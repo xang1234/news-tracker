@@ -34,6 +34,11 @@ dependencies = [
     "rapidfuzz>=3.5.0",
     "langdetect>=1.0.9",
 
+    # Embeddings (requires Python 3.11-3.12 for torch compatibility)
+    "torch>=2.0.0",
+    "transformers>=4.36.0",
+    "numpy>=1.24.0",
+
     # Observability
     "structlog>=24.1.0",
     "prometheus-client>=0.19.0",
@@ -47,6 +52,10 @@ dependencies = [
     # CLI
     "click>=8.1.0",
     "python-dotenv>=1.0.0",
+
+    # API Server
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
 ]
 
 [project.optional-dependencies]

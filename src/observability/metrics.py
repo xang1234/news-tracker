@@ -160,6 +160,41 @@ class MetricsCollector:
             "Number of idle database connections",
         )
 
+        # Embedding metrics
+        self.embeddings_generated = Counter(
+            "news_tracker_embeddings_generated_total",
+            "Total embeddings generated",
+            ["platform", "model"],
+        )
+
+        self.embedding_latency = Histogram(
+            "news_tracker_embedding_latency_seconds",
+            "Time to generate embeddings",
+            ["operation"],  # single, batch
+            buckets=(0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0),
+        )
+
+        self.embedding_cache_hits = Counter(
+            "news_tracker_embedding_cache_hits_total",
+            "Total embedding cache hits",
+        )
+
+        self.embedding_cache_misses = Counter(
+            "news_tracker_embedding_cache_misses_total",
+            "Total embedding cache misses",
+        )
+
+        self.embedding_queue_depth = Gauge(
+            "news_tracker_embedding_queue_depth",
+            "Number of jobs in embedding queue",
+        )
+
+        self.embedding_batch_size = Histogram(
+            "news_tracker_embedding_batch_size",
+            "Embedding batch sizes",
+            buckets=(1, 5, 10, 20, 32, 50, 100),
+        )
+
         logger.info("Prometheus metrics initialized")
 
     def start_server(self, port: int | None = None) -> None:
@@ -274,6 +309,80 @@ class MetricsCollector:
             depth: Number of messages
         """
         self.queue_depth.labels(stream=stream).set(depth)
+
+    def record_embedding_generated(
+        self,
+        platform: Platform | str,
+        model: str = "finbert",
+        count: int = 1,
+    ) -> None:
+        """
+        Record embedding generation.
+
+        Args:
+            platform: Source platform
+            model: Model used (finbert or minilm)
+            count: Number of embeddings generated
+        """
+        platform_str = platform.value if isinstance(platform, Platform) else platform
+        self.embeddings_generated.labels(platform=platform_str, model=model).inc(count)
+
+    def record_embedding_latency(
+        self,
+        operation: str,
+        latency: float,
+    ) -> None:
+        """
+        Record embedding generation latency.
+
+        Args:
+            operation: Operation type (single, batch)
+            latency: Latency in seconds
+        """
+        self.embedding_latency.labels(operation=operation).observe(latency)
+
+    def record_embedding_cache(self, hit: bool) -> None:
+        """
+        Record embedding cache hit or miss.
+
+        Args:
+            hit: True for cache hit, False for miss
+        """
+        if hit:
+            self.embedding_cache_hits.inc()
+        else:
+            self.embedding_cache_misses.inc()
+
+    def set_embedding_queue_depth(self, depth: int) -> None:
+        """
+        Set embedding queue depth metric.
+
+        Args:
+            depth: Number of jobs in queue
+        """
+        self.embedding_queue_depth.set(depth)
+
+    def record_embedding_batch(
+        self,
+        processed: int,
+        skipped: int,
+        errors: int,
+        latency: float,
+    ) -> None:
+        """
+        Record embedding batch processing metrics.
+
+        Args:
+            processed: Number of embeddings generated
+            skipped: Number of documents skipped
+            errors: Number of errors
+            latency: Total batch latency in seconds
+        """
+        total = processed + skipped + errors
+        if total > 0:
+            self.embedding_batch_size.observe(total)
+        if latency > 0:
+            self.embedding_latency.labels(operation="batch").observe(latency)
 
 
 # Global metrics instance

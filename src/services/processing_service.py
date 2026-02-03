@@ -19,6 +19,7 @@ from typing import Any
 import structlog
 
 from src.config.settings import get_settings
+from src.embedding.queue import EmbeddingQueue
 from src.ingestion.deduplication import Deduplicator
 from src.ingestion.preprocessor import Preprocessor
 from src.ingestion.queue import DocumentQueue, QueueMessage
@@ -53,7 +54,9 @@ class ProcessingService:
         database: Database | None = None,
         preprocessor: Preprocessor | None = None,
         deduplicator: Deduplicator | None = None,
+        embedding_queue: EmbeddingQueue | None = None,
         batch_size: int = 32,
+        enable_embedding_queue: bool = True,
     ):
         """
         Initialize processing service.
@@ -63,12 +66,16 @@ class ProcessingService:
             database: Database connection (or create from config)
             preprocessor: Document preprocessor (or create default)
             deduplicator: Deduplication index (or create default)
+            embedding_queue: Embedding job queue (or create from config)
             batch_size: Documents to process per batch
+            enable_embedding_queue: Whether to publish to embedding queue
         """
         self._queue = queue or DocumentQueue()
         self._database = database or Database()
         self._preprocessor = preprocessor or Preprocessor()
         self._deduplicator = deduplicator or Deduplicator()
+        self._embedding_queue = embedding_queue
+        self._enable_embedding_queue = enable_embedding_queue
         self._batch_size = batch_size
 
         self._repository: DocumentRepository | None = None
@@ -78,6 +85,7 @@ class ProcessingService:
         logger.info(
             "Processing service initialized",
             batch_size=batch_size,
+            embedding_queue_enabled=enable_embedding_queue,
         )
 
     async def start(self) -> None:
@@ -93,6 +101,12 @@ class ProcessingService:
         # Connect to dependencies
         await self._queue.connect()
         await self._database.connect()
+
+        # Connect embedding queue if enabled
+        if self._enable_embedding_queue:
+            if self._embedding_queue is None:
+                self._embedding_queue = EmbeddingQueue()
+            await self._embedding_queue.connect()
 
         # Create repository
         self._repository = DocumentRepository(self._database)
@@ -119,6 +133,8 @@ class ProcessingService:
         """Clean up resources."""
         await self._queue.close()
         await self._database.close()
+        if self._embedding_queue:
+            await self._embedding_queue.close()
         logger.info("Processing service cleaned up")
 
     async def _process_loop(self) -> None:
@@ -210,6 +226,18 @@ class ProcessingService:
                     time.monotonic() - stage_start,
                 )
 
+                # Stage 4: Queue for embedding generation
+                if self._embedding_queue:
+                    try:
+                        await self._embedding_queue.publish(doc.id)
+                    except Exception as e:
+                        # Log but don't fail the document processing
+                        logger.warning(
+                            "Failed to queue embedding job",
+                            doc_id=doc.id,
+                            error=str(e),
+                        )
+
                 processed += 1
                 self._metrics.documents_stored.labels(
                     platform=doc.platform,
@@ -251,7 +279,8 @@ class ProcessingService:
     async def run_once(
         self,
         docs: list[NormalizedDocument],
-    ) -> dict[str, int]:
+        return_doc_ids: bool = False,
+    ) -> dict[str, int] | tuple[dict[str, int], list[str]]:
         """
         Process a list of documents without queue.
 
@@ -259,9 +288,10 @@ class ProcessingService:
 
         Args:
             docs: Documents to process
+            return_doc_ids: If True, also return list of stored document IDs
 
         Returns:
-            Processing statistics
+            Processing statistics, or tuple of (stats, doc_ids) if return_doc_ids=True
         """
         await self._database.connect()
         self._repository = DocumentRepository(self._database)
@@ -274,6 +304,7 @@ class ProcessingService:
             "duplicates": 0,
             "errors": 0,
         }
+        stored_doc_ids: list[str] = []
 
         try:
             for doc in docs:
@@ -290,6 +321,7 @@ class ProcessingService:
 
                     await self._repository.insert(doc)
                     stats["processed"] += 1
+                    stored_doc_ids.append(doc.id)
 
                 except Exception as e:
                     stats["errors"] += 1
@@ -298,6 +330,8 @@ class ProcessingService:
         finally:
             await self._database.close()
 
+        if return_doc_ids:
+            return stats, stored_doc_ids
         return stats
 
     @property

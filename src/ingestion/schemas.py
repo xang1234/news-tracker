@@ -150,11 +150,21 @@ class NormalizedDocument(BaseModel):
         le=1.0,
         description="Bot probability from 0.0 (human) to 1.0 (bot)",
     )
+    authority_score: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Computed authority score (0.0-1.0) based on verification, followers, engagement",
+    )
 
     # Set by downstream services
     embedding: list[float] | None = Field(
         default=None,
-        description="Vector embedding (set by embedding service)",
+        description="FinBERT 768-dim embedding (set by embedding service)",
+    )
+    embedding_minilm: list[float] | None = Field(
+        default=None,
+        description="MiniLM 384-dim embedding for short content (set by embedding service)",
     )
     sentiment: dict[str, Any] | None = Field(
         default=None,
@@ -229,9 +239,10 @@ class NormalizedDocument(BaseModel):
         """
         Convert to dict for database storage.
 
-        Excludes embedding and raw_data to reduce storage size.
+        Excludes embeddings and raw_data to reduce storage size.
         """
         data = self.model_dump()
         data.pop("embedding", None)
+        data.pop("embedding_minilm", None)
         data.pop("raw_data", None)
         return data

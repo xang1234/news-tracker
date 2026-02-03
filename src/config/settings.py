@@ -78,10 +78,31 @@ class Settings(BaseSettings):
     max_http_retries: int = Field(default=3, ge=0, le=10)
     max_backoff_seconds: float = Field(default=60.0, ge=1.0, le=300.0)
 
+    # Embedding service
+    embedding_model_name: str = "ProsusAI/finbert"
+    embedding_batch_size: int = 32
+    embedding_use_fp16: bool = True
+    embedding_device: str = "auto"  # auto, cpu, cuda, mps
+    embedding_stream_name: str = "embedding_queue"
+    embedding_consumer_group: str = "embedding_workers"
+    embedding_cache_enabled: bool = True
+    embedding_cache_ttl_hours: int = 168  # 1 week
+
+    # API server
+    api_host: str = "0.0.0.0"
+    api_port: int = 8001
+    api_keys: str | None = None  # Comma-separated API keys, None = no auth (dev mode)
+
     # Observability
     metrics_port: int = 8000
     otel_exporter_otlp_endpoint: str | None = None
     otel_service_name: str = "news-tracker"
+
+    # Vector store
+    vectorstore_default_limit: int = 10
+    vectorstore_default_threshold: float = 0.7
+    vectorstore_centroid_limit: int = 100
+    vectorstore_centroid_threshold: float = 0.5
 
     @property
     def is_production(self) -> bool:

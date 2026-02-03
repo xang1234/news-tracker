@@ -195,14 +195,52 @@ def health() -> None:
     asyncio.run(check())
 
 
+@main.command()
+@click.option("--host", default=None, help="API server host")
+@click.option("--port", default=None, type=int, help="API server port")
+@click.option("--reload", is_flag=True, help="Enable auto-reload (dev only)")
+@click.option("--metrics-port", default=8000, help="Metrics server port")
+def serve(host: str | None, port: int | None, reload: bool, metrics_port: int) -> None:
+    """Start the embedding API server."""
+    import uvicorn
+
+    settings = get_settings()
+    host = host or settings.api_host
+    port = port or settings.api_port
+
+    # Start metrics server on separate port
+    get_metrics().start_server(port=metrics_port)
+
+    click.echo(f"Starting API server on {host}:{port}")
+    click.echo(f"Metrics available on http://localhost:{metrics_port}/metrics")
+    click.echo(f"API docs available on http://localhost:{port}/docs")
+
+    uvicorn.run(
+        "src.api.app:create_app",
+        factory=True,
+        host=host,
+        port=port,
+        reload=reload,
+        log_level="info",
+    )
+
+
 @main.command("run-once")
 @click.option("--mock", is_flag=True, help="Use mock adapters")
-def run_once(mock: bool) -> None:
-    """Run one ingestion + processing cycle."""
+@click.option("--with-embeddings", is_flag=True, help="Run embedding worker after processing")
+@click.option("--verify", is_flag=True, help="Query DB to confirm embeddings exist")
+def run_once(mock: bool, with_embeddings: bool, verify: bool) -> None:
+    """Run one ingestion + processing cycle.
+
+    With --with-embeddings, also generates embeddings for processed documents.
+    With --verify, queries the database to confirm documents have embeddings.
+    """
     from src.services.ingestion_service import IngestionService
     from src.services.processing_service import ProcessingService
 
     async def run():
+        exit_code = 0
+
         # Ingestion
         ingestion = IngestionService(use_mock=mock)
         ingestion_results = await ingestion.run_once()
@@ -221,25 +259,220 @@ def run_once(mock: bool) -> None:
 
         docs = []
         try:
-            # Read all pending messages
-            async for msg in queue.consume(count=1000, block_ms=1000):
-                docs.append(msg.document)
-                await queue.ack(msg.message_id)
-                if len(docs) >= 1000:
-                    break
-        except asyncio.TimeoutError:
+            # Read all pending messages with a timeout
+            # The consume() generator runs forever, so we use asyncio.timeout
+            # to break out after messages stop arriving
+            async with asyncio.timeout(3):  # 3 second timeout for idle
+                async for msg in queue.consume(count=1000, block_ms=1000):
+                    docs.append(msg.document)
+                    await queue.ack(msg.message_id)
+                    if len(docs) >= 1000:
+                        break
+        except TimeoutError:
+            # Expected when no more messages arrive within timeout
             pass
         finally:
             await queue.close()
 
+        stored_doc_ids: list[str] = []
         if docs:
-            processing_results = await processing.run_once(docs)
+            result = await processing.run_once(docs, return_doc_ids=with_embeddings)
+
+            if with_embeddings:
+                processing_results, stored_doc_ids = result
+            else:
+                processing_results = result
 
             click.echo("\nProcessing Results:")
-            for key, value in processing_results.items():
-                click.echo(f"  {key}: {value}")
+            click.echo(f"  stored: {processing_results['processed']}")
+            click.echo(f"  filtered (spam): {processing_results['filtered']}")
+            click.echo(f"  duplicates: {processing_results['duplicates']}")
+            click.echo(f"  errors: {processing_results['errors']}")
         else:
             click.echo("\nNo documents to process")
+
+        # Embedding stage (optional)
+        if with_embeddings and stored_doc_ids:
+            from src.embedding.worker import EmbeddingWorker
+
+            click.echo("\nGenerating embeddings...")
+            worker = EmbeddingWorker()
+            embedding_results = await worker.run_once(stored_doc_ids)
+
+            # Calculate model breakdown from stats
+            # Note: run_once doesn't track per-model counts, so we report totals
+            click.echo("\nEmbedding Results:")
+            click.echo(f"  processed: {embedding_results['processed']}")
+            click.echo(f"  skipped: {embedding_results['skipped']}")
+            click.echo(f"  errors: {embedding_results['errors']}")
+
+            if embedding_results['errors'] > 0:
+                exit_code = 1
+
+        # Verification stage (optional)
+        if verify and stored_doc_ids:
+            from src.storage.database import Database
+            from src.storage.repository import DocumentRepository
+
+            db = Database()
+            await db.connect()
+            repo = DocumentRepository(db)
+
+            try:
+                # Count documents and those with embeddings
+                total_count = 0
+                with_embedding_count = 0
+
+                for doc_id in stored_doc_ids:
+                    doc = await repo.get_by_id(doc_id)
+                    if doc:
+                        total_count += 1
+                        if doc.embedding is not None or doc.embedding_minilm is not None:
+                            with_embedding_count += 1
+
+                click.echo("\nVerification:")
+                if total_count == len(stored_doc_ids):
+                    click.echo(click.style(f"  ✓ {total_count} documents in database", fg="green"))
+                else:
+                    click.echo(click.style(f"  ✗ Only {total_count}/{len(stored_doc_ids)} documents in database", fg="red"))
+                    exit_code = 1
+
+                if with_embeddings:
+                    if with_embedding_count == total_count:
+                        click.echo(click.style(f"  ✓ {with_embedding_count} documents have embeddings", fg="green"))
+                    else:
+                        click.echo(click.style(f"  ✗ Only {with_embedding_count}/{total_count} documents have embeddings", fg="red"))
+                        exit_code = 1
+
+                if exit_code == 0:
+                    click.echo(click.style("  ✓ Pipeline completed successfully", fg="green"))
+                else:
+                    click.echo(click.style("  ✗ Pipeline completed with errors", fg="red"))
+
+            finally:
+                await db.close()
+
+        return exit_code
+
+    result = asyncio.run(run())
+    if result != 0:
+        sys.exit(result)
+
+
+@main.command("vector-search")
+@click.argument("query")
+@click.option("--limit", default=10, help="Maximum results to return")
+@click.option("--threshold", default=0.7, type=float, help="Minimum similarity threshold")
+@click.option("--platform", multiple=True, help="Filter by platform (can repeat)")
+@click.option("--ticker", multiple=True, help="Filter by ticker (can repeat)")
+@click.option("--min-authority", type=float, help="Minimum authority score")
+def vector_search(
+    query: str,
+    limit: int,
+    threshold: float,
+    platform: tuple[str, ...],
+    ticker: tuple[str, ...],
+    min_authority: float | None,
+) -> None:
+    """Search for semantically similar documents.
+
+    Example:
+        news-tracker vector-search "NVIDIA AI demand" --limit 5
+        news-tracker vector-search "semiconductor supply chain" --platform twitter --ticker NVDA
+    """
+    import redis.asyncio as redis
+    from src.embedding.config import EmbeddingConfig
+    from src.embedding.service import EmbeddingService
+    from src.storage.database import Database
+    from src.storage.repository import DocumentRepository
+    from src.vectorstore.config import VectorStoreConfig
+    from src.vectorstore.manager import VectorStoreManager
+    from src.vectorstore.pgvector_store import PgVectorStore
+    from src.vectorstore.base import VectorSearchFilter
+
+    async def run():
+        settings = get_settings()
+
+        # Initialize database
+        db = Database()
+        await db.connect()
+
+        # Initialize Redis for embedding cache
+        redis_client = redis.from_url(
+            str(settings.redis_url),
+            encoding="utf-8",
+            decode_responses=True,
+        )
+
+        try:
+            # Create services
+            embedding_config = EmbeddingConfig(
+                model_name=settings.embedding_model_name,
+                batch_size=settings.embedding_batch_size,
+                device=settings.embedding_device,
+                cache_enabled=settings.embedding_cache_enabled,
+            )
+            embedding_service = EmbeddingService(
+                config=embedding_config,
+                redis_client=redis_client,
+            )
+
+            repository = DocumentRepository(db)
+            vector_store = PgVectorStore(
+                database=db,
+                repository=repository,
+            )
+            manager = VectorStoreManager(
+                vector_store=vector_store,
+                embedding_service=embedding_service,
+            )
+
+            # Build filters
+            filters = None
+            if platform or ticker or min_authority is not None:
+                filters = VectorSearchFilter(
+                    platforms=list(platform) if platform else None,
+                    tickers=list(ticker) if ticker else None,
+                    min_authority_score=min_authority,
+                )
+
+            # Execute search
+            click.echo(f"\nSearching for: {query}")
+            click.echo("-" * 60)
+
+            results = await manager.query(
+                text=query,
+                limit=limit,
+                threshold=threshold,
+                filters=filters,
+            )
+
+            if not results:
+                click.echo("No results found.")
+                return
+
+            # Display results
+            for i, result in enumerate(results, 1):
+                meta = result.metadata
+                platform_name = meta.get("platform", "unknown")
+                title = meta.get("title") or meta.get("content_preview", "")[:50]
+                score = result.score
+                authority = meta.get("authority_score")
+                tickers = meta.get("tickers", [])
+
+                click.echo(f"\n{i}. [{platform_name}] {title}")
+                click.echo(f"   Score: {score:.4f} | Authority: {authority or 'N/A'}")
+                if tickers:
+                    click.echo(f"   Tickers: {', '.join(tickers)}")
+                click.echo(f"   ID: {result.document_id}")
+
+            click.echo(f"\n{'-' * 60}")
+            click.echo(f"Found {len(results)} results")
+
+        finally:
+            await embedding_service.close()
+            await redis_client.close()
+            await db.close()
 
     asyncio.run(run())
 
