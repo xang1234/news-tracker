@@ -25,6 +25,7 @@ from src.ingestion.preprocessor import Preprocessor
 from src.ingestion.queue import DocumentQueue, QueueMessage
 from src.ingestion.schemas import NormalizedDocument
 from src.observability.metrics import get_metrics
+from src.sentiment.queue import SentimentQueue
 from src.storage.database import Database
 from src.storage.repository import DocumentRepository
 
@@ -55,8 +56,10 @@ class ProcessingService:
         preprocessor: Preprocessor | None = None,
         deduplicator: Deduplicator | None = None,
         embedding_queue: EmbeddingQueue | None = None,
+        sentiment_queue: SentimentQueue | None = None,
         batch_size: int = 32,
         enable_embedding_queue: bool = True,
+        enable_sentiment_queue: bool = True,
     ):
         """
         Initialize processing service.
@@ -67,15 +70,19 @@ class ProcessingService:
             preprocessor: Document preprocessor (or create default)
             deduplicator: Deduplication index (or create default)
             embedding_queue: Embedding job queue (or create from config)
+            sentiment_queue: Sentiment job queue (or create from config)
             batch_size: Documents to process per batch
             enable_embedding_queue: Whether to publish to embedding queue
+            enable_sentiment_queue: Whether to publish to sentiment queue
         """
         self._queue = queue or DocumentQueue()
         self._database = database or Database()
         self._preprocessor = preprocessor or Preprocessor()
         self._deduplicator = deduplicator or Deduplicator()
         self._embedding_queue = embedding_queue
+        self._sentiment_queue = sentiment_queue
         self._enable_embedding_queue = enable_embedding_queue
+        self._enable_sentiment_queue = enable_sentiment_queue
         self._batch_size = batch_size
 
         self._repository: DocumentRepository | None = None
@@ -86,6 +93,7 @@ class ProcessingService:
             "Processing service initialized",
             batch_size=batch_size,
             embedding_queue_enabled=enable_embedding_queue,
+            sentiment_queue_enabled=enable_sentiment_queue,
         )
 
     async def start(self) -> None:
@@ -107,6 +115,12 @@ class ProcessingService:
             if self._embedding_queue is None:
                 self._embedding_queue = EmbeddingQueue()
             await self._embedding_queue.connect()
+
+        # Connect sentiment queue if enabled
+        if self._enable_sentiment_queue:
+            if self._sentiment_queue is None:
+                self._sentiment_queue = SentimentQueue()
+            await self._sentiment_queue.connect()
 
         # Create repository
         self._repository = DocumentRepository(self._database)
@@ -135,6 +149,8 @@ class ProcessingService:
         await self._database.close()
         if self._embedding_queue:
             await self._embedding_queue.close()
+        if self._sentiment_queue:
+            await self._sentiment_queue.close()
         logger.info("Processing service cleaned up")
 
     async def _process_loop(self) -> None:
@@ -186,45 +202,90 @@ class ProcessingService:
         for msg_id, doc in batch:
             try:
                 # Stage 1: Preprocessing
-                stage_start = time.monotonic()
-                doc = self._preprocessor.process(doc)
-                self._metrics.record_stage_latency(
-                    "preprocessing",
-                    time.monotonic() - stage_start,
-                )
+                try:
+                    stage_start = time.monotonic()
+                    doc = self._preprocessor.process(doc)
+                    self._metrics.record_stage_latency(
+                        "preprocessing",
+                        time.monotonic() - stage_start,
+                    )
+                except Exception as e:
+                    errors += 1
+                    logger.error(
+                        "Error in preprocessing",
+                        doc_id=doc.id,
+                        error=str(e),
+                    )
+                    self._metrics.record_error(
+                        "preprocessing",
+                        type(e).__name__,
+                        is_adapter=False,
+                    )
+                    await self._queue.nack(msg_id, str(e))
+                    continue
 
                 # Check if filtered
                 if doc.should_filter:
                     filtered += 1
                     self._metrics.spam_filtered.labels(
-                        platform=doc.platform,
+                        platform=doc.platform.value,
                     ).inc()
                     await self._queue.ack(msg_id)
                     continue
 
                 # Stage 2: Deduplication
-                stage_start = time.monotonic()
-                is_dup = not self._deduplicator.process(doc)
-                self._metrics.record_stage_latency(
-                    "deduplication",
-                    time.monotonic() - stage_start,
-                )
+                try:
+                    stage_start = time.monotonic()
+                    is_dup = not self._deduplicator.process(doc)
+                    self._metrics.record_stage_latency(
+                        "deduplication",
+                        time.monotonic() - stage_start,
+                    )
+                except Exception as e:
+                    errors += 1
+                    logger.error(
+                        "Error in deduplication",
+                        doc_id=doc.id,
+                        error=str(e),
+                    )
+                    self._metrics.record_error(
+                        "deduplication",
+                        type(e).__name__,
+                        is_adapter=False,
+                    )
+                    await self._queue.nack(msg_id, str(e))
+                    continue
 
                 if is_dup:
                     duplicates += 1
                     self._metrics.duplicates_detected.labels(
-                        platform=doc.platform,
+                        platform=doc.platform.value,
                     ).inc()
                     await self._queue.ack(msg_id)
                     continue
 
                 # Stage 3: Storage
-                stage_start = time.monotonic()
-                await self._repository.insert(doc)
-                self._metrics.record_stage_latency(
-                    "storage",
-                    time.monotonic() - stage_start,
-                )
+                try:
+                    stage_start = time.monotonic()
+                    await self._repository.insert(doc)
+                    self._metrics.record_stage_latency(
+                        "storage",
+                        time.monotonic() - stage_start,
+                    )
+                except Exception as e:
+                    errors += 1
+                    logger.error(
+                        "Error in storage",
+                        doc_id=doc.id,
+                        error=str(e),
+                    )
+                    self._metrics.record_error(
+                        "storage",
+                        type(e).__name__,
+                        is_adapter=False,
+                    )
+                    await self._queue.nack(msg_id, str(e))
+                    continue
 
                 # Stage 4: Queue for embedding generation
                 if self._embedding_queue:
@@ -238,29 +299,39 @@ class ProcessingService:
                             error=str(e),
                         )
 
+                # Stage 5: Queue for sentiment analysis
+                if self._sentiment_queue:
+                    try:
+                        await self._sentiment_queue.publish(doc.id)
+                    except Exception as e:
+                        # Log but don't fail the document processing
+                        logger.warning(
+                            "Failed to queue sentiment job",
+                            doc_id=doc.id,
+                            error=str(e),
+                        )
+
                 processed += 1
                 self._metrics.documents_stored.labels(
-                    platform=doc.platform,
+                    platform=doc.platform.value,
                 ).inc()
 
                 # Acknowledge successful processing
                 await self._queue.ack(msg_id)
 
             except Exception as e:
+                # Catch any unexpected errors (e.g., from queue.ack/nack themselves)
                 errors += 1
                 logger.error(
-                    "Error processing document",
+                    "Unexpected error processing document",
                     doc_id=doc.id,
                     error=str(e),
                 )
                 self._metrics.record_error(
-                    doc.platform,
+                    "unknown",
                     type(e).__name__,
                     is_adapter=False,
                 )
-
-                # Move to dead letter queue
-                await self._queue.nack(msg_id, str(e))
 
         # Update metrics
         elapsed = time.monotonic() - start_time
@@ -348,10 +419,22 @@ class ProcessingService:
         """
         queue_healthy = await self._queue.health_check()
         db_healthy = await self._database.health_check()
+        embedding_queue_healthy = (
+            await self._embedding_queue.health_check()
+            if self._embedding_queue
+            else None
+        )
+        sentiment_queue_healthy = (
+            await self._sentiment_queue.health_check()
+            if self._sentiment_queue
+            else None
+        )
 
         return {
             "running": self._running,
             "queue_healthy": queue_healthy,
             "database_healthy": db_healthy,
+            "embedding_queue_healthy": embedding_queue_healthy,
+            "sentiment_queue_healthy": sentiment_queue_healthy,
             "dedup_stats": self._deduplicator.stats,
         }
