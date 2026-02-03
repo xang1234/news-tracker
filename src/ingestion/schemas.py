@@ -132,6 +132,10 @@ class NormalizedDocument(BaseModel):
         default_factory=list,
         description="Extracted $TICKER cashtags and company references",
     )
+    entities_mentioned: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Financial entities from NER (COMPANY, PRODUCT, TECHNOLOGY, METRIC)",
+    )
     urls_mentioned: list[str] = Field(
         default_factory=list,
         description="URLs found in content",

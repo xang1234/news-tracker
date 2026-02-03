@@ -359,6 +359,54 @@ def run_once(mock: bool, with_embeddings: bool, verify: bool) -> None:
         sys.exit(result)
 
 
+@main.command()
+@click.option("--days", default=90, help="Days of data to keep")
+@click.option("--dry-run", is_flag=True, help="Show count without deleting")
+def cleanup(days: int, dry_run: bool) -> None:
+    """Remove documents older than specified days.
+
+    Example:
+        news-tracker cleanup --days 30              # Delete docs older than 30 days
+        news-tracker cleanup --days 30 --dry-run   # Preview without deleting
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from src.storage.database import Database
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+            if dry_run:
+                # Count documents that would be deleted
+                sql = "SELECT COUNT(*) FROM documents WHERE timestamp < $1"
+                count = await db.fetchval(sql, cutoff)
+
+                click.echo(f"\nDry run - would delete {count} documents older than {days} days")
+                click.echo(f"Cutoff: {cutoff.isoformat()}")
+                click.echo("\nRun without --dry-run to actually delete.")
+            else:
+                # Perform the deletion
+                sql = """
+                    DELETE FROM documents
+                    WHERE timestamp < $1
+                    RETURNING id
+                """
+                rows = await db.fetch(sql, cutoff)
+                deleted = len(rows)
+
+                click.echo(f"\nDeleted {deleted} documents older than {days} days")
+                click.echo(f"Cutoff: {cutoff.isoformat()}")
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
 @main.command("vector-search")
 @click.argument("query")
 @click.option("--limit", default=10, help="Maximum results to return")

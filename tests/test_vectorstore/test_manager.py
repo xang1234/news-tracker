@@ -1,5 +1,7 @@
 """Unit tests for VectorStoreManager."""
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from unittest.mock import AsyncMock
 
@@ -312,3 +314,82 @@ class TestVectorStoreManagerIngest:
         # Authority score should now be set
         assert document_for_authority.authority_score is not None
         assert document_for_authority.authority_score > 0.5
+
+
+class TestVectorStoreManagerCleanup:
+    """Tests for cleanup_old_documents() method."""
+
+    @pytest.mark.asyncio
+    async def test_cleanup_old_documents_default_days(self, mock_embedding_service):
+        """Test cleanup with default 90 days retention."""
+        mock_store = AsyncMock()
+        mock_store.delete_before_timestamp = AsyncMock(return_value=50)
+
+        manager = VectorStoreManager(
+            vector_store=mock_store,
+            embedding_service=mock_embedding_service,
+        )
+
+        deleted = await manager.cleanup_old_documents()
+
+        assert deleted == 50
+        mock_store.delete_before_timestamp.assert_called_once()
+
+        # Verify the cutoff is approximately 90 days ago
+        call_args = mock_store.delete_before_timestamp.call_args
+        cutoff = call_args[0][0]
+        expected_cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+        # Allow 1 second tolerance for test execution time
+        assert abs((cutoff - expected_cutoff).total_seconds()) < 1
+
+    @pytest.mark.asyncio
+    async def test_cleanup_old_documents_custom_days(self, mock_embedding_service):
+        """Test cleanup with custom retention period."""
+        mock_store = AsyncMock()
+        mock_store.delete_before_timestamp = AsyncMock(return_value=100)
+
+        manager = VectorStoreManager(
+            vector_store=mock_store,
+            embedding_service=mock_embedding_service,
+        )
+
+        deleted = await manager.cleanup_old_documents(days_to_keep=30)
+
+        assert deleted == 100
+
+        # Verify the cutoff is approximately 30 days ago
+        call_args = mock_store.delete_before_timestamp.call_args
+        cutoff = call_args[0][0]
+        expected_cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+        assert abs((cutoff - expected_cutoff).total_seconds()) < 1
+
+    @pytest.mark.asyncio
+    async def test_cleanup_old_documents_no_matches(self, mock_embedding_service):
+        """Test cleanup when no old documents exist."""
+        mock_store = AsyncMock()
+        mock_store.delete_before_timestamp = AsyncMock(return_value=0)
+
+        manager = VectorStoreManager(
+            vector_store=mock_store,
+            embedding_service=mock_embedding_service,
+        )
+
+        deleted = await manager.cleanup_old_documents(days_to_keep=365)
+
+        assert deleted == 0
+
+    @pytest.mark.asyncio
+    async def test_cleanup_old_documents_invalid_days(self, mock_embedding_service):
+        """Test cleanup raises error for invalid days_to_keep."""
+        mock_store = AsyncMock()
+
+        manager = VectorStoreManager(
+            vector_store=mock_store,
+            embedding_service=mock_embedding_service,
+        )
+
+        with pytest.raises(ValueError, match="days_to_keep must be positive"):
+            await manager.cleanup_old_documents(days_to_keep=0)
+
+        with pytest.raises(ValueError, match="days_to_keep must be positive"):
+            await manager.cleanup_old_documents(days_to_keep=-10)

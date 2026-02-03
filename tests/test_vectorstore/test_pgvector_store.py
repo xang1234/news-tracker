@@ -230,6 +230,78 @@ class TestPgVectorStoreSearch:
         sql = call_args[0][0]
         assert "id != ALL" in sql
 
+    @pytest.mark.asyncio
+    async def test_search_with_timestamp_after_filter(
+        self,
+        mock_database,
+        sample_embedding,
+    ):
+        """Test search with timestamp_after filter."""
+        mock_database.fetch = AsyncMock(return_value=[])
+        store = PgVectorStore(database=mock_database)
+
+        ts = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        filters = VectorSearchFilter(timestamp_after=ts)
+        await store.search(
+            query_embedding=sample_embedding,
+            limit=10,
+            threshold=0.7,
+            filters=filters,
+        )
+
+        call_args = mock_database.fetch.call_args
+        sql = call_args[0][0]
+        assert "timestamp >=" in sql
+
+    @pytest.mark.asyncio
+    async def test_search_with_timestamp_before_filter(
+        self,
+        mock_database,
+        sample_embedding,
+    ):
+        """Test search with timestamp_before filter."""
+        mock_database.fetch = AsyncMock(return_value=[])
+        store = PgVectorStore(database=mock_database)
+
+        ts = datetime(2026, 2, 1, 0, 0, 0, tzinfo=timezone.utc)
+        filters = VectorSearchFilter(timestamp_before=ts)
+        await store.search(
+            query_embedding=sample_embedding,
+            limit=10,
+            threshold=0.7,
+            filters=filters,
+        )
+
+        call_args = mock_database.fetch.call_args
+        sql = call_args[0][0]
+        assert "timestamp <=" in sql
+
+    @pytest.mark.asyncio
+    async def test_search_with_date_range_filter(
+        self,
+        mock_database,
+        sample_embedding,
+    ):
+        """Test search with both timestamp_after and timestamp_before."""
+        mock_database.fetch = AsyncMock(return_value=[])
+        store = PgVectorStore(database=mock_database)
+
+        start = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        end = datetime(2026, 1, 31, 23, 59, 59, tzinfo=timezone.utc)
+        filters = VectorSearchFilter(timestamp_after=start, timestamp_before=end)
+        await store.search(
+            query_embedding=sample_embedding,
+            limit=10,
+            threshold=0.7,
+            filters=filters,
+        )
+
+        call_args = mock_database.fetch.call_args
+        sql = call_args[0][0]
+        # Both conditions should be present
+        assert "timestamp >=" in sql
+        assert "timestamp <=" in sql
+
 
 class TestPgVectorStoreDelete:
     """Tests for PgVectorStore.delete()."""
@@ -299,3 +371,38 @@ class TestPgVectorStoreGetByIds:
 
         assert results == []
         mock_database.fetch.assert_not_called()
+
+
+class TestPgVectorStoreDeleteBeforeTimestamp:
+    """Tests for PgVectorStore.delete_before_timestamp()."""
+
+    @pytest.mark.asyncio
+    async def test_delete_before_timestamp(self, mock_database):
+        """Test deleting documents before a cutoff timestamp."""
+        mock_database.fetch = AsyncMock(return_value=[
+            {"id": "old_doc_1"},
+            {"id": "old_doc_2"},
+            {"id": "old_doc_3"},
+        ])
+        store = PgVectorStore(database=mock_database)
+
+        cutoff = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        result = await store.delete_before_timestamp(cutoff)
+
+        assert result == 3
+        # Verify SQL contains timestamp comparison
+        call_args = mock_database.fetch.call_args
+        sql = call_args[0][0]
+        assert "DELETE FROM documents" in sql
+        assert "timestamp < $1" in sql
+
+    @pytest.mark.asyncio
+    async def test_delete_before_timestamp_no_matches(self, mock_database):
+        """Test delete when no documents match the cutoff."""
+        mock_database.fetch = AsyncMock(return_value=[])
+        store = PgVectorStore(database=mock_database)
+
+        cutoff = datetime(2020, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        result = await store.delete_before_timestamp(cutoff)
+
+        assert result == 0

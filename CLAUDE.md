@@ -29,6 +29,13 @@ uv run news-tracker init-db            # Initialize database schema
 uv run news-tracker run-once --mock    # Single cycle for testing
 uv run news-tracker serve              # Start embedding API server
 uv run news-tracker vector-search "query" --limit 10  # Semantic search
+uv run news-tracker cleanup --days 90  # Remove old documents (storage management)
+
+# NER testing
+uv run pytest tests/test_ner/ -v           # Run all NER tests
+uv run pytest tests/test_ner/ -v -m "not integration"  # Skip integration tests (no spaCy model needed)
+python -m spacy download en_core_web_trf   # Download transformer model for NER
+python -m spacy download en_core_web_sm    # Download smaller model (faster, lower accuracy)
 ```
 
 ## Architecture Overview
@@ -70,10 +77,19 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 - All adapters output `NormalizedDocument` (defined in `schemas.py`)
 
 **Processing Layer** (`src/ingestion/` + `src/services/`):
-- `Preprocessor`: Orchestrates spam detection, bot detection, ticker extraction
+- `Preprocessor`: Orchestrates spam detection, bot detection, ticker extraction, NER (optional)
 - `SpamDetector`: Rule-based scoring (0.0-1.0) with ML-ready signal structure
 - `TickerExtractor`: Cashtags, company names, fuzzy matching against `src/config/tickers.py`
 - `Deduplicator`: MinHash LSH with 3-word shingles, configurable threshold
+
+**NER Layer** (`src/ner/`):
+- `NERConfig`: Pydantic settings for spaCy model, fuzzy threshold, coreference, batch size, semantic linking
+- `FinancialEntity`: Dataclass for extracted entities with type, normalized form, confidence, metadata
+- `NERService`: Named entity recognition using spaCy + EntityRuler patterns + fastcoref
+- `patterns/`: JSONL files for domain-specific EntityRuler patterns (companies, products, technologies, metrics)
+- Entity types: `TICKER`, `COMPANY`, `PRODUCT`, `TECHNOLOGY`, `METRIC`
+- Lazy model loading, fuzzy matching via rapidfuzz, optional coreference resolution
+- `link_entities_to_theme_semantic()`: Embedding-based disambiguation using cosine similarity (requires EmbeddingService)
 
 **Storage Layer** (`src/storage/`):
 - `Database`: asyncpg connection pool with transaction context managers
@@ -90,7 +106,9 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 - `base.py`: Abstract `VectorStore` class, `VectorSearchResult` and `VectorSearchFilter` dataclasses
 - `config.py`: `VectorStoreConfig` Pydantic settings for search defaults and authority weights
 - `pgvector_store.py`: `PgVectorStore` implementation wrapping DocumentRepository with dynamic SQL filtering
-- `manager.py`: `VectorStoreManager` orchestrates embed + store + search operations, computes authority scores
+- `manager.py`: `VectorStoreManager` orchestrates embed + store + search + cleanup operations, computes authority scores
+- `VectorSearchFilter` supports: platforms, tickers, theme_ids, min_authority_score, exclude_ids, timestamp_after, timestamp_before
+- `cleanup_old_documents(days_to_keep)`: Removes documents older than threshold for storage management
 
 **API Layer** (`src/api/`):
 - `app.py`: FastAPI application factory with structlog integration
@@ -118,8 +136,12 @@ Settings in `src/config/settings.py` use Pydantic BaseSettings with env var over
 - `api_host` (0.0.0.0), `api_port` (8000), `api_keys` (comma-separated, empty = dev mode) for embedding API
 - `vectorstore_default_limit` (10), `vectorstore_default_threshold` (0.7) for search defaults
 - `vectorstore_centroid_limit` (100), `vectorstore_centroid_threshold` (0.5) for theme/cluster queries
+- `ner_enabled` (false), `ner_spacy_model` (en_core_web_trf) for NER configuration
+- `NER_ENABLE_SEMANTIC_LINKING` (false), `NER_SEMANTIC_SIMILARITY_THRESHOLD` (0.5), `NER_SEMANTIC_BASE_SCORE` (0.6) for embedding-based entity-theme linking
 
 Semiconductor tickers and company mappings are in `src/config/tickers.py`.
+
+NER settings can be overridden via `NER_*` environment variables (e.g., `NER_SPACY_MODEL=en_core_web_sm`, `NER_ENABLE_SEMANTIC_LINKING=true`).
 
 ### Data Schema
 
@@ -127,7 +149,7 @@ Semiconductor tickers and company mappings are in `src/config/tickers.py`.
 - Identity: `id`, `platform`, `url`
 - Content: `content`, `content_type`, `title`
 - Author: `author_id`, `author_name`, `author_verified`, `author_followers`
-- Quality: `spam_score`, `bot_probability`, `authority_score`, `tickers_mentioned`
+- Quality: `spam_score`, `bot_probability`, `authority_score`, `tickers_mentioned`, `entities_mentioned`
 - Engagement: `likes`, `shares`, `comments`, `views`
 - Embedding: `embedding` (FinBERT 768-dim), `embedding_minilm` (MiniLM 384-dim) - generated async by EmbeddingWorker
 - Clustering: `theme_ids` - assigned by clustering service
@@ -150,3 +172,52 @@ Semiconductor tickers and company mappings are in `src/config/tickers.py`.
 - **Dynamic SQL Builder**: `PgVectorStore.search()` constructs parameterized queries with variable filter combinations
 - **Log-Scaled Scoring**: Authority score uses `log(value+1)/log(scale)` to compress power-law distributions (followers, engagement)
 - **Orchestration Layer**: `VectorStoreManager` combines EmbeddingService + VectorStore for unified embed+search API
+- **Timestamp Range Queries**: Hybrid search combining vector similarity with temporal filtering for time-sensitive news
+- **EntityRuler Before NER**: spaCy EntityRuler runs before statistical NER for domain-specific pattern priority
+- **Opt-in NER**: NER is disabled by default (`enable_ner=False`) to avoid memory overhead when not needed
+- **Semantic Theme Linking**: `link_entities_to_theme_semantic()` uses MiniLM embeddings + cosine similarity for robust conglomerate disambiguation (e.g., "Samsung Electronics" vs "Samsung Galaxy")
+
+### Testing
+
+Test markers in `pyproject.toml`:
+- `@pytest.mark.performance`: Performance benchmarks (upsert throughput, search latency)
+- `@pytest.mark.integration`: Integration tests requiring running services
+
+```bash
+# Run all tests
+uv run pytest tests/ -v
+
+# Run only performance tests
+uv run pytest tests/ -v -m performance
+
+# Skip integration tests
+uv run pytest tests/ -v -m "not integration"
+
+# Manual NER verification
+uv run python -c "
+from src.ner import NERService
+svc = NERService()
+entities = svc.extract_sync('Nvidia announced HBM3E support for H200 GPUs')
+for e in entities:
+    print(f'{e.type}: {e.text} -> {e.normalized}')
+"
+
+# Semantic theme linking (requires embedding models)
+uv run python -c "
+import asyncio
+from src.embedding.service import EmbeddingService
+from src.ner import NERService
+
+async def main():
+    emb_svc = EmbeddingService()
+    ner_svc = NERService(embedding_service=emb_svc)
+    entities = ner_svc.extract_sync('Nvidia announced HBM3E for H200')
+    scores = await ner_svc.link_entities_to_theme_semantic(
+        entities, ['AI accelerator', 'deep learning']
+    )
+    for name, score in scores.items():
+        print(f'{name}: {score:.2f}')
+
+asyncio.run(main())
+"
+```

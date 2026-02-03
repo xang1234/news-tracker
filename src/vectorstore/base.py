@@ -7,6 +7,7 @@ plus shared data structures for search results and filters.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 
@@ -47,6 +48,8 @@ class VectorSearchFilter:
         theme_ids: Filter to documents with these theme IDs (OR within)
         min_authority_score: Minimum authority score threshold
         exclude_ids: Document IDs to exclude from results
+        timestamp_after: Filter to documents created after this time (inclusive)
+        timestamp_before: Filter to documents created before this time (inclusive)
     """
 
     platforms: list[str] | None = None
@@ -54,6 +57,8 @@ class VectorSearchFilter:
     theme_ids: list[str] | None = None
     min_authority_score: float | None = None
     exclude_ids: list[str] | None = None
+    timestamp_after: datetime | None = None
+    timestamp_before: datetime | None = None
 
     def __post_init__(self) -> None:
         """Validate filter values."""
@@ -64,6 +69,17 @@ class VectorSearchFilter:
                     f"got {self.min_authority_score}"
                 )
 
+        # Validate timestamp range
+        if (
+            self.timestamp_after is not None
+            and self.timestamp_before is not None
+            and self.timestamp_after > self.timestamp_before
+        ):
+            raise ValueError(
+                f"timestamp_after ({self.timestamp_after}) must be before "
+                f"timestamp_before ({self.timestamp_before})"
+            )
+
     @property
     def is_empty(self) -> bool:
         """Check if no filters are set."""
@@ -73,6 +89,8 @@ class VectorSearchFilter:
             and self.theme_ids is None
             and self.min_authority_score is None
             and self.exclude_ids is None
+            and self.timestamp_after is None
+            and self.timestamp_before is None
         )
 
 
@@ -182,5 +200,20 @@ class VectorStore(ABC):
 
         Returns:
             List of results (score will be 1.0 for exact matches)
+        """
+        ...
+
+    @abstractmethod
+    async def delete_before_timestamp(self, cutoff: datetime) -> int:
+        """
+        Delete documents older than cutoff timestamp.
+
+        Used for storage cleanup to remove stale documents.
+
+        Args:
+            cutoff: Documents with timestamp before this will be deleted
+
+        Returns:
+            Number of documents deleted
         """
         ...

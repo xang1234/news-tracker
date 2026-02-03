@@ -7,6 +7,7 @@ computation, and vector storage in a single high-level API.
 
 import math
 import structlog
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from src.embedding.service import EmbeddingService, ModelType
@@ -221,6 +222,36 @@ class VectorStoreManager:
             threshold=threshold,
             filters=filters,
         )
+
+    async def cleanup_old_documents(self, days_to_keep: int = 90) -> int:
+        """
+        Remove documents older than the specified threshold.
+
+        Used for storage management to prevent unbounded growth.
+        Documents with timestamp before (now - days_to_keep) will be deleted.
+
+        Args:
+            days_to_keep: Number of days of data to retain (default 90)
+
+        Returns:
+            Number of documents deleted
+
+        Raises:
+            ValueError: If days_to_keep is not positive
+        """
+        if days_to_keep <= 0:
+            raise ValueError(f"days_to_keep must be positive, got {days_to_keep}")
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
+        deleted = await self._store.delete_before_timestamp(cutoff)
+
+        logger.info(
+            "Cleanup complete",
+            deleted=deleted,
+            days_to_keep=days_to_keep,
+            cutoff=cutoff.isoformat(),
+        )
+        return deleted
 
     def _compute_authority_score(self, doc: NormalizedDocument) -> float:
         """

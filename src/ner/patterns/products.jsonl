@@ -1,0 +1,56 @@
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^H[12]00$"}}]}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^A100$"}}]}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^A[36]000$"}}]}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^V100$"}}]}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^L40[sS]?$"}}]}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^B100$"}}]}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^B200$"}}]}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^GB200$"}}]}
+{"label": "PRODUCT", "pattern": [{"LOWER": "grace"}, {"LOWER": "hopper", "OP": "?"}]}
+{"label": "PRODUCT", "pattern": [{"LOWER": "grace"}, {"LOWER": "blackwell", "OP": "?"}]}
+{"label": "PRODUCT", "pattern": "blackwell"}
+{"label": "PRODUCT", "pattern": "hopper"}
+{"label": "PRODUCT", "pattern": "ampere"}
+{"label": "PRODUCT", "pattern": "ada lovelace"}
+{"label": "PRODUCT", "pattern": [{"LOWER": "geforce"}, {"LOWER": "rtx", "OP": "?"}, {"TEXT": {"REGEX": "^[234][0-9]{3}$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": [{"LOWER": "rtx"}, {"TEXT": {"REGEX": "^[234][0-9]{3}$"}}]}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^RTX$"}}, {"TEXT": {"REGEX": "^[234][0-9]{3}$"}}]}
+{"label": "PRODUCT", "pattern": [{"LOWER": "quadro"}, {"TEXT": {"REGEX": "^[A-Z]?[0-9]+$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": [{"LOWER": "tesla"}, {"TEXT": {"REGEX": "^[AVPTK][0-9]+$"}}]}
+{"label": "PRODUCT", "pattern": "dgx"}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^DGX$"}}, {"TEXT": {"REGEX": "^[A-Z0-9]+$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^MI[0-9]+X?$"}}]}
+{"label": "PRODUCT", "pattern": [{"LOWER": "instinct"}, {"TEXT": {"REGEX": "^MI[0-9]+X?$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": [{"LOWER": "radeon"}, {"TEXT": {"REGEX": "^(RX|Pro)$"}, "OP": "?"}, {"TEXT": {"REGEX": "^[0-9]+$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": [{"LOWER": "ryzen"}, {"TEXT": {"REGEX": "^[3579]$"}, "OP": "?"}, {"TEXT": {"REGEX": "^[0-9]+X?$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": [{"LOWER": "epyc"}, {"TEXT": {"REGEX": "^[0-9]+$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": [{"LOWER": "threadripper"}, {"TEXT": {"REGEX": "^[0-9]+$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^Zen[0-9]?$"}}]}
+{"label": "PRODUCT", "pattern": [{"LOWER": "xeon"}, {"TEXT": {"REGEX": "^[A-Za-z]+$"}, "OP": "?"}, {"TEXT": {"REGEX": "^[0-9]+$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": [{"LOWER": "core"}, {"TEXT": {"REGEX": "^i[3579]$"}}, {"TEXT": {"REGEX": "^-?[0-9]+[A-Z]*$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^i[3579]$"}}, {"TEXT": "-", "OP": "?"}, {"TEXT": {"REGEX": "^[0-9]+[A-Z]*$"}}]}
+{"label": "PRODUCT", "pattern": "alder lake"}
+{"label": "PRODUCT", "pattern": "raptor lake"}
+{"label": "PRODUCT", "pattern": "meteor lake"}
+{"label": "PRODUCT", "pattern": "arrow lake"}
+{"label": "PRODUCT", "pattern": "lunar lake"}
+{"label": "PRODUCT", "pattern": [{"LOWER": "arc"}, {"TEXT": {"REGEX": "^[A-Za-z][0-9]+$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": "gaudi"}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^Gaudi[0-9]?$"}}]}
+{"label": "PRODUCT", "pattern": "snapdragon"}
+{"label": "PRODUCT", "pattern": [{"LOWER": "snapdragon"}, {"TEXT": {"REGEX": "^[0-9]+$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": "adreno"}
+{"label": "PRODUCT", "pattern": "dimensity"}
+{"label": "PRODUCT", "pattern": [{"LOWER": "dimensity"}, {"TEXT": {"REGEX": "^[0-9]+$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": "exynos"}
+{"label": "PRODUCT", "pattern": [{"LOWER": "exynos"}, {"TEXT": {"REGEX": "^[0-9]+$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": "bionic"}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^A[0-9]+$"}}, {"LOWER": "bionic"}]}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^M[0-9]$"}}, {"TEXT": {"REGEX": "^(Pro|Max|Ultra)?$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": "trainium"}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^Trainium[0-9]?$"}}]}
+{"label": "PRODUCT", "pattern": "inferentia"}
+{"label": "PRODUCT", "pattern": [{"LOWER": "graviton"}, {"TEXT": {"REGEX": "^[0-9]$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": "tpu"}
+{"label": "PRODUCT", "pattern": [{"TEXT": {"REGEX": "^TPU$"}}, {"TEXT": {"REGEX": "^v[0-9]$"}, "OP": "?"}]}
+{"label": "PRODUCT", "pattern": "crucial"}

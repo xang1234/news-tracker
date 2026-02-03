@@ -6,6 +6,7 @@ vector operations through the VectorStore abstraction.
 """
 
 import structlog
+from datetime import datetime
 from typing import Any
 
 from src.ingestion.schemas import NormalizedDocument
@@ -137,6 +138,16 @@ class PgVectorStore(VectorStore):
             if filters.exclude_ids:
                 conditions.append(f"id != ALL(${param_idx})")
                 params.append(filters.exclude_ids)
+                param_idx += 1
+
+            if filters.timestamp_after:
+                conditions.append(f"timestamp >= ${param_idx}")
+                params.append(filters.timestamp_after)
+                param_idx += 1
+
+            if filters.timestamp_before:
+                conditions.append(f"timestamp <= ${param_idx}")
+                params.append(filters.timestamp_before)
                 param_idx += 1
 
         where_clause = " AND ".join(conditions)
@@ -285,6 +296,29 @@ class PgVectorStore(VectorStore):
         """
         result = await self._db.fetchval(sql, doc_id, authority_score)
         return result is not None
+
+    async def delete_before_timestamp(self, cutoff: datetime) -> int:
+        """
+        Delete documents with timestamp before cutoff.
+
+        Used for storage cleanup to remove stale documents.
+
+        Args:
+            cutoff: Documents with timestamp before this will be deleted
+
+        Returns:
+            Number of documents deleted
+        """
+        sql = """
+            DELETE FROM documents
+            WHERE timestamp < $1
+            RETURNING id
+        """
+        rows = await self._db.fetch(sql, cutoff)
+        deleted = len(rows)
+
+        logger.info(f"Deleted {deleted} documents before {cutoff.isoformat()}")
+        return deleted
 
     def _row_to_result(
         self,

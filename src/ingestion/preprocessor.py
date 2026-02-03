@@ -1,7 +1,7 @@
 """
 Document preprocessing pipeline.
 
-Implements spam detection, bot detection, ticker extraction, and
+Implements spam detection, bot detection, ticker extraction, NER, and
 content enrichment. All preprocessing is rule-based with ML-ready
 structure for future model integration.
 
@@ -9,12 +9,16 @@ Components:
 - SpamDetector: Rule-based spam scoring
 - BotDetector: Bot probability estimation
 - TickerExtractor: Ticker extraction with fuzzy matching
+- NERService: Named entity recognition (optional)
 - Preprocessor: Orchestrates all preprocessing steps
 """
+
+from __future__ import annotations
 
 import logging
 import re
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from rapidfuzz import fuzz
 
@@ -25,6 +29,9 @@ from src.config.tickers import (
     SEMICONDUCTOR_TICKERS,
 )
 from src.ingestion.schemas import NormalizedDocument, Platform
+
+if TYPE_CHECKING:
+    from src.ner.service import NERService
 
 logger = logging.getLogger(__name__)
 
@@ -356,7 +363,8 @@ class Preprocessor:
     1. Spam detection
     2. Bot detection
     3. Ticker extraction
-    4. Content enrichment
+    4. NER extraction (optional)
+    5. Content enrichment
 
     Usage:
         preprocessor = Preprocessor()
@@ -364,6 +372,10 @@ class Preprocessor:
 
         if doc.should_filter:
             continue  # Skip this document
+
+        # With NER enabled:
+        from src.ner.service import NERService
+        preprocessor = Preprocessor(ner_service=NERService(), enable_ner=True)
     """
 
     def __init__(
@@ -371,6 +383,8 @@ class Preprocessor:
         spam_detector: SpamDetector | None = None,
         bot_detector: BotDetector | None = None,
         ticker_extractor: TickerExtractor | None = None,
+        ner_service: "NERService | None" = None,
+        enable_ner: bool = False,
     ):
         """
         Initialize preprocessor.
@@ -379,10 +393,14 @@ class Preprocessor:
             spam_detector: Custom spam detector (or use default)
             bot_detector: Custom bot detector (or use default)
             ticker_extractor: Custom ticker extractor (or use default)
+            ner_service: NER service for entity extraction (optional)
+            enable_ner: Whether to run NER extraction (default False)
         """
         self.spam_detector = spam_detector or SpamDetector()
         self.bot_detector = bot_detector or BotDetector()
         self.ticker_extractor = ticker_extractor or TickerExtractor()
+        self._ner_service = ner_service
+        self._enable_ner = enable_ner
 
     def process(self, doc: NormalizedDocument) -> NormalizedDocument:
         """
@@ -407,11 +425,21 @@ class Preprocessor:
         bot_prob = self.bot_detector.detect(doc)
         doc.bot_probability = bot_prob
 
+        # 4. NER extraction (if enabled)
+        if self._enable_ner and self._ner_service is not None:
+            try:
+                entities = self._ner_service.extract_sync(doc.content)
+                doc.entities_mentioned = [e.to_dict() for e in entities]
+            except Exception as e:
+                logger.warning(f"NER extraction failed for {doc.id}: {e}")
+                doc.entities_mentioned = []
+
         logger.debug(
             f"Preprocessed {doc.id}: "
             f"spam={doc.spam_score:.2f}, "
             f"bot={doc.bot_probability:.2f}, "
-            f"tickers={doc.tickers_mentioned}"
+            f"tickers={doc.tickers_mentioned}, "
+            f"entities={len(doc.entities_mentioned)}"
         )
 
         return doc

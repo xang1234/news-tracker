@@ -1,5 +1,7 @@
 """Unit tests for vectorstore base classes and data models."""
 
+from datetime import datetime, timezone
+
 import pytest
 
 from src.vectorstore.base import VectorSearchFilter, VectorSearchResult
@@ -145,3 +147,54 @@ class TestVectorSearchFilter:
         """Test that authority score of 1.0 is valid."""
         f = VectorSearchFilter(min_authority_score=1.0)
         assert f.min_authority_score == 1.0
+
+    def test_create_filter_with_timestamp_after(self):
+        """Test creating a filter with timestamp_after."""
+        ts = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        f = VectorSearchFilter(timestamp_after=ts)
+
+        assert f.timestamp_after == ts
+        assert f.is_empty is False
+
+    def test_create_filter_with_timestamp_before(self):
+        """Test creating a filter with timestamp_before."""
+        ts = datetime(2026, 2, 1, 0, 0, 0, tzinfo=timezone.utc)
+        f = VectorSearchFilter(timestamp_before=ts)
+
+        assert f.timestamp_before == ts
+        assert f.is_empty is False
+
+    def test_create_filter_with_date_range(self):
+        """Test creating a filter with both timestamp_after and timestamp_before."""
+        start = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        end = datetime(2026, 1, 31, 23, 59, 59, tzinfo=timezone.utc)
+        f = VectorSearchFilter(timestamp_after=start, timestamp_before=end)
+
+        assert f.timestamp_after == start
+        assert f.timestamp_before == end
+        assert f.is_empty is False
+
+    def test_invalid_timestamp_range(self):
+        """Test that timestamp_after > timestamp_before raises ValueError."""
+        start = datetime(2026, 2, 1, 0, 0, 0, tzinfo=timezone.utc)
+        end = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+        with pytest.raises(ValueError, match="timestamp_after.*must be before"):
+            VectorSearchFilter(timestamp_after=start, timestamp_before=end)
+
+    def test_timestamp_edge_case_same_time(self):
+        """Test that timestamp_after == timestamp_before is valid (single point in time)."""
+        ts = datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+        f = VectorSearchFilter(timestamp_after=ts, timestamp_before=ts)
+
+        assert f.timestamp_after == f.timestamp_before
+
+    def test_is_empty_with_only_timestamps(self):
+        """Test that is_empty returns False when only timestamps are set."""
+        ts = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+        f1 = VectorSearchFilter(timestamp_after=ts)
+        assert f1.is_empty is False
+
+        f2 = VectorSearchFilter(timestamp_before=ts)
+        assert f2.is_empty is False

@@ -1,0 +1,89 @@
+{"label": "COMPANY", "pattern": [{"LOWER": "nvidia"}, {"LOWER": "corporation", "OP": "?"}]}
+{"label": "COMPANY", "pattern": "nvidia"}
+{"label": "COMPANY", "pattern": "NVIDIA"}
+{"label": "COMPANY", "pattern": [{"LOWER": "advanced"}, {"LOWER": "micro"}, {"LOWER": "devices"}]}
+{"label": "COMPANY", "pattern": "amd"}
+{"label": "COMPANY", "pattern": "AMD"}
+{"label": "COMPANY", "pattern": [{"LOWER": "intel"}, {"LOWER": "corporation", "OP": "?"}]}
+{"label": "COMPANY", "pattern": "intel"}
+{"label": "COMPANY", "pattern": "INTC"}
+{"label": "COMPANY", "pattern": [{"LOWER": "taiwan"}, {"LOWER": "semiconductor"}, {"LOWER": "manufacturing", "OP": "?"}, {"LOWER": "company", "OP": "?"}]}
+{"label": "COMPANY", "pattern": [{"LOWER": "taiwan"}, {"LOWER": "semi"}]}
+{"label": "COMPANY", "pattern": "tsmc"}
+{"label": "COMPANY", "pattern": "TSMC"}
+{"label": "COMPANY", "pattern": "TSM"}
+{"label": "COMPANY", "pattern": [{"LOWER": "sk"}, {"LOWER": "hynix"}]}
+{"label": "COMPANY", "pattern": "hynix"}
+{"label": "COMPANY", "pattern": [{"LOWER": "samsung"}, {"LOWER": "semiconductor", "OP": "?"}]}
+{"label": "COMPANY", "pattern": [{"LOWER": "samsung"}, {"LOWER": "electronics"}]}
+{"label": "COMPANY", "pattern": [{"LOWER": "samsung"}, {"LOWER": "foundry"}]}
+{"label": "COMPANY", "pattern": [{"LOWER": "micron"}, {"LOWER": "technology", "OP": "?"}]}
+{"label": "COMPANY", "pattern": "micron"}
+{"label": "COMPANY", "pattern": "MU"}
+{"label": "COMPANY", "pattern": [{"LOWER": "asml"}, {"LOWER": "holding", "OP": "?"}]}
+{"label": "COMPANY", "pattern": "asml"}
+{"label": "COMPANY", "pattern": "ASML"}
+{"label": "COMPANY", "pattern": [{"LOWER": "applied"}, {"LOWER": "materials"}]}
+{"label": "COMPANY", "pattern": "amat"}
+{"label": "COMPANY", "pattern": "AMAT"}
+{"label": "COMPANY", "pattern": [{"LOWER": "lam"}, {"LOWER": "research"}]}
+{"label": "COMPANY", "pattern": "LRCX"}
+{"label": "COMPANY", "pattern": [{"LOWER": "kla"}, {"LOWER": "corporation", "OP": "?"}]}
+{"label": "COMPANY", "pattern": "kla"}
+{"label": "COMPANY", "pattern": "KLAC"}
+{"label": "COMPANY", "pattern": "qualcomm"}
+{"label": "COMPANY", "pattern": "QCOM"}
+{"label": "COMPANY", "pattern": [{"LOWER": "broadcom"}, {"LOWER": "inc", "OP": "?"}]}
+{"label": "COMPANY", "pattern": "broadcom"}
+{"label": "COMPANY", "pattern": "AVGO"}
+{"label": "COMPANY", "pattern": [{"LOWER": "texas"}, {"LOWER": "instruments"}]}
+{"label": "COMPANY", "pattern": "TXN"}
+{"label": "COMPANY", "pattern": [{"LOWER": "analog"}, {"LOWER": "devices"}]}
+{"label": "COMPANY", "pattern": "ADI"}
+{"label": "COMPANY", "pattern": [{"LOWER": "nxp"}, {"LOWER": "semiconductors", "OP": "?"}]}
+{"label": "COMPANY", "pattern": "nxp"}
+{"label": "COMPANY", "pattern": "NXPI"}
+{"label": "COMPANY", "pattern": [{"LOWER": "marvell"}, {"LOWER": "technology", "OP": "?"}]}
+{"label": "COMPANY", "pattern": "marvell"}
+{"label": "COMPANY", "pattern": "MRVL"}
+{"label": "COMPANY", "pattern": [{"LOWER": "on"}, {"LOWER": "semiconductor"}]}
+{"label": "COMPANY", "pattern": "onsemi"}
+{"label": "COMPANY", "pattern": [{"LOWER": "microchip"}, {"LOWER": "technology", "OP": "?"}]}
+{"label": "COMPANY", "pattern": "MCHP"}
+{"label": "COMPANY", "pattern": [{"LOWER": "skyworks"}, {"LOWER": "solutions", "OP": "?"}]}
+{"label": "COMPANY", "pattern": "skyworks"}
+{"label": "COMPANY", "pattern": "SWKS"}
+{"label": "COMPANY", "pattern": "qorvo"}
+{"label": "COMPANY", "pattern": "QRVO"}
+{"label": "COMPANY", "pattern": [{"LOWER": "arm"}, {"LOWER": "holdings", "OP": "?"}]}
+{"label": "COMPANY", "pattern": "synopsys"}
+{"label": "COMPANY", "pattern": "SNPS"}
+{"label": "COMPANY", "pattern": [{"LOWER": "cadence"}, {"LOWER": "design", "OP": "?"}]}
+{"label": "COMPANY", "pattern": "cadence"}
+{"label": "COMPANY", "pattern": "CDNS"}
+{"label": "COMPANY", "pattern": "globalfoundries"}
+{"label": "COMPANY", "pattern": "GFS"}
+{"label": "COMPANY", "pattern": "wolfspeed"}
+{"label": "COMPANY", "pattern": "WOLF"}
+{"label": "COMPANY", "pattern": [{"LOWER": "lattice"}, {"LOWER": "semiconductor", "OP": "?"}]}
+{"label": "COMPANY", "pattern": "LSCC"}
+{"label": "COMPANY", "pattern": [{"LOWER": "monolithic"}, {"LOWER": "power"}, {"LOWER": "systems", "OP": "?"}]}
+{"label": "COMPANY", "pattern": "MPWR"}
+{"label": "COMPANY", "pattern": [{"LOWER": "cirrus"}, {"LOWER": "logic"}]}
+{"label": "COMPANY", "pattern": "CRUS"}
+{"label": "COMPANY", "pattern": [{"LOWER": "silicon"}, {"LOWER": "labs"}]}
+{"label": "COMPANY", "pattern": "SLAB"}
+{"label": "COMPANY", "pattern": "semtech"}
+{"label": "COMPANY", "pattern": "SMTC"}
+{"label": "COMPANY", "pattern": "teradyne"}
+{"label": "COMPANY", "pattern": "TER"}
+{"label": "COMPANY", "pattern": [{"LOWER": "united"}, {"LOWER": "microelectronics"}]}
+{"label": "COMPANY", "pattern": "umc"}
+{"label": "COMPANY", "pattern": "UMC"}
+{"label": "COMPANY", "pattern": [{"LOWER": "western"}, {"LOWER": "digital"}]}
+{"label": "COMPANY", "pattern": "WDC"}
+{"label": "COMPANY", "pattern": "seagate"}
+{"label": "COMPANY", "pattern": "STX"}
+{"label": "COMPANY", "pattern": "xilinx"}
+{"label": "COMPANY", "pattern": "altera"}
+{"label": "COMPANY", "pattern": "cree"}

@@ -104,6 +104,10 @@ class Settings(BaseSettings):
     vectorstore_centroid_limit: int = 100
     vectorstore_centroid_threshold: float = 0.5
 
+    # NER (Named Entity Recognition)
+    ner_enabled: bool = Field(default=False, description="Enable NER extraction in preprocessing")
+    ner_spacy_model: str = Field(default="en_core_web_trf", description="spaCy model for NER")
+
     @property
     def is_production(self) -> bool:
         """Check if running in production environment."""

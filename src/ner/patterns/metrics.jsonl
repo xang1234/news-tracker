@@ -1,0 +1,26 @@
+{"label": "METRIC", "pattern": [{"LIKE_NUM": true}, {"LOWER": {"IN": ["billion", "million", "trillion", "bn", "mm", "tn"]}}]}
+{"label": "METRIC", "pattern": [{"TEXT": "$"}, {"LIKE_NUM": true}, {"LOWER": {"IN": ["billion", "million", "trillion", "bn", "mm", "tn"]}, "OP": "?"}]}
+{"label": "METRIC", "pattern": [{"LIKE_NUM": true}, {"TEXT": "%"}]}
+{"label": "METRIC", "pattern": [{"LIKE_NUM": true}, {"LOWER": "percent"}]}
+{"label": "METRIC", "pattern": [{"LIKE_NUM": true}, {"LOWER": "bps"}]}
+{"label": "METRIC", "pattern": [{"LIKE_NUM": true}, {"LOWER": {"IN": ["basis", "bps"]}}, {"LOWER": "points", "OP": "?"}]}
+{"label": "METRIC", "pattern": [{"LIKE_NUM": true}, {"TEXT": "x"}, {"LOWER": "growth", "OP": "?"}]}
+{"label": "METRIC", "pattern": [{"LIKE_NUM": true}, {"LOWER": "tflops"}]}
+{"label": "METRIC", "pattern": [{"LIKE_NUM": true}, {"LOWER": {"IN": ["pflops", "exaflops"]}}]}
+{"label": "METRIC", "pattern": [{"LIKE_NUM": true}, {"LOWER": {"IN": ["gb", "tb", "pb"]}}]}
+{"label": "METRIC", "pattern": [{"LIKE_NUM": true}, {"LOWER": {"IN": ["gb/s", "tb/s", "gbps", "tbps"]}}]}
+{"label": "METRIC", "pattern": [{"LIKE_NUM": true}, {"LOWER": {"IN": ["w", "watts", "watt"]}}]}
+{"label": "METRIC", "pattern": [{"LIKE_NUM": true}, {"LOWER": "tdp"}]}
+{"label": "METRIC", "pattern": [{"LOWER": {"IN": ["q1", "q2", "q3", "q4"]}}, {"LIKE_NUM": true, "OP": "?"}]}
+{"label": "METRIC", "pattern": [{"LOWER": "fy"}, {"LIKE_NUM": true}]}
+{"label": "METRIC", "pattern": [{"LOWER": "yoy"}]}
+{"label": "METRIC", "pattern": [{"LOWER": "qoq"}]}
+{"label": "METRIC", "pattern": [{"LOWER": {"IN": ["revenue", "sales"]}}, {"LOWER": "of", "OP": "?"}, {"TEXT": "$", "OP": "?"}, {"LIKE_NUM": true}]}
+{"label": "METRIC", "pattern": [{"LOWER": "eps"}, {"LOWER": "of", "OP": "?"}, {"TEXT": "$", "OP": "?"}, {"LIKE_NUM": true, "OP": "?"}]}
+{"label": "METRIC", "pattern": [{"LOWER": "gross"}, {"LOWER": "margin"}, {"LOWER": "of", "OP": "?"}, {"LIKE_NUM": true, "OP": "?"}, {"TEXT": "%", "OP": "?"}]}
+{"label": "METRIC", "pattern": [{"LOWER": "operating"}, {"LOWER": "margin"}]}
+{"label": "METRIC", "pattern": [{"LOWER": "market"}, {"LOWER": "share"}]}
+{"label": "METRIC", "pattern": [{"LOWER": "capex"}]}
+{"label": "METRIC", "pattern": [{"LOWER": "wafer"}, {"LOWER": "starts"}]}
+{"label": "METRIC", "pattern": [{"LIKE_NUM": true}, {"LOWER": {"IN": ["kwpm", "kwspm"]}}]}
+{"label": "METRIC", "pattern": [{"LIKE_NUM": true}, {"LOWER": "k"}, {"LOWER": {"IN": ["wspm", "wpm"]}}]}

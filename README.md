@@ -260,6 +260,10 @@ uv run news-tracker vector-search "semiconductor supply chain" \
   --ticker NVDA \
   --ticker AMD \
   --min-authority 0.6
+
+# Cleanup old documents (storage management)
+uv run news-tracker cleanup --days 90              # Delete docs older than 90 days
+uv run news-tracker cleanup --days 30 --dry-run   # Preview without deleting
 ```
 
 ### API Endpoint
@@ -275,7 +279,9 @@ curl -X POST http://localhost:8001/search/similar \
     "threshold": 0.7,
     "platforms": ["twitter", "news"],
     "tickers": ["NVDA"],
-    "min_authority_score": 0.5
+    "min_authority_score": 0.5,
+    "timestamp_after": "2026-01-01T00:00:00Z",
+    "timestamp_before": "2026-02-01T00:00:00Z"
   }'
 ```
 
@@ -310,5 +316,131 @@ curl -X POST http://localhost:8001/search/similar \
 | `tickers` | string[] | Filter by mentioned ticker symbols |
 | `theme_ids` | string[] | Filter by theme cluster IDs |
 | `min_authority_score` | float | Minimum authority score (0.0-1.0) |
+| `timestamp_after` | datetime | Filter to documents created after this time (ISO 8601) |
+| `timestamp_before` | datetime | Filter to documents created before this time (ISO 8601) |
 | `threshold` | float | Minimum similarity score (default: 0.7) |
 | `limit` | int | Maximum results (default: 10, max: 100) |
+
+## Named Entity Recognition (NER)
+
+Optional NER extraction identifies financial entities beyond simple ticker symbols.
+
+### Entity Types
+
+| Type | Description | Examples |
+|------|-------------|----------|
+| **TICKER** | Stock ticker symbols | $NVDA, $AMD, $INTC |
+| **COMPANY** | Company names (normalized to standard form) | Nvidia → NVIDIA, Taiwan Semiconductor → TSM |
+| **PRODUCT** | Hardware products | H100, A100, Snapdragon, GeForce RTX |
+| **TECHNOLOGY** | Technical terms | HBM3E, CoWoS, 3nm, EUV lithography |
+| **METRIC** | Financial metrics | $5.6 billion, 10% YoY, 51% margin |
+
+### Enable NER
+
+NER is disabled by default to save memory (~500MB for transformer model). Enable via environment variable:
+
+```bash
+# In .env
+NER_ENABLED=true
+NER_SPACY_MODEL=en_core_web_trf  # High accuracy (default)
+# NER_SPACY_MODEL=en_core_web_sm  # Faster, lower memory
+
+# Download the spaCy model
+python -m spacy download en_core_web_trf
+```
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NER_ENABLED` | false | Enable NER extraction in preprocessing |
+| `NER_SPACY_MODEL` | en_core_web_trf | spaCy model (trf=transformer, sm=small) |
+| `NER_FUZZY_THRESHOLD` | 85 | Fuzzy matching threshold (0-100) |
+| `NER_ENABLE_COREFERENCE` | true | Resolve "the company" → entity |
+| `NER_CONFIDENCE_THRESHOLD` | 0.5 | Minimum confidence for entities |
+| `NER_ENABLE_SEMANTIC_LINKING` | false | Enable embedding-based theme linking |
+| `NER_SEMANTIC_SIMILARITY_THRESHOLD` | 0.5 | Minimum cosine similarity for theme match |
+| `NER_SEMANTIC_BASE_SCORE` | 0.6 | Base weight for semantic similarity score |
+
+### Example Output
+
+```python
+from src.ner import NERService
+
+service = NERService()
+entities = service.extract_sync("Nvidia announced HBM3E support for H200 GPUs")
+
+for e in entities:
+    print(f"{e.type}: {e.text} → {e.normalized}")
+
+# Output:
+# COMPANY: Nvidia → NVIDIA
+# TECHNOLOGY: HBM3E → HBM3E
+# PRODUCT: H200 → H200
+```
+
+### Extracted Entity Schema
+
+Entities are stored in the `entities_mentioned` JSONB column:
+
+```json
+{
+  "text": "Nvidia",
+  "type": "COMPANY",
+  "normalized": "NVIDIA",
+  "start": 0,
+  "end": 6,
+  "confidence": 0.95,
+  "metadata": {"ticker": "NVDA"}
+}
+```
+
+### Semantic Theme Linking
+
+For robust entity disambiguation (e.g., distinguishing "Samsung Electronics" from "Samsung Galaxy"), use embedding-based semantic similarity:
+
+```python
+from src.embedding.service import EmbeddingService
+from src.ner import NERService
+
+# Initialize with embedding service for semantic linking
+embedding_svc = EmbeddingService()
+ner_svc = NERService(embedding_service=embedding_svc)
+
+# Extract entities
+entities = ner_svc.extract_sync("Nvidia announced HBM3E support for H200")
+
+# Calculate semantic relevance to theme keywords
+scores = await ner_svc.link_entities_to_theme_semantic(
+    entities,
+    ["AI accelerator", "deep learning", "graphics processing"]
+)
+# {'NVIDIA': 0.82, 'HBM3E': 0.71, 'H200': 0.65}
+```
+
+The scoring formula combines semantic similarity with domain-specific bonuses:
+- **Semantic similarity**: Cosine similarity between entity and theme embeddings (weighted by `semantic_base_score`)
+- **Semiconductor ticker bonus**: +0.2 for entities with known semiconductor ticker symbols
+- **Tech entity bonus**: +0.1 for TECHNOLOGY and PRODUCT entity types
+
+This is useful for:
+- **Conglomerate disambiguation**: "Samsung" in a semiconductor context vs. consumer electronics
+- **Theme clustering**: Grouping entities by topic relevance
+- **Search ranking**: Prioritizing entities that match user intent
+
+## Storage Management
+
+The cleanup command removes old documents to prevent unbounded database growth:
+
+```bash
+# Delete documents older than 90 days (default)
+uv run news-tracker cleanup
+
+# Custom retention period
+uv run news-tracker cleanup --days 30
+
+# Preview deletion count without actually deleting
+uv run news-tracker cleanup --days 30 --dry-run
+```
+
+Programmatic cleanup is also available via `VectorStoreManager.cleanup_old_documents(days_to_keep=90)`.

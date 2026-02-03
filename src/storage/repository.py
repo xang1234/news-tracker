@@ -70,6 +70,7 @@ class DocumentRepository:
             title TEXT,
             engagement JSONB NOT NULL DEFAULT '{}',
             tickers TEXT[] NOT NULL DEFAULT '{}',
+            entities_mentioned JSONB NOT NULL DEFAULT '[]',
             urls_mentioned TEXT[] NOT NULL DEFAULT '{}',
             spam_score REAL NOT NULL DEFAULT 0.0,
             bot_probability REAL NOT NULL DEFAULT 0.0,
@@ -92,6 +93,8 @@ class DocumentRepository:
             ON documents(author_id);
         CREATE INDEX IF NOT EXISTS idx_documents_tickers
             ON documents USING GIN(tickers);
+        CREATE INDEX IF NOT EXISTS idx_documents_entities
+            ON documents USING GIN(entities_mentioned);
         CREATE INDEX IF NOT EXISTS idx_documents_created_at
             ON documents(created_at DESC);
 
@@ -139,6 +142,9 @@ class DocumentRepository:
         -- Add authority_score column if it doesn't exist (for existing tables)
         ALTER TABLE documents ADD COLUMN IF NOT EXISTS authority_score REAL;
 
+        -- Add entities_mentioned column if it doesn't exist
+        ALTER TABLE documents ADD COLUMN IF NOT EXISTS entities_mentioned JSONB NOT NULL DEFAULT '[]';
+
         -- Add index for authority_score filtering
         CREATE INDEX IF NOT EXISTS idx_documents_authority_score
             ON documents(authority_score DESC)
@@ -148,6 +154,10 @@ class DocumentRepository:
         CREATE INDEX IF NOT EXISTS idx_documents_platform_authority
             ON documents(platform, authority_score DESC)
             WHERE authority_score IS NOT NULL AND embedding IS NOT NULL;
+
+        -- GIN index for entity queries
+        CREATE INDEX IF NOT EXISTS idx_documents_entities
+            ON documents USING GIN(entities_mentioned);
         """
         await self._db.execute(migrations_sql)
 
@@ -170,19 +180,20 @@ class DocumentRepository:
             id, platform, url, timestamp, fetched_at,
             author_id, author_name, author_followers, author_verified,
             content, content_type, title,
-            engagement, tickers, urls_mentioned,
+            engagement, tickers, entities_mentioned, urls_mentioned,
             spam_score, bot_probability, authority_score,
             embedding, sentiment, theme_ids, raw_data
         ) VALUES (
             $1, $2, $3, $4, $5,
             $6, $7, $8, $9,
             $10, $11, $12,
-            $13, $14, $15,
-            $16, $17, $18,
-            $19, $20, $21, $22
+            $13, $14, $15, $16,
+            $17, $18, $19,
+            $20, $21, $22, $23
         )
         ON CONFLICT (id) DO UPDATE SET
             engagement = EXCLUDED.engagement,
+            entities_mentioned = EXCLUDED.entities_mentioned,
             spam_score = EXCLUDED.spam_score,
             bot_probability = EXCLUDED.bot_probability,
             authority_score = EXCLUDED.authority_score,
@@ -206,6 +217,7 @@ class DocumentRepository:
             doc.title,
             json.dumps(doc.engagement.model_dump()),
             doc.tickers_mentioned,
+            json.dumps(doc.entities_mentioned),
             doc.urls_mentioned,
             doc.spam_score,
             doc.bot_probability,
@@ -241,19 +253,20 @@ class DocumentRepository:
             id, platform, url, timestamp, fetched_at,
             author_id, author_name, author_followers, author_verified,
             content, content_type, title,
-            engagement, tickers, urls_mentioned,
+            engagement, tickers, entities_mentioned, urls_mentioned,
             spam_score, bot_probability, authority_score,
             raw_data
         ) VALUES (
             $1, $2, $3, $4, $5,
             $6, $7, $8, $9,
             $10, $11, $12,
-            $13, $14, $15,
-            $16, $17, $18,
-            $19
+            $13, $14, $15, $16,
+            $17, $18, $19,
+            $20
         )
         ON CONFLICT (id) DO UPDATE SET
             engagement = EXCLUDED.engagement,
+            entities_mentioned = EXCLUDED.entities_mentioned,
             spam_score = EXCLUDED.spam_score,
             bot_probability = EXCLUDED.bot_probability,
             authority_score = EXCLUDED.authority_score,
@@ -277,6 +290,7 @@ class DocumentRepository:
                 doc.title,
                 json.dumps(doc.engagement.model_dump()),
                 doc.tickers_mentioned,
+                json.dumps(doc.entities_mentioned),
                 doc.urls_mentioned,
                 doc.spam_score,
                 doc.bot_probability,
@@ -510,6 +524,97 @@ class DocumentRepository:
             value,
             json.dumps(dimensions or {}),
         )
+
+    # Entity query methods
+
+    async def get_documents_by_entity(
+        self,
+        entity_type: str,
+        entity_normalized: str,
+        limit: int = 100,
+        since: datetime | None = None,
+    ) -> list[NormalizedDocument]:
+        """
+        Get documents mentioning a specific entity.
+
+        Uses JSONB containment query on entities_mentioned.
+
+        Args:
+            entity_type: Entity type (COMPANY, PRODUCT, TECHNOLOGY, METRIC)
+            entity_normalized: Normalized entity name to search for
+            limit: Maximum documents to return
+            since: Optional timestamp filter
+
+        Returns:
+            List of documents mentioning the entity
+        """
+        # Build JSONB containment query
+        entity_filter = json.dumps([{"type": entity_type, "normalized": entity_normalized}])
+
+        if since:
+            sql = """
+                SELECT * FROM documents
+                WHERE entities_mentioned @> $1::jsonb
+                  AND timestamp >= $2
+                ORDER BY timestamp DESC
+                LIMIT $3
+            """
+            rows = await self._db.fetch(sql, entity_filter, since, limit)
+        else:
+            sql = """
+                SELECT * FROM documents
+                WHERE entities_mentioned @> $1::jsonb
+                ORDER BY timestamp DESC
+                LIMIT $2
+            """
+            rows = await self._db.fetch(sql, entity_filter, limit)
+
+        return [self._row_to_document(row) for row in rows]
+
+    async def get_entity_counts(
+        self,
+        entity_type: str | None = None,
+        limit: int = 50,
+    ) -> list[tuple[str, str, int]]:
+        """
+        Get counts of entities by type and normalized name.
+
+        Args:
+            entity_type: Optional entity type filter
+            limit: Maximum results to return
+
+        Returns:
+            List of (type, normalized, count) tuples
+        """
+        if entity_type:
+            sql = """
+                SELECT
+                    entity->>'type' AS type,
+                    entity->>'normalized' AS normalized,
+                    COUNT(*) AS cnt
+                FROM documents,
+                     jsonb_array_elements(entities_mentioned) AS entity
+                WHERE entity->>'type' = $1
+                GROUP BY entity->>'type', entity->>'normalized'
+                ORDER BY cnt DESC
+                LIMIT $2
+            """
+            rows = await self._db.fetch(sql, entity_type, limit)
+        else:
+            sql = """
+                SELECT
+                    entity->>'type' AS type,
+                    entity->>'normalized' AS normalized,
+                    COUNT(*) AS cnt
+                FROM documents,
+                     jsonb_array_elements(entities_mentioned) AS entity
+                GROUP BY entity->>'type', entity->>'normalized'
+                ORDER BY cnt DESC
+                LIMIT $1
+            """
+            rows = await self._db.fetch(sql, limit)
+
+        return [(row["type"], row["normalized"], row["cnt"]) for row in rows]
 
     # Embedding methods
 
@@ -778,6 +883,11 @@ class DocumentRepository:
         if isinstance(raw_data, str):
             raw_data = json.loads(raw_data)
 
+        # Parse entities_mentioned JSON
+        entities_mentioned = row.get("entities_mentioned", [])
+        if isinstance(entities_mentioned, str):
+            entities_mentioned = json.loads(entities_mentioned)
+
         return NormalizedDocument(
             id=row["id"],
             platform=Platform(row["platform"]),
@@ -793,6 +903,7 @@ class DocumentRepository:
             title=row.get("title"),
             engagement=engagement,
             tickers_mentioned=list(row.get("tickers", [])),
+            entities_mentioned=entities_mentioned or [],
             urls_mentioned=list(row.get("urls_mentioned", [])),
             spam_score=row.get("spam_score", 0.0),
             bot_probability=row.get("bot_probability", 0.0),

@@ -1,0 +1,93 @@
+{"label": "TECHNOLOGY", "pattern": [{"TEXT": {"REGEX": "^HBM[234]?[eE]?$"}}]}
+{"label": "TECHNOLOGY", "pattern": "hbm"}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "high"}, {"LOWER": "bandwidth"}, {"LOWER": "memory"}]}
+{"label": "TECHNOLOGY", "pattern": [{"TEXT": {"REGEX": "^GDDR[567]X?$"}}]}
+{"label": "TECHNOLOGY", "pattern": [{"TEXT": {"REGEX": "^DDR[45]$"}}]}
+{"label": "TECHNOLOGY", "pattern": [{"TEXT": {"REGEX": "^LPDDR[45]X?$"}}]}
+{"label": "TECHNOLOGY", "pattern": "cowos"}
+{"label": "TECHNOLOGY", "pattern": "CoWoS"}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "cowos"}, {"TEXT": "-", "OP": "?"}, {"TEXT": {"REGEX": "^[SRL]$"}, "OP": "?"}]}
+{"label": "TECHNOLOGY", "pattern": "foveros"}
+{"label": "TECHNOLOGY", "pattern": "emib"}
+{"label": "TECHNOLOGY", "pattern": "EMIB"}
+{"label": "TECHNOLOGY", "pattern": "soic"}
+{"label": "TECHNOLOGY", "pattern": "SOIC"}
+{"label": "TECHNOLOGY", "pattern": [{"TEXT": {"REGEX": "^[23457]nm$"}}]}
+{"label": "TECHNOLOGY", "pattern": [{"TEXT": {"REGEX": "^[12][0248]nm$"}}]}
+{"label": "TECHNOLOGY", "pattern": [{"TEXT": {"REGEX": "^N[23457]$"}}]}
+{"label": "TECHNOLOGY", "pattern": [{"TEXT": {"REGEX": "^N[23457][EP]?$"}}]}
+{"label": "TECHNOLOGY", "pattern": [{"TEXT": {"REGEX": "^A[0-9]+$"}}, {"LOWER": "process", "OP": "?"}]}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "euv"}, {"LOWER": "lithography", "OP": "?"}]}
+{"label": "TECHNOLOGY", "pattern": "euv"}
+{"label": "TECHNOLOGY", "pattern": "EUV"}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "duv"}, {"LOWER": "lithography", "OP": "?"}]}
+{"label": "TECHNOLOGY", "pattern": "duv"}
+{"label": "TECHNOLOGY", "pattern": "DUV"}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "high"}, {"TEXT": "-", "OP": "?"}, {"LOWER": "na"}, {"LOWER": "euv", "OP": "?"}]}
+{"label": "TECHNOLOGY", "pattern": "high-na"}
+{"label": "TECHNOLOGY", "pattern": "chiplet"}
+{"label": "TECHNOLOGY", "pattern": "chiplets"}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "2.5d"}, {"LOWER": "packaging", "OP": "?"}]}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "3d"}, {"LOWER": "packaging", "OP": "?"}]}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "3d"}, {"LOWER": "stacking", "OP": "?"}]}
+{"label": "TECHNOLOGY", "pattern": "interposer"}
+{"label": "TECHNOLOGY", "pattern": "tsv"}
+{"label": "TECHNOLOGY", "pattern": "TSV"}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "through"}, {"TEXT": "-", "OP": "?"}, {"LOWER": "silicon"}, {"LOWER": "via", "OP": "?"}]}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "advanced"}, {"LOWER": "packaging"}]}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "backend"}, {"LOWER": "of"}, {"LOWER": "line"}]}
+{"label": "TECHNOLOGY", "pattern": "beol"}
+{"label": "TECHNOLOGY", "pattern": "BEOL"}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "frontend"}, {"LOWER": "of"}, {"LOWER": "line"}]}
+{"label": "TECHNOLOGY", "pattern": "feol"}
+{"label": "TECHNOLOGY", "pattern": "FEOL"}
+{"label": "TECHNOLOGY", "pattern": "finfet"}
+{"label": "TECHNOLOGY", "pattern": "FinFET"}
+{"label": "TECHNOLOGY", "pattern": "gaafet"}
+{"label": "TECHNOLOGY", "pattern": "GAA"}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "gate"}, {"TEXT": "-", "OP": "?"}, {"LOWER": "all"}, {"TEXT": "-", "OP": "?"}, {"LOWER": "around"}]}
+{"label": "TECHNOLOGY", "pattern": "nanosheet"}
+{"label": "TECHNOLOGY", "pattern": "nanosheets"}
+{"label": "TECHNOLOGY", "pattern": "cfet"}
+{"label": "TECHNOLOGY", "pattern": "CFET"}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "silicon"}, {"LOWER": "carbide"}]}
+{"label": "TECHNOLOGY", "pattern": "sic"}
+{"label": "TECHNOLOGY", "pattern": "SiC"}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "gallium"}, {"LOWER": "nitride"}]}
+{"label": "TECHNOLOGY", "pattern": "gan"}
+{"label": "TECHNOLOGY", "pattern": "GaN"}
+{"label": "TECHNOLOGY", "pattern": "cuda"}
+{"label": "TECHNOLOGY", "pattern": "CUDA"}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "tensor"}, {"LOWER": "core"}, {"LOWER": "s", "OP": "?"}]}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "ray"}, {"LOWER": "tracing"}]}
+{"label": "TECHNOLOGY", "pattern": "nvlink"}
+{"label": "TECHNOLOGY", "pattern": "NVLink"}
+{"label": "TECHNOLOGY", "pattern": "nvswitch"}
+{"label": "TECHNOLOGY", "pattern": "NVSwitch"}
+{"label": "TECHNOLOGY", "pattern": "infiniband"}
+{"label": "TECHNOLOGY", "pattern": "InfiniBand"}
+{"label": "TECHNOLOGY", "pattern": "pcie"}
+{"label": "TECHNOLOGY", "pattern": "PCIe"}
+{"label": "TECHNOLOGY", "pattern": [{"TEXT": {"REGEX": "^PCIe$"}}, {"TEXT": {"REGEX": "^[456]\\.0$"}, "OP": "?"}]}
+{"label": "TECHNOLOGY", "pattern": "cxl"}
+{"label": "TECHNOLOGY", "pattern": "CXL"}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "compute"}, {"LOWER": "express"}, {"LOWER": "link"}]}
+{"label": "TECHNOLOGY", "pattern": "ucie"}
+{"label": "TECHNOLOGY", "pattern": "UCIe"}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "dram"}, {"LOWER": "less", "OP": "?"}]}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "nand"}, {"LOWER": "flash", "OP": "?"}]}
+{"label": "TECHNOLOGY", "pattern": "qlc"}
+{"label": "TECHNOLOGY", "pattern": "QLC"}
+{"label": "TECHNOLOGY", "pattern": "tlc"}
+{"label": "TECHNOLOGY", "pattern": "TLC"}
+{"label": "TECHNOLOGY", "pattern": "mlc"}
+{"label": "TECHNOLOGY", "pattern": "MLC"}
+{"label": "TECHNOLOGY", "pattern": [{"LOWER": "transformer"}, {"LOWER": "engine", "OP": "?"}]}
+{"label": "TECHNOLOGY", "pattern": "fp8"}
+{"label": "TECHNOLOGY", "pattern": "FP8"}
+{"label": "TECHNOLOGY", "pattern": "fp16"}
+{"label": "TECHNOLOGY", "pattern": "FP16"}
+{"label": "TECHNOLOGY", "pattern": "int8"}
+{"label": "TECHNOLOGY", "pattern": "INT8"}
+{"label": "TECHNOLOGY", "pattern": "int4"}
+{"label": "TECHNOLOGY", "pattern": "INT4"}
