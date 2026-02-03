@@ -108,6 +108,31 @@ class Settings(BaseSettings):
     ner_enabled: bool = Field(default=False, description="Enable NER extraction in preprocessing")
     ner_spacy_model: str = Field(default="en_core_web_trf", description="spaCy model for NER")
 
+    # Sentiment Analysis
+    sentiment_model_name: str = Field(default="ProsusAI/finbert", description="Model for sentiment analysis")
+    sentiment_batch_size: int = Field(default=16, ge=1, le=64, description="Batch size for sentiment analysis")
+    sentiment_use_fp16: bool = Field(default=True, description="Use FP16 for GPU acceleration")
+    sentiment_device: str = Field(default="auto", description="Device for inference (auto, cpu, cuda, mps)")
+    sentiment_stream_name: str = Field(default="sentiment_queue", description="Redis stream for sentiment jobs")
+    sentiment_consumer_group: str = Field(default="sentiment_workers", description="Consumer group for sentiment workers")
+    sentiment_cache_enabled: bool = Field(default=True, description="Enable Redis caching for sentiment")
+    sentiment_cache_ttl_hours: int = Field(default=168, description="Cache TTL in hours (1 week)")
+    sentiment_enable_entity_sentiment: bool = Field(default=True, description="Enable entity-level sentiment")
+
+    # Queue reclaim configuration (applies to all Redis Streams queues)
+    queue_idle_timeout_ms: int = Field(
+        default=30_000,
+        ge=1_000,
+        le=300_000,
+        description="Idle time before reclaiming pending messages (ms)",
+    )
+    queue_max_delivery_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Max delivery attempts before moving to DLQ",
+    )
+
     @property
     def is_production(self) -> bool:
         """Check if running in production environment."""

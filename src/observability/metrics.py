@@ -195,6 +195,73 @@ class MetricsCollector:
             buckets=(1, 5, 10, 20, 32, 50, 100),
         )
 
+        # Sentiment metrics
+        self.sentiment_analyzed = Counter(
+            "news_tracker_sentiment_analyzed_total",
+            "Total sentiment analyses performed",
+            ["platform", "label"],  # label: positive, negative, neutral
+        )
+
+        self.sentiment_latency = Histogram(
+            "news_tracker_sentiment_latency_seconds",
+            "Time to analyze sentiment",
+            ["operation"],  # single, batch, entity
+            buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+        )
+
+        self.sentiment_cache_hits = Counter(
+            "news_tracker_sentiment_cache_hits_total",
+            "Total sentiment cache hits",
+        )
+
+        self.sentiment_cache_misses = Counter(
+            "news_tracker_sentiment_cache_misses_total",
+            "Total sentiment cache misses",
+        )
+
+        self.sentiment_errors = Counter(
+            "news_tracker_sentiment_errors_total",
+            "Total sentiment analysis errors",
+            ["error_type"],
+        )
+
+        self.sentiment_queue_depth = Gauge(
+            "news_tracker_sentiment_queue_depth",
+            "Number of jobs in sentiment queue",
+        )
+
+        self.sentiment_batch_size = Histogram(
+            "news_tracker_sentiment_batch_size",
+            "Sentiment batch sizes",
+            buckets=(1, 5, 10, 20, 32, 50, 100),
+        )
+
+        self.sentiment_confidence = Histogram(
+            "news_tracker_sentiment_confidence",
+            "Distribution of sentiment confidence scores",
+            ["label"],
+            buckets=(0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 0.99),
+        )
+
+        self.sentiment_entity_count = Histogram(
+            "news_tracker_sentiment_entity_count",
+            "Number of entities analyzed per document",
+            buckets=(0, 1, 2, 3, 5, 10, 20),
+        )
+
+        # Queue reclaim metrics
+        self.pending_reclaimed = Counter(
+            "news_tracker_queue_pending_reclaimed_total",
+            "Total messages reclaimed from pending state",
+            ["queue"],
+        )
+
+        self.dlq_max_retries = Counter(
+            "news_tracker_queue_dlq_max_retries_total",
+            "Total messages moved to DLQ due to max retries exceeded",
+            ["queue"],
+        )
+
         logger.info("Prometheus metrics initialized")
 
     def start_server(self, port: int | None = None) -> None:
@@ -383,6 +450,103 @@ class MetricsCollector:
             self.embedding_batch_size.observe(total)
         if latency > 0:
             self.embedding_latency.labels(operation="batch").observe(latency)
+
+    def record_sentiment_analyzed(
+        self,
+        platform: Platform | str,
+        label: str,
+        confidence: float | None = None,
+        count: int = 1,
+    ) -> None:
+        """
+        Record sentiment analysis.
+
+        Args:
+            platform: Source platform
+            label: Sentiment label (positive, negative, neutral)
+            confidence: Optional confidence score to record
+            count: Number of analyses
+        """
+        platform_str = platform.value if isinstance(platform, Platform) else platform
+        self.sentiment_analyzed.labels(platform=platform_str, label=label).inc(count)
+
+        if confidence is not None:
+            self.sentiment_confidence.labels(label=label).observe(confidence)
+
+    def record_sentiment_latency(
+        self,
+        operation: str,
+        latency: float,
+    ) -> None:
+        """
+        Record sentiment analysis latency.
+
+        Args:
+            operation: Operation type (single, batch, entity)
+            latency: Latency in seconds
+        """
+        self.sentiment_latency.labels(operation=operation).observe(latency)
+
+    def record_sentiment_cache(self, hit: bool) -> None:
+        """
+        Record sentiment cache hit or miss.
+
+        Args:
+            hit: True for cache hit, False for miss
+        """
+        if hit:
+            self.sentiment_cache_hits.inc()
+        else:
+            self.sentiment_cache_misses.inc()
+
+    def record_sentiment_error(self, error_type: str) -> None:
+        """
+        Record sentiment analysis error.
+
+        Args:
+            error_type: Error type/category
+        """
+        self.sentiment_errors.labels(error_type=error_type).inc()
+
+    def set_sentiment_queue_depth(self, depth: int) -> None:
+        """
+        Set sentiment queue depth metric.
+
+        Args:
+            depth: Number of jobs in queue
+        """
+        self.sentiment_queue_depth.set(depth)
+
+    def record_sentiment_batch(
+        self,
+        processed: int,
+        skipped: int,
+        errors: int,
+        latency: float,
+    ) -> None:
+        """
+        Record sentiment batch processing metrics.
+
+        Args:
+            processed: Number of documents analyzed
+            skipped: Number of documents skipped
+            errors: Number of errors
+            latency: Total batch latency in seconds
+        """
+        total = processed + skipped + errors
+        if total > 0:
+            self.sentiment_batch_size.observe(total)
+        if latency > 0:
+            self.sentiment_latency.labels(operation="batch").observe(latency)
+
+    def record_sentiment_entities(self, entity_count: int) -> None:
+        """
+        Record number of entities analyzed in a document.
+
+        Args:
+            entity_count: Number of entities
+        """
+        self.sentiment_entity_count.observe(entity_count)
 
 
 # Global metrics instance

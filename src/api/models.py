@@ -203,3 +203,80 @@ class SearchResponse(BaseModel):
         ...,
         description="Search latency in milliseconds",
     )
+
+
+# Sentiment models
+
+
+class SentimentRequest(BaseModel):
+    """Request model for sentiment analysis."""
+
+    texts: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=32,
+        description="List of texts to analyze (1-32)",
+    )
+
+
+class SentimentScores(BaseModel):
+    """Sentiment class probabilities."""
+
+    positive: float = Field(..., ge=0.0, le=1.0)
+    neutral: float = Field(..., ge=0.0, le=1.0)
+    negative: float = Field(..., ge=0.0, le=1.0)
+
+
+class EntitySentimentItem(BaseModel):
+    """Entity-level sentiment result."""
+
+    entity: str = Field(..., description="Entity text or normalized form")
+    type: str = Field(..., description="Entity type (COMPANY, PRODUCT, etc.)")
+    label: str = Field(..., description="Sentiment label")
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    scores: SentimentScores
+    context: str | None = Field(default=None, description="Context window used")
+
+
+class SentimentResultItem(BaseModel):
+    """Single sentiment analysis result."""
+
+    label: str = Field(
+        ...,
+        description="Sentiment label: positive, neutral, or negative",
+    )
+    confidence: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Classification confidence",
+    )
+    scores: SentimentScores = Field(
+        ...,
+        description="All class probabilities",
+    )
+    entity_sentiments: list[EntitySentimentItem] = Field(
+        default_factory=list,
+        description="Reserved for future entity-level sentiment (currently always empty)",
+    )
+
+
+class SentimentResponse(BaseModel):
+    """Response model for sentiment analysis."""
+
+    results: list[SentimentResultItem] = Field(
+        ...,
+        description="Sentiment results for each input text",
+    )
+    total: int = Field(
+        ...,
+        description="Number of results",
+    )
+    model: str = Field(
+        ...,
+        description="Model used for analysis",
+    )
+    latency_ms: float = Field(
+        ...,
+        description="Processing latency in milliseconds",
+    )

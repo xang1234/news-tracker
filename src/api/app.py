@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.api.dependencies import cleanup_dependencies
-from src.api.routes import embed, health, search
+from src.api.routes import embed, health, search, sentiment
 from src.config.settings import get_settings
 
 logger = structlog.get_logger(__name__)
@@ -91,6 +91,7 @@ Requires `X-API-KEY` header for all requests except `/health`.
 
     # Include routers
     app.include_router(embed.router, tags=["embeddings"])
+    app.include_router(sentiment.router, tags=["sentiment"])
     app.include_router(health.router, tags=["health"])
     app.include_router(search.router, tags=["search"])
 

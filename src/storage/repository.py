@@ -670,6 +670,66 @@ class DocumentRepository:
         result = await self._db.fetchval(sql, doc_id, embedding_str)
         return result is not None
 
+    async def update_sentiment(
+        self,
+        doc_id: str,
+        sentiment: dict[str, Any],
+    ) -> bool:
+        """
+        Update a document's sentiment analysis.
+
+        Args:
+            doc_id: Document ID
+            sentiment: Sentiment analysis result dictionary
+
+        Returns:
+            True if document was updated, False if not found
+        """
+        sql = """
+            UPDATE documents
+            SET sentiment = $2, updated_at = NOW()
+            WHERE id = $1
+            RETURNING id
+        """
+        result = await self._db.fetchval(sql, doc_id, json.dumps(sentiment))
+        return result is not None
+
+    async def get_documents_without_sentiment(
+        self,
+        limit: int = 100,
+        platform: Platform | None = None,
+    ) -> list[NormalizedDocument]:
+        """
+        Get documents that don't have sentiment analysis yet.
+
+        Useful for backfilling sentiment on existing documents.
+
+        Args:
+            limit: Maximum documents to return
+            platform: Optional platform filter
+
+        Returns:
+            List of documents without sentiment
+        """
+        if platform:
+            sql = """
+                SELECT * FROM documents
+                WHERE sentiment IS NULL AND platform = $1
+                ORDER BY created_at DESC
+                LIMIT $2
+            """
+            rows = await self._db.fetch(sql, platform.value, limit)
+        else:
+            sql = """
+                SELECT * FROM documents
+                WHERE sentiment IS NULL
+                ORDER BY created_at DESC
+                LIMIT $1
+            """
+            rows = await self._db.fetch(sql, limit)
+
+        return [self._row_to_document(row) for row in rows]
+
     async def get_documents_without_embedding(
         self,
         limit: int = 100,
@@ -914,3 +974,112 @@ class DocumentRepository:
             theme_ids=list(row.get("theme_ids", [])),
             raw_data=raw_data or {},
         )
+
+    # Sentiment aggregation query methods
+
+    async def get_sentiments_for_ticker(
+        self,
+        ticker: str,
+        since: datetime,
+        until: datetime | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Get sentiment data for documents mentioning a ticker.
+
+        Returns lightweight sentiment records for aggregation, not full documents.
+
+        Args:
+            ticker: Ticker symbol (case-insensitive)
+            since: Start of time window
+            until: End of time window (defaults to now)
+
+        Returns:
+            List of sentiment records with fields:
+            - document_id, timestamp, platform, authority_score, sentiment (JSONB)
+        """
+        ticker = ticker.upper()
+        until = until or datetime.now()
+
+        sql = """
+            SELECT
+                id AS document_id,
+                timestamp,
+                platform,
+                authority_score,
+                sentiment
+            FROM documents
+            WHERE $1 = ANY(tickers)
+              AND sentiment IS NOT NULL
+              AND timestamp >= $2
+              AND timestamp <= $3
+            ORDER BY timestamp DESC
+        """
+        rows = await self._db.fetch(sql, ticker, since, until)
+
+        results = []
+        for row in rows:
+            sentiment = row["sentiment"]
+            if isinstance(sentiment, str):
+                sentiment = json.loads(sentiment)
+            results.append({
+                "document_id": row["document_id"],
+                "timestamp": row["timestamp"],
+                "platform": row["platform"],
+                "authority_score": row["authority_score"],
+                "sentiment": sentiment,
+            })
+
+        return results
+
+    async def get_sentiments_for_theme(
+        self,
+        theme_id: str,
+        since: datetime,
+        until: datetime | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Get sentiment data for documents in a theme.
+
+        Returns lightweight sentiment records for aggregation, not full documents.
+
+        Args:
+            theme_id: Theme identifier
+            since: Start of time window
+            until: End of time window (defaults to now)
+
+        Returns:
+            List of sentiment records with fields:
+            - document_id, timestamp, platform, authority_score, sentiment (JSONB)
+        """
+        until = until or datetime.now()
+
+        sql = """
+            SELECT
+                id AS document_id,
+                timestamp,
+                platform,
+                authority_score,
+                sentiment
+            FROM documents
+            WHERE $1 = ANY(theme_ids)
+              AND sentiment IS NOT NULL
+              AND timestamp >= $2
+              AND timestamp <= $3
+            ORDER BY timestamp DESC
+        """
+        rows = await self._db.fetch(sql, theme_id, since, until)
+
+        results = []
+        for row in rows:
+            sentiment = row["sentiment"]
+            if isinstance(sentiment, str):
+                sentiment = json.loads(sentiment)
+            results.append({
+                "document_id": row["document_id"],
+                "timestamp": row["timestamp"],
+                "platform": row["platform"],
+                "authority_score": row["authority_score"],
+                "sentiment": sentiment,
+            })
+
+        return results

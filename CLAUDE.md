@@ -27,7 +27,9 @@ uv run news-tracker worker --mock      # Run both services together
 uv run news-tracker health             # Check all dependencies
 uv run news-tracker init-db            # Initialize database schema
 uv run news-tracker run-once --mock    # Single cycle for testing
+uv run news-tracker run-once --mock --with-sentiment  # Include sentiment analysis
 uv run news-tracker serve              # Start embedding API server
+uv run news-tracker sentiment-worker   # Run sentiment analysis worker
 uv run news-tracker vector-search "query" --limit 10  # Semantic search
 uv run news-tracker cleanup --days 90  # Remove old documents (storage management)
 
@@ -45,24 +47,29 @@ This is a multi-platform financial data ingestion pipeline for tracking semicond
 ```
 Adapters → Redis Streams → Processing Pipeline → PostgreSQL
                                     │
-                                    ▼ publish document_id
-                            embedding_queue (Redis Stream)
-                                    │
-                                    ▼ consume
-                            EmbeddingWorker
-                                    │
-                    ┌───────────────┴───────────────┐
-                    ▼                               ▼
-            FinBERT (768-dim)               MiniLM (384-dim)
-            Long/financial text             Short social posts
-                    │                               │
-                    ▼                               ▼
-            embedding column                embedding_minilm column
-                            PostgreSQL
+                    ┌───────────────┼───────────────┐
+                    ▼               ▼               ▼
+            embedding_queue  sentiment_queue   (direct store)
+            (Redis Stream)   (Redis Stream)
+                    │               │
+                    ▼               ▼
+            EmbeddingWorker  SentimentWorker
+                    │               │
+            ┌───────┴───────┐       │
+            ▼               ▼       ▼
+    FinBERT (768-dim)  MiniLM   FinBERT Sentiment
+    Long/financial     (384)    (pos/neg/neutral)
+                    │               │
+                    └───────┬───────┘
+                            ▼
+                    PostgreSQL + pgvector
+                    (embedding, sentiment JSONB)
 
                             ┌─────────────┐
                             │ FastAPI     │
-                            │ /embed      │◄── External clients
+                            │ /embed      │
+                            │ /sentiment  │◄── External clients
+                            │ /search     │
                             │ /health     │
                             └─────────────┘
 ```
@@ -70,7 +77,7 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 ### Key Components
 
 **Ingestion Layer** (`src/ingestion/`):
-- `BaseAdapter`: Abstract base with rate limiting, error handling. Subclasses implement `_fetch_raw()` and `_transform()`.
+- `BaseAdapter`: Abstract base with error handling and preprocessing. Subclasses implement `_fetch_raw()` and `_transform()`. **Note**: Subclasses must call `self._rate_limiter.acquire()` before each HTTP request in `_fetch_raw()`.
 - Platform adapters: `TwitterAdapter`, `RedditAdapter`, `SubstackAdapter`, `NewsAdapter`, `MockAdapter`
 - `DocumentQueue`: Redis Streams wrapper with consumer groups, DLQ support
 - `HTTPClient`: Async HTTP client with exponential backoff, retry on 429/5xx, and API key rotation (`http_client.py`)
@@ -102,6 +109,15 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 - `EmbeddingWorker`: Consumes queue, selects model by platform/length, generates embeddings, updates DB
 - `ModelType`: Enum for type-safe model selection (FINBERT, MINILM)
 
+**Sentiment Layer** (`src/sentiment/`):
+- `SentimentConfig`: Pydantic settings for model, caching, entity sentiment, queue configuration
+- `SentimentService`: FinBERT-based sentiment classification with lazy loading, caching, entity-level analysis, metrics instrumentation
+- `SentimentQueue`: Redis Streams wrapper for async sentiment job processing
+- `SentimentWorker`: Consumes queue, generates document/entity sentiment, updates DB, records metrics
+- Label mapping: `{0: "positive", 1: "negative", 2: "neutral"}` (ProsusAI/finbert)
+- Entity sentiment uses context windows around entity mentions for aspect-based analysis
+- Prometheus metrics: `sentiment_analyzed_total`, `sentiment_latency_seconds`, `sentiment_cache_hits/misses`, `sentiment_queue_depth`
+
 **VectorStore Layer** (`src/vectorstore/`):
 - `base.py`: Abstract `VectorStore` class, `VectorSearchResult` and `VectorSearchFilter` dataclasses
 - `config.py`: `VectorStoreConfig` Pydantic settings for search defaults and authority weights
@@ -113,15 +129,16 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 **API Layer** (`src/api/`):
 - `app.py`: FastAPI application factory with structlog integration
 - `auth.py`: X-API-KEY header authentication with dev mode bypass
-- `models.py`: Pydantic request/response models (EmbedRequest, EmbedResponse, SearchRequest, SearchResponse)
-- `dependencies.py`: Dependency injection for EmbeddingService, Redis, and VectorStoreManager
+- `models.py`: Pydantic request/response models (EmbedRequest, EmbedResponse, SearchRequest, SearchResponse, SentimentRequest, SentimentResponse)
+- `dependencies.py`: Dependency injection for EmbeddingService, SentimentService, Redis, and VectorStoreManager
 - `routes/embed.py`: POST /embed endpoint with auto model selection
+- `routes/sentiment.py`: POST /sentiment endpoint with optional entity-level analysis
 - `routes/search.py`: POST /search/similar endpoint for semantic search with filters
 - `routes/health.py`: GET /health endpoint for service status
 
 **Services** (`src/services/`):
 - `IngestionService`: Runs adapters concurrently, publishes to queue
-- `ProcessingService`: Consumes batches, applies pipeline, stores to DB
+- `ProcessingService`: Consumes batches, applies pipeline, stores to DB, queues for embedding and sentiment
 
 ### Configuration
 
@@ -136,6 +153,10 @@ Settings in `src/config/settings.py` use Pydantic BaseSettings with env var over
 - `api_host` (0.0.0.0), `api_port` (8000), `api_keys` (comma-separated, empty = dev mode) for embedding API
 - `vectorstore_default_limit` (10), `vectorstore_default_threshold` (0.7) for search defaults
 - `vectorstore_centroid_limit` (100), `vectorstore_centroid_threshold` (0.5) for theme/cluster queries
+- `sentiment_model_name` (ProsusAI/finbert), `sentiment_batch_size` (16), `sentiment_device` (auto) for sentiment analysis
+- `sentiment_cache_enabled` (true), `sentiment_cache_ttl_hours` (168) for sentiment caching
+- `sentiment_enable_entity_sentiment` (true), `sentiment_entity_context_window` (100) for entity-level analysis
+- `sentiment_stream_name` (sentiment_queue), `sentiment_consumer_group` (sentiment_workers) for queue config
 - `ner_enabled` (false), `ner_spacy_model` (en_core_web_trf) for NER configuration
 - `NER_ENABLE_SEMANTIC_LINKING` (false), `NER_SEMANTIC_SIMILARITY_THRESHOLD` (0.5), `NER_SEMANTIC_BASE_SCORE` (0.6) for embedding-based entity-theme linking
 
@@ -152,11 +173,39 @@ NER settings can be overridden via `NER_*` environment variables (e.g., `NER_SPA
 - Quality: `spam_score`, `bot_probability`, `authority_score`, `tickers_mentioned`, `entities_mentioned`
 - Engagement: `likes`, `shares`, `comments`, `views`
 - Embedding: `embedding` (FinBERT 768-dim), `embedding_minilm` (MiniLM 384-dim) - generated async by EmbeddingWorker
+- Sentiment: `sentiment` (JSONB with label, confidence, scores, entity_sentiments) - generated async by SentimentWorker
 - Clustering: `theme_ids` - assigned by clustering service
+
+### Critical Implementation Rules
+
+#### Rate Limiting in Adapters
+
+**Rule**: Rate limiting MUST be applied at the I/O boundary (before HTTP calls), NOT at the data transformation layer (after yields).
+
+```python
+# ✅ CORRECT: Rate limit before HTTP request
+async def _fetch_raw(self):
+    for ticker in tickers:
+        await self._rate_limiter.acquire()  # Before HTTP call
+        response = await client.get(url, params={"ticker": ticker})
+        for article in response.json():
+            yield article  # No rate limit here - yields are free
+
+# ❌ WRONG: Rate limit after yield (in base class fetch loop)
+async def fetch(self):
+    async for raw in self._fetch_raw():
+        await self._rate_limiter.acquire()  # Too late! API call already happened
+        yield self._transform(raw)
+```
+
+**Why it matters**: APIs return batches (NewsAPI: 50 articles, Twitter: 100 tweets). Rate limiting per-item instead of per-request causes N× slowdown where N = batch size. A 50-article response should take 1 rate limit wait, not 50.
+
+**Implementation**: Each adapter's `_fetch_raw()` must call `await self._rate_limiter.acquire()` before every HTTP request. The base class `fetch()` method does NOT rate limit—it only handles transformation and error handling.
 
 ### Patterns
 
-- **Adapter Pattern**: New platforms extend `BaseAdapter`, get rate limiting and preprocessing free
+- **Adapter Pattern**: New platforms extend `BaseAdapter`, implement `_fetch_raw()` (with rate limiting before HTTP calls) and `_transform()`
+- **Rate Limiting at I/O Boundary**: Rate limiters protect external APIs, so they must guard HTTP calls directly—not downstream data processing. See "Critical Implementation Rules" above.
 - **Consumer Groups**: Redis Streams enable horizontal scaling of processing workers
 - **Singleton Ticker Extractor**: `get_ticker_extractor()` in `base_adapter.py` avoids circular imports
 - **Dataclass Config**: `ArticleSourceConfig` in `news_adapter.py` consolidates source-specific transformation logic
@@ -176,6 +225,10 @@ NER settings can be overridden via `NER_*` environment variables (e.g., `NER_SPA
 - **EntityRuler Before NER**: spaCy EntityRuler runs before statistical NER for domain-specific pattern priority
 - **Opt-in NER**: NER is disabled by default (`enable_ner=False`) to avoid memory overhead when not needed
 - **Semantic Theme Linking**: `link_entities_to_theme_semantic()` uses MiniLM embeddings + cosine similarity for robust conglomerate disambiguation (e.g., "Samsung Electronics" vs "Samsung Galaxy")
+- **Async Sentiment Pipeline**: Decoupled from main processing via `sentiment_queue` Redis Stream, follows EmbeddingWorker pattern
+- **Entity Context Windows**: Entity-level sentiment extracts text windows around entity mentions for aspect-based classification
+- **Cache Isolation**: Document-level and entity-level sentiment use separate cache strategies to prevent cache poisoning
+- **RED Metrics Pattern**: Sentiment metrics follow Rate (analyzed_total), Errors (errors_total), Duration (latency_seconds) pattern for observability
 
 ### Testing
 
@@ -217,6 +270,24 @@ async def main():
     )
     for name, score in scores.items():
         print(f'{name}: {score:.2f}')
+
+asyncio.run(main())
+"
+
+# Sentiment testing
+uv run pytest tests/test_sentiment/ -v     # Run all sentiment tests
+
+# Manual sentiment verification
+uv run python -c "
+import asyncio
+from src.sentiment.service import SentimentService
+
+async def main():
+    svc = SentimentService()
+    result = await svc.analyze('NVIDIA stock surged 10% on strong AI demand')
+    print(f'Label: {result[\"label\"]} ({result[\"confidence\"]:.2f})')
+    print(f'Scores: {result[\"scores\"]}')
+    await svc.close()
 
 asyncio.run(main())
 "

@@ -7,30 +7,34 @@ Multi-platform financial data ingestion framework for tracking semiconductor and
 ```
 Adapters → Redis Streams → Processing Pipeline → PostgreSQL
                                     │
-                                    ▼ publish document_id
-                            embedding_queue (Redis Stream)
-                                    │
-                                    ▼ consume
-                            EmbeddingWorker
-                                    │
-                    ┌───────────────┴───────────────┐
-                    ▼                               ▼
-            FinBERT (768-dim)               MiniLM (384-dim)
-            Long/financial text             Short social posts
-                    │                               │
-                    └───────────────┬───────────────┘
-                                    ▼
-                            PostgreSQL + pgvector
-                            (HNSW indexes)
-                                    │
-                            ┌───────┴───────┐
-                            ▼               ▼
-                    ┌─────────────┐  ┌─────────────┐
-                    │ FastAPI     │  │ CLI         │
-                    │ /embed      │  │ vector-     │
-                    │ /search     │  │ search      │
-                    │ /health     │  └─────────────┘
-                    └─────────────┘
+                    ┌───────────────┼───────────────┐
+                    ▼               ▼               ▼
+            embedding_queue  sentiment_queue   (direct store)
+            (Redis Stream)   (Redis Stream)
+            [auto-queued]    [auto-queued]
+                    │               │
+                    ▼               ▼
+            EmbeddingWorker  SentimentWorker
+                    │               │
+            ┌───────┴───────┐       │
+            ▼               ▼       ▼
+    FinBERT (768-dim)  MiniLM   FinBERT
+    Long/financial     (384)    Sentiment
+                    │               │
+                    └───────┬───────┘
+                            ▼
+                    PostgreSQL + pgvector
+                    (HNSW indexes, sentiment JSONB)
+                            │
+                    ┌───────┴───────┐
+                    ▼               ▼
+            ┌─────────────┐  ┌─────────────┐
+            │ FastAPI     │  │ CLI         │
+            │ /embed      │  │ vector-     │
+            │ /search     │  │ search      │
+            │ /sentiment  │  │ sentiment-  │
+            │ /health     │  │ worker      │
+            └─────────────┘  └─────────────┘
 ```
 
 ## Data Sources
@@ -128,6 +132,15 @@ EMBEDDING_CACHE_TTL_HOURS=168
 API_HOST=0.0.0.0
 API_PORT=8000
 API_KEYS=key1,key2  # Comma-separated valid keys (empty = dev mode, no auth)
+
+# Sentiment service
+SENTIMENT_MODEL_NAME=ProsusAI/finbert
+SENTIMENT_BATCH_SIZE=16
+SENTIMENT_USE_FP16=true
+SENTIMENT_DEVICE=auto
+SENTIMENT_CACHE_ENABLED=true
+SENTIMENT_CACHE_TTL_HOURS=168
+SENTIMENT_ENABLE_ENTITY_SENTIMENT=true
 ```
 
 ## Embedding Service
@@ -200,6 +213,8 @@ uv run news-tracker serve --host 0.0.0.0 --port 8000
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/embed` | Generate embeddings for batch of texts (1-100) |
+| POST | `/sentiment` | Analyze sentiment for batch of texts (1-100) |
+| POST | `/search/similar` | Semantic search with filters |
 | GET | `/health` | Service health check with model and cache status |
 
 ### Example Usage
@@ -229,6 +244,171 @@ curl http://localhost:8000/health
   "model_used": "finbert",
   "dimensions": 768,
   "latency_ms": 45.23
+}
+```
+
+## Sentiment Analysis
+
+The sentiment service classifies financial documents using ProsusAI/finbert, providing both document-level and entity-level sentiment analysis.
+
+### Sentiment Labels
+
+| Label | Description | Example |
+|-------|-------------|---------|
+| **positive** | Bullish sentiment, good news | "NVIDIA reports record Q4 earnings, stock surges 10%" |
+| **negative** | Bearish sentiment, bad news | "AMD shares plunge on weak guidance and supply concerns" |
+| **neutral** | Factual reporting, no sentiment | "Intel will report earnings next week" |
+
+### Features
+
+- **Automatic queuing** - Documents are automatically queued for sentiment analysis by ProcessingService
+- **Document-level sentiment** - Overall sentiment classification with confidence scores
+- **Entity-level sentiment** - Sentiment specific to each mentioned entity via context windows
+- **FinBERT model** - Financial domain-specific BERT for accurate financial sentiment
+- **Lazy model loading** - Model loads on first use to save memory
+- **Redis caching** - Content-hash based caching avoids recomputation
+- **Async worker** - Decoupled from main pipeline via Redis Streams
+
+### CLI Usage
+
+```bash
+# Run sentiment worker (continuous processing)
+uv run news-tracker sentiment-worker
+uv run news-tracker sentiment-worker --batch-size 8
+
+# Single pipeline run with sentiment
+uv run news-tracker run-once --mock --with-sentiment
+
+# Full pipeline (embeddings + sentiment + verification)
+uv run news-tracker run-once --mock --with-embeddings --with-sentiment --verify
+```
+
+### API Endpoint
+
+```bash
+# Analyze sentiment for texts
+curl -X POST http://localhost:8000/sentiment \
+  -H "Content-Type: application/json" \
+  -H "X-API-KEY: your-api-key" \
+  -d '{
+    "texts": ["NVIDIA stock surged 10% on strong AI chip demand"]
+  }'
+```
+
+### Response Format
+
+```json
+{
+  "results": [
+    {
+      "label": "positive",
+      "confidence": 0.9234,
+      "scores": {
+        "positive": 0.9234,
+        "negative": 0.0156,
+        "neutral": 0.0610
+      },
+      "entity_sentiments": []
+    }
+  ],
+  "model": "ProsusAI/finbert",
+  "total": 1,
+  "latency_ms": 48.5
+}
+```
+
+### Entity-Level Sentiment
+
+Entity-level sentiment is available through the internal processing pipeline when NER is enabled. The API endpoint provides document-level sentiment only. For entity-level sentiment:
+
+1. Enable NER in configuration: `NER_ENABLED=true`
+2. Use the processing pipeline: `uv run news-tracker run-once --mock --with-sentiment`
+3. Query results from the database which includes `sentiment.entity_sentiments`
+
+The processing pipeline automatically extracts entities via NER, then analyzes sentiment for each entity mention using context windows around the entity text.
+
+### Configuration
+
+```bash
+# In .env
+SENTIMENT_MODEL_NAME=ProsusAI/finbert
+SENTIMENT_BATCH_SIZE=16
+SENTIMENT_USE_FP16=true
+SENTIMENT_DEVICE=auto
+SENTIMENT_CACHE_ENABLED=true
+SENTIMENT_CACHE_TTL_HOURS=168
+SENTIMENT_ENABLE_ENTITY_SENTIMENT=true
+SENTIMENT_ENTITY_CONTEXT_WINDOW=100
+SENTIMENT_STREAM_NAME=sentiment_queue
+SENTIMENT_CONSUMER_GROUP=sentiment_workers
+```
+
+### Disabling Auto-Queuing
+
+By default, `ProcessingService` automatically queues documents for both embedding and sentiment analysis. To disable:
+
+```python
+# Disable sentiment queuing
+service = ProcessingService(enable_sentiment_queue=False)
+
+# Disable both
+service = ProcessingService(
+    enable_embedding_queue=False,
+    enable_sentiment_queue=False,
+)
+```
+
+### Prometheus Metrics
+
+Sentiment analysis exposes the following metrics for observability:
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `news_tracker_sentiment_analyzed_total` | Counter | platform, label | Total sentiment analyses performed |
+| `news_tracker_sentiment_latency_seconds` | Histogram | operation | Analysis latency (single/batch/entity) |
+| `news_tracker_sentiment_cache_hits_total` | Counter | - | Cache hits |
+| `news_tracker_sentiment_cache_misses_total` | Counter | - | Cache misses |
+| `news_tracker_sentiment_errors_total` | Counter | error_type | Analysis errors |
+| `news_tracker_sentiment_queue_depth` | Gauge | - | Pending jobs in queue |
+| `news_tracker_sentiment_batch_size` | Histogram | - | Batch sizes processed |
+| `news_tracker_sentiment_confidence` | Histogram | label | Confidence score distribution |
+| `news_tracker_sentiment_entity_count` | Histogram | - | Entities analyzed per document |
+
+Example Prometheus queries:
+```promql
+# Sentiment analysis rate by label
+rate(news_tracker_sentiment_analyzed_total[5m])
+
+# Cache hit ratio
+rate(news_tracker_sentiment_cache_hits_total[5m]) /
+(rate(news_tracker_sentiment_cache_hits_total[5m]) + rate(news_tracker_sentiment_cache_misses_total[5m]))
+
+# 95th percentile latency
+histogram_quantile(0.95, rate(news_tracker_sentiment_latency_seconds_bucket[5m]))
+
+# Error rate
+rate(news_tracker_sentiment_errors_total[5m])
+```
+
+### Database Schema
+
+Sentiment is stored in the `sentiment` JSONB column:
+
+```json
+{
+  "label": "positive",
+  "confidence": 0.92,
+  "scores": {"positive": 0.92, "negative": 0.03, "neutral": 0.05},
+  "model": "ProsusAI/finbert",
+  "analyzed_at": "2026-02-03T12:00:00Z",
+  "entity_sentiments": [
+    {
+      "entity": "NVIDIA",
+      "type": "COMPANY",
+      "label": "positive",
+      "confidence": 0.95
+    }
+  ]
 }
 ```
 

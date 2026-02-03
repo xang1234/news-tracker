@@ -114,6 +114,9 @@ class RedditAdapter(BaseAdapter):
             return self._access_token
 
         try:
+            # Rate limit before token request
+            await self._rate_limiter.acquire()
+
             response = await client.post(
                 REDDIT_TOKEN_URL,
                 auth=(self._client_id, self._client_secret),
@@ -157,6 +160,9 @@ class RedditAdapter(BaseAdapter):
 
             for subreddit in self._subreddits:
                 try:
+                    # Rate limit before each subreddit API call
+                    await self._rate_limiter.acquire()
+
                     # Fetch hot posts from subreddit
                     response = await client.get(
                         f"{REDDIT_API_BASE}/r/{subreddit}/hot",

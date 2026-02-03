@@ -119,6 +119,20 @@ class EmbeddingConfig(BaseSettings):
         description="Timeout in seconds for idle worker shutdown",
     )
 
+    # Queue reclaim configuration
+    idle_timeout_ms: int = Field(
+        default=30_000,
+        ge=1_000,
+        le=300_000,
+        description="Idle time before reclaiming pending messages (ms)",
+    )
+    max_delivery_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Max delivery attempts before moving to DLQ",
+    )
+
     @property
     def cache_ttl_seconds(self) -> int:
         """Get cache TTL in seconds."""

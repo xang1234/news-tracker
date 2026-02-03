@@ -152,6 +152,9 @@ class TwitterAdapter(BaseAdapter):
                         params["next_token"] = next_token
 
                     try:
+                        # Rate limit before each API call (pagination)
+                        await self._rate_limiter.acquire()
+
                         response = await client.get(
                             TWEETS_SEARCH_RECENT,
                             headers=headers,

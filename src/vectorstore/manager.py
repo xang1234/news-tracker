@@ -145,8 +145,8 @@ class VectorStoreManager:
             return []
 
         # Use defaults from config if not specified
-        limit = limit or self._config.default_limit
-        threshold = threshold or self._config.default_threshold
+        limit = self._config.default_limit if limit is None else limit
+        threshold = self._config.default_threshold if threshold is None else threshold
 
         # Generate query embedding
         query_embedding = await self._embedding.embed_finbert(text)
@@ -181,8 +181,8 @@ class VectorStoreManager:
         Returns:
             List of search results
         """
-        limit = limit or self._config.default_limit
-        threshold = threshold or self._config.default_threshold
+        limit = self._config.default_limit if limit is None else limit
+        threshold = self._config.default_threshold if threshold is None else threshold
 
         return await self._store.search(
             query_embedding=embedding,
@@ -213,8 +213,8 @@ class VectorStoreManager:
         Returns:
             List of documents in the cluster
         """
-        limit = limit or self._config.centroid_default_limit
-        threshold = threshold or self._config.centroid_default_threshold
+        limit = self._config.centroid_default_limit if limit is None else limit
+        threshold = self._config.centroid_default_threshold if threshold is None else threshold
 
         return await self._store.search_by_centroid(
             centroid=centroid,

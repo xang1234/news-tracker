@@ -23,7 +23,7 @@ import feedparser
 import httpx
 from bs4 import BeautifulSoup
 
-from src.ingestion.base_adapter import BaseAdapter, clean_text, extract_tickers
+from src.ingestion.base_adapter import BaseAdapter, clean_text, extract_tickers, stable_hash
 from src.ingestion.schemas import (
     EngagementMetrics,
     NormalizedDocument,
@@ -99,6 +99,9 @@ class SubstackAdapter(BaseAdapter):
                 feed_url = self._get_feed_url(slug)
 
                 try:
+                    # Rate limit before each RSS feed fetch
+                    await self._rate_limiter.acquire()
+
                     response = await client.get(
                         feed_url,
                         headers={
@@ -229,16 +232,16 @@ class SubstackAdapter(BaseAdapter):
         return datetime.now(timezone.utc)
 
     def _get_entry_id(self, entry: dict[str, Any]) -> str:
-        """Extract unique ID from RSS entry."""
+        """Extract unique ID from RSS entry using stable hash."""
         # Try standard ID fields
         for field in ["id", "guid", "link"]:
             if field in entry:
-                # Hash the ID to get a consistent short ID
+                # Use stable hash for deterministic IDs across runs
                 value = str(entry[field])
-                return str(abs(hash(value)) % 10**10)
+                return stable_hash(value)
 
         # Fallback: hash the title
-        return str(abs(hash(entry.get("title", ""))) % 10**10)
+        return stable_hash(entry.get("title", ""))
 
     def _clean_html_content(self, html_content: str) -> str:
         """

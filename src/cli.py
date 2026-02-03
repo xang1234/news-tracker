@@ -228,11 +228,13 @@ def serve(host: str | None, port: int | None, reload: bool, metrics_port: int) -
 @main.command("run-once")
 @click.option("--mock", is_flag=True, help="Use mock adapters")
 @click.option("--with-embeddings", is_flag=True, help="Run embedding worker after processing")
+@click.option("--with-sentiment", is_flag=True, help="Run sentiment worker after processing")
 @click.option("--verify", is_flag=True, help="Query DB to confirm embeddings exist")
-def run_once(mock: bool, with_embeddings: bool, verify: bool) -> None:
+def run_once(mock: bool, with_embeddings: bool, with_sentiment: bool, verify: bool) -> None:
     """Run one ingestion + processing cycle.
 
     With --with-embeddings, also generates embeddings for processed documents.
+    With --with-sentiment, also generates sentiment analysis for processed documents.
     With --verify, queries the database to confirm documents have embeddings.
     """
     from src.services.ingestion_service import IngestionService
@@ -309,6 +311,22 @@ def run_once(mock: bool, with_embeddings: bool, verify: bool) -> None:
             if embedding_results['errors'] > 0:
                 exit_code = 1
 
+        # Sentiment stage (optional)
+        if with_sentiment and stored_doc_ids:
+            from src.sentiment.worker import SentimentWorker
+
+            click.echo("\nGenerating sentiment analysis...")
+            sentiment_worker = SentimentWorker()
+            sentiment_results = await sentiment_worker.run_once(stored_doc_ids)
+
+            click.echo("\nSentiment Results:")
+            click.echo(f"  processed: {sentiment_results['processed']}")
+            click.echo(f"  skipped: {sentiment_results['skipped']}")
+            click.echo(f"  errors: {sentiment_results['errors']}")
+
+            if sentiment_results['errors'] > 0:
+                exit_code = 1
+
         # Verification stage (optional)
         if verify and stored_doc_ids:
             from src.storage.database import Database
@@ -319,9 +337,10 @@ def run_once(mock: bool, with_embeddings: bool, verify: bool) -> None:
             repo = DocumentRepository(db)
 
             try:
-                # Count documents and those with embeddings
+                # Count documents and those with embeddings/sentiment
                 total_count = 0
                 with_embedding_count = 0
+                with_sentiment_count = 0
 
                 for doc_id in stored_doc_ids:
                     doc = await repo.get_by_id(doc_id)
@@ -329,6 +348,8 @@ def run_once(mock: bool, with_embeddings: bool, verify: bool) -> None:
                         total_count += 1
                         if doc.embedding is not None or doc.embedding_minilm is not None:
                             with_embedding_count += 1
+                        if doc.sentiment is not None:
+                            with_sentiment_count += 1
 
                 click.echo("\nVerification:")
                 if total_count == len(stored_doc_ids):
@@ -342,6 +363,13 @@ def run_once(mock: bool, with_embeddings: bool, verify: bool) -> None:
                         click.echo(click.style(f"  ✓ {with_embedding_count} documents have embeddings", fg="green"))
                     else:
                         click.echo(click.style(f"  ✗ Only {with_embedding_count}/{total_count} documents have embeddings", fg="red"))
+                        exit_code = 1
+
+                if with_sentiment:
+                    if with_sentiment_count == total_count:
+                        click.echo(click.style(f"  ✓ {with_sentiment_count} documents have sentiment", fg="green"))
+                    else:
+                        click.echo(click.style(f"  ✗ Only {with_sentiment_count}/{total_count} documents have sentiment", fg="red"))
                         exit_code = 1
 
                 if exit_code == 0:
@@ -403,6 +431,38 @@ def cleanup(days: int, dry_run: bool) -> None:
 
         finally:
             await db.close()
+
+    asyncio.run(run())
+
+
+@main.command("sentiment-worker")
+@click.option("--batch-size", default=None, type=int, help="Jobs to process per batch")
+@click.option("--metrics/--no-metrics", default=True, help="Enable metrics server")
+@click.option("--metrics-port", default=8001, help="Metrics server port")
+def sentiment_worker(batch_size: int | None, metrics: bool, metrics_port: int) -> None:
+    """Run the sentiment analysis worker.
+
+    Consumes document IDs from Redis Streams sentiment queue,
+    generates sentiment using FinBERT, and updates the database.
+
+    Example:
+        news-tracker sentiment-worker
+        news-tracker sentiment-worker --batch-size 8
+    """
+    from src.sentiment.worker import SentimentWorker
+
+    async def run():
+        worker = SentimentWorker(batch_size=batch_size)
+
+        if metrics:
+            get_metrics().start_server(port=metrics_port)
+
+        # Handle shutdown signals
+        loop = asyncio.get_event_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, lambda: asyncio.create_task(worker.stop()))
+
+        await worker.start()
 
     asyncio.run(run())
 

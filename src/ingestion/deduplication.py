@@ -62,7 +62,7 @@ class DeduplicationIndex:
             num_perm: Number of permutations for MinHash
         """
         settings = get_settings()
-        self.threshold = threshold or settings.duplicate_threshold
+        self.threshold = settings.duplicate_threshold if threshold is None else threshold
         self.num_perm = num_perm
 
         # Initialize LSH index

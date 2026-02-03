@@ -29,7 +29,7 @@ import httpx
 
 from src.config.settings import get_settings
 from src.config.tickers import SEMICONDUCTOR_TICKERS
-from src.ingestion.base_adapter import BaseAdapter, clean_text, extract_tickers
+from src.ingestion.base_adapter import BaseAdapter, clean_text, extract_tickers, stable_hash
 from src.ingestion.http_client import (
     APIKeyRotator,
     HTTPClient,
@@ -346,6 +346,9 @@ class NewsAdapter(BaseAdapter):
 
         for ticker in top_tickers:
             try:
+                # Rate limit before each API call
+                await self._rate_limiter.acquire()
+
                 # Get news from last 7 days
                 from datetime import timedelta
                 to_date = datetime.now()
@@ -394,6 +397,9 @@ class NewsAdapter(BaseAdapter):
         query = " OR ".join(list(self._tickers)[:5])  # Limit query length
 
         try:
+            # Rate limit before API call
+            await self._rate_limiter.acquire()
+
             response = await client.get(
                 NEWSAPI_EVERYTHING_URL,
                 params={
@@ -438,6 +444,9 @@ class NewsAdapter(BaseAdapter):
         tickers_str = ",".join(list(self._tickers)[:5])
 
         try:
+            # Rate limit before API call
+            await self._rate_limiter.acquire()
+
             response = await client.get(
                 ALPHA_VANTAGE_NEWS_URL,
                 params={
@@ -488,6 +497,9 @@ class NewsAdapter(BaseAdapter):
         tickers_query = " OR ".join(list(self._tickers)[:10])
 
         try:
+            # Rate limit before API call
+            await self._rate_limiter.acquire()
+
             response = await client.post(
                 NEWSFILTER_URL,
                 json_body={
@@ -542,6 +554,9 @@ class NewsAdapter(BaseAdapter):
         symbols = ",".join(list(self._tickers)[:10])
 
         try:
+            # Rate limit before API call
+            await self._rate_limiter.acquire()
+
             response = await client.get(
                 MARKETAUX_URL,
                 params={
@@ -596,6 +611,9 @@ class NewsAdapter(BaseAdapter):
         tickers_list = list(self._tickers)[:10]
 
         try:
+            # Rate limit before API call
+            await self._rate_limiter.acquire()
+
             response = await client.post(
                 FINLIGHT_URL,
                 json_body={
@@ -719,8 +737,8 @@ class NewsAdapter(BaseAdapter):
                 author_name = article.get(config.source_field, config.source_default)
                 author_id = author_name
 
-            # Generate document ID
-            article_id = article.get("id", hash(url))
+            # Generate document ID (use stable hash for deterministic IDs across runs)
+            article_id = article.get("id") or stable_hash(url)
             doc_id = f"{config.id_prefix}{article_id}"
 
             # Get source authority weight

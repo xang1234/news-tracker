@@ -76,7 +76,7 @@ class SpamDetector:
             threshold: Spam threshold (0.0-1.0), default from settings
         """
         settings = get_settings()
-        self.threshold = threshold or settings.spam_threshold
+        self.threshold = settings.spam_threshold if threshold is None else threshold
 
         # Promotional keywords (case-insensitive)
         self.promo_patterns = [

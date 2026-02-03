@@ -10,6 +10,7 @@ NormalizedDocument instances. The base class provides:
 """
 
 import asyncio
+import hashlib
 import logging
 import re
 import time
@@ -134,8 +135,18 @@ class BaseAdapter(ABC):
         Yields:
             Raw platform responses as dictionaries
 
-        This method should handle pagination but NOT rate limiting
-        (handled by base class).
+        IMPORTANT: Subclasses MUST call `await self._rate_limiter.acquire()`
+        before each HTTP request to enforce rate limiting at the correct
+        granularity. Rate limiting should be applied per-request, not per-item.
+
+        Example:
+            async def _fetch_raw(self):
+                async with httpx.AsyncClient() as client:
+                    for ticker in tickers:
+                        await self._rate_limiter.acquire()  # Before HTTP call
+                        response = await client.get(url, params={...})
+                        for item in response.json():
+                            yield item  # No rate limit here
         """
         ...
 
@@ -170,9 +181,8 @@ class BaseAdapter(ABC):
 
         try:
             async for raw in self._fetch_raw():
-                # Apply rate limiting before each API call
-                await self._rate_limiter.acquire()
-
+                # Note: Rate limiting is applied in _fetch_raw() before HTTP calls,
+                # not here. This ensures rate limiting is per-request, not per-item.
                 try:
                     doc = self._transform(raw)
                     if doc is None:
@@ -311,6 +321,23 @@ def clean_text(text: str) -> str:
     text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
 
     return text.strip()
+
+
+def stable_hash(value: str) -> str:
+    """
+    Generate a stable, deterministic hash from a string.
+
+    Uses SHA256 truncated to 16 hex characters (64 bits) for a compact but
+    collision-resistant ID. Unlike Python's built-in hash(), this is
+    deterministic across process restarts and Python versions.
+
+    Args:
+        value: String to hash (typically a URL or identifier)
+
+    Returns:
+        16-character hex string (e.g., "a1b2c3d4e5f67890")
+    """
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()[:16]
 
 
 def expand_twitter_abbreviations(text: str) -> str:
