@@ -271,17 +271,109 @@ class TickerExtractor:
     def __init__(
         self,
         fuzzy_threshold: int = 80,
+        tickers: set[str] | None = None,
+        company_map: dict[str, str] | None = None,
+        keywords: set[str] | None = None,
+        *,
+        ambiguous_tickers: set[str] | None = None,
+        require_context_for_ambiguous: bool = True,
+        enable_company_lookup: bool = True,
+        enable_fuzzy: bool = True,
     ):
         """
         Initialize ticker extractor.
 
         Args:
             fuzzy_threshold: Minimum fuzzy match score (0-100)
+            tickers: Universe of valid ticker symbols (normalized form)
+            company_map: Mapping of company/alias text -> ticker
+            keywords: Domain keywords for relevance checks
+            ambiguous_tickers: Tickers that are common words (e.g., COIN, STOP).
+                These are only accepted when they appear in a stronger context
+                (cashtag/exchange/parenthetical) or near market-language.
+            require_context_for_ambiguous: Whether to apply extra context checks
+                for ambiguous tickers when they appear as bare symbols.
+            enable_company_lookup: Whether to map company/alias text to tickers.
+            enable_fuzzy: Whether to run fuzzy matching (best for small maps).
         """
         self.fuzzy_threshold = fuzzy_threshold
-        self.tickers = SEMICONDUCTOR_TICKERS
-        self.company_map = COMPANY_TO_TICKER
-        self.keywords = SEMICONDUCTOR_KEYWORDS
+        self.tickers = tickers or SEMICONDUCTOR_TICKERS
+        self.company_map = company_map or COMPANY_TO_TICKER
+        self.keywords = keywords or SEMICONDUCTOR_KEYWORDS
+        self.ambiguous_tickers = ambiguous_tickers or set()
+        self.require_context_for_ambiguous = require_context_for_ambiguous
+        self.enable_company_lookup = enable_company_lookup
+        self.enable_fuzzy = enable_fuzzy
+
+        # Pre-compiled patterns for efficient, candidate-first extraction.
+        # Note: direct/bare symbol extraction is intentionally case-sensitive;
+        # we do NOT uppercase the whole input, to avoid false positives like
+        # "stop" -> "STOP" when scaling to a large ticker universe.
+        self._cashtag_re = re.compile(
+            r'(?<![A-Za-z0-9_])\$([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,2})?)\b'
+        )
+        self._exchange_re = re.compile(
+            r'\b(?:NASDAQ|NYSE|AMEX|OTC|TSX|LSE|ASX|HKEX|TSE|SSE|SZSE)\s*[:\-]\s*'
+            r'([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,2})?)\b',
+            re.IGNORECASE,
+        )
+        self._paren_symbol_re = re.compile(
+            r'\(([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,2})?)\)'
+        )
+        self._bare_symbol_re = re.compile(
+            r'\b[A-Z]{2,5}(?:[.-][A-Z]{1,2})?\b'
+        )
+        self._market_context_re = re.compile(
+            r'\b('
+            r'stock|shares?|ticker|symbol|equity|earnings|guidance|revenue|'
+            r'price|target|pt|upgrade|downgrade|analyst|'
+            r'options?|calls?|puts?|volume|market\s+cap|'
+            r'buy|sell|hold|long|short|'
+            r'nasdaq|nyse|amex|otc'
+            r')\b',
+            re.IGNORECASE,
+        )
+
+        # Compile company lookup regexes (kept for curated/small maps).
+        # This avoids substring matches like "lam" in "lamb".
+        self._company_patterns: list[tuple[re.Pattern[str], str]] = []
+        if self.enable_company_lookup and self.company_map:
+            # Longest first reduces accidental matches on shorter aliases.
+            for company, ticker in sorted(
+                self.company_map.items(), key=lambda kv: len(kv[0]), reverse=True
+            ):
+                company_norm = company.strip().lower()
+                if not company_norm:
+                    continue
+                escaped = re.escape(company_norm).replace(r"\ ", r"\s+")
+                pattern = re.compile(rf'\b{escaped}\b', re.IGNORECASE)
+                self._company_patterns.append((pattern, ticker))
+
+    @staticmethod
+    def _normalize_symbol(raw: str) -> str:
+        raw = raw.strip()
+        if not raw:
+            return ""
+        # Normalize segments while preserving separators like "." and "-"
+        parts = re.split(r'([.-])', raw)
+        return "".join(p.upper() if p not in {".", "-"} else p for p in parts)
+
+    def _has_market_context(self, text: str, start: int, end: int) -> bool:
+        """
+        Heuristic: treat nearby market language or price/percent patterns as
+        evidence that a bare token is likely a ticker mention.
+        """
+        window = 48
+        lo = max(0, start - window)
+        hi = min(len(text), end + window)
+        snippet = text[lo:hi]
+
+        if self._market_context_re.search(snippet) is not None:
+            return True
+        # Simple numeric/price context (+5%, -2.3%, $123, 123%)
+        if re.search(r'[\+\-]?\d+(\.\d+)?\s*%|\$\s*\d', snippet):
+            return True
+        return False
 
     def extract(self, text: str) -> list[str]:
         """
@@ -295,40 +387,70 @@ class TickerExtractor:
         """
         tickers_found: set[str] = set()
 
-        # 1. Extract cashtags ($NVDA)
-        cashtag_pattern = r'\$([A-Z]{1,5})\b'
-        for match in re.finditer(cashtag_pattern, text.upper()):
-            ticker = match.group(1)
-            if ticker in self.tickers:
-                tickers_found.add(ticker)
+        if not text:
+            return []
 
-        # 2. Direct ticker mention (all caps, standalone)
-        for ticker in self.tickers:
-            if re.search(rf'\b{ticker}\b', text.upper()):
-                tickers_found.add(ticker)
+        # 1) Strong signal: cashtags ($NVDA, $coin)
+        for match in self._cashtag_re.finditer(text):
+            symbol = self._normalize_symbol(match.group(1))
+            if symbol and symbol in self.tickers:
+                tickers_found.add(symbol)
 
-        # 3. Company name lookup
+        # 2) Strong signal: exchange-tagged symbols (NASDAQ: NVDA)
+        for match in self._exchange_re.finditer(text):
+            symbol = self._normalize_symbol(match.group(1))
+            if symbol and symbol in self.tickers:
+                tickers_found.add(symbol)
+
+        # 3) Medium signal: parenthetical symbols (Company (NVDA))
+        for match in self._paren_symbol_re.finditer(text):
+            raw = match.group(1)
+            # Avoid normal words in parentheses unless explicitly symbol-like.
+            if raw != raw.upper():
+                continue
+            symbol = self._normalize_symbol(raw)
+            if symbol and symbol in self.tickers:
+                tickers_found.add(symbol)
+
+        # 4) Bare symbol candidates (case-sensitive, single pass).
+        # This scales to large ticker universes: O(len(text) + matches).
+        for match in self._bare_symbol_re.finditer(text):
+            symbol = match.group(0)
+            if symbol not in self.tickers:
+                continue
+            if (
+                self.require_context_for_ambiguous
+                and symbol in self.ambiguous_tickers
+                and symbol not in tickers_found
+                and not self._has_market_context(text, match.start(), match.end())
+            ):
+                continue
+            tickers_found.add(symbol)
+
+        # 5) Company name / alias lookup (curated lists)
         text_lower = text.lower()
-        for company, ticker in self.company_map.items():
-            if company in text_lower:
-                if ticker in self.tickers:
-                    tickers_found.add(ticker)
-
-        # 4. Fuzzy matching for variations
-        # Only if we haven't found many tickers yet
-        if len(tickers_found) < 3:
-            for company, ticker in self.company_map.items():
+        if self.enable_company_lookup:
+            for pattern, ticker in self._company_patterns:
                 if ticker in tickers_found:
                     continue
+                if pattern.search(text_lower) is not None:
+                    if ticker in self.tickers:
+                        tickers_found.add(ticker)
 
-                # Check fuzzy match
-                for word in text_lower.split():
-                    if len(word) >= 4:  # Skip short words
-                        score = fuzz.ratio(company, word)
-                        if score >= self.fuzzy_threshold:
-                            if ticker in self.tickers:
-                                tickers_found.add(ticker)
-                                break
+        # 6) Fuzzy matching for variations (best for small curated maps)
+        if self.enable_fuzzy and len(tickers_found) < 3 and len(self.company_map) <= 250:
+            for company, ticker in self.company_map.items():
+                if ticker in tickers_found or ticker not in self.tickers:
+                    continue
+                company_norm = company.strip().lower()
+                if not company_norm or " " in company_norm:
+                    continue
+
+                for word in re.findall(r"[a-zA-Z]{4,}", text_lower):
+                    score = fuzz.ratio(company_norm, word)
+                    if score >= self.fuzzy_threshold:
+                        tickers_found.add(ticker)
+                        break
 
         return sorted(tickers_found)
 

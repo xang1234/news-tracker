@@ -63,6 +63,22 @@ class Settings(BaseSettings):
     # Substack
     substack_cookie: str | None = None
 
+    # Sotwe fallback (Twitter alternative when no API key)
+    sotwe_enabled: bool = Field(
+        default=True,
+        description="Enable Sotwe.com fallback when Twitter API unavailable"
+    )
+    sotwe_usernames: str | None = Field(
+        default=None,
+        description="Comma-separated Twitter usernames to track via Sotwe (overrides defaults)"
+    )
+    sotwe_rate_limit: int = Field(
+        default=10,
+        ge=1,
+        le=30,
+        description="Requests per minute for Sotwe scraping (conservative)"
+    )
+
     # Rate limits (requests per minute)
     twitter_rate_limit: int = 30
     reddit_rate_limit: int = 60
@@ -142,6 +158,11 @@ class Settings(BaseSettings):
     def twitter_configured(self) -> bool:
         """Check if Twitter API is configured."""
         return self.twitter_bearer_token is not None
+
+    @property
+    def sotwe_configured(self) -> bool:
+        """Check if Sotwe fallback is enabled and available."""
+        return self.sotwe_enabled
 
     @property
     def reddit_configured(self) -> bool:

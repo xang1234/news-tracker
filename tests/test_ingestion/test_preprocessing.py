@@ -152,6 +152,40 @@ class TestTickerExtractor:
         # AI is not a tracked semiconductor ticker
         assert "AI" not in tickers
 
+    def test_common_word_not_extracted_when_not_symbol(self):
+        """Lowercase common words should not become tickers via uppercasing."""
+        extractor = TickerExtractor(tickers={"COIN", "STOP"})
+        text = "please stop talking about coin flips"
+        tickers = extractor.extract(text)
+
+        assert "STOP" not in tickers
+        assert "COIN" not in tickers
+
+    def test_ambiguous_all_caps_requires_market_context(self):
+        """Ambiguous all-caps words should require market context when enabled."""
+        extractor = TickerExtractor(
+            tickers={"STOP"},
+            ambiguous_tickers={"STOP"},
+            require_context_for_ambiguous=True,
+            enable_company_lookup=False,
+            enable_fuzzy=False,
+        )
+
+        assert extractor.extract("STOP IT RIGHT NOW") == []
+        assert extractor.extract("STOP is up 5% today") == ["STOP"]
+
+    def test_lowercase_cashtag_is_strong_signal(self):
+        """Cashtags should be case-insensitive (e.g., $coin)."""
+        extractor = TickerExtractor(
+            tickers={"COIN"},
+            ambiguous_tickers={"COIN"},
+            require_context_for_ambiguous=True,
+            enable_company_lookup=False,
+            enable_fuzzy=False,
+        )
+
+        assert extractor.extract("Watching $coin closely") == ["COIN"]
+
 
 class TestPreprocessor:
     """Tests for Preprocessor."""

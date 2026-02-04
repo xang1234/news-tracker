@@ -21,6 +21,7 @@ dependencies = [
     "feedparser>=6.0.0",
     "beautifulsoup4>=4.12.0",
     "readability-lxml>=0.8.0",
+    "curl_cffi>=0.6.0",
 
     # Queue & Cache
     "redis[hiredis]>=5.0.0",

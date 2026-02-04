@@ -86,12 +86,15 @@ class IngestionService:
         """Create adapters based on available configuration."""
         adapters = {}
 
-        # Twitter
-        if settings.twitter_configured:
+        # Twitter (API or Sotwe fallback)
+        if settings.twitter_configured or settings.sotwe_configured:
             adapters[Platform.TWITTER] = TwitterAdapter(
                 rate_limit=settings.twitter_rate_limit,
             )
-            logger.info("Twitter adapter enabled")
+            if settings.twitter_configured:
+                logger.info("Twitter adapter enabled (API)")
+            else:
+                logger.info("Twitter adapter enabled (Sotwe fallback)")
 
         # Reddit
         if settings.reddit_configured:

@@ -79,6 +79,8 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 **Ingestion Layer** (`src/ingestion/`):
 - `BaseAdapter`: Abstract base with error handling and preprocessing. Subclasses implement `_fetch_raw()` and `_transform()`. **Note**: Subclasses must call `self._rate_limiter.acquire()` before each HTTP request in `_fetch_raw()`.
 - Platform adapters: `TwitterAdapter`, `RedditAdapter`, `SubstackAdapter`, `NewsAdapter`, `MockAdapter`
+- `TwitterAdapter`: Uses Twitter API v2 when `TWITTER_BEARER_TOKEN` is set, falls back to Sotwe.com scraping otherwise
+- `SotweClient`: Sotwe.com scraper using `curl_cffi` (browser impersonation) and Node.js (NUXT JS parsing)
 - `DocumentQueue`: Redis Streams wrapper with consumer groups, DLQ support
 - `HTTPClient`: Async HTTP client with exponential backoff, retry on 429/5xx, and API key rotation (`http_client.py`)
 - All adapters output `NormalizedDocument` (defined in `schemas.py`)
@@ -145,6 +147,7 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 Settings in `src/config/settings.py` use Pydantic BaseSettings with env var overrides:
 - `DATABASE_URL`, `REDIS_URL` for infrastructure
 - `TWITTER_BEARER_TOKEN`, `REDDIT_CLIENT_ID`, etc. for APIs
+- `SOTWE_ENABLED` (true), `SOTWE_USERNAMES` (comma-separated, overrides defaults), `SOTWE_RATE_LIMIT` (10) for Sotwe fallback
 - `NEWSFILTER_API_KEYS`, `MARKETAUX_API_KEYS`, `FINLIGHT_API_KEYS` for new news sources (comma-separated for key rotation)
 - `max_http_retries` (3), `max_backoff_seconds` (60.0) for HTTP retry configuration
 - `spam_threshold` (0.7), `duplicate_threshold` (0.85) for processing
@@ -161,6 +164,8 @@ Settings in `src/config/settings.py` use Pydantic BaseSettings with env var over
 - `NER_ENABLE_SEMANTIC_LINKING` (false), `NER_SEMANTIC_SIMILARITY_THRESHOLD` (0.5), `NER_SEMANTIC_BASE_SCORE` (0.6) for embedding-based entity-theme linking
 
 Semiconductor tickers and company mappings are in `src/config/tickers.py`.
+
+Curated Twitter accounts for Sotwe fallback are in `src/config/twitter_accounts.py` (analysts, companies, market accounts).
 
 NER settings can be overridden via `NER_*` environment variables (e.g., `NER_SPACY_MODEL=en_core_web_sm`, `NER_ENABLE_SEMANTIC_LINKING=true`).
 
@@ -229,6 +234,9 @@ async def fetch(self):
 - **Entity Context Windows**: Entity-level sentiment extracts text windows around entity mentions for aspect-based classification
 - **Cache Isolation**: Document-level and entity-level sentiment use separate cache strategies to prevent cache poisoning
 - **RED Metrics Pattern**: Sentiment metrics follow Rate (analyzed_total), Errors (errors_total), Duration (latency_seconds) pattern for observability
+- **Multi-Source Fallback**: TwitterAdapter uses API when available, falls back to Sotwe scraping (follows NewsAdapter pattern)
+- **Browser Impersonation**: `curl_cffi` with `impersonate="chrome"` bypasses Cloudflare protection for Sotwe
+- **NUXT Data Extraction**: Tweet data extracted directly from embedded NUXT JavaScript using regex (no Node.js required)
 
 ### Testing
 
@@ -273,6 +281,10 @@ async def main():
 
 asyncio.run(main())
 "
+
+# Sotwe fallback testing
+uv run pytest tests/test_ingestion/test_sotwe.py -v -m "not integration"  # Unit tests
+uv run pytest tests/test_ingestion/test_sotwe.py -v -m integration        # Integration (requires Node.js)
 
 # Sentiment testing
 uv run pytest tests/test_sentiment/ -v     # Run all sentiment tests
