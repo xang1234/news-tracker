@@ -790,6 +790,14 @@ wheels = [
 ]
 
 [[package]]
+name = "en-core-web-sm"
+version = "3.8.0"
+source = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
+wheels = [
+    { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl", hash = "sha256:1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85" },
+]
+
+[[package]]
 name = "fastapi"
 version = "0.128.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1811,6 +1819,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
+    { name = "rapid-textrank", extra = ["spacy"] },
     { name = "rapidfuzz" },
     { name = "readability-lxml" },
     { name = "redis", extra = ["hiredis"] },
@@ -1824,6 +1833,7 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
+    { name = "en-core-web-sm" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1841,6 +1851,7 @@ requires-dist = [
     { name = "click", specifier = ">=8.1.0" },
     { name = "curl-cffi", specifier = ">=0.6.0" },
     { name = "datasketch", specifier = ">=1.6.0" },
+    { name = "en-core-web-sm", marker = "extra == 'dev'", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" },
     { name = "fastapi", specifier = ">=0.109.0" },
     { name = "fastcoref", specifier = ">=2.1.0" },
     { name = "feedparser", specifier = ">=6.0.0" },
@@ -1863,6 +1874,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.1.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
+    { name = "rapid-textrank", extras = ["spacy"], specifier = ">=0.1.1" },
     { name = "rapidfuzz", specifier = ">=3.5.0" },
     { name = "readability-lxml", specifier = ">=0.8.0" },
     { name = "redis", extras = ["hiredis"], specifier = ">=5.0.0" },
@@ -2890,6 +2902,25 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/da/92/1446574745d74df0c92e6aa4a7b0b3130706a4142b2d1a5869f2eaa423c6/pyyaml-6.0.3-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:16249ee61e95f858e83976573de0f5b2893b3677ba71c9dd36b9cf8be9ac6d65", size = 829923, upload-time = "2025-09-25T21:32:54.537Z" },
     { url = "https://files.pythonhosted.org/packages/f0/7a/1c7270340330e575b92f397352af856a8c06f230aa3e76f86b39d01b416a/pyyaml-6.0.3-cp314-cp314t-win_amd64.whl", hash = "sha256:4ad1906908f2f5ae4e5a8ddfce73c320c2a1429ec52eafd27138b7f1cbe341c9", size = 174062, upload-time = "2025-09-25T21:32:55.767Z" },
     { url = "https://files.pythonhosted.org/packages/f1/12/de94a39c2ef588c7e6455cfbe7343d3b2dc9d6b6b2f40c4c6565744c873d/pyyaml-6.0.3-cp314-cp314t-win_arm64.whl", hash = "sha256:ebc55a14a21cb14062aa4162f906cd962b28e2e9ea38f9b4391244cd8de4ae0b", size = 149341, upload-time = "2025-09-25T21:32:56.828Z" },
+]
+
+[[package]]
+name = "rapid-textrank"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c0/76/9cef6941f9cf9b5264a7f7e113dffcf96a2b3b96eca6a5de8da2435e8e7f/rapid_textrank-0.1.1.tar.gz", hash = "sha256:e201f572a9e4dc534a97fd760d1ab1f73b12c3b12372d15556ad5776a25613b2", size = 163352, upload-time = "2026-02-04T18:32:41.452Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/25/5d/8096e55a794e6a5248c6bf8cde8397efb12ce403f53e406c76d64eb22ee6/rapid_textrank-0.1.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:e42e555a1d8f80d89e942996999a7ba243d930964d568155e0d25be4db646757", size = 506846, upload-time = "2026-02-04T18:32:25.184Z" },
+    { url = "https://files.pythonhosted.org/packages/76/9d/7f2f448c284be2d9374008b292f257a2453f3eb734d30b369c21c9d21612/rapid_textrank-0.1.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:2293e813639d8381800091d6768cc7a34b99620126298fcceffb721392432af4", size = 547479, upload-time = "2026-02-04T18:32:27.051Z" },
+    { url = "https://files.pythonhosted.org/packages/5f/df/66b20fc508fdfe139043feef5e11935eb553b60bfd01934581eb61b97962/rapid_textrank-0.1.1-cp311-cp311-win_amd64.whl", hash = "sha256:366fdde79cd2e139a801df7e643467b6d40f61d841599249efc879ac4673d6ab", size = 420845, upload-time = "2026-02-04T18:32:28.72Z" },
+    { url = "https://files.pythonhosted.org/packages/f9/aa/7a20c57efef27ab1de32af292f0f77930597f68a7091d8fc55a60935731e/rapid_textrank-0.1.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:f22f6ef8593105f10bc1ee0abe924cb99006c6703ab3c6929ac9cf7c98af54b8", size = 507128, upload-time = "2026-02-04T18:32:30.195Z" },
+    { url = "https://files.pythonhosted.org/packages/aa/d4/744129f28f0bd903e5d235d790c64b3c89eaa6f4afa028b9e64d82a345ad/rapid_textrank-0.1.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:968f107635e6044128679a3a39af44f03589255fe3bf265fdb6926956321df2b", size = 546461, upload-time = "2026-02-04T18:32:31.727Z" },
+    { url = "https://files.pythonhosted.org/packages/21/2d/ae1cc2f3c0a51f0599241b7698513071857b6f924387b1c4b3da8aef82e7/rapid_textrank-0.1.1-cp312-cp312-win_amd64.whl", hash = "sha256:6d4703a6a5998ded1efd219c56a510fb8521538cd129b3ee3b009c74806f123c", size = 421670, upload-time = "2026-02-04T18:32:34.846Z" },
+]
+
+[package.optional-dependencies]
+spacy = [
+    { name = "spacy" },
 ]
 
 [[package]]

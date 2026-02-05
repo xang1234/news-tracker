@@ -31,6 +31,7 @@ from src.config.tickers import (
 from src.ingestion.schemas import NormalizedDocument, Platform
 
 if TYPE_CHECKING:
+    from src.keywords.service import KeywordsService
     from src.ner.service import NERService
 
 logger = logging.getLogger(__name__)
@@ -507,6 +508,8 @@ class Preprocessor:
         ticker_extractor: TickerExtractor | None = None,
         ner_service: "NERService | None" = None,
         enable_ner: bool = False,
+        keywords_service: "KeywordsService | None" = None,
+        enable_keywords: bool = False,
     ):
         """
         Initialize preprocessor.
@@ -517,12 +520,16 @@ class Preprocessor:
             ticker_extractor: Custom ticker extractor (or use default)
             ner_service: NER service for entity extraction (optional)
             enable_ner: Whether to run NER extraction (default False)
+            keywords_service: Keywords service for keyword extraction (optional)
+            enable_keywords: Whether to run keyword extraction (default False)
         """
         self.spam_detector = spam_detector or SpamDetector()
         self.bot_detector = bot_detector or BotDetector()
         self.ticker_extractor = ticker_extractor or TickerExtractor()
         self._ner_service = ner_service
         self._enable_ner = enable_ner
+        self._keywords_service = keywords_service
+        self._enable_keywords = enable_keywords
 
     def process(self, doc: NormalizedDocument) -> NormalizedDocument:
         """
@@ -556,12 +563,22 @@ class Preprocessor:
                 logger.warning(f"NER extraction failed for {doc.id}: {e}")
                 doc.entities_mentioned = []
 
+        # 5. Keywords extraction (if enabled)
+        if self._enable_keywords and self._keywords_service is not None:
+            try:
+                keywords = self._keywords_service.extract_sync(doc.content)
+                doc.keywords_extracted = [kw.to_dict() for kw in keywords]
+            except Exception as e:
+                logger.warning(f"Keywords extraction failed for {doc.id}: {e}")
+                doc.keywords_extracted = []
+
         logger.debug(
             f"Preprocessed {doc.id}: "
             f"spam={doc.spam_score:.2f}, "
             f"bot={doc.bot_probability:.2f}, "
             f"tickers={doc.tickers_mentioned}, "
-            f"entities={len(doc.entities_mentioned)}"
+            f"entities={len(doc.entities_mentioned)}, "
+            f"keywords={len(doc.keywords_extracted)}"
         )
 
         return doc

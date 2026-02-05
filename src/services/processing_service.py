@@ -77,7 +77,7 @@ class ProcessingService:
         """
         self._queue = queue or DocumentQueue()
         self._database = database or Database()
-        self._preprocessor = preprocessor or Preprocessor()
+        self._preprocessor = preprocessor or self._create_default_preprocessor()
         self._deduplicator = deduplicator or Deduplicator()
         self._embedding_queue = embedding_queue
         self._sentiment_queue = sentiment_queue
@@ -94,6 +94,44 @@ class ProcessingService:
             batch_size=batch_size,
             embedding_queue_enabled=enable_embedding_queue,
             sentiment_queue_enabled=enable_sentiment_queue,
+        )
+
+    def _create_default_preprocessor(self) -> Preprocessor:
+        """
+        Create a Preprocessor with auto-injected services based on settings.
+
+        Auto-injects NERService when ner_enabled=True and
+        KeywordsService when keywords_enabled=True.
+        """
+        settings = get_settings()
+
+        ner_service = None
+        enable_ner = settings.ner_enabled
+        if enable_ner:
+            try:
+                from src.ner.service import NERService
+                ner_service = NERService()
+                logger.info("NER service auto-injected into preprocessor")
+            except ImportError:
+                logger.warning("NER enabled but spacy not available")
+                enable_ner = False
+
+        keywords_service = None
+        enable_keywords = settings.keywords_enabled
+        if enable_keywords:
+            try:
+                from src.keywords.service import KeywordsService
+                keywords_service = KeywordsService()
+                logger.info("Keywords service auto-injected into preprocessor")
+            except ImportError:
+                logger.warning("Keywords enabled but rapid-textrank not available")
+                enable_keywords = False
+
+        return Preprocessor(
+            ner_service=ner_service,
+            enable_ner=enable_ner,
+            keywords_service=keywords_service,
+            enable_keywords=enable_keywords,
         )
 
     async def start(self) -> None:

@@ -100,6 +100,12 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 - Lazy model loading, fuzzy matching via rapidfuzz, optional coreference resolution
 - `link_entities_to_theme_semantic()`: Embedding-based disambiguation using cosine similarity (requires EmbeddingService)
 
+**Keywords Layer** (`src/keywords/`):
+- `KeywordsConfig`: Pydantic settings for top_n, language, min_score, max_text_length
+- `ExtractedKeyword`: Dataclass for extracted keywords with text, score, rank, lemma, count, metadata
+- `KeywordsService`: TextRank-based keyword extraction using rapid-textrank library
+- Lazy model loading, graceful error handling, opt-in activation via `KEYWORDS_ENABLED=true`
+
 **Storage Layer** (`src/storage/`):
 - `Database`: asyncpg connection pool with transaction context managers
 - `DocumentRepository`: CRUD operations, batch upserts, full-text search, similarity search
@@ -162,6 +168,8 @@ Settings in `src/config/settings.py` use Pydantic BaseSettings with env var over
 - `sentiment_stream_name` (sentiment_queue), `sentiment_consumer_group` (sentiment_workers) for queue config
 - `ner_enabled` (false), `ner_spacy_model` (en_core_web_trf) for NER configuration
 - `NER_ENABLE_SEMANTIC_LINKING` (false), `NER_SEMANTIC_SIMILARITY_THRESHOLD` (0.5), `NER_SEMANTIC_BASE_SCORE` (0.6) for embedding-based entity-theme linking
+- `keywords_enabled` (false), `keywords_top_n` (10) for keyword extraction configuration
+- Keywords settings can be overridden via `KEYWORDS_*` environment variables (e.g., `KEYWORDS_TOP_N=15`, `KEYWORDS_MIN_SCORE=0.01`)
 
 Semiconductor tickers and company mappings are in `src/config/tickers.py`.
 
@@ -175,7 +183,7 @@ NER settings can be overridden via `NER_*` environment variables (e.g., `NER_SPA
 - Identity: `id`, `platform`, `url`
 - Content: `content`, `content_type`, `title`
 - Author: `author_id`, `author_name`, `author_verified`, `author_followers`
-- Quality: `spam_score`, `bot_probability`, `authority_score`, `tickers_mentioned`, `entities_mentioned`
+- Quality: `spam_score`, `bot_probability`, `authority_score`, `tickers_mentioned`, `entities_mentioned`, `keywords_extracted`
 - Engagement: `likes`, `shares`, `comments`, `views`
 - Embedding: `embedding` (FinBERT 768-dim), `embedding_minilm` (MiniLM 384-dim) - generated async by EmbeddingWorker
 - Sentiment: `sentiment` (JSONB with label, confidence, scores, entity_sentiments) - generated async by SentimentWorker
@@ -302,5 +310,17 @@ async def main():
     await svc.close()
 
 asyncio.run(main())
+"
+
+# Keywords testing
+uv run pytest tests/test_keywords/ -v     # Run all keyword tests
+
+# Manual keywords verification
+uv run python -c "
+from src.keywords import KeywordsService
+svc = KeywordsService()
+keywords = svc.extract_sync('Nvidia announced new GPU architecture with HBM3E memory')
+for kw in keywords:
+    print(f'{kw.rank}. {kw.text} (score: {kw.score:.3f})')
 "
 ```

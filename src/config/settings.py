@@ -124,6 +124,10 @@ class Settings(BaseSettings):
     ner_enabled: bool = Field(default=False, description="Enable NER extraction in preprocessing")
     ner_spacy_model: str = Field(default="en_core_web_trf", description="spaCy model for NER")
 
+    # Keywords extraction
+    keywords_enabled: bool = Field(default=False, description="Enable keyword extraction in preprocessing")
+    keywords_top_n: int = Field(default=10, ge=1, le=50, description="Max keywords per document")
+
     # Sentiment Analysis
     sentiment_model_name: str = Field(default="ProsusAI/finbert", description="Model for sentiment analysis")
     sentiment_batch_size: int = Field(default=16, ge=1, le=64, description="Batch size for sentiment analysis")

@@ -71,6 +71,7 @@ class DocumentRepository:
             engagement JSONB NOT NULL DEFAULT '{}',
             tickers TEXT[] NOT NULL DEFAULT '{}',
             entities_mentioned JSONB NOT NULL DEFAULT '[]',
+            keywords_extracted JSONB NOT NULL DEFAULT '[]',
             urls_mentioned TEXT[] NOT NULL DEFAULT '{}',
             spam_score REAL NOT NULL DEFAULT 0.0,
             bot_probability REAL NOT NULL DEFAULT 0.0,
@@ -95,6 +96,8 @@ class DocumentRepository:
             ON documents USING GIN(tickers);
         CREATE INDEX IF NOT EXISTS idx_documents_entities
             ON documents USING GIN(entities_mentioned);
+        CREATE INDEX IF NOT EXISTS idx_documents_keywords
+            ON documents USING GIN(keywords_extracted);
         CREATE INDEX IF NOT EXISTS idx_documents_created_at
             ON documents(created_at DESC);
 
@@ -158,6 +161,13 @@ class DocumentRepository:
         -- GIN index for entity queries
         CREATE INDEX IF NOT EXISTS idx_documents_entities
             ON documents USING GIN(entities_mentioned);
+
+        -- Add keywords_extracted column if it doesn't exist
+        ALTER TABLE documents ADD COLUMN IF NOT EXISTS keywords_extracted JSONB NOT NULL DEFAULT '[]';
+
+        -- GIN index for keyword queries
+        CREATE INDEX IF NOT EXISTS idx_documents_keywords
+            ON documents USING GIN(keywords_extracted);
         """
         await self._db.execute(migrations_sql)
 
@@ -180,20 +190,21 @@ class DocumentRepository:
             id, platform, url, timestamp, fetched_at,
             author_id, author_name, author_followers, author_verified,
             content, content_type, title,
-            engagement, tickers, entities_mentioned, urls_mentioned,
+            engagement, tickers, entities_mentioned, keywords_extracted, urls_mentioned,
             spam_score, bot_probability, authority_score,
             embedding, sentiment, theme_ids, raw_data
         ) VALUES (
             $1, $2, $3, $4, $5,
             $6, $7, $8, $9,
             $10, $11, $12,
-            $13, $14, $15, $16,
-            $17, $18, $19,
-            $20, $21, $22, $23
+            $13, $14, $15, $16, $17,
+            $18, $19, $20,
+            $21, $22, $23, $24
         )
         ON CONFLICT (id) DO UPDATE SET
             engagement = EXCLUDED.engagement,
             entities_mentioned = EXCLUDED.entities_mentioned,
+            keywords_extracted = EXCLUDED.keywords_extracted,
             spam_score = EXCLUDED.spam_score,
             bot_probability = EXCLUDED.bot_probability,
             authority_score = EXCLUDED.authority_score,
@@ -218,6 +229,7 @@ class DocumentRepository:
             json.dumps(doc.engagement.model_dump()),
             doc.tickers_mentioned,
             json.dumps(doc.entities_mentioned),
+            json.dumps(doc.keywords_extracted),
             doc.urls_mentioned,
             doc.spam_score,
             doc.bot_probability,
@@ -253,20 +265,21 @@ class DocumentRepository:
             id, platform, url, timestamp, fetched_at,
             author_id, author_name, author_followers, author_verified,
             content, content_type, title,
-            engagement, tickers, entities_mentioned, urls_mentioned,
+            engagement, tickers, entities_mentioned, keywords_extracted, urls_mentioned,
             spam_score, bot_probability, authority_score,
             raw_data
         ) VALUES (
             $1, $2, $3, $4, $5,
             $6, $7, $8, $9,
             $10, $11, $12,
-            $13, $14, $15, $16,
-            $17, $18, $19,
-            $20
+            $13, $14, $15, $16, $17,
+            $18, $19, $20,
+            $21
         )
         ON CONFLICT (id) DO UPDATE SET
             engagement = EXCLUDED.engagement,
             entities_mentioned = EXCLUDED.entities_mentioned,
+            keywords_extracted = EXCLUDED.keywords_extracted,
             spam_score = EXCLUDED.spam_score,
             bot_probability = EXCLUDED.bot_probability,
             authority_score = EXCLUDED.authority_score,
@@ -291,6 +304,7 @@ class DocumentRepository:
                 json.dumps(doc.engagement.model_dump()),
                 doc.tickers_mentioned,
                 json.dumps(doc.entities_mentioned),
+                json.dumps(doc.keywords_extracted),
                 doc.urls_mentioned,
                 doc.spam_score,
                 doc.bot_probability,
@@ -948,6 +962,11 @@ class DocumentRepository:
         if isinstance(entities_mentioned, str):
             entities_mentioned = json.loads(entities_mentioned)
 
+        # Parse keywords_extracted JSON
+        keywords_extracted = row.get("keywords_extracted", [])
+        if isinstance(keywords_extracted, str):
+            keywords_extracted = json.loads(keywords_extracted)
+
         return NormalizedDocument(
             id=row["id"],
             platform=Platform(row["platform"]),
@@ -964,6 +983,7 @@ class DocumentRepository:
             engagement=engagement,
             tickers_mentioned=list(row.get("tickers", [])),
             entities_mentioned=entities_mentioned or [],
+            keywords_extracted=keywords_extracted or [],
             urls_mentioned=list(row.get("urls_mentioned", [])),
             spam_score=row.get("spam_score", 0.0),
             bot_probability=row.get("bot_probability", 0.0),
