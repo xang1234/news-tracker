@@ -31,6 +31,9 @@ uv run news-tracker run-once --mock --with-sentiment  # Include sentiment analys
 uv run news-tracker serve              # Start embedding API server
 uv run news-tracker sentiment-worker   # Run sentiment analysis worker
 uv run news-tracker clustering-worker  # Run clustering worker for theme assignment
+uv run news-tracker daily-clustering                   # Daily batch clustering (today)
+uv run news-tracker daily-clustering --date 2026-02-05 # Batch clustering for specific date
+uv run news-tracker daily-clustering --dry-run         # Preview without running
 uv run news-tracker vector-search "query" --limit 10  # Semantic search
 uv run news-tracker cleanup --days 90  # Remove old documents (storage management)
 
@@ -138,6 +141,18 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
   - Idempotency: `idempotent:cluster:{doc_id}:{model}` Redis SET NX with 7-day TTL
   - Skips MiniLM-only documents (theme centroids are 768-dim FinBERT)
   - CLI: `news-tracker clustering-worker [--batch-size N] [--metrics-port 8002]`
+- `DailyClusteringResult`: Dataclass summarizing a batch run (counts, errors, elapsed time)
+- `run_daily_clustering(database, target_date, config)`: Offline batch pipeline (10 phases):
+  1. Fetch docs via `get_with_embeddings_since()` (lightweight projection, 6 fields)
+  2. Batch cosine similarity via numpy matrix multiply `emb_norm @ centroid_norm.T`
+  3. Three-tier assignment: strong (EMA centroid update), weak (assign only), unassigned
+  4. Persist assignments via `update_themes()` atomic array merge
+  5. Detect emerging themes from unassigned candidates via `BERTopicService.check_new_themes()`
+  6. Compute daily metrics (sentiment_score, avg_authority, bullish_ratio) via `ThemeMetrics`
+  7. Weekly Monday merge via `BERTopicService.merge_similar_themes()` with DB cleanup
+  - Helper functions: `_batch_cosine_similarity()`, `_theme_to_cluster()`, `_cluster_to_theme()`, `_aggregate_sentiment_metrics()`
+  - CLI: `news-tracker daily-clustering [--date YYYY-MM-DD] [--dry-run]`
+  - Designed for cron: `0 4 * * * news-tracker daily-clustering`
 
 **Themes Layer** (`src/themes/`):
 - `Theme`: Dataclass mapping 1:1 to the `themes` DB table (distinct from in-memory `ThemeCluster`)
@@ -157,7 +172,7 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 
 **Storage Layer** (`src/storage/`):
 - `Database`: asyncpg connection pool with transaction context managers
-- `DocumentRepository`: CRUD operations, batch upserts, full-text search, similarity search, `update_themes()` array merge
+- `DocumentRepository`: CRUD operations, batch upserts, full-text search, similarity search, `update_themes()` array merge, `get_with_embeddings_since()` lightweight projection for batch clustering
 
 **Embedding Layer** (`src/embedding/`):
 - `EmbeddingConfig`: Pydantic settings for model, batching, caching, queue configuration
@@ -314,6 +329,11 @@ async def fetch(self):
 - **Redis SET NX Idempotency**: `idempotent:cluster:{doc_id}:{model}` with 7-day TTL prevents reprocessing; key is deleted if embedding missing so re-queue succeeds
 - **Atomic Array Merge**: `update_themes()` uses `ARRAY(SELECT DISTINCT unnest(theme_ids || $2))` for safe concurrent theme assignment without read-modify-write races
 - **Atomic Counter Increment**: `document_count = document_count + 1` raw SQL avoids stale-read increment races between concurrent workers
+- **Projection Query for Batch Efficiency**: `get_with_embeddings_since()` returns 6 fields as dicts instead of full `NormalizedDocument` (24+ fields) to minimize memory for 50k-doc batch clustering
+- **Numpy Batch Similarity**: Daily job uses `emb_norm @ centroid_norm.T` for O(n_docs × n_themes) similarity in a single matrix multiply — no Python loops, handles 50k × 500 in ~10ms
+- **Dual-Path Clustering**: Real-time `ClusteringWorker` (pgvector HNSW, per-document) vs offline `run_daily_clustering` (numpy batch, per-day) serve different latency/throughput tradeoffs
+- **BERTopicService Reuse**: Daily job populates `_themes` dict from DB `Theme` records and sets `_initialized=True` to reuse `merge_similar_themes()` and `check_new_themes()` without reimplementing
+- **Phase-Resilient Error Handling**: Each phase (fetch, assign, centroid update, metrics, merge) has independent try/except — failures are logged to `result.errors` without aborting the job
 
 ### Testing
 
@@ -394,10 +414,11 @@ for kw in keywords:
 "
 
 # Clustering testing
-uv run pytest tests/test_clustering/ -v   # Run all clustering tests (schema + service + config + worker)
+uv run pytest tests/test_clustering/ -v   # Run all clustering tests (schema + service + config + worker + daily job)
 uv run pytest tests/test_clustering/test_service.py -v -k "Transform"  # Run only transform tests
 uv run pytest tests/test_clustering/test_service.py -v -k "Merge or CheckNew"  # Run merge + new theme tests
 uv run pytest tests/test_clustering/test_worker.py -v   # Run clustering worker tests
+uv run pytest tests/test_clustering/test_daily_job.py -v  # Run daily batch clustering tests
 
 # Themes testing
 uv run pytest tests/test_themes/ -v              # Run all theme tests (schema + repository + search + metrics)

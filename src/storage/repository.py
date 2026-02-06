@@ -1078,6 +1078,58 @@ class DocumentRepository:
             raw_data=raw_data or {},
         )
 
+    # Projection queries for batch processing
+
+    async def get_with_embeddings_since(
+        self,
+        since: datetime,
+        until: datetime,
+        limit: int = 50_000,
+    ) -> list[dict[str, Any]]:
+        """
+        Get lightweight document projections with FinBERT embeddings in a time window.
+
+        Returns only the fields needed for batch clustering (6 fields vs 24+
+        in full NormalizedDocument), avoiding materialization of large JSONB
+        blobs and engagement objects for memory efficiency at scale.
+
+        Args:
+            since: Start of time window (inclusive).
+            until: End of time window (exclusive).
+            limit: Maximum documents to return.
+
+        Returns:
+            List of dicts with keys: id, content, embedding, authority_score,
+            sentiment, theme_ids. Embedding is parsed to list[float].
+        """
+        sql = """
+            SELECT id, content, embedding, authority_score, sentiment, theme_ids
+            FROM documents
+            WHERE embedding IS NOT NULL
+              AND timestamp >= $1
+              AND timestamp < $2
+            ORDER BY timestamp DESC
+            LIMIT $3
+        """
+        rows = await self._db.fetch(sql, since, until, limit)
+
+        results = []
+        for row in rows:
+            sentiment = row.get("sentiment")
+            if isinstance(sentiment, str):
+                sentiment = json.loads(sentiment)
+
+            results.append({
+                "id": row["id"],
+                "content": row["content"],
+                "embedding": self._parse_embedding(row["embedding"]),
+                "authority_score": row.get("authority_score"),
+                "sentiment": sentiment,
+                "theme_ids": list(row.get("theme_ids", [])),
+            })
+
+        return results
+
     # Sentiment aggregation query methods
 
     async def get_sentiments_for_ticker(

@@ -15,6 +15,7 @@ Usage:
 import asyncio
 import signal
 import sys
+from datetime import datetime
 from typing import Any
 
 import click
@@ -496,6 +497,79 @@ def clustering_worker(batch_size: int | None, metrics: bool, metrics_port: int) 
             loop.add_signal_handler(sig, lambda: asyncio.create_task(worker.stop()))
 
         await worker.start()
+
+    asyncio.run(run())
+
+
+@main.command("daily-clustering")
+@click.option("--date", "target_date", default=None, type=click.DateTime(formats=["%Y-%m-%d"]),
+              help="Date to process (default: today UTC)")
+@click.option("--dry-run", is_flag=True, help="Preview document count without running")
+def daily_clustering(target_date: Any, dry_run: bool) -> None:
+    """Run daily batch clustering for theme assignment and metrics.
+
+    Re-assigns recent documents to themes, detects emerging themes,
+    computes daily metrics, and runs weekly theme merges (Mondays).
+
+    Designed for cron scheduling: 0 4 * * * news-tracker daily-clustering
+
+    Example:
+        news-tracker daily-clustering                    # Process today
+        news-tracker daily-clustering --date 2026-02-05  # Process specific date
+        news-tracker daily-clustering --dry-run          # Preview only
+    """
+    from datetime import timedelta, timezone as tz
+
+    from src.clustering.daily_job import run_daily_clustering
+    from src.storage.database import Database
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            d = target_date.date() if target_date else None
+
+            if dry_run:
+                from src.storage.repository import DocumentRepository
+
+                d = d or datetime.now(tz.utc).date()
+                repo = DocumentRepository(db)
+                since = datetime(d.year, d.month, d.day, tzinfo=tz.utc)
+                until = since + timedelta(days=1)
+                docs = await repo.get_with_embeddings_since(since, until)
+
+                # Count existing themes
+                from src.themes.repository import ThemeRepository
+                theme_repo = ThemeRepository(db)
+                themes = await theme_repo.get_all(limit=500)
+
+                click.echo(f"\nDry run for {d}")
+                click.echo(f"  Documents with embeddings: {len(docs)}")
+                click.echo(f"  Existing themes: {len(themes)}")
+                click.echo(f"  Day of week: {d.strftime('%A')}"
+                           f"{' (merge day)' if d.weekday() == 0 else ''}")
+                click.echo("\nRun without --dry-run to execute.")
+            else:
+                result = await run_daily_clustering(db, target_date=d)
+
+                click.echo(f"\nDaily Clustering Results ({result.date}):")
+                click.echo(f"  Documents fetched:  {result.documents_fetched}")
+                click.echo(f"  Documents assigned: {result.documents_assigned}")
+                click.echo(f"  Unassigned:         {result.documents_unassigned}")
+                click.echo(f"  New themes created: {result.new_themes_created}")
+                click.echo(f"  Themes merged:      {result.themes_merged}")
+                click.echo(f"  Metrics computed:   {result.metrics_computed}")
+                click.echo(f"  Errors:             {len(result.errors)}")
+                click.echo(f"  Elapsed:            {result.elapsed_seconds:.2f}s")
+
+                if result.errors:
+                    click.echo("\nErrors:")
+                    for err in result.errors:
+                        click.echo(click.style(f"  - {err}", fg="red"))
+
+        finally:
+            await db.close()
 
     asyncio.run(run())
 

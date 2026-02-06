@@ -12,6 +12,7 @@ Components:
 """
 
 from src.clustering.config import ClusteringConfig
+from src.clustering.daily_job import DailyClusteringResult, run_daily_clustering
 from src.clustering.queue import ClusteringJob, ClusteringQueue
 from src.clustering.schemas import ThemeCluster
 from src.clustering.service import BERTopicService
@@ -22,6 +23,8 @@ __all__ = [
     "ClusteringJob",
     "ClusteringQueue",
     "ClusteringWorker",
+    "DailyClusteringResult",
     "ThemeCluster",
     "BERTopicService",
+    "run_daily_clustering",
 ]
