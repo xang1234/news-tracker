@@ -136,6 +136,58 @@ class DocumentRepository:
             ON processing_metrics(timestamp DESC);
         CREATE INDEX IF NOT EXISTS idx_metrics_name
             ON processing_metrics(metric_name);
+
+        -- Themes table (clustering results from BERTopicService)
+        CREATE TABLE IF NOT EXISTS themes (
+            theme_id        TEXT PRIMARY KEY,
+            name            TEXT NOT NULL,
+            description     TEXT,
+            centroid        vector(768) NOT NULL,
+            top_keywords    TEXT[] NOT NULL DEFAULT '{}',
+            top_tickers     TEXT[] NOT NULL DEFAULT '{}',
+            top_entities    JSONB NOT NULL DEFAULT '[]',
+            document_count  INTEGER NOT NULL DEFAULT 0,
+            lifecycle_stage TEXT NOT NULL DEFAULT 'emerging'
+                CHECK (lifecycle_stage IN ('emerging', 'accelerating', 'mature', 'fading')),
+            created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            metadata        JSONB NOT NULL DEFAULT '{}'
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_themes_centroid_hnsw
+            ON themes
+            USING hnsw (centroid vector_cosine_ops)
+            WITH (m = 16, ef_construction = 64);
+        CREATE INDEX IF NOT EXISTS idx_themes_top_keywords
+            ON themes USING GIN(top_keywords);
+        CREATE INDEX IF NOT EXISTS idx_themes_lifecycle_stage
+            ON themes(lifecycle_stage);
+        CREATE INDEX IF NOT EXISTS idx_themes_updated_at
+            ON themes(updated_at DESC);
+
+        -- Auto-update updated_at on themes (reuses trigger function from documents)
+        DROP TRIGGER IF EXISTS update_themes_updated_at ON themes;
+        CREATE TRIGGER update_themes_updated_at
+            BEFORE UPDATE ON themes
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+
+        -- Theme metrics time series (one row per theme per day)
+        CREATE TABLE IF NOT EXISTS theme_metrics (
+            theme_id        TEXT NOT NULL REFERENCES themes(theme_id) ON DELETE CASCADE,
+            date            DATE NOT NULL,
+            document_count  INTEGER NOT NULL DEFAULT 0,
+            sentiment_score REAL,
+            volume_zscore   REAL,
+            velocity        REAL,
+            acceleration    REAL,
+            avg_authority   REAL,
+            bullish_ratio   REAL,
+            PRIMARY KEY (theme_id, date)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_theme_metrics_date
+            ON theme_metrics(date);
         """
 
         await self._db.execute(create_sql)
