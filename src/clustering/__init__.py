@@ -7,10 +7,16 @@ topic representations over FinBERT embeddings.
 
 Components:
 - ClusteringConfig: Configuration for the clustering service
+- ThemeCluster: Dataclass representing a discovered theme
+- BERTopicService: Service for fitting BERTopic models on document embeddings
 """
 
 from src.clustering.config import ClusteringConfig
+from src.clustering.schemas import ThemeCluster
+from src.clustering.service import BERTopicService
 
 __all__ = [
     "ClusteringConfig",
+    "ThemeCluster",
+    "BERTopicService",
 ]

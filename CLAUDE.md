@@ -108,6 +108,11 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 
 **Clustering Layer** (`src/clustering/`):
 - `ClusteringConfig`: Pydantic settings for UMAP, HDBSCAN, c-TF-IDF, assignment thresholds, Redis queue
+- `ThemeCluster`: Dataclass for discovered themes with deterministic IDs, centroid embeddings, topic words, serialization
+- `BERTopicService`: Sync fit() runs UMAP → HDBSCAN → c-TF-IDF on pre-computed FinBERT embeddings to discover themes
+- Theme IDs: `theme_{sha256(sorted_topic_words)[:12]}` for cross-run stability
+- Outlier documents (BERTopic topic -1) excluded from theme assignments
+- Deferred imports for heavy dependencies (bertopic, hdbscan, umap-learn)
 - Configurable via `CLUSTERING_*` environment variables (e.g., `CLUSTERING_HDBSCAN_MIN_CLUSTER_SIZE=20`)
 - `clustering_enabled` (false) in settings.py for opt-in activation
 
@@ -252,6 +257,8 @@ async def fetch(self):
 - **Multi-Source Fallback**: TwitterAdapter uses API when available, falls back to Sotwe scraping (follows NewsAdapter pattern)
 - **Browser Impersonation**: `curl_cffi` with `impersonate="chrome"` bypasses Cloudflare protection for Sotwe
 - **NUXT Data Extraction**: Tweet data extracted directly from embedded NUXT JavaScript using regex (no Node.js required)
+- **Per-Run Model Creation**: BERTopicService creates a fresh model per `fit()` call (training artifact, not reused), unlike inference services that cache models
+- **Deterministic Theme IDs**: SHA256 hash of sorted topic words ensures stable IDs across re-fits with the same topic words
 
 ### Testing
 
@@ -330,4 +337,7 @@ keywords = svc.extract_sync('Nvidia announced new GPU architecture with HBM3E me
 for kw in keywords:
     print(f'{kw.rank}. {kw.text} (score: {kw.score:.3f})')
 "
+
+# Clustering testing
+uv run pytest tests/test_clustering/ -v   # Run all clustering tests (schema + service + config)
 ```
