@@ -106,6 +106,11 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 - `KeywordsService`: TextRank-based keyword extraction using rapid-textrank library
 - Lazy model loading, graceful error handling, opt-in activation via `KEYWORDS_ENABLED=true`
 
+**Clustering Layer** (`src/clustering/`):
+- `ClusteringConfig`: Pydantic settings for UMAP, HDBSCAN, c-TF-IDF, assignment thresholds, Redis queue
+- Configurable via `CLUSTERING_*` environment variables (e.g., `CLUSTERING_HDBSCAN_MIN_CLUSTER_SIZE=20`)
+- `clustering_enabled` (false) in settings.py for opt-in activation
+
 **Storage Layer** (`src/storage/`):
 - `Database`: asyncpg connection pool with transaction context managers
 - `DocumentRepository`: CRUD operations, batch upserts, full-text search, similarity search
@@ -170,6 +175,8 @@ Settings in `src/config/settings.py` use Pydantic BaseSettings with env var over
 - `NER_ENABLE_SEMANTIC_LINKING` (false), `NER_SEMANTIC_SIMILARITY_THRESHOLD` (0.5), `NER_SEMANTIC_BASE_SCORE` (0.6) for embedding-based entity-theme linking
 - `keywords_enabled` (false), `keywords_top_n` (10) for keyword extraction configuration
 - Keywords settings can be overridden via `KEYWORDS_*` environment variables (e.g., `KEYWORDS_TOP_N=15`, `KEYWORDS_MIN_SCORE=0.01`)
+- `clustering_enabled` (false), `clustering_stream_name` (clustering_queue), `clustering_consumer_group` (clustering_workers) for BERTopic clustering
+- Clustering settings can be overridden via `CLUSTERING_*` environment variables (e.g., `CLUSTERING_HDBSCAN_MIN_CLUSTER_SIZE=20`, `CLUSTERING_UMAP_N_COMPONENTS=15`)
 
 Semiconductor tickers and company mappings are in `src/config/tickers.py`.
 
