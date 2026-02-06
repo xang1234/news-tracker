@@ -692,5 +692,428 @@ def vector_search(
     asyncio.run(run())
 
 
+@main.group()
+def cluster() -> None:
+    """Clustering management commands."""
+
+
+@cluster.command("fit")
+@click.option("--days", default=30, type=int, help="Days of historical data to use")
+def cluster_fit(days: int) -> None:
+    """Discover themes from recent documents using BERTopic.
+
+    Fetches documents with FinBERT embeddings from the last N days,
+    runs UMAP + HDBSCAN + c-TF-IDF, and persists discovered themes.
+
+    Example:
+        news-tracker cluster fit              # Last 30 days
+        news-tracker cluster fit --days 7     # Last 7 days
+    """
+    from datetime import timedelta, timezone as tz
+
+    import numpy as np
+
+    from src.clustering.config import ClusteringConfig
+    from src.clustering.daily_job import _cluster_to_theme
+    from src.clustering.service import BERTopicService
+    from src.storage.database import Database
+    from src.storage.repository import DocumentRepository
+    from src.themes.repository import ThemeRepository
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            doc_repo = DocumentRepository(db)
+            theme_repo = ThemeRepository(db)
+
+            until = datetime.now(tz.utc)
+            since = until - timedelta(days=days)
+
+            click.echo(f"Fetching documents from last {days} days...")
+            docs = await doc_repo.get_with_embeddings_since(since, until)
+
+            if not docs:
+                click.echo("No documents with embeddings found.")
+                return
+
+            click.echo(f"Found {len(docs)} documents with embeddings")
+
+            # Extract texts and embeddings
+            texts = [d["content"] for d in docs]
+            embeddings = np.array([d["embedding"] for d in docs], dtype=np.float32)
+            doc_ids = [d["id"] for d in docs]
+
+            # Run BERTopic fit
+            click.echo("Running BERTopic clustering...")
+            config = ClusteringConfig()
+            service = BERTopicService(config=config)
+            theme_clusters = service.fit(texts, embeddings, doc_ids)
+
+            if not theme_clusters:
+                click.echo("No themes discovered.")
+                return
+
+            # Persist to DB
+            click.echo(f"Persisting {len(theme_clusters)} themes...")
+            created = 0
+            for cluster in theme_clusters.values():
+                theme = _cluster_to_theme(cluster)
+                try:
+                    await theme_repo.create(theme)
+                    created += 1
+                except Exception as e:
+                    click.echo(click.style(f"  Failed to create {cluster.theme_id}: {e}", fg="red"))
+
+            # Display results
+            click.echo(f"\nResults:")
+            click.echo(f"  Documents processed: {len(docs)}")
+            click.echo(f"  Themes discovered:   {len(theme_clusters)}")
+            click.echo(f"  Themes persisted:    {created}")
+
+            click.echo(f"\nThemes:")
+            for tc in theme_clusters.values():
+                keywords = ", ".join(w for w, _ in tc.topic_words[:5])
+                click.echo(f"  {tc.theme_id[:20]:20s}  {tc.document_count:4d} docs  [{keywords}]")
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
+@cluster.command("run")
+@click.option("--date", "target_date", default=None, type=click.DateTime(formats=["%Y-%m-%d"]),
+              help="Date to process (default: today UTC)")
+@click.option("--dry-run", is_flag=True, help="Preview document count without running")
+def cluster_run(target_date: Any, dry_run: bool) -> None:
+    """Run daily batch clustering for a specific date.
+
+    Same as 'daily-clustering' but under the cluster group namespace.
+
+    Example:
+        news-tracker cluster run                    # Process today
+        news-tracker cluster run --date 2026-02-05  # Specific date
+        news-tracker cluster run --dry-run           # Preview only
+    """
+    from datetime import timedelta, timezone as tz
+
+    from src.clustering.daily_job import run_daily_clustering
+    from src.storage.database import Database
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            d = target_date.date() if target_date else None
+
+            if dry_run:
+                from src.storage.repository import DocumentRepository
+                from src.themes.repository import ThemeRepository
+
+                d = d or datetime.now(tz.utc).date()
+                repo = DocumentRepository(db)
+                since = datetime(d.year, d.month, d.day, tzinfo=tz.utc)
+                until = since + timedelta(days=1)
+                docs = await repo.get_with_embeddings_since(since, until)
+
+                theme_repo = ThemeRepository(db)
+                themes = await theme_repo.get_all(limit=500)
+
+                click.echo(f"\nDry run for {d}")
+                click.echo(f"  Documents with embeddings: {len(docs)}")
+                click.echo(f"  Existing themes: {len(themes)}")
+                click.echo(f"  Day of week: {d.strftime('%A')}"
+                           f"{' (merge day)' if d.weekday() == 0 else ''}")
+                click.echo("\nRun without --dry-run to execute.")
+            else:
+                result = await run_daily_clustering(db, target_date=d)
+
+                click.echo(f"\nDaily Clustering Results ({result.date}):")
+                click.echo(f"  Documents fetched:  {result.documents_fetched}")
+                click.echo(f"  Documents assigned: {result.documents_assigned}")
+                click.echo(f"  Unassigned:         {result.documents_unassigned}")
+                click.echo(f"  New themes created: {result.new_themes_created}")
+                click.echo(f"  Themes merged:      {result.themes_merged}")
+                click.echo(f"  Metrics computed:   {result.metrics_computed}")
+                click.echo(f"  Errors:             {len(result.errors)}")
+                click.echo(f"  Elapsed:            {result.elapsed_seconds:.2f}s")
+
+                if result.errors:
+                    click.echo("\nErrors:")
+                    for err in result.errors:
+                        click.echo(click.style(f"  - {err}", fg="red"))
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
+@cluster.command("backfill")
+@click.option("--start", "start_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
+              help="Start date (inclusive)")
+@click.option("--end", "end_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
+              help="End date (inclusive)")
+def cluster_backfill(start_date: Any, end_date: Any) -> None:
+    """Run daily clustering for a range of dates.
+
+    Processes each date sequentially. Continues on per-date errors
+    but stops on fatal errors (DB connection lost).
+
+    Example:
+        news-tracker cluster backfill --start 2026-01-01 --end 2026-01-31
+    """
+    from datetime import timedelta
+
+    from src.clustering.daily_job import run_daily_clustering
+    from src.storage.database import Database
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            start = start_date.date()
+            end = end_date.date()
+
+            if start > end:
+                click.echo(click.style("Error: start date must be before end date", fg="red"))
+                return
+
+            total_days = (end - start).days + 1
+            click.echo(f"Backfilling {total_days} days: {start} to {end}")
+            click.echo("-" * 50)
+
+            success_count = 0
+            error_count = 0
+            current = start
+
+            while current <= end:
+                try:
+                    result = await run_daily_clustering(db, target_date=current)
+                    status = click.style("OK", fg="green")
+                    detail = (
+                        f"fetched={result.documents_fetched} "
+                        f"assigned={result.documents_assigned} "
+                        f"errors={len(result.errors)}"
+                    )
+                    click.echo(f"  {current}  {status}  {detail}")
+                    success_count += 1
+
+                except Exception as e:
+                    error_msg = str(e)
+                    status = click.style("FAIL", fg="red")
+                    click.echo(f"  {current}  {status}  {error_msg}")
+                    error_count += 1
+
+                    # Stop on DB connection errors
+                    if "connection" in error_msg.lower() or "pool" in error_msg.lower():
+                        click.echo(click.style("\nFatal: DB connection lost, stopping.", fg="red"))
+                        break
+
+                current += timedelta(days=1)
+
+            click.echo("-" * 50)
+            click.echo(f"Done: {success_count} succeeded, {error_count} failed")
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
+@cluster.command("merge")
+@click.option("--dry-run", is_flag=True, help="Show what would merge without persisting")
+@click.option("--threshold", default=None, type=float,
+              help="Override similarity threshold for merge (default: 0.85)")
+def cluster_merge(dry_run: bool, threshold: float | None) -> None:
+    """Merge similar themes based on centroid similarity.
+
+    Loads all themes, finds pairs with centroid similarity above
+    the threshold, and merges the smaller into the larger.
+
+    Example:
+        news-tracker cluster merge                    # Merge with default threshold
+        news-tracker cluster merge --dry-run          # Preview without persisting
+        news-tracker cluster merge --threshold 0.80   # More aggressive merge
+    """
+    from src.clustering.config import ClusteringConfig
+    from src.clustering.daily_job import _run_weekly_merge, _theme_to_cluster
+    from src.clustering.service import BERTopicService
+    from src.storage.database import Database
+    from src.themes.repository import ThemeRepository
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            theme_repo = ThemeRepository(db)
+            themes = await theme_repo.get_all(limit=500)
+
+            if len(themes) < 2:
+                click.echo(f"Only {len(themes)} theme(s) found — nothing to merge.")
+                return
+
+            config = ClusteringConfig()
+            if threshold is not None:
+                config.similarity_threshold_merge = threshold
+
+            if dry_run:
+                # Build service to find merge candidates without persisting
+                service = BERTopicService(config=config)
+                for theme in themes:
+                    service._themes[theme.theme_id] = _theme_to_cluster(theme)
+                service._initialized = True
+
+                merge_results = service.merge_similar_themes()
+
+                if not merge_results:
+                    click.echo("No themes similar enough to merge.")
+                    return
+
+                click.echo(f"\nDry run — {len(merge_results)} merge(s) would occur:\n")
+                for absorbed_id, survivor_id in merge_results:
+                    absorbed = next((t for t in themes if t.theme_id == absorbed_id), None)
+                    survivor = next((t for t in themes if t.theme_id == survivor_id), None)
+                    a_name = absorbed.name if absorbed else absorbed_id
+                    s_name = survivor.name if survivor else survivor_id
+                    click.echo(f"  {a_name} → {s_name}")
+
+                click.echo(f"\nRun without --dry-run to execute.")
+            else:
+                merge_count = await _run_weekly_merge(themes, config, theme_repo, db)
+
+                if merge_count == 0:
+                    click.echo("No themes similar enough to merge.")
+                else:
+                    click.echo(f"\nMerged {merge_count} theme(s) successfully.")
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
+@cluster.command("status")
+def cluster_status() -> None:
+    """Show clustering status and theme summary.
+
+    Displays total theme count, lifecycle stage breakdown,
+    and the time of the most recent theme update.
+
+    Example:
+        news-tracker cluster status
+    """
+    from src.storage.database import Database
+    from src.themes.repository import ThemeRepository
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            theme_repo = ThemeRepository(db)
+            themes = await theme_repo.get_all(limit=500)
+
+            if not themes:
+                click.echo("No themes found.")
+                return
+
+            # Lifecycle breakdown
+            lifecycle_counts: dict[str, int] = {}
+            total_docs = 0
+            for theme in themes:
+                stage = theme.lifecycle_stage
+                lifecycle_counts[stage] = lifecycle_counts.get(stage, 0) + 1
+                total_docs += theme.document_count
+
+            # Most recent update
+            last_updated = max(t.updated_at for t in themes)
+
+            click.echo(f"\nClustering Status")
+            click.echo("=" * 40)
+            click.echo(f"  Total themes:     {len(themes)}")
+            click.echo(f"  Total documents:  {total_docs}")
+            click.echo(f"  Last updated:     {last_updated.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
+            click.echo(f"\n  Lifecycle Stages:")
+            for stage in ("emerging", "accelerating", "mature", "fading"):
+                count = lifecycle_counts.get(stage, 0)
+                click.echo(f"    {stage:15s} {count}")
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
+@cluster.command("recompute-centroids")
+def cluster_recompute_centroids() -> None:
+    """Recompute theme centroids from document embeddings.
+
+    For each theme, fetches all assigned document embeddings and
+    recalculates the centroid as the mean embedding vector.
+
+    Example:
+        news-tracker cluster recompute-centroids
+    """
+    import numpy as np
+
+    from src.storage.database import Database
+    from src.themes.repository import ThemeRepository
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            theme_repo = ThemeRepository(db)
+            themes = await theme_repo.get_all(limit=500)
+
+            if not themes:
+                click.echo("No themes found.")
+                return
+
+            click.echo(f"Recomputing centroids for {len(themes)} themes...")
+
+            updated = 0
+            skipped = 0
+
+            for theme in themes:
+                # Fetch embeddings for documents assigned to this theme
+                rows = await db.fetch(
+                    "SELECT embedding FROM documents "
+                    "WHERE $1 = ANY(theme_ids) AND embedding IS NOT NULL",
+                    theme.theme_id,
+                )
+
+                if not rows:
+                    click.echo(f"  {theme.theme_id[:20]:20s}  skipped (no embeddings)")
+                    skipped += 1
+                    continue
+
+                embeddings = np.array(
+                    [list(row["embedding"]) for row in rows], dtype=np.float32
+                )
+                new_centroid = np.mean(embeddings, axis=0)
+                await theme_repo.update_centroid(theme.theme_id, new_centroid)
+
+                click.echo(
+                    f"  {theme.theme_id[:20]:20s}  updated ({len(rows)} docs)"
+                )
+                updated += 1
+
+            click.echo(f"\nDone: {updated} updated, {skipped} skipped")
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
 if __name__ == "__main__":
     main()

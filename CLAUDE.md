@@ -34,6 +34,12 @@ uv run news-tracker clustering-worker  # Run clustering worker for theme assignm
 uv run news-tracker daily-clustering                   # Daily batch clustering (today)
 uv run news-tracker daily-clustering --date 2026-02-05 # Batch clustering for specific date
 uv run news-tracker daily-clustering --dry-run         # Preview without running
+uv run news-tracker cluster fit --days 30              # Discover themes via BERTopic
+uv run news-tracker cluster run --date 2026-02-05      # Daily clustering (same as daily-clustering)
+uv run news-tracker cluster backfill --start 2026-01-01 --end 2026-01-31  # Backfill date range
+uv run news-tracker cluster merge --dry-run            # Preview theme merges
+uv run news-tracker cluster status                     # Show theme summary
+uv run news-tracker cluster recompute-centroids        # Recompute all centroids from docs
 uv run news-tracker vector-search "query" --limit 10  # Semantic search
 uv run news-tracker cleanup --days 90  # Remove old documents (storage management)
 
@@ -452,6 +458,13 @@ uv run pytest tests/test_themes/test_repository.py -v -k "Metrics"  # Run metric
 uv run pytest tests/test_themes/test_lifecycle.py -v              # Run lifecycle classifier tests
 uv run pytest tests/test_themes/test_lifecycle.py -v -k "Classify"  # Run only classification tests
 uv run pytest tests/test_themes/test_lifecycle.py -v -k "Transition"  # Run transition detection tests
+
+# CLI testing
+uv run pytest tests/test_cli/ -v                         # Run all CLI tests
+uv run pytest tests/test_cli/test_cluster.py -v          # Run cluster command tests
+uv run pytest tests/test_cli/test_cluster.py -v -k "Fit"       # Run fit subcommand tests
+uv run pytest tests/test_cli/test_cluster.py -v -k "Backfill"  # Run backfill tests
+uv run pytest tests/test_cli/test_cluster.py -v -k "Merge"     # Run merge tests
 
 # API testing
 uv run pytest tests/test_api/ -v                        # Run all API tests
