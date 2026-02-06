@@ -9,12 +9,19 @@ Components:
 - Theme: Dataclass mapping to the themes table
 - ThemeRepository: CRUD operations for theme persistence
 - VALID_LIFECYCLE_STAGES: Allowed lifecycle stage values
+- LifecycleClassifier: Rule-based lifecycle stage classification
+- LifecycleTransition: Stage change records for alerting
 """
 
+from src.themes.lifecycle import LifecycleClassifier
 from src.themes.repository import ThemeRepository
 from src.themes.schemas import VALID_LIFECYCLE_STAGES, Theme, ThemeMetrics
+from src.themes.transitions import ALERTABLE_TRANSITIONS, LifecycleTransition
 
 __all__ = [
+    "ALERTABLE_TRANSITIONS",
+    "LifecycleClassifier",
+    "LifecycleTransition",
     "Theme",
     "ThemeMetrics",
     "ThemeRepository",

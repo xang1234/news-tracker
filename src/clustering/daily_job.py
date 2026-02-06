@@ -6,7 +6,8 @@ Runs as an offline batch process (distinct from the real-time ClusteringWorker):
 3. Three-tier assignment: strong (EMA update), weak (assign only), unassigned
 4. Detects emerging themes from unassigned document candidates
 5. Computes basic daily metrics (sentiment, authority) per theme
-6. Weekly theme merge on Mondays to consolidate similar themes
+6. Classifies lifecycle stages and detects transitions
+7. Weekly theme merge on Mondays to consolidate similar themes
 
 Designed for external cron scheduling: ``0 4 * * * news-tracker daily-clustering``
 """
@@ -24,8 +25,10 @@ from src.clustering.schemas import ThemeCluster
 from src.clustering.service import BERTopicService
 from src.storage.database import Database
 from src.storage.repository import DocumentRepository
+from src.themes.lifecycle import LifecycleClassifier
 from src.themes.repository import ThemeRepository
 from src.themes.schemas import Theme, ThemeMetrics
+from src.themes.transitions import LifecycleTransition
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +44,7 @@ class DailyClusteringResult:
     new_themes_created: int = 0
     themes_merged: int = 0
     metrics_computed: int = 0
+    lifecycle_transitions: list[LifecycleTransition] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     elapsed_seconds: float = 0.0
 
@@ -194,6 +198,22 @@ async def run_daily_clustering(
     except Exception as e:
         logger.exception("Metrics computation failed")
         result.errors.append(f"metrics: {e}")
+
+    # Phase 11: Lifecycle classification
+    try:
+        transitions = await _classify_lifecycle_stages(
+            target_date, themes, theme_repo,
+        )
+        result.lifecycle_transitions = transitions
+        for t in transitions:
+            if t.is_alertable:
+                logger.info(
+                    "Lifecycle transition: %s %s → %s (%s)",
+                    t.theme_id, t.from_stage, t.to_stage, t.alert_message,
+                )
+    except Exception as e:
+        logger.exception("Lifecycle classification failed")
+        result.errors.append(f"lifecycle: {e}")
 
     # Weekly maintenance: theme merge on Mondays
     if target_date.weekday() == 0:  # Monday
@@ -509,3 +529,45 @@ async def _run_weekly_merge(
 
     logger.info("Weekly merge: %d themes absorbed", len(merge_results))
     return len(merge_results)
+
+
+async def _classify_lifecycle_stages(
+    target_date: date,
+    themes: list[Theme],
+    theme_repo: ThemeRepository,
+) -> list[LifecycleTransition]:
+    """
+    Classify lifecycle stages for all themes and persist stage updates.
+
+    Fetches a 7-day metrics window per theme, classifies the stage, detects
+    transitions, and updates the DB lifecycle_stage field.
+
+    Returns:
+        List of detected LifecycleTransition records (only actual changes).
+    """
+    classifier = LifecycleClassifier()
+    transitions: list[LifecycleTransition] = []
+    lookback = timedelta(days=7)
+    start = target_date - lookback
+    end = target_date
+
+    for theme in themes:
+        try:
+            metrics_history = await theme_repo.get_metrics_range(
+                theme.theme_id, start, end,
+            )
+            new_stage, confidence = classifier.classify(theme, metrics_history)
+            transition = classifier.detect_transition(theme, new_stage, confidence)
+
+            if transition:
+                transitions.append(transition)
+                await theme_repo.update(theme.theme_id, {
+                    "lifecycle_stage": new_stage,
+                })
+
+        except Exception as e:
+            logger.error(
+                "Failed to classify lifecycle for %s: %s", theme.theme_id, e,
+            )
+
+    return transitions

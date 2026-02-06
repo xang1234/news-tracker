@@ -169,6 +169,16 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 - JSONB fields (`top_entities`, `metadata`) serialized with `json.dumps()` on write, `json.loads()` on read
 - TEXT[] fields (`top_keywords`, `top_tickers`) passed as Python lists (asyncpg handles natively)
 - DB trigger handles `updated_at` — no explicit SET needed
+- `LifecycleClassifier`: Rule-based lifecycle stage classification using 3-day sliding window of ThemeMetrics
+  - `classify(theme, metrics_history)` → `(stage, confidence)` with normalized least-squares velocity/volume trends
+  - `detect_transition(theme, new_stage, confidence)` → `Optional[LifecycleTransition]` for stage changes
+  - `_compute_trend(values)`: Least-squares slope normalized by mean for scale-independent growth rate
+  - Classification cascade: emerging (low docs + positive velocity) → accelerating (high velocity trend) → fading (negative velocity) → mature (default)
+  - Confidence scores: 0.5 for insufficient data, 0.6-1.0 for confident classifications
+- `LifecycleTransition`: Dataclass for detected stage changes with alertability
+  - `is_alertable` / `alert_message`: Properties checking against `ALERTABLE_TRANSITIONS` lookup table
+  - Key transitions: emerging→accelerating ("gaining momentum"), accelerating→mature ("peaking"), *→fading ("losing momentum")
+- Integrated into `run_daily_clustering()` as Phase 11 after metrics computation
 
 **Storage Layer** (`src/storage/`):
 - `Database`: asyncpg connection pool with transaction context managers
@@ -333,7 +343,10 @@ async def fetch(self):
 - **Numpy Batch Similarity**: Daily job uses `emb_norm @ centroid_norm.T` for O(n_docs × n_themes) similarity in a single matrix multiply — no Python loops, handles 50k × 500 in ~10ms
 - **Dual-Path Clustering**: Real-time `ClusteringWorker` (pgvector HNSW, per-document) vs offline `run_daily_clustering` (numpy batch, per-day) serve different latency/throughput tradeoffs
 - **BERTopicService Reuse**: Daily job populates `_themes` dict from DB `Theme` records and sets `_initialized=True` to reuse `merge_similar_themes()` and `check_new_themes()` without reimplementing
-- **Phase-Resilient Error Handling**: Each phase (fetch, assign, centroid update, metrics, merge) has independent try/except — failures are logged to `result.errors` without aborting the job
+- **Phase-Resilient Error Handling**: Each phase (fetch, assign, centroid update, metrics, lifecycle, merge) has independent try/except — failures are logged to `result.errors` without aborting the job
+- **Stateless Classifier**: `LifecycleClassifier` has no instance state — takes Theme + metrics, returns stage + confidence. Trivially testable without mocking DB
+- **Normalized Trend Analysis**: `_compute_trend()` divides raw least-squares slope by `abs(mean)` so thresholds work across themes with different volume scales
+- **Alertable Transition Lookup**: `ALERTABLE_TRANSITIONS` dict maps `(from, to)` tuples to messages — O(1) lookup, easy to extend without modifying class logic
 
 ### Testing
 
@@ -423,8 +436,11 @@ uv run pytest tests/test_clustering/test_bertopic_service.py -v -m integration  
 uv run pytest tests/test_clustering/test_bertopic_service.py -v -m performance   # Performance benchmarks (slow)
 
 # Themes testing
-uv run pytest tests/test_themes/ -v              # Run all theme tests (schema + repository + search + metrics)
+uv run pytest tests/test_themes/ -v              # Run all theme tests (schema + repository + lifecycle + search + metrics)
 uv run pytest tests/test_themes/test_repository.py -v -k "Update"  # Run only update tests
 uv run pytest tests/test_themes/test_repository.py -v -k "FindSimilar or GetCentroidsBatch"  # Run vector search tests
 uv run pytest tests/test_themes/test_repository.py -v -k "Metrics"  # Run metrics time-series tests
+uv run pytest tests/test_themes/test_lifecycle.py -v              # Run lifecycle classifier tests
+uv run pytest tests/test_themes/test_lifecycle.py -v -k "Classify"  # Run only classification tests
+uv run pytest tests/test_themes/test_lifecycle.py -v -k "Transition"  # Run transition detection tests
 ```
