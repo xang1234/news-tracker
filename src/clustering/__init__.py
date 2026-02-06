@@ -12,11 +12,14 @@ Components:
 """
 
 from src.clustering.config import ClusteringConfig
+from src.clustering.queue import ClusteringJob, ClusteringQueue
 from src.clustering.schemas import ThemeCluster
 from src.clustering.service import BERTopicService
 
 __all__ = [
     "ClusteringConfig",
+    "ClusteringJob",
+    "ClusteringQueue",
     "ThemeCluster",
     "BERTopicService",
 ]

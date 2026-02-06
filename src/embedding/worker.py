@@ -16,6 +16,7 @@ from typing import Any
 import redis.asyncio as redis
 import structlog
 
+from src.clustering.queue import ClusteringQueue
 from src.config.settings import get_settings
 from src.embedding.config import EmbeddingConfig
 from src.embedding.queue import EmbeddingJob, EmbeddingQueue
@@ -53,6 +54,7 @@ class EmbeddingWorker:
         embedding_service: EmbeddingService | None = None,
         config: EmbeddingConfig | None = None,
         batch_size: int | None = None,
+        clustering_queue: ClusteringQueue | None = None,
     ):
         """
         Initialize the embedding worker.
@@ -63,6 +65,7 @@ class EmbeddingWorker:
             embedding_service: Embedding service (or create from config)
             config: Embedding configuration
             batch_size: Jobs to process per batch (uses config default)
+            clustering_queue: Clustering queue for downstream enqueue (or create if enabled)
         """
         self._config = config or EmbeddingConfig()
         self._queue = queue or EmbeddingQueue(config=self._config)
@@ -78,9 +81,14 @@ class EmbeddingWorker:
         self._running = False
         self._metrics = get_metrics()
 
+        # Clustering queue: only used when clustering is enabled
+        self._clustering_enabled = get_settings().clustering_enabled
+        self._clustering_queue = clustering_queue
+
         logger.info(
             "EmbeddingWorker initialized",
             batch_size=self._batch_size,
+            clustering_enabled=self._clustering_enabled,
         )
 
     async def start(self) -> None:
@@ -115,6 +123,13 @@ class EmbeddingWorker:
         # Create repository
         self._repository = DocumentRepository(self._database)
 
+        # Connect clustering queue if enabled
+        if self._clustering_enabled:
+            if self._clustering_queue is None:
+                self._clustering_queue = ClusteringQueue()
+            await self._clustering_queue.connect()
+            logger.info("Clustering queue connected")
+
         try:
             # Process jobs from queue
             await self._process_loop()
@@ -140,6 +155,8 @@ class EmbeddingWorker:
             await self._redis.close()
         if self._embedding_service:
             await self._embedding_service.close()
+        if self._clustering_queue:
+            await self._clustering_queue.close()
         logger.info("Embedding worker cleaned up")
 
     async def _process_loop(self) -> None:
@@ -317,6 +334,19 @@ class EmbeddingWorker:
                             doc_map[job.document_id].platform,
                             model=model_type.value,
                         )
+
+                        # Enqueue for clustering if enabled
+                        if self._clustering_enabled and self._clustering_queue:
+                            try:
+                                await self._clustering_queue.publish(
+                                    job.document_id, model_type.value
+                                )
+                            except Exception as enqueue_err:
+                                logger.warning(
+                                    "Failed to enqueue for clustering",
+                                    document_id=job.document_id,
+                                    error=str(enqueue_err),
+                                )
                     else:
                         logger.error(
                             "Failed to update embedding",

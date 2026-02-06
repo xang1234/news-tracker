@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.clustering.queue import ClusteringQueue
 from src.embedding.config import EmbeddingConfig
 from src.embedding.queue import EmbeddingJob, EmbeddingQueue
 from src.embedding.service import EmbeddingService, ModelType
@@ -345,3 +346,222 @@ class TestEmbeddingWorkerHealth:
         assert "running" in health
         assert "queue_healthy" in health
         assert "database_healthy" in health
+
+
+class TestEmbeddingWorkerClusteringIntegration:
+    """Tests for clustering queue integration in EmbeddingWorker."""
+
+    @pytest.mark.asyncio
+    async def test_enqueues_to_clustering_when_enabled(
+        self,
+        mock_queue,
+        mock_database,
+        mock_repository,
+        mock_embedding_service_for_worker,
+        sample_documents,
+    ):
+        """Should enqueue to clustering queue after successful embedding."""
+        mock_clustering_queue = AsyncMock(spec=ClusteringQueue)
+        mock_clustering_queue.publish = AsyncMock(return_value="clust_msg_1")
+
+        config = EmbeddingConfig(batch_size=4)
+
+        with patch("src.embedding.worker.get_settings") as mock_settings:
+            settings = MagicMock()
+            settings.clustering_enabled = True
+            settings.redis_url = "redis://localhost:6379/0"
+            mock_settings.return_value = settings
+
+            worker = EmbeddingWorker(
+                queue=mock_queue,
+                database=mock_database,
+                embedding_service=mock_embedding_service_for_worker,
+                config=config,
+                clustering_queue=mock_clustering_queue,
+            )
+            worker._repository = mock_repository
+
+            jobs = [
+                EmbeddingJob(message_id=f"msg_{i}", document_id=f"doc_{i}")
+                for i in range(3)
+            ]
+
+            await worker._process_batch(jobs)
+
+            # All 3 documents should be enqueued for clustering
+            assert mock_clustering_queue.publish.call_count == 3
+
+            # Verify the publish calls include doc_id and model type
+            for call in mock_clustering_queue.publish.call_args_list:
+                args = call[0]
+                assert args[0].startswith("doc_")
+                assert args[1] == "finbert"
+
+    @pytest.mark.asyncio
+    async def test_no_enqueue_when_clustering_disabled(
+        self,
+        mock_queue,
+        mock_database,
+        mock_repository,
+        mock_embedding_service_for_worker,
+        sample_documents,
+    ):
+        """Should not enqueue when clustering is disabled."""
+        mock_clustering_queue = AsyncMock(spec=ClusteringQueue)
+
+        config = EmbeddingConfig(batch_size=4)
+
+        with patch("src.embedding.worker.get_settings") as mock_settings:
+            settings = MagicMock()
+            settings.clustering_enabled = False
+            mock_settings.return_value = settings
+
+            worker = EmbeddingWorker(
+                queue=mock_queue,
+                database=mock_database,
+                embedding_service=mock_embedding_service_for_worker,
+                config=config,
+                clustering_queue=mock_clustering_queue,
+            )
+            worker._repository = mock_repository
+
+            jobs = [
+                EmbeddingJob(message_id="msg_0", document_id="doc_0")
+            ]
+
+            await worker._process_batch(jobs)
+
+            # Should NOT enqueue since clustering is disabled
+            mock_clustering_queue.publish.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_clustering_enqueue_failure_does_not_fail_embedding(
+        self,
+        mock_queue,
+        mock_database,
+        mock_repository,
+        mock_embedding_service_for_worker,
+        sample_documents,
+    ):
+        """Clustering enqueue failure should not affect embedding processing."""
+        mock_clustering_queue = AsyncMock(spec=ClusteringQueue)
+        mock_clustering_queue.publish = AsyncMock(
+            side_effect=Exception("Redis connection lost")
+        )
+
+        config = EmbeddingConfig(batch_size=4)
+
+        with patch("src.embedding.worker.get_settings") as mock_settings:
+            settings = MagicMock()
+            settings.clustering_enabled = True
+            settings.redis_url = "redis://localhost:6379/0"
+            mock_settings.return_value = settings
+
+            worker = EmbeddingWorker(
+                queue=mock_queue,
+                database=mock_database,
+                embedding_service=mock_embedding_service_for_worker,
+                config=config,
+                clustering_queue=mock_clustering_queue,
+            )
+            worker._repository = mock_repository
+
+            jobs = [
+                EmbeddingJob(message_id="msg_0", document_id="doc_0")
+            ]
+
+            # Should NOT raise even though clustering enqueue fails
+            await worker._process_batch(jobs)
+
+            # Embedding should still be acknowledged
+            mock_queue.ack.assert_called_once()
+
+            # Embedding should still be stored
+            mock_repository.update_embedding.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_no_enqueue_when_embedding_update_fails(
+        self,
+        mock_queue,
+        mock_database,
+        mock_embedding_service_for_worker,
+        sample_documents,
+    ):
+        """Should not enqueue for clustering when embedding DB update fails."""
+        mock_clustering_queue = AsyncMock(spec=ClusteringQueue)
+
+        config = EmbeddingConfig(batch_size=4)
+
+        # Repository that returns False (update failed)
+        mock_repo = AsyncMock()
+        doc_map = {doc.id: doc for doc in sample_documents}
+        mock_repo.get_by_id = AsyncMock(side_effect=lambda id: doc_map.get(id))
+        mock_repo.update_embedding = AsyncMock(return_value=False)
+
+        with patch("src.embedding.worker.get_settings") as mock_settings:
+            settings = MagicMock()
+            settings.clustering_enabled = True
+            settings.redis_url = "redis://localhost:6379/0"
+            mock_settings.return_value = settings
+
+            worker = EmbeddingWorker(
+                queue=mock_queue,
+                database=mock_database,
+                embedding_service=mock_embedding_service_for_worker,
+                config=config,
+                clustering_queue=mock_clustering_queue,
+            )
+            worker._repository = mock_repo
+
+            jobs = [
+                EmbeddingJob(message_id="msg_0", document_id="doc_0")
+            ]
+
+            await worker._process_batch(jobs)
+
+            # Should NOT enqueue since embedding update returned False
+            mock_clustering_queue.publish.assert_not_called()
+
+    def test_worker_init_reads_clustering_enabled(self):
+        """Should read clustering_enabled from settings on init."""
+        with patch("src.embedding.worker.get_settings") as mock_settings:
+            settings = MagicMock()
+            settings.clustering_enabled = True
+            mock_settings.return_value = settings
+
+            worker = EmbeddingWorker()
+            assert worker._clustering_enabled is True
+
+        with patch("src.embedding.worker.get_settings") as mock_settings:
+            settings = MagicMock()
+            settings.clustering_enabled = False
+            mock_settings.return_value = settings
+
+            worker = EmbeddingWorker()
+            assert worker._clustering_enabled is False
+
+    @pytest.mark.asyncio
+    async def test_cleanup_closes_clustering_queue(
+        self,
+        mock_queue,
+        mock_database,
+        mock_embedding_service_for_worker,
+    ):
+        """Should close clustering queue during cleanup."""
+        mock_clustering_queue = AsyncMock(spec=ClusteringQueue)
+
+        with patch("src.embedding.worker.get_settings") as mock_settings:
+            settings = MagicMock()
+            settings.clustering_enabled = True
+            mock_settings.return_value = settings
+
+            worker = EmbeddingWorker(
+                queue=mock_queue,
+                database=mock_database,
+                embedding_service=mock_embedding_service_for_worker,
+                clustering_queue=mock_clustering_queue,
+            )
+
+            await worker._cleanup()
+
+            mock_clustering_queue.close.assert_called_once()

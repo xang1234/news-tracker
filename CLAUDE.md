@@ -108,6 +108,8 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 
 **Clustering Layer** (`src/clustering/`):
 - `ClusteringConfig`: Pydantic settings for UMAP, HDBSCAN, c-TF-IDF, assignment thresholds, Redis queue
+- `ClusteringQueue`: Redis Streams wrapper for clustering jobs (follows `BaseRedisQueue[ClusteringJob]` pattern)
+- `ClusteringJob`: Dataclass with `document_id`, `embedding_model`, `message_id`, `retry_count`
 - `ThemeCluster`: Dataclass for discovered themes with deterministic IDs, centroid embeddings, topic words, serialization
 - `BERTopicService`: Sync fit() runs UMAP → HDBSCAN → c-TF-IDF on pre-computed FinBERT embeddings to discover themes
 - `BERTopicService.transform()`: Incremental assignment of new documents to existing themes via cosine similarity against centroids
@@ -138,7 +140,7 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 - `EmbeddingConfig`: Pydantic settings for model, batching, caching, queue configuration
 - `EmbeddingService`: Multi-model embedding (FinBERT 768-dim, MiniLM 384-dim) with lazy loading, chunking, caching
 - `EmbeddingQueue`: Redis Streams wrapper for async embedding job processing
-- `EmbeddingWorker`: Consumes queue, selects model by platform/length, generates embeddings, updates DB
+- `EmbeddingWorker`: Consumes queue, selects model by platform/length, generates embeddings, updates DB, enqueues to clustering_queue (if `clustering_enabled`)
 - `ModelType`: Enum for type-safe model selection (FINBERT, MINILM)
 
 **Sentiment Layer** (`src/sentiment/`):
@@ -279,6 +281,7 @@ async def fetch(self):
 - **Greedy Pairwise Merge**: `merge_similar_themes()` processes pairs in descending similarity order with `merged_set` to prevent chain merges in a single pass
 - **Lightweight TF-IDF Keywords**: `_extract_keywords_tfidf()` uses sklearn CountVectorizer + TfidfTransformer for small candidate clusters, avoiding full BERTopic overhead
 - **Mockable Sub-Clustering**: `_create_mini_clusterer()` follows `_create_model()` pattern — deferred HDBSCAN import wrapped in a method for easy test mocking
+- **Conditional Fan-Out**: EmbeddingWorker enqueues to clustering_queue only when `clustering_enabled=True`, with soft failure (warning log, no embedding failure) to keep clustering as a non-critical downstream enrichment
 
 ### Testing
 
