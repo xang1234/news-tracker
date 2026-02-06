@@ -1,11 +1,11 @@
-"""Tests for Theme dataclass."""
+"""Tests for Theme and ThemeMetrics dataclasses."""
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import numpy as np
 import pytest
 
-from src.themes.schemas import VALID_LIFECYCLE_STAGES, Theme
+from src.themes.schemas import VALID_LIFECYCLE_STAGES, Theme, ThemeMetrics
 
 
 class TestThemeInit:
@@ -150,3 +150,37 @@ class TestThemeSerialization:
         assert theme.description is None
         assert theme.top_entities == []
         assert theme.metadata == {}
+
+
+class TestThemeMetrics:
+    """Test ThemeMetrics dataclass."""
+
+    def test_construction(self) -> None:
+        metrics = ThemeMetrics(
+            theme_id="theme_abc",
+            date=date(2025, 6, 15),
+            document_count=42,
+            sentiment_score=0.35,
+            volume_zscore=1.8,
+            velocity=0.12,
+            acceleration=0.03,
+            avg_authority=0.65,
+            bullish_ratio=0.72,
+        )
+        assert metrics.theme_id == "theme_abc"
+        assert metrics.date == date(2025, 6, 15)
+        assert metrics.document_count == 42
+        assert metrics.sentiment_score == pytest.approx(0.35)
+
+    def test_defaults(self) -> None:
+        metrics = ThemeMetrics(
+            theme_id="theme_abc",
+            date=date(2025, 6, 15),
+        )
+        assert metrics.document_count == 0
+        assert metrics.sentiment_score is None
+        assert metrics.volume_zscore is None
+        assert metrics.velocity is None
+        assert metrics.acceleration is None
+        assert metrics.avg_authority is None
+        assert metrics.bullish_ratio is None

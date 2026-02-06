@@ -1,18 +1,20 @@
-"""Theme repository for CRUD operations on the themes table.
+"""Theme repository for CRUD, vector search, and metrics operations.
 
 Follows the DocumentRepository pattern with asyncpg, providing
 high-level operations for Theme persistence with pgvector centroid
-storage and JSONB field handling.
+storage, HNSW similarity search, and daily metrics time series.
 """
 
 import json
 import logging
+import time
+from datetime import date
 from typing import Any
 
 import numpy as np
 
 from src.storage.database import Database
-from src.themes.schemas import VALID_LIFECYCLE_STAGES, Theme
+from src.themes.schemas import VALID_LIFECYCLE_STAGES, Theme, ThemeMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -30,16 +32,58 @@ _UPDATABLE_FIELDS = frozenset({
 })
 
 
+# Default TTL for centroid cache (10 minutes). Centroids drift slowly
+# via EMA updates, so a 10-minute window is safe for batch lookups.
+_CENTROID_CACHE_TTL = 600.0
+
+
+class _TTLCache:
+    """Minimal TTL cache for centroid vectors.
+
+    Avoids adding an external dependency (cachetools) for a simple
+    key→(value, expiry) map with lazy eviction on read.
+    """
+
+    def __init__(self, ttl: float = _CENTROID_CACHE_TTL) -> None:
+        self._ttl = ttl
+        self._store: dict[str, tuple[np.ndarray, float]] = {}
+
+    def get(self, key: str) -> np.ndarray | None:
+        entry = self._store.get(key)
+        if entry is None:
+            return None
+        value, expiry = entry
+        if time.monotonic() > expiry:
+            del self._store[key]
+            return None
+        return value
+
+    def put(self, key: str, value: np.ndarray) -> None:
+        self._store[key] = (value, time.monotonic() + self._ttl)
+
+    def invalidate(self, key: str) -> None:
+        self._store.pop(key, None)
+
+    def clear(self) -> None:
+        self._store.clear()
+
+
 class ThemeRepository:
     """
-    Repository for theme storage and retrieval.
+    Repository for theme storage, retrieval, search, and metrics.
 
-    Provides CRUD operations for Theme records backed by the themes
-    PostgreSQL table with pgvector centroid embeddings and JSONB fields.
+    Provides CRUD operations, pgvector HNSW similarity search on
+    centroid embeddings, batch centroid fetches with TTL caching,
+    and daily metrics time-series for Theme records.
     """
 
-    def __init__(self, database: Database) -> None:
+    def __init__(
+        self,
+        database: Database,
+        centroid_cache_ttl: float = _CENTROID_CACHE_TTL,
+    ) -> None:
         self._db = database
+        self._centroid_cache = _TTLCache(ttl=centroid_cache_ttl)
 
     # ── Create ──────────────────────────────────────────────
 
@@ -230,6 +274,8 @@ class ThemeRepository:
         if result.endswith(" 0"):
             raise ValueError(f"Theme {theme_id!r} not found")
 
+        self._centroid_cache.invalidate(theme_id)
+
     # ── Delete ──────────────────────────────────────────────
 
     async def delete(self, theme_id: str) -> bool:
@@ -244,7 +290,153 @@ class ThemeRepository:
         """
         sql = "DELETE FROM themes WHERE theme_id = $1 RETURNING theme_id"
         result = await self._db.fetchval(sql, theme_id)
+        if result is not None:
+            self._centroid_cache.invalidate(theme_id)
         return result is not None
+
+    # ── Vector Search ─────────────────────────────────────────
+
+    async def find_similar(
+        self,
+        centroid: np.ndarray,
+        limit: int = 10,
+        threshold: float = 0.5,
+    ) -> list[tuple[Theme, float]]:
+        """
+        Find themes with similar centroids using HNSW cosine similarity.
+
+        Args:
+            centroid: Query vector (768-dim FinBERT embedding).
+            limit: Maximum themes to return.
+            threshold: Minimum cosine similarity (0.0–1.0).
+
+        Returns:
+            List of (Theme, similarity_score) tuples sorted by similarity
+            descending. Only themes above the threshold are included.
+        """
+        centroid_str = _centroid_to_pgvector(centroid)
+        sql = """
+            SELECT *, 1 - (centroid <=> $1) AS similarity
+            FROM themes
+            WHERE 1 - (centroid <=> $1) >= $2
+            ORDER BY centroid <=> $1
+            LIMIT $3
+        """
+        rows = await self._db.fetch(sql, centroid_str, threshold, limit)
+        return [(_row_to_theme(row), float(row["similarity"])) for row in rows]
+
+    async def get_centroids_batch(
+        self,
+        theme_ids: list[str],
+    ) -> dict[str, np.ndarray]:
+        """
+        Bulk fetch centroid vectors for a set of themes.
+
+        Uses an in-memory TTL cache (default 600s) to avoid repeated
+        DB roundtrips during high-throughput ClusteringWorker processing.
+        Cache is invalidated on centroid update and delete.
+
+        Args:
+            theme_ids: Theme identifiers to fetch centroids for.
+
+        Returns:
+            Dict mapping theme_id → centroid ndarray. Missing themes
+            are silently omitted.
+        """
+        if not theme_ids:
+            return {}
+
+        result: dict[str, np.ndarray] = {}
+        uncached: list[str] = []
+
+        for tid in theme_ids:
+            cached = self._centroid_cache.get(tid)
+            if cached is not None:
+                result[tid] = cached
+            else:
+                uncached.append(tid)
+
+        if uncached:
+            sql = """
+                SELECT theme_id, centroid
+                FROM themes
+                WHERE theme_id = ANY($1)
+            """
+            rows = await self._db.fetch(sql, uncached)
+            for row in rows:
+                vec = _parse_centroid(row["centroid"])
+                self._centroid_cache.put(row["theme_id"], vec)
+                result[row["theme_id"]] = vec
+
+        return result
+
+    # ── Metrics Time Series ───────────────────────────────────
+
+    async def add_metrics(self, metrics: ThemeMetrics) -> None:
+        """
+        Upsert a daily metrics row for a theme.
+
+        Idempotent: ON CONFLICT (theme_id, date) updates all columns.
+
+        Args:
+            metrics: ThemeMetrics with the date's values.
+        """
+        sql = """
+            INSERT INTO theme_metrics (
+                theme_id, date, document_count,
+                sentiment_score, volume_zscore, velocity,
+                acceleration, avg_authority, bullish_ratio
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (theme_id, date) DO UPDATE SET
+                document_count  = EXCLUDED.document_count,
+                sentiment_score = EXCLUDED.sentiment_score,
+                volume_zscore   = EXCLUDED.volume_zscore,
+                velocity        = EXCLUDED.velocity,
+                acceleration    = EXCLUDED.acceleration,
+                avg_authority   = EXCLUDED.avg_authority,
+                bullish_ratio   = EXCLUDED.bullish_ratio
+        """
+        await self._db.execute(
+            sql,
+            metrics.theme_id,
+            metrics.date,
+            metrics.document_count,
+            metrics.sentiment_score,
+            metrics.volume_zscore,
+            metrics.velocity,
+            metrics.acceleration,
+            metrics.avg_authority,
+            metrics.bullish_ratio,
+        )
+
+    async def get_metrics_range(
+        self,
+        theme_id: str,
+        start: date,
+        end: date,
+    ) -> list[ThemeMetrics]:
+        """
+        Fetch daily metrics for a theme within a date range.
+
+        Args:
+            theme_id: Theme identifier.
+            start: Inclusive start date.
+            end: Inclusive end date.
+
+        Returns:
+            List of ThemeMetrics ordered by date ascending (for trend
+            computation).
+        """
+        sql = """
+            SELECT *
+            FROM theme_metrics
+            WHERE theme_id = $1
+              AND date >= $2
+              AND date <= $3
+            ORDER BY date ASC
+        """
+        rows = await self._db.fetch(sql, theme_id, start, end)
+        return [_row_to_metrics(row) for row in rows]
 
 
 # ── Helpers (module-level for testability) ──────────────────
@@ -316,4 +508,19 @@ def _row_to_theme(row: Any) -> Theme:
         description=row.get("description"),
         top_entities=top_entities,
         metadata=metadata,
+    )
+
+
+def _row_to_metrics(row: Any) -> ThemeMetrics:
+    """Convert an asyncpg Record to a ThemeMetrics."""
+    return ThemeMetrics(
+        theme_id=row["theme_id"],
+        date=row["date"],
+        document_count=row.get("document_count", 0),
+        sentiment_score=row.get("sentiment_score"),
+        volume_zscore=row.get("volume_zscore"),
+        velocity=row.get("velocity"),
+        acceleration=row.get("acceleration"),
+        avg_authority=row.get("avg_authority"),
+        bullish_ratio=row.get("bullish_ratio"),
     )

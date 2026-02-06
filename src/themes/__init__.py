@@ -12,10 +12,11 @@ Components:
 """
 
 from src.themes.repository import ThemeRepository
-from src.themes.schemas import VALID_LIFECYCLE_STAGES, Theme
+from src.themes.schemas import VALID_LIFECYCLE_STAGES, Theme, ThemeMetrics
 
 __all__ = [
     "Theme",
+    "ThemeMetrics",
     "ThemeRepository",
     "VALID_LIFECYCLE_STAGES",
 ]

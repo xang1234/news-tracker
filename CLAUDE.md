@@ -134,11 +134,16 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 
 **Themes Layer** (`src/themes/`):
 - `Theme`: Dataclass mapping 1:1 to the `themes` DB table (distinct from in-memory `ThemeCluster`)
-- `ThemeRepository`: CRUD operations for theme persistence with pgvector centroid storage
+- `ThemeMetrics`: Dataclass mapping 1:1 to the `theme_metrics` daily time-series table
+- `ThemeRepository`: CRUD, vector search, batch centroid, and metrics operations with pgvector centroid storage
 - `VALID_LIFECYCLE_STAGES`: `{"emerging", "accelerating", "mature", "fading"}`
 - `create()`, `get_by_id()`, `get_all()` with optional lifecycle_stage filter, `update()` with field allowlist, `delete()`
 - `update_centroid()`: Dedicated fast-path for centroid updates (fixed SQL, no JSONB, no RETURNING)
-- Module-level helpers: `_row_to_theme()`, `_parse_centroid()`, `_centroid_to_pgvector()`
+- `find_similar(centroid, limit, threshold)`: HNSW cosine similarity search on theme centroids, returns `List[Tuple[Theme, float]]`
+- `get_centroids_batch(theme_ids)`: Bulk centroid fetch with in-memory TTL cache (600s default), cache invalidated on update/delete
+- `add_metrics(ThemeMetrics)`: Idempotent upsert of daily metrics (ON CONFLICT DO UPDATE on `(theme_id, date)`)
+- `get_metrics_range(theme_id, start, end)`: Time-series query ordered by date ascending for trend computation
+- Module-level helpers: `_row_to_theme()`, `_row_to_metrics()`, `_parse_centroid()`, `_centroid_to_pgvector()`
 - JSONB fields (`top_entities`, `metadata`) serialized with `json.dumps()` on write, `json.loads()` on read
 - TEXT[] fields (`top_keywords`, `top_tickers`) passed as Python lists (asyncpg handles natively)
 - DB trigger handles `updated_at` — no explicit SET needed
@@ -295,6 +300,9 @@ async def fetch(self):
 - **Conditional Fan-Out**: EmbeddingWorker enqueues to clustering_queue only when `clustering_enabled=True`, with soft failure (warning log, no embedding failure) to keep clustering as a non-critical downstream enrichment
 - **Separate Centroid Fast-Path**: `ThemeRepository.update_centroid()` is a dedicated method for the hot-path centroid EMA update — fixed SQL with `execute()`, no JSONB, no RETURNING, minimal overhead
 - **DB-Layer vs Clustering-Layer Schemas**: `Theme` (persistence, DB columns) vs `ThemeCluster` (in-memory, BERTopic fields) cleanly separates concerns at the domain boundary
+- **TTL Cache without External Deps**: `_TTLCache` in ThemeRepository uses a simple dict + `time.monotonic()` expiry instead of adding `cachetools` dependency — minimal code for key→(value, expiry) with lazy eviction
+- **Cache-Through Batch Reads**: `get_centroids_batch()` checks cache first, fetches only uncached IDs in a single `ANY($1)` query, populates cache on read, invalidates on write — read-heavy pattern for ClusteringWorker
+- **Idempotent Metrics Upsert**: `add_metrics()` uses `ON CONFLICT (theme_id, date) DO UPDATE SET` for safe re-runs of daily batch jobs
 
 ### Testing
 
@@ -380,6 +388,8 @@ uv run pytest tests/test_clustering/test_service.py -v -k "Transform"  # Run onl
 uv run pytest tests/test_clustering/test_service.py -v -k "Merge or CheckNew"  # Run merge + new theme tests
 
 # Themes testing
-uv run pytest tests/test_themes/ -v              # Run all theme tests (schema + repository)
+uv run pytest tests/test_themes/ -v              # Run all theme tests (schema + repository + search + metrics)
 uv run pytest tests/test_themes/test_repository.py -v -k "Update"  # Run only update tests
+uv run pytest tests/test_themes/test_repository.py -v -k "FindSimilar or GetCentroidsBatch"  # Run vector search tests
+uv run pytest tests/test_themes/test_repository.py -v -k "Metrics"  # Run metrics time-series tests
 ```

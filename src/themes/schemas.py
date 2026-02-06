@@ -4,11 +4,13 @@ Maps 1:1 to the `themes` database table. Distinct from ThemeCluster
 (the in-memory clustering artifact) — Theme has top_keywords, top_tickers,
 top_entities, lifecycle_stage, and description, but NOT topic_words or
 document_ids which are clustering-time constructs.
+
+Also defines ThemeMetrics for the theme_metrics daily time-series table.
 """
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 import numpy as np
@@ -132,3 +134,33 @@ class Theme:
             top_entities=top_entities,
             metadata=metadata,
         )
+
+
+@dataclass
+class ThemeMetrics:
+    """
+    Daily time-series metrics for a theme.
+
+    Maps 1:1 to the theme_metrics table. Primary key is (theme_id, date).
+
+    Attributes:
+        theme_id: Parent theme identifier.
+        date: Calendar date for this metrics snapshot.
+        document_count: Number of documents assigned on this date.
+        sentiment_score: Aggregate sentiment (-1.0 to 1.0).
+        volume_zscore: Standard deviations from mean volume.
+        velocity: Rate of volume change.
+        acceleration: Rate of velocity change.
+        avg_authority: Mean authority_score of documents.
+        bullish_ratio: Fraction of positive sentiment documents.
+    """
+
+    theme_id: str
+    date: date
+    document_count: int = 0
+    sentiment_score: float | None = None
+    volume_zscore: float | None = None
+    velocity: float | None = None
+    acceleration: float | None = None
+    avg_authority: float | None = None
+    bullish_ratio: float | None = None
