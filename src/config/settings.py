@@ -126,6 +126,9 @@ class Settings(BaseSettings):
 
     # Keywords extraction
     keywords_enabled: bool = Field(default=False, description="Enable keyword extraction in preprocessing")
+
+    # Event extraction
+    events_enabled: bool = Field(default=False, description="Enable event extraction in preprocessing")
     keywords_top_n: int = Field(default=10, ge=1, le=50, description="Max keywords per document")
 
     # Volume Metrics

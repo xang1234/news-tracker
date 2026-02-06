@@ -31,6 +31,7 @@ from src.config.tickers import (
 from src.ingestion.schemas import NormalizedDocument, Platform
 
 if TYPE_CHECKING:
+    from src.event_extraction.patterns import PatternExtractor
     from src.keywords.service import KeywordsService
     from src.ner.service import NERService
 
@@ -510,6 +511,8 @@ class Preprocessor:
         enable_ner: bool = False,
         keywords_service: "KeywordsService | None" = None,
         enable_keywords: bool = False,
+        event_extractor: "PatternExtractor | None" = None,
+        enable_events: bool = False,
     ):
         """
         Initialize preprocessor.
@@ -522,6 +525,8 @@ class Preprocessor:
             enable_ner: Whether to run NER extraction (default False)
             keywords_service: Keywords service for keyword extraction (optional)
             enable_keywords: Whether to run keyword extraction (default False)
+            event_extractor: PatternExtractor for event extraction (optional)
+            enable_events: Whether to run event extraction (default False)
         """
         self.spam_detector = spam_detector or SpamDetector()
         self.bot_detector = bot_detector or BotDetector()
@@ -530,6 +535,8 @@ class Preprocessor:
         self._enable_ner = enable_ner
         self._keywords_service = keywords_service
         self._enable_keywords = enable_keywords
+        self._event_extractor = event_extractor
+        self._enable_events = enable_events
 
     def process(self, doc: NormalizedDocument) -> NormalizedDocument:
         """
@@ -572,13 +579,23 @@ class Preprocessor:
                 logger.warning(f"Keywords extraction failed for {doc.id}: {e}")
                 doc.keywords_extracted = []
 
+        # 6. Event extraction (if enabled)
+        if self._enable_events and self._event_extractor is not None:
+            try:
+                events = self._event_extractor.extract(doc)
+                doc.events_extracted = [ev.to_dict() for ev in events]
+            except Exception as e:
+                logger.warning(f"Event extraction failed for {doc.id}: {e}")
+                doc.events_extracted = []
+
         logger.debug(
             f"Preprocessed {doc.id}: "
             f"spam={doc.spam_score:.2f}, "
             f"bot={doc.bot_probability:.2f}, "
             f"tickers={doc.tickers_mentioned}, "
             f"entities={len(doc.entities_mentioned)}, "
-            f"keywords={len(doc.keywords_extracted)}"
+            f"keywords={len(doc.keywords_extracted)}, "
+            f"events={len(doc.events_extracted)}"
         )
 
         return doc

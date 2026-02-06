@@ -189,6 +189,33 @@ class DocumentRepository:
 
         CREATE INDEX IF NOT EXISTS idx_theme_metrics_date
             ON theme_metrics(date);
+
+        -- Events table (extracted events from documents)
+        CREATE TABLE IF NOT EXISTS events (
+            event_id            TEXT PRIMARY KEY,
+            doc_id              TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+            event_type          TEXT NOT NULL,
+            actor               TEXT,
+            action              TEXT NOT NULL,
+            object              TEXT,
+            time_ref            TEXT,
+            quantity            TEXT,
+            tickers             TEXT[] NOT NULL DEFAULT '{}',
+            confidence          REAL NOT NULL DEFAULT 0.0,
+            span_start          INTEGER NOT NULL,
+            span_end            INTEGER NOT NULL,
+            extractor_version   TEXT NOT NULL,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_events_event_type
+            ON events(event_type);
+        CREATE INDEX IF NOT EXISTS idx_events_tickers
+            ON events USING GIN(tickers);
+        CREATE INDEX IF NOT EXISTS idx_events_doc_id
+            ON events(doc_id);
+        CREATE INDEX IF NOT EXISTS idx_events_created_at
+            ON events(created_at DESC);
         """
 
         await self._db.execute(create_sql)
@@ -224,6 +251,13 @@ class DocumentRepository:
 
         -- Add weighted_volume column to theme_metrics if it doesn't exist
         ALTER TABLE theme_metrics ADD COLUMN IF NOT EXISTS weighted_volume REAL;
+
+        -- Add events_extracted column if it doesn't exist
+        ALTER TABLE documents ADD COLUMN IF NOT EXISTS events_extracted JSONB NOT NULL DEFAULT '[]';
+
+        -- GIN index for event queries
+        CREATE INDEX IF NOT EXISTS idx_documents_events_extracted
+            ON documents USING GIN(events_extracted);
         """
         await self._db.execute(migrations_sql)
 
@@ -246,21 +280,24 @@ class DocumentRepository:
             id, platform, url, timestamp, fetched_at,
             author_id, author_name, author_followers, author_verified,
             content, content_type, title,
-            engagement, tickers, entities_mentioned, keywords_extracted, urls_mentioned,
+            engagement, tickers, entities_mentioned, keywords_extracted,
+            events_extracted, urls_mentioned,
             spam_score, bot_probability, authority_score,
             embedding, sentiment, theme_ids, raw_data
         ) VALUES (
             $1, $2, $3, $4, $5,
             $6, $7, $8, $9,
             $10, $11, $12,
-            $13, $14, $15, $16, $17,
-            $18, $19, $20,
-            $21, $22, $23, $24
+            $13, $14, $15, $16,
+            $17, $18,
+            $19, $20, $21,
+            $22, $23, $24, $25
         )
         ON CONFLICT (id) DO UPDATE SET
             engagement = EXCLUDED.engagement,
             entities_mentioned = EXCLUDED.entities_mentioned,
             keywords_extracted = EXCLUDED.keywords_extracted,
+            events_extracted = EXCLUDED.events_extracted,
             spam_score = EXCLUDED.spam_score,
             bot_probability = EXCLUDED.bot_probability,
             authority_score = EXCLUDED.authority_score,
@@ -286,6 +323,7 @@ class DocumentRepository:
             doc.tickers_mentioned,
             json.dumps(doc.entities_mentioned),
             json.dumps(doc.keywords_extracted),
+            json.dumps(doc.events_extracted),
             doc.urls_mentioned,
             doc.spam_score,
             doc.bot_probability,
@@ -321,21 +359,24 @@ class DocumentRepository:
             id, platform, url, timestamp, fetched_at,
             author_id, author_name, author_followers, author_verified,
             content, content_type, title,
-            engagement, tickers, entities_mentioned, keywords_extracted, urls_mentioned,
+            engagement, tickers, entities_mentioned, keywords_extracted,
+            events_extracted, urls_mentioned,
             spam_score, bot_probability, authority_score,
             raw_data
         ) VALUES (
             $1, $2, $3, $4, $5,
             $6, $7, $8, $9,
             $10, $11, $12,
-            $13, $14, $15, $16, $17,
-            $18, $19, $20,
-            $21
+            $13, $14, $15, $16,
+            $17, $18,
+            $19, $20, $21,
+            $22
         )
         ON CONFLICT (id) DO UPDATE SET
             engagement = EXCLUDED.engagement,
             entities_mentioned = EXCLUDED.entities_mentioned,
             keywords_extracted = EXCLUDED.keywords_extracted,
+            events_extracted = EXCLUDED.events_extracted,
             spam_score = EXCLUDED.spam_score,
             bot_probability = EXCLUDED.bot_probability,
             authority_score = EXCLUDED.authority_score,
@@ -361,6 +402,7 @@ class DocumentRepository:
                 doc.tickers_mentioned,
                 json.dumps(doc.entities_mentioned),
                 json.dumps(doc.keywords_extracted),
+                json.dumps(doc.events_extracted),
                 doc.urls_mentioned,
                 doc.spam_score,
                 doc.bot_probability,
@@ -1054,6 +1096,11 @@ class DocumentRepository:
         if isinstance(keywords_extracted, str):
             keywords_extracted = json.loads(keywords_extracted)
 
+        # Parse events_extracted JSON
+        events_extracted = row.get("events_extracted", [])
+        if isinstance(events_extracted, str):
+            events_extracted = json.loads(events_extracted)
+
         return NormalizedDocument(
             id=row["id"],
             platform=Platform(row["platform"]),
@@ -1071,6 +1118,7 @@ class DocumentRepository:
             tickers_mentioned=list(row.get("tickers", [])),
             entities_mentioned=entities_mentioned or [],
             keywords_extracted=keywords_extracted or [],
+            events_extracted=events_extracted or [],
             urls_mentioned=list(row.get("urls_mentioned", [])),
             spam_score=row.get("spam_score", 0.0),
             bot_probability=row.get("bot_probability", 0.0),

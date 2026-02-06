@@ -127,11 +127,24 @@ class ProcessingService:
                 logger.warning("Keywords enabled but rapid-textrank not available")
                 enable_keywords = False
 
+        event_extractor = None
+        enable_events = settings.events_enabled
+        if enable_events:
+            try:
+                from src.event_extraction.patterns import PatternExtractor
+                event_extractor = PatternExtractor()
+                logger.info("Event extractor auto-injected into preprocessor")
+            except ImportError:
+                logger.warning("Events enabled but event_extraction module not available")
+                enable_events = False
+
         return Preprocessor(
             ner_service=ner_service,
             enable_ner=enable_ner,
             keywords_service=keywords_service,
             enable_keywords=enable_keywords,
+            event_extractor=event_extractor,
+            enable_events=enable_events,
         )
 
     async def start(self) -> None:

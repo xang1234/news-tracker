@@ -140,6 +140,10 @@ class NormalizedDocument(BaseModel):
         default_factory=list,
         description="Extracted keywords from TextRank (text, score, rank)",
     )
+    events_extracted: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Extracted events from PatternExtractor (event_type, actor, action, object)",
+    )
     urls_mentioned: list[str] = Field(
         default_factory=list,
         description="URLs found in content",

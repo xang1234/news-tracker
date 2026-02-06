@@ -116,6 +116,15 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 - `KeywordsService`: TextRank-based keyword extraction using rapid-textrank library
 - Lazy model loading, graceful error handling, opt-in activation via `KEYWORDS_ENABLED=true`
 
+**Event Extraction Layer** (`src/event_extraction/`):
+- `EventExtractionConfig`: Pydantic settings (prefix `EVENTS_`) for extractor_version, min_confidence, max_events_per_doc
+- `EventType`: Literal type for event categories: `capacity_expansion`, `capacity_constraint`, `product_launch`, `product_delay`, `price_change`, `guidance_change`
+- `EventRecord`: Dataclass for extracted events with SVO structure (actor, action, object), time_ref, quantity, tickers, confidence, span offsets
+- `PatternExtractor`: Regex-based event extractor with lazy-compiled patterns, named capture groups, ticker context linking, confidence scoring
+- `TimeNormalizer`: Stateless normalizer for temporal references (Q1-Q4, H1-H2, relative refs, month names)
+- Opt-in activation via `EVENTS_ENABLED=true`, follows NER/Keywords service pattern
+- DB: `events` table with B-tree on event_type/doc_id/created_at, GIN on tickers; `events_extracted` JSONB column on documents
+
 **Clustering Layer** (`src/clustering/`):
 - `ClusteringConfig`: Pydantic settings for UMAP, HDBSCAN, c-TF-IDF, assignment thresholds, Redis queue
 - `ClusteringQueue`: Redis Streams wrapper for clustering jobs (follows `BaseRedisQueue[ClusteringJob]` pattern)
@@ -267,6 +276,8 @@ Settings in `src/config/settings.py` use Pydantic BaseSettings with env var over
 - `NER_ENABLE_SEMANTIC_LINKING` (false), `NER_SEMANTIC_SIMILARITY_THRESHOLD` (0.5), `NER_SEMANTIC_BASE_SCORE` (0.6) for embedding-based entity-theme linking
 - `keywords_enabled` (false), `keywords_top_n` (10) for keyword extraction configuration
 - Keywords settings can be overridden via `KEYWORDS_*` environment variables (e.g., `KEYWORDS_TOP_N=15`, `KEYWORDS_MIN_SCORE=0.01`)
+- `events_enabled` (false) for event extraction in preprocessing
+- Event extraction settings can be overridden via `EVENTS_*` environment variables (e.g., `EVENTS_MIN_CONFIDENCE=0.6`, `EVENTS_MAX_EVENTS_PER_DOC=50`)
 - `clustering_enabled` (false), `clustering_stream_name` (clustering_queue), `clustering_consumer_group` (clustering_workers) for BERTopic clustering
 - Clustering settings can be overridden via `CLUSTERING_*` environment variables (e.g., `CLUSTERING_HDBSCAN_MIN_CLUSTER_SIZE=20`, `CLUSTERING_UMAP_N_COMPONENTS=15`)
 - `volume_metrics_enabled` (false) for volume metrics computation
@@ -379,6 +390,12 @@ async def fetch(self):
 - **Opt-In Centroid Serialization**: Theme API excludes 768-float centroid (~6KB) by default; `?include_centroid=true` opts in. `_theme_to_item()` centralizes Theme→ThemeItem conversion
 - **Sentiment Endpoint Chaining**: `/themes/{id}/sentiment` chains ThemeRepository (existence check) → DocumentRepository (lightweight sentiment rows) → SentimentAggregator (sync CPU-only) for clean separation of DB/compute concerns
 - **Dynamic SQL for Theme Documents**: `get_documents_by_theme()` uses incremental `param_idx` builder pattern with optional platform/min_authority filters, matching existing repository style
+- **SVO Event Extraction**: `PatternExtractor` uses named regex groups (`?P<actor>`, `?P<action>`, `?P<object>`) to extract Subject-Verb-Object triplets from financial text
+- **Lazy Pattern Compilation**: `_build_patterns()` compiles regex on first `.patterns` access; subsequent accesses reuse the compiled dict
+- **Overlap Deduplication**: `_overlaps()` prevents the same text span from generating duplicate events across different event type patterns
+- **Additive Confidence Scoring**: Base 0.7 per regex match, +0.1 for actor/ticker/quantity signals, capped at 1.0
+- **Chain-of-Responsibility TimeNormalizer**: Each `_try_*` method returns `None` on non-match, falling through to the next — easy to extend with new time patterns
+- **Opt-in Event Extraction**: Events disabled by default (`events_enabled=False`) to avoid overhead when not needed, follows NER/Keywords pattern
 
 ### Testing
 
@@ -457,6 +474,13 @@ keywords = svc.extract_sync('Nvidia announced new GPU architecture with HBM3E me
 for kw in keywords:
     print(f'{kw.rank}. {kw.text} (score: {kw.score:.3f})')
 "
+
+# Event extraction testing
+uv run pytest tests/test_event_extraction/ -v              # Run all event extraction tests
+uv run pytest tests/test_event_extraction/test_patterns.py -v              # Run pattern extractor tests
+uv run pytest tests/test_event_extraction/test_normalizer.py -v            # Run time normalizer tests
+uv run pytest tests/test_event_extraction/test_schemas.py -v               # Run schema tests
+uv run pytest tests/test_event_extraction/test_preprocessor_integration.py -v  # Run integration tests
 
 # Clustering testing
 uv run pytest tests/test_clustering/ -v   # Run all clustering tests (schema + service + config + worker + daily job)
