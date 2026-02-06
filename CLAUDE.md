@@ -182,7 +182,7 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 
 **Storage Layer** (`src/storage/`):
 - `Database`: asyncpg connection pool with transaction context managers
-- `DocumentRepository`: CRUD operations, batch upserts, full-text search, similarity search, `update_themes()` array merge, `get_with_embeddings_since()` lightweight projection for batch clustering
+- `DocumentRepository`: CRUD operations, batch upserts, full-text search, similarity search, `update_themes()` array merge, `get_with_embeddings_since()` lightweight projection for batch clustering, `get_documents_by_theme()` with dynamic SQL filtering
 
 **Embedding Layer** (`src/embedding/`):
 - `EmbeddingConfig`: Pydantic settings for model, batching, caching, queue configuration
@@ -211,12 +211,18 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 **API Layer** (`src/api/`):
 - `app.py`: FastAPI application factory with structlog integration
 - `auth.py`: X-API-KEY header authentication with dev mode bypass
-- `models.py`: Pydantic request/response models (EmbedRequest, EmbedResponse, SearchRequest, SearchResponse, SentimentRequest, SentimentResponse)
-- `dependencies.py`: Dependency injection for EmbeddingService, SentimentService, Redis, and VectorStoreManager
+- `models.py`: Pydantic request/response models (EmbedRequest, EmbedResponse, SearchRequest, SearchResponse, SentimentRequest, SentimentResponse, ThemeItem, ThemeListResponse, ThemeDetailResponse, ThemeDocumentItem, ThemeDocumentsResponse, ThemeSentimentResponse, ThemeMetricsItem, ThemeMetricsResponse)
+- `dependencies.py`: Dependency injection for EmbeddingService, SentimentService, Redis, VectorStoreManager, ThemeRepository, DocumentRepository, and SentimentAggregator
 - `routes/embed.py`: POST /embed endpoint with auto model selection
 - `routes/sentiment.py`: POST /sentiment endpoint with optional entity-level analysis
 - `routes/search.py`: POST /search/similar endpoint for semantic search with filters
 - `routes/health.py`: GET /health endpoint for service status
+- `routes/themes.py`: Theme REST API endpoints:
+  - GET /themes — list themes with lifecycle_stage filter, pagination, optional centroid
+  - GET /themes/{theme_id} — single theme detail with optional centroid
+  - GET /themes/{theme_id}/documents — documents in a theme with platform/authority filters
+  - GET /themes/{theme_id}/sentiment — aggregated sentiment with exponential decay weighting
+  - GET /themes/{theme_id}/metrics — daily metrics time series with date range
 
 **Services** (`src/services/`):
 - `IngestionService`: Runs adapters concurrently, publishes to queue
@@ -347,6 +353,9 @@ async def fetch(self):
 - **Stateless Classifier**: `LifecycleClassifier` has no instance state — takes Theme + metrics, returns stage + confidence. Trivially testable without mocking DB
 - **Normalized Trend Analysis**: `_compute_trend()` divides raw least-squares slope by `abs(mean)` so thresholds work across themes with different volume scales
 - **Alertable Transition Lookup**: `ALERTABLE_TRANSITIONS` dict maps `(from, to)` tuples to messages — O(1) lookup, easy to extend without modifying class logic
+- **Opt-In Centroid Serialization**: Theme API excludes 768-float centroid (~6KB) by default; `?include_centroid=true` opts in. `_theme_to_item()` centralizes Theme→ThemeItem conversion
+- **Sentiment Endpoint Chaining**: `/themes/{id}/sentiment` chains ThemeRepository (existence check) → DocumentRepository (lightweight sentiment rows) → SentimentAggregator (sync CPU-only) for clean separation of DB/compute concerns
+- **Dynamic SQL for Theme Documents**: `get_documents_by_theme()` uses incremental `param_idx` builder pattern with optional platform/min_authority filters, matching existing repository style
 
 ### Testing
 
@@ -443,4 +452,13 @@ uv run pytest tests/test_themes/test_repository.py -v -k "Metrics"  # Run metric
 uv run pytest tests/test_themes/test_lifecycle.py -v              # Run lifecycle classifier tests
 uv run pytest tests/test_themes/test_lifecycle.py -v -k "Classify"  # Run only classification tests
 uv run pytest tests/test_themes/test_lifecycle.py -v -k "Transition"  # Run transition detection tests
+
+# API testing
+uv run pytest tests/test_api/ -v                        # Run all API tests
+uv run pytest tests/test_api/test_themes.py -v           # Run theme endpoint tests
+uv run pytest tests/test_api/test_themes.py -v -k "ListThemes"    # Run list endpoint tests
+uv run pytest tests/test_api/test_themes.py -v -k "GetTheme and not Documents"  # Run detail endpoint tests
+uv run pytest tests/test_api/test_themes.py -v -k "Documents"     # Run documents endpoint tests
+uv run pytest tests/test_api/test_themes.py -v -k "Sentiment"     # Run sentiment endpoint tests
+uv run pytest tests/test_api/test_themes.py -v -k "Metrics"       # Run metrics endpoint tests
 ```

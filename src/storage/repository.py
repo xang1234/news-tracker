@@ -1238,3 +1238,52 @@ class DocumentRepository:
             })
 
         return results
+
+    async def get_documents_by_theme(
+        self,
+        theme_id: str,
+        limit: int = 50,
+        offset: int = 0,
+        platform: str | None = None,
+        min_authority: float | None = None,
+    ) -> list[NormalizedDocument]:
+        """
+        Get documents assigned to a theme.
+
+        Uses dynamic SQL builder with optional platform and authority filters.
+
+        Args:
+            theme_id: Theme identifier
+            limit: Maximum documents to return
+            offset: Offset for pagination
+            platform: Optional platform filter
+            min_authority: Optional minimum authority score filter
+
+        Returns:
+            List of documents ordered by timestamp descending
+        """
+        conditions = ["$1 = ANY(theme_ids)"]
+        params: list[Any] = [theme_id]
+        param_idx = 2
+
+        if platform:
+            conditions.append(f"platform = ${param_idx}")
+            params.append(platform)
+            param_idx += 1
+
+        if min_authority is not None:
+            conditions.append(f"authority_score >= ${param_idx}")
+            params.append(min_authority)
+            param_idx += 1
+
+        where_clause = " AND ".join(conditions)
+        sql = f"""
+            SELECT * FROM documents
+            WHERE {where_clause}
+            ORDER BY timestamp DESC
+            LIMIT ${param_idx} OFFSET ${param_idx + 1}
+        """
+        params.extend([limit, offset])
+
+        rows = await self._db.fetch(sql, *params)
+        return [self._row_to_document(row) for row in rows]

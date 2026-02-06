@@ -9,9 +9,12 @@ import redis.asyncio as redis
 from src.config.settings import get_settings
 from src.embedding.config import EmbeddingConfig
 from src.embedding.service import EmbeddingService
+from src.sentiment.aggregation import SentimentAggregator
 from src.sentiment.config import SentimentConfig
 from src.sentiment.service import SentimentService
 from src.storage.database import Database
+from src.storage.repository import DocumentRepository
+from src.themes.repository import ThemeRepository
 from src.vectorstore.manager import VectorStoreManager
 
 # Global service instances (initialized on first request)
@@ -20,6 +23,9 @@ _sentiment_service: SentimentService | None = None
 _redis_client: redis.Redis | None = None
 _vector_store_manager: VectorStoreManager | None = None
 _database: Database | None = None
+_theme_repository: ThemeRepository | None = None
+_document_repository: DocumentRepository | None = None
+_sentiment_aggregator: SentimentAggregator | None = None
 
 
 async def get_redis_client() -> AsyncGenerator[redis.Redis, None]:
@@ -178,11 +184,65 @@ async def get_vector_store_manager() -> "VectorStoreManager":
     return _vector_store_manager
 
 
+async def get_theme_repository() -> ThemeRepository:
+    """
+    Get theme repository instance.
+
+    Creates a singleton repository backed by the shared Database.
+    """
+    global _theme_repository, _database
+
+    if _theme_repository is None:
+        if _database is None:
+            _database = Database()
+            await _database.connect()
+
+        _theme_repository = ThemeRepository(_database)
+
+    return _theme_repository
+
+
+async def get_document_repository() -> DocumentRepository:
+    """
+    Get document repository instance.
+
+    Creates a singleton repository backed by the shared Database.
+    """
+    global _document_repository, _database
+
+    if _document_repository is None:
+        if _database is None:
+            _database = Database()
+            await _database.connect()
+
+        _document_repository = DocumentRepository(_database)
+
+    return _document_repository
+
+
+def get_sentiment_aggregator() -> SentimentAggregator:
+    """
+    Get sentiment aggregator instance.
+
+    Stateless aggregator — no DB or async needed.
+    """
+    global _sentiment_aggregator
+
+    if _sentiment_aggregator is None:
+        _sentiment_aggregator = SentimentAggregator()
+
+    return _sentiment_aggregator
+
+
 async def cleanup_dependencies() -> None:
     """Clean up global dependencies on shutdown."""
     global _embedding_service, _sentiment_service, _redis_client, _vector_store_manager, _database
+    global _theme_repository, _document_repository, _sentiment_aggregator
 
     _vector_store_manager = None
+    _theme_repository = None
+    _document_repository = None
+    _sentiment_aggregator = None
 
     if _embedding_service is not None:
         await _embedding_service.close()

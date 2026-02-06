@@ -2,6 +2,7 @@
 Request and response models for the embedding API.
 """
 
+import datetime as dt
 from enum import Enum
 
 from pydantic import BaseModel, Field
@@ -280,3 +281,109 @@ class SentimentResponse(BaseModel):
         ...,
         description="Processing latency in milliseconds",
     )
+
+
+# Theme models
+
+
+class ThemeItem(BaseModel):
+    """Shared theme representation for list and detail responses."""
+
+    theme_id: str = Field(..., description="Deterministic theme identifier")
+    name: str = Field(..., description="Human-readable theme name")
+    top_keywords: list[str] = Field(default_factory=list, description="Ranked topic keywords")
+    top_tickers: list[str] = Field(default_factory=list, description="Most-mentioned ticker symbols")
+    top_entities: list[dict] = Field(default_factory=list, description="Entity objects with scores")
+    lifecycle_stage: str = Field(..., description="One of: emerging, accelerating, mature, fading")
+    document_count: int = Field(..., description="Number of documents assigned to this theme")
+    description: str | None = Field(default=None, description="Optional human-readable summary")
+    created_at: str = Field(..., description="Theme creation timestamp (ISO format)")
+    updated_at: str = Field(..., description="Last modification timestamp (ISO format)")
+    metadata: dict = Field(default_factory=dict, description="Flexible metadata storage")
+    centroid: list[float] | None = Field(
+        default=None,
+        description="768-dim FinBERT centroid vector (omitted by default, opt-in via include_centroid=true)",
+    )
+
+
+class ThemeListResponse(BaseModel):
+    """Response model for listing themes."""
+
+    themes: list[ThemeItem] = Field(..., description="List of themes")
+    total: int = Field(..., description="Number of themes returned")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class ThemeDetailResponse(BaseModel):
+    """Response model for a single theme."""
+
+    theme: ThemeItem = Field(..., description="Theme details")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class ThemeDocumentItem(BaseModel):
+    """Document item within a theme's document list."""
+
+    document_id: str = Field(..., description="Unique document identifier")
+    platform: str | None = Field(default=None, description="Source platform")
+    title: str | None = Field(default=None, description="Document title if available")
+    content_preview: str | None = Field(default=None, description="First 300 characters of content")
+    url: str | None = Field(default=None, description="Original document URL")
+    author_name: str | None = Field(default=None, description="Author display name")
+    tickers: list[str] = Field(default_factory=list, description="Ticker symbols mentioned")
+    authority_score: float | None = Field(default=None, description="Document authority score (0.0-1.0)")
+    sentiment_label: str | None = Field(default=None, description="Sentiment label if available")
+    sentiment_confidence: float | None = Field(default=None, description="Sentiment confidence if available")
+    timestamp: str | None = Field(default=None, description="Document creation timestamp (ISO format)")
+
+
+class ThemeDocumentsResponse(BaseModel):
+    """Response model for documents in a theme."""
+
+    documents: list[ThemeDocumentItem] = Field(..., description="Documents in this theme")
+    total: int = Field(..., description="Number of documents returned")
+    theme_id: str = Field(..., description="Theme identifier")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class ThemeSentimentResponse(BaseModel):
+    """Response model for theme sentiment aggregation."""
+
+    theme_id: str = Field(..., description="Theme identifier")
+    bullish_ratio: float = Field(..., description="Proportion of positive sentiment (0-1)")
+    bearish_ratio: float = Field(..., description="Proportion of negative sentiment (0-1)")
+    neutral_ratio: float = Field(..., description="Proportion of neutral sentiment (0-1)")
+    avg_confidence: float = Field(..., description="Average sentiment confidence")
+    avg_authority: float | None = Field(default=None, description="Average authority score of documents")
+    sentiment_velocity: float | None = Field(
+        default=None, description="Rate of sentiment change (positive = more bullish)"
+    )
+    extreme_sentiment: str | None = Field(
+        default=None, description="Extreme sentiment flag: extreme_bullish or extreme_bearish"
+    )
+    document_count: int = Field(..., description="Number of documents in aggregation window")
+    window_start: str = Field(..., description="Aggregation window start (ISO format)")
+    window_end: str = Field(..., description="Aggregation window end (ISO format)")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class ThemeMetricsItem(BaseModel):
+    """Single day of theme metrics."""
+
+    date: dt.date = Field(..., description="Calendar date for this metrics snapshot")
+    document_count: int = Field(..., description="Number of documents on this date")
+    sentiment_score: float | None = Field(default=None, description="Aggregate sentiment (-1.0 to 1.0)")
+    volume_zscore: float | None = Field(default=None, description="Standard deviations from mean volume")
+    velocity: float | None = Field(default=None, description="Rate of volume change")
+    acceleration: float | None = Field(default=None, description="Rate of velocity change")
+    avg_authority: float | None = Field(default=None, description="Mean authority score of documents")
+    bullish_ratio: float | None = Field(default=None, description="Fraction of positive sentiment documents")
+
+
+class ThemeMetricsResponse(BaseModel):
+    """Response model for theme metrics time series."""
+
+    metrics: list[ThemeMetricsItem] = Field(..., description="Daily metrics time series")
+    total: int = Field(..., description="Number of metric data points")
+    theme_id: str = Field(..., description="Theme identifier")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
