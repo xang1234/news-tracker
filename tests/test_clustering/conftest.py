@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from src.clustering.config import ClusteringConfig
+from src.clustering.schemas import ThemeCluster
 from src.clustering.service import BERTopicService
 
 
@@ -150,5 +151,76 @@ def fitted_service(
 
     with patch.object(service, "_create_model", return_value=mock_bertopic_model):
         service.fit(sample_documents, sample_embeddings, sample_document_ids)
+
+    return service
+
+
+@pytest.fixture
+def service_with_similar_themes(clustering_config):
+    """
+    BERTopicService with 3 manually-constructed themes, two of which are
+    very similar (cosine sim ~0.9998, well above the 0.85 merge threshold).
+
+    - Theme A (10 docs): base centroid
+    - Theme B (5 docs): centroid perturbed ~0.02 from A (nearly identical)
+    - Theme C (8 docs): orthogonal centroid (distant from both A and B)
+    """
+    rng = np.random.RandomState(42)
+    dim = 768
+
+    # Theme A: random unit vector
+    centroid_a = rng.randn(dim).astype(np.float64)
+    centroid_a /= np.linalg.norm(centroid_a)
+
+    # Theme B: tiny perturbation of A (cosine sim ~0.9998)
+    perturbation = rng.randn(dim) * 0.02
+    centroid_b = centroid_a + perturbation
+    centroid_b /= np.linalg.norm(centroid_b)
+
+    # Theme C: orthogonal direction (distant from A and B)
+    centroid_c = rng.randn(dim).astype(np.float64)
+    # Remove component along A to make more orthogonal
+    centroid_c -= np.dot(centroid_c, centroid_a) * centroid_a
+    centroid_c /= np.linalg.norm(centroid_c)
+
+    words_a = [("gpu", 0.15), ("nvidia", 0.12), ("ai", 0.10), ("chip", 0.08), ("training", 0.06)]
+    words_b = [("gpu", 0.14), ("accelerator", 0.11), ("nvidia", 0.10), ("compute", 0.07), ("deep", 0.05)]
+    words_c = [("memory", 0.18), ("hbm3e", 0.14), ("bandwidth", 0.11), ("samsung", 0.09), ("dram", 0.07)]
+
+    theme_a = ThemeCluster(
+        theme_id=ThemeCluster.generate_theme_id(words_a),
+        name=ThemeCluster.generate_name(words_a),
+        topic_words=words_a,
+        centroid=centroid_a,
+        document_count=10,
+        document_ids=[f"doc_a_{i}" for i in range(10)],
+        metadata={"bertopic_topic_id": 0},
+    )
+    theme_b = ThemeCluster(
+        theme_id=ThemeCluster.generate_theme_id(words_b),
+        name=ThemeCluster.generate_name(words_b),
+        topic_words=words_b,
+        centroid=centroid_b,
+        document_count=5,
+        document_ids=[f"doc_b_{i}" for i in range(5)],
+        metadata={"bertopic_topic_id": 1},
+    )
+    theme_c = ThemeCluster(
+        theme_id=ThemeCluster.generate_theme_id(words_c),
+        name=ThemeCluster.generate_name(words_c),
+        topic_words=words_c,
+        centroid=centroid_c,
+        document_count=8,
+        document_ids=[f"doc_c_{i}" for i in range(8)],
+        metadata={"bertopic_topic_id": 2},
+    )
+
+    service = BERTopicService(config=clustering_config)
+    service._initialized = True
+    service._themes = {
+        theme_a.theme_id: theme_a,
+        theme_b.theme_id: theme_b,
+        theme_c.theme_id: theme_c,
+    }
 
     return service

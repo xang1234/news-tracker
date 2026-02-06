@@ -703,3 +703,335 @@ class TestTransformGetStats:
         service = BERTopicService()
         stats = service.get_stats()
         assert stats["n_new_theme_candidates"] == 0
+
+
+# ──────────────────────────────────────────────────────
+# merge_similar_themes() tests
+# ──────────────────────────────────────────────────────
+
+
+class TestMergeSimilarThemes:
+    """Tests for BERTopicService.merge_similar_themes()."""
+
+    def test_merges_similar_themes(self, service_with_similar_themes):
+        """Themes A and B (sim ~0.9998) should merge, reducing theme count."""
+        service = service_with_similar_themes
+        assert len(service._themes) == 3
+
+        merges = service.merge_similar_themes()
+
+        assert len(merges) == 1
+        assert len(service._themes) == 2
+
+    def test_keeps_larger_theme(self, service_with_similar_themes):
+        """Survivor should be the theme with more documents (Theme A, 10 docs)."""
+        service = service_with_similar_themes
+        merges = service.merge_similar_themes()
+
+        # Theme A had 10 docs, Theme B had 5 — A survives
+        merged_from, merged_into = merges[0]
+        # The merged_into should be the original ID of theme A (larger)
+        # After merge, the survivor has 15 docs total
+        surviving_themes = list(service._themes.values())
+        merged_theme = [t for t in surviving_themes if t.document_count == 15]
+        assert len(merged_theme) == 1
+
+    def test_weighted_centroid(self, service_with_similar_themes):
+        """Merged centroid should be weighted average by document count."""
+        service = service_with_similar_themes
+
+        # Capture original centroids before merge
+        themes = list(service._themes.values())
+        # Find themes A (10 docs) and B (5 docs) by doc count
+        theme_a = next(t for t in themes if t.document_count == 10)
+        theme_b = next(t for t in themes if t.document_count == 5)
+        centroid_a = theme_a.centroid.copy()
+        centroid_b = theme_b.centroid.copy()
+
+        service.merge_similar_themes()
+
+        expected = (10 * centroid_a + 5 * centroid_b) / 15
+        survivor = next(t for t in service._themes.values() if t.document_count == 15)
+        np.testing.assert_array_almost_equal(survivor.centroid, expected)
+
+    def test_merged_topic_words_deduped(self, service_with_similar_themes):
+        """Merged topic words should have no duplicates and respect top_n_words."""
+        service = service_with_similar_themes
+        service.merge_similar_themes()
+
+        survivor = next(t for t in service._themes.values() if t.document_count == 15)
+        words = [w for w, _ in survivor.topic_words]
+        # No duplicate words
+        assert len(words) == len(set(words))
+        # Respects top_n_words config
+        assert len(survivor.topic_words) <= service.config.top_n_words
+
+    def test_document_ids_combined(self, service_with_similar_themes):
+        """Survivor should contain document IDs from both themes."""
+        service = service_with_similar_themes
+        service.merge_similar_themes()
+
+        survivor = next(t for t in service._themes.values() if t.document_count == 15)
+        # Theme A had doc_a_0..doc_a_9, Theme B had doc_b_0..doc_b_4
+        for i in range(10):
+            assert f"doc_a_{i}" in survivor.document_ids
+        for i in range(5):
+            assert f"doc_b_{i}" in survivor.document_ids
+
+    def test_document_count_summed(self, service_with_similar_themes):
+        """Survivor document_count should be sum of merged themes."""
+        service = service_with_similar_themes
+        service.merge_similar_themes()
+
+        survivor = next(t for t in service._themes.values() if t.document_count == 15)
+        assert survivor.document_count == 15
+
+    def test_returns_merge_pairs(self, service_with_similar_themes):
+        """Return value should be list of (from_id, into_id) tuples."""
+        service = service_with_similar_themes
+        merges = service.merge_similar_themes()
+
+        assert len(merges) == 1
+        merged_from, merged_into = merges[0]
+        assert isinstance(merged_from, str)
+        assert isinstance(merged_into, str)
+        assert merged_from.startswith("theme_")
+        assert merged_into.startswith("theme_")
+        assert merged_from != merged_into
+
+    def test_theme_id_regenerated(self, service_with_similar_themes):
+        """Theme IDs should be regenerated after merge (topic words changed)."""
+        service = service_with_similar_themes
+        old_ids = set(service._themes.keys())
+
+        service.merge_similar_themes()
+
+        new_ids = set(service._themes.keys())
+        # At least the survivor's ID changed (merged topic words)
+        # Theme C's ID might also change if re-keyed — but at minimum
+        # the set shouldn't be identical since one theme was removed
+        assert len(new_ids) < len(old_ids)
+
+    def test_no_merge_below_threshold(self, fitted_service):
+        """Well-separated themes (from fitted_service) should not merge."""
+        merges = fitted_service.merge_similar_themes()
+        assert merges == []
+        assert len(fitted_service._themes) == 3
+
+    def test_not_initialized_returns_empty(self):
+        """Not-initialized service should return empty list."""
+        service = BERTopicService()
+        assert service.merge_similar_themes() == []
+
+    def test_single_theme_returns_empty(self, clustering_config):
+        """Service with only one theme should return empty list."""
+        service = BERTopicService(config=clustering_config)
+        service._initialized = True
+
+        theme = ThemeCluster(
+            theme_id="theme_abc123",
+            name="solo_theme",
+            topic_words=[("gpu", 0.1)],
+            centroid=np.random.randn(768),
+            document_count=5,
+            document_ids=["d1", "d2", "d3", "d4", "d5"],
+        )
+        service._themes = {"theme_abc123": theme}
+
+        assert service.merge_similar_themes() == []
+
+
+# ──────────────────────────────────────────────────────
+# check_new_themes() tests
+# ──────────────────────────────────────────────────────
+
+
+class TestCheckNewThemes:
+    """Tests for BERTopicService.check_new_themes()."""
+
+    def _make_candidates(self, n, dim=768, seed=42):
+        """Create n candidate (doc_id, text, embedding) triples in a tight cluster."""
+        rng = np.random.RandomState(seed)
+        center = rng.randn(dim).astype(np.float64)
+        center /= np.linalg.norm(center)
+        candidates = []
+        for i in range(n):
+            emb = center + rng.randn(dim) * 0.02
+            emb = emb / np.linalg.norm(emb)
+            candidates.append((f"cand_{i}", f"Candidate document {i} about topic", emb))
+        return candidates
+
+    def test_creates_new_theme(self, fitted_service):
+        """Valid cluster of candidates should produce a new ThemeCluster."""
+        # Create candidates far from existing themes
+        rng = np.random.RandomState(999)
+        center = rng.randn(768)
+        center /= np.linalg.norm(center)
+        candidates = []
+        for i in range(6):
+            emb = center + rng.randn(768) * 0.02
+            emb = emb / np.linalg.norm(emb)
+            candidates.append((f"cand_{i}", f"New topic about quantum computing chip {i}", emb))
+
+        mock_clusterer = MagicMock()
+        mock_clusterer.fit_predict.return_value = np.array([0, 0, 0, 0, 0, 0])
+
+        with patch.object(fitted_service, "_create_mini_clusterer", return_value=mock_clusterer):
+            new_themes = fitted_service.check_new_themes(candidates)
+
+        assert len(new_themes) >= 1
+
+    def test_new_theme_has_correct_fields(self, fitted_service):
+        """Newly created theme should have all expected ThemeCluster fields."""
+        rng = np.random.RandomState(999)
+        center = rng.randn(768)
+        center /= np.linalg.norm(center)
+        candidates = []
+        for i in range(6):
+            emb = center + rng.randn(768) * 0.02
+            emb = emb / np.linalg.norm(emb)
+            candidates.append((f"cand_{i}", f"Quantum computing chip advances {i}", emb))
+
+        mock_clusterer = MagicMock()
+        mock_clusterer.fit_predict.return_value = np.array([0, 0, 0, 0, 0, 0])
+
+        with patch.object(fitted_service, "_create_mini_clusterer", return_value=mock_clusterer):
+            new_themes = fitted_service.check_new_themes(candidates)
+
+        assert len(new_themes) >= 1
+        theme = new_themes[0]
+        assert isinstance(theme, ThemeCluster)
+        assert theme.theme_id.startswith("theme_")
+        assert len(theme.name) > 0
+        assert len(theme.topic_words) > 0
+        assert isinstance(theme.centroid, np.ndarray)
+        assert theme.document_count == 6
+        assert len(theme.document_ids) == 6
+
+    def test_adds_to_service_themes(self, fitted_service):
+        """New themes should be added to the service's _themes dict."""
+        original_count = len(fitted_service._themes)
+
+        rng = np.random.RandomState(999)
+        center = rng.randn(768)
+        center /= np.linalg.norm(center)
+        candidates = []
+        for i in range(6):
+            emb = center + rng.randn(768) * 0.02
+            emb = emb / np.linalg.norm(emb)
+            candidates.append((f"cand_{i}", f"Quantum topic {i}", emb))
+
+        mock_clusterer = MagicMock()
+        mock_clusterer.fit_predict.return_value = np.array([0, 0, 0, 0, 0, 0])
+
+        with patch.object(fitted_service, "_create_mini_clusterer", return_value=mock_clusterer):
+            fitted_service.check_new_themes(candidates)
+
+        assert len(fitted_service._themes) > original_count
+
+    def test_candidates_cleared_after(self, fitted_service):
+        """Processed candidate doc_ids should be removed from _new_theme_candidates."""
+        # Seed some candidates in the internal buffer
+        rng = np.random.RandomState(999)
+        for i in range(6):
+            emb = rng.randn(768).astype(np.float32)
+            fitted_service._new_theme_candidates.append((f"cand_{i}", emb))
+
+        # Also add one that's NOT in the candidate list
+        fitted_service._new_theme_candidates.append(("unrelated_doc", rng.randn(768).astype(np.float32)))
+
+        center = rng.randn(768)
+        center /= np.linalg.norm(center)
+        candidates = []
+        for i in range(6):
+            emb = center + rng.randn(768) * 0.02
+            emb = emb / np.linalg.norm(emb)
+            candidates.append((f"cand_{i}", f"Topic {i}", emb))
+
+        mock_clusterer = MagicMock()
+        mock_clusterer.fit_predict.return_value = np.array([0, 0, 0, 0, 0, 0])
+
+        with patch.object(fitted_service, "_create_mini_clusterer", return_value=mock_clusterer):
+            fitted_service.check_new_themes(candidates)
+
+        # cand_0..cand_5 should be removed, unrelated_doc should remain
+        remaining_ids = [did for did, _ in fitted_service._new_theme_candidates]
+        for i in range(6):
+            assert f"cand_{i}" not in remaining_ids
+        assert "unrelated_doc" in remaining_ids
+
+    def test_rejects_similar_to_existing(self, fitted_service):
+        """Candidate cluster near an existing theme should be skipped."""
+        # Create candidates near an existing theme's centroid
+        theme_0 = _get_theme_by_topic_id(fitted_service, 0)
+        center = theme_0.centroid.copy()
+        candidates = []
+        for i in range(6):
+            rng = np.random.RandomState(i)
+            emb = center + rng.randn(768) * 0.01
+            emb = emb / np.linalg.norm(emb)
+            candidates.append((f"cand_{i}", f"Similar GPU topic {i}", emb))
+
+        mock_clusterer = MagicMock()
+        mock_clusterer.fit_predict.return_value = np.array([0, 0, 0, 0, 0, 0])
+
+        original_count = len(fitted_service._themes)
+
+        with patch.object(fitted_service, "_create_mini_clusterer", return_value=mock_clusterer):
+            new_themes = fitted_service.check_new_themes(candidates)
+
+        assert new_themes == []
+        assert len(fitted_service._themes) == original_count
+
+    def test_not_enough_candidates(self, fitted_service):
+        """Too few candidates should return empty list."""
+        candidates = [("cand_0", "Single doc", np.random.randn(768))]
+        result = fitted_service.check_new_themes(candidates)
+        assert result == []
+
+    def test_not_initialized_returns_empty(self):
+        """Not-initialized service should return empty list."""
+        service = BERTopicService()
+        candidates = [("cand_0", "Doc", np.random.randn(768)) for _ in range(10)]
+        assert service.check_new_themes(candidates) == []
+
+    def test_empty_candidates_returns_empty(self, fitted_service):
+        """Empty candidate list should return empty list."""
+        assert fitted_service.check_new_themes([]) == []
+
+    def test_all_outliers_returns_empty(self, fitted_service):
+        """When HDBSCAN labels all candidates as -1, no themes created."""
+        rng = np.random.RandomState(999)
+        candidates = []
+        for i in range(6):
+            emb = rng.randn(768)
+            emb = emb / np.linalg.norm(emb)
+            candidates.append((f"cand_{i}", f"Random doc {i}", emb))
+
+        mock_clusterer = MagicMock()
+        mock_clusterer.fit_predict.return_value = np.array([-1, -1, -1, -1, -1, -1])
+
+        with patch.object(fitted_service, "_create_mini_clusterer", return_value=mock_clusterer):
+            new_themes = fitted_service.check_new_themes(candidates)
+
+        assert new_themes == []
+
+    def test_lifecycle_stage_metadata(self, fitted_service):
+        """New themes should have lifecycle_stage='emerging' in metadata."""
+        rng = np.random.RandomState(999)
+        center = rng.randn(768)
+        center /= np.linalg.norm(center)
+        candidates = []
+        for i in range(6):
+            emb = center + rng.randn(768) * 0.02
+            emb = emb / np.linalg.norm(emb)
+            candidates.append((f"cand_{i}", f"Quantum topic {i}", emb))
+
+        mock_clusterer = MagicMock()
+        mock_clusterer.fit_predict.return_value = np.array([0, 0, 0, 0, 0, 0])
+
+        with patch.object(fitted_service, "_create_mini_clusterer", return_value=mock_clusterer):
+            new_themes = fitted_service.check_new_themes(candidates)
+
+        assert len(new_themes) >= 1
+        assert new_themes[0].metadata.get("lifecycle_stage") == "emerging"

@@ -383,6 +383,312 @@ class BERTopicService:
 
         return themes
 
+    def merge_similar_themes(self) -> list[tuple[str, str]]:
+        """
+        Merge themes whose centroids exceed the similarity threshold.
+
+        Uses greedy highest-similarity-first strategy with a merged_set to
+        prevent chain merges. The larger theme (by document_count) survives;
+        the absorbed theme is removed. Survivor gets weighted centroid,
+        combined topic words, and merged document IDs.
+
+        Returns:
+            List of (merged_from_id, merged_into_id) tuples using the
+            original theme IDs (before re-keying). Empty list if no merges
+            occurred or service is not initialized.
+        """
+        if not self._initialized or len(self._themes) < 2:
+            return []
+
+        theme_ids_ordered = list(self._themes.keys())
+        themes_ordered = [self._themes[tid] for tid in theme_ids_ordered]
+        n_themes = len(themes_ordered)
+
+        # Build centroid matrix and compute pairwise cosine similarity
+        centroid_matrix = np.vstack([t.centroid for t in themes_ordered])
+        norms = np.linalg.norm(centroid_matrix, axis=1, keepdims=True)
+        norms = np.where(norms == 0, 1.0, norms)
+        normalized = centroid_matrix / norms
+        sim_matrix = normalized @ normalized.T
+
+        # Collect upper-triangle pairs above merge threshold
+        merge_threshold = self.config.similarity_threshold_merge
+        pairs: list[tuple[float, int, int]] = []
+        for i in range(n_themes):
+            for j in range(i + 1, n_themes):
+                if sim_matrix[i, j] >= merge_threshold:
+                    pairs.append((float(sim_matrix[i, j]), i, j))
+
+        if not pairs:
+            return []
+
+        # Sort descending by similarity (greedy highest-first)
+        pairs.sort(key=lambda x: x[0], reverse=True)
+
+        merged_set: set[int] = set()
+        merge_results: list[tuple[str, str]] = []
+        now = datetime.now(timezone.utc)
+
+        for sim, idx_a, idx_b in pairs:
+            if idx_a in merged_set or idx_b in merged_set:
+                continue
+
+            theme_a = themes_ordered[idx_a]
+            theme_b = themes_ordered[idx_b]
+
+            # Survivor = larger document_count (ties: lower index)
+            if theme_a.document_count >= theme_b.document_count:
+                survivor, absorbed = theme_a, theme_b
+                absorbed_idx = idx_b
+            else:
+                survivor, absorbed = theme_b, theme_a
+                absorbed_idx = idx_a
+
+            original_survivor_id = survivor.theme_id
+            original_absorbed_id = absorbed.theme_id
+            old_centroid = survivor.centroid.copy()
+
+            # Weighted centroid
+            n1, n2 = survivor.document_count, absorbed.document_count
+            survivor.centroid = (n1 * survivor.centroid + n2 * absorbed.centroid) / (
+                n1 + n2
+            )
+
+            # Merge topic words: combine, dedup by word keeping max score
+            word_scores: dict[str, float] = {}
+            for word, score in survivor.topic_words:
+                word_scores[word] = max(word_scores.get(word, 0.0), score)
+            for word, score in absorbed.topic_words:
+                word_scores[word] = max(word_scores.get(word, 0.0), score)
+            merged_words = sorted(word_scores.items(), key=lambda x: x[1], reverse=True)
+            survivor.topic_words = merged_words[: self.config.top_n_words]
+
+            # Combine document IDs and counts
+            survivor.document_ids.extend(absorbed.document_ids)
+            survivor.document_count = n1 + n2
+            survivor.updated_at = now
+
+            # Track merge in metadata
+            prev_merges = survivor.metadata.get("merged_from", [])
+            prev_merges.append(original_absorbed_id)
+            survivor.metadata["merged_from"] = prev_merges
+
+            # Log merge details
+            centroid_shift = float(np.linalg.norm(survivor.centroid - old_centroid))
+            logger.info(
+                f"Merged theme {original_absorbed_id} into {original_survivor_id}: "
+                f"similarity={sim:.4f}, centroid_shift={centroid_shift:.6f}, "
+                f"combined_docs={survivor.document_count}"
+            )
+
+            merged_set.add(absorbed_idx)
+            merge_results.append((original_absorbed_id, original_survivor_id))
+
+        # Re-key _themes: regenerate IDs on survivors, remove absorbed
+        new_themes: dict[str, ThemeCluster] = {}
+        for idx, theme in enumerate(themes_ordered):
+            if idx in merged_set:
+                continue
+            # Regenerate theme_id and name from (possibly updated) topic words
+            theme.theme_id = ThemeCluster.generate_theme_id(theme.topic_words)
+            theme.name = ThemeCluster.generate_name(theme.topic_words)
+            new_themes[theme.theme_id] = theme
+
+        self._themes = new_themes
+
+        logger.info(
+            f"Merge complete: {len(merge_results)} merges, "
+            f"{len(self._themes)} themes remaining"
+        )
+
+        return merge_results
+
+    def check_new_themes(
+        self,
+        candidates: list[tuple[str, str, np.ndarray]],
+    ) -> list[ThemeCluster]:
+        """
+        Detect emerging themes from outlier candidate documents.
+
+        Runs lightweight HDBSCAN on candidate embeddings (no UMAP — pool is
+        too small for meaningful dimensionality reduction). New clusters are
+        checked against existing themes to avoid duplicates, then added to
+        the service's theme dictionary.
+
+        Args:
+            candidates: List of (doc_id, text, embedding) triples. Text is
+                needed for TF-IDF keyword extraction since _new_theme_candidates
+                only stores (doc_id, embedding).
+
+        Returns:
+            List of newly created ThemeCluster objects. Empty list if not
+            initialized, too few candidates, or no valid clusters found.
+        """
+        if not self._initialized or not candidates:
+            return []
+
+        min_candidates = max(3, self.config.hdbscan_min_cluster_size // 2)
+        if len(candidates) < min_candidates:
+            return []
+
+        doc_ids = [c[0] for c in candidates]
+        texts = [c[1] for c in candidates]
+        embeddings = np.vstack([c[2] for c in candidates])
+
+        try:
+            clusterer = self._create_mini_clusterer(min_size=min_candidates)
+            labels = clusterer.fit_predict(embeddings)
+        except Exception:
+            logger.exception("Mini-clustering failed")
+            return []
+
+        # Build existing centroid matrix for overlap checking
+        existing_centroids = None
+        if self._themes:
+            existing_centroids = np.vstack(
+                [t.centroid for t in self._themes.values()]
+            )
+            cen_norms = np.linalg.norm(existing_centroids, axis=1, keepdims=True)
+            cen_norms = np.where(cen_norms == 0, 1.0, cen_norms)
+            existing_centroids_normalized = existing_centroids / cen_norms
+
+        new_themes: list[ThemeCluster] = []
+        unique_labels = sorted(set(labels))
+
+        for label in unique_labels:
+            if label == -1:
+                continue
+
+            # Gather cluster members
+            indices = [i for i, lbl in enumerate(labels) if lbl == label]
+            cluster_embeddings = embeddings[indices]
+            cluster_texts = [texts[i] for i in indices]
+            cluster_doc_ids = [doc_ids[i] for i in indices]
+
+            # Compute centroid
+            centroid = np.mean(cluster_embeddings, axis=0)
+
+            # Overlap check against existing themes
+            if existing_centroids is not None:
+                cen_norm = np.linalg.norm(centroid)
+                if cen_norm == 0:
+                    continue
+                centroid_normalized = centroid / cen_norm
+                similarities = existing_centroids_normalized @ centroid_normalized
+                max_sim = float(np.max(similarities))
+                if max_sim >= self.config.similarity_threshold_new:
+                    logger.debug(
+                        f"Skipping candidate cluster (label={label}): "
+                        f"max_sim={max_sim:.4f} >= threshold "
+                        f"{self.config.similarity_threshold_new}"
+                    )
+                    continue
+
+            # Extract keywords via TF-IDF
+            topic_words = self._extract_keywords_tfidf(cluster_texts)
+
+            # Create ThemeCluster
+            theme_id = ThemeCluster.generate_theme_id(topic_words)
+            name = ThemeCluster.generate_name(topic_words)
+
+            theme = ThemeCluster(
+                theme_id=theme_id,
+                name=name,
+                topic_words=topic_words,
+                centroid=centroid,
+                document_count=len(indices),
+                document_ids=cluster_doc_ids,
+                metadata={"lifecycle_stage": "emerging"},
+            )
+
+            self._themes[theme_id] = theme
+            new_themes.append(theme)
+
+            top_words = [w for w, _ in topic_words[:3]]
+            logger.info(
+                f"New theme detected: {theme_id} ({name}), "
+                f"{len(indices)} docs, keywords={top_words}"
+            )
+
+        # Clear ALL passed-in candidate doc_ids from _new_theme_candidates
+        passed_doc_ids = set(doc_ids)
+        self._new_theme_candidates = [
+            (did, emb)
+            for did, emb in self._new_theme_candidates
+            if did not in passed_doc_ids
+        ]
+
+        logger.info(
+            f"New theme check complete: {len(new_themes)} themes created "
+            f"from {len(candidates)} candidates"
+        )
+
+        return new_themes
+
+    def _extract_keywords_tfidf(
+        self, texts: list[str]
+    ) -> list[tuple[str, float]]:
+        """
+        Extract top keywords from texts using TF-IDF scoring.
+
+        Lightweight alternative to full BERTopic for small candidate clusters.
+        Uses sklearn CountVectorizer + TfidfTransformer to score n-grams,
+        then returns the top-ranked keywords.
+
+        Args:
+            texts: List of document text strings.
+
+        Returns:
+            List of (word, score) tuples sorted by TF-IDF score descending.
+            Returns [("unknown", 0.0)] on extraction failure.
+        """
+        try:
+            from sklearn.feature_extraction.text import (
+                CountVectorizer,
+                TfidfTransformer,
+            )
+
+            vectorizer = CountVectorizer(
+                stop_words="english",
+                ngram_range=(1, 2),
+                max_features=1000,
+            )
+            counts = vectorizer.fit_transform(texts)
+            tfidf = TfidfTransformer().fit_transform(counts)
+
+            # Sum TF-IDF scores across all documents per term
+            scores = np.asarray(tfidf.sum(axis=0)).flatten()
+            feature_names = vectorizer.get_feature_names_out()
+
+            # Sort by score descending, take top_n_words
+            top_indices = scores.argsort()[::-1][: self.config.top_n_words]
+            return [(feature_names[i], float(scores[i])) for i in top_indices]
+
+        except Exception:
+            logger.exception("TF-IDF keyword extraction failed")
+            return [("unknown", 0.0)]
+
+    def _create_mini_clusterer(self, min_size: int) -> Any:
+        """
+        Create a lightweight HDBSCAN clusterer for small candidate pools.
+
+        Follows the deferred-import pattern of _create_model() for testability
+        and to avoid loading hdbscan at module level.
+
+        Args:
+            min_size: Minimum cluster size for HDBSCAN.
+
+        Returns:
+            Configured HDBSCAN instance.
+        """
+        from hdbscan import HDBSCAN
+
+        return HDBSCAN(
+            min_cluster_size=min_size,
+            min_samples=max(1, min_size // 2),
+            metric="euclidean",
+        )
+
     def get_stats(self) -> dict[str, Any]:
         """
         Get statistics about the current clustering state.

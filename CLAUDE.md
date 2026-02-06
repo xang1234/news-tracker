@@ -114,6 +114,16 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
   - Three-tier: strong (>= assign threshold, EMA centroid update), weak (>= new threshold, no update), new candidate (buffered)
   - `_new_theme_candidates`: List of `(doc_id, embedding)` pairs for documents below similarity_threshold_new
   - `updated_at` field on ThemeCluster tracks when centroid was last updated via EMA
+- `BERTopicService.merge_similar_themes()`: Greedy pairwise merge of themes whose centroids exceed `similarity_threshold_merge` (0.85)
+  - Survivor = larger `document_count`, gets weighted centroid, combined topic words, merged doc IDs
+  - Re-keys `_themes` dict with regenerated theme IDs after merge
+  - Returns `[(merged_from_id, merged_into_id)]` pairs
+- `BERTopicService.check_new_themes()`: Detects emerging themes from outlier candidate documents
+  - Runs lightweight HDBSCAN on candidate embeddings (no UMAP — pool too small)
+  - Overlap check: skips clusters whose centroid is too similar to existing themes
+  - TF-IDF keyword extraction via `_extract_keywords_tfidf()` for topic representation
+  - New themes get `metadata={"lifecycle_stage": "emerging"}`
+  - Clears processed doc_ids from `_new_theme_candidates` buffer
 - Theme IDs: `theme_{sha256(sorted_topic_words)[:12]}` for cross-run stability
 - Outlier documents (BERTopic topic -1) excluded from theme assignments
 - Deferred imports for heavy dependencies (bertopic, hdbscan, umap-learn)
@@ -266,6 +276,9 @@ async def fetch(self):
 - **Batch Cosine Similarity**: `transform()` uses normalized matrix multiply `embeddings @ centroids.T` for O(n_docs × n_themes) similarity without Python loops
 - **Three-Tier Assignment**: Strong/weak/new-candidate routing based on cosine similarity thresholds controls centroid drift and new theme detection
 - **EMA Centroid Update**: `centroid = (1 - lr) * centroid + lr * embedding` adapts themes to evolving content with O(1) per-document cost
+- **Greedy Pairwise Merge**: `merge_similar_themes()` processes pairs in descending similarity order with `merged_set` to prevent chain merges in a single pass
+- **Lightweight TF-IDF Keywords**: `_extract_keywords_tfidf()` uses sklearn CountVectorizer + TfidfTransformer for small candidate clusters, avoiding full BERTopic overhead
+- **Mockable Sub-Clustering**: `_create_mini_clusterer()` follows `_create_model()` pattern — deferred HDBSCAN import wrapped in a method for easy test mocking
 
 ### Testing
 
@@ -348,4 +361,5 @@ for kw in keywords:
 # Clustering testing
 uv run pytest tests/test_clustering/ -v   # Run all clustering tests (schema + service + config)
 uv run pytest tests/test_clustering/test_service.py -v -k "Transform"  # Run only transform tests
+uv run pytest tests/test_clustering/test_service.py -v -k "Merge or CheckNew"  # Run merge + new theme tests
 ```
