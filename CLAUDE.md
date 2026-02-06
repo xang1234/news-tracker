@@ -419,6 +419,8 @@ uv run pytest tests/test_clustering/test_service.py -v -k "Transform"  # Run onl
 uv run pytest tests/test_clustering/test_service.py -v -k "Merge or CheckNew"  # Run merge + new theme tests
 uv run pytest tests/test_clustering/test_worker.py -v   # Run clustering worker tests
 uv run pytest tests/test_clustering/test_daily_job.py -v  # Run daily batch clustering tests
+uv run pytest tests/test_clustering/test_bertopic_service.py -v -m integration   # Integration tests (real BERTopic)
+uv run pytest tests/test_clustering/test_bertopic_service.py -v -m performance   # Performance benchmarks (slow)
 
 # Themes testing
 uv run pytest tests/test_themes/ -v              # Run all theme tests (schema + repository + search + metrics)

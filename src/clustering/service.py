@@ -285,7 +285,6 @@ class BERTopicService:
             Configured BERTopic instance ready for fit_transform.
         """
         from bertopic import BERTopic
-        from bertopic.representation import KeyBERTInspired
         from hdbscan import HDBSCAN
         from sklearn.feature_extraction.text import CountVectorizer
         from umap import UMAP
@@ -310,13 +309,13 @@ class BERTopicService:
             ngram_range=(1, 2),
         )
 
-        representation_model = KeyBERTInspired()
-
+        # Use default c-TF-IDF representation (no embedding model needed).
+        # KeyBERTInspired requires an embedding model for word embeddings,
+        # which is incompatible with pre-computed document embeddings.
         model = BERTopic(
             umap_model=umap_model,
             hdbscan_model=hdbscan_model,
             vectorizer_model=vectorizer,
-            representation_model=representation_model,
             top_n_words=self.config.top_n_words,
             nr_topics=self.config.nr_topics,
             embedding_model=None,  # We provide pre-computed embeddings
