@@ -124,6 +124,10 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 - `TimeNormalizer`: Stateless normalizer for temporal references (Q1-Q4, H1-H2, relative refs, month names)
 - Opt-in activation via `EVENTS_ENABLED=true`, follows NER/Keywords service pattern
 - DB: `events` table with B-tree on event_type/doc_id/created_at, GIN on tickers; `events_extracted` JSONB column on documents
+- `EventThemeLinker`: Stateless linker (static methods) for associating events with themes via ticker overlap
+  - `link_events_to_theme(events, theme)`: Filters events by ticker set intersection with theme's `top_tickers`, adds `theme_id`
+  - `deduplicate_events(events)`: Composite key `(actor, action, object, time_ref)`, keeps earliest, tracks `source_doc_ids`, +0.05 confidence per source (capped at 1.0)
+- `ThemeWithEvents`: Summary dataclass with `event_counts`, `investment_signal()` → `supply_increasing | supply_decreasing | product_momentum | product_risk | None`
 
 **Clustering Layer** (`src/clustering/`):
 - `ClusteringConfig`: Pydantic settings for UMAP, HDBSCAN, c-TF-IDF, assignment thresholds, Redis queue
@@ -208,7 +212,7 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 
 **Storage Layer** (`src/storage/`):
 - `Database`: asyncpg connection pool with transaction context managers
-- `DocumentRepository`: CRUD operations, batch upserts, full-text search, similarity search, `update_themes()` array merge, `get_with_embeddings_since()` lightweight projection for batch clustering, `get_documents_by_theme()` with dynamic SQL filtering
+- `DocumentRepository`: CRUD operations, batch upserts, full-text search, similarity search, `update_themes()` array merge, `get_with_embeddings_since()` lightweight projection for batch clustering, `get_documents_by_theme()` with dynamic SQL filtering, `get_events_by_tickers()` GIN-indexed array overlap query on events table
 
 **Embedding Layer** (`src/embedding/`):
 - `EmbeddingConfig`: Pydantic settings for model, batching, caching, queue configuration
@@ -237,7 +241,7 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 **API Layer** (`src/api/`):
 - `app.py`: FastAPI application factory with structlog integration
 - `auth.py`: X-API-KEY header authentication with dev mode bypass
-- `models.py`: Pydantic request/response models (EmbedRequest, EmbedResponse, SearchRequest, SearchResponse, SentimentRequest, SentimentResponse, ThemeItem, ThemeListResponse, ThemeDetailResponse, ThemeDocumentItem, ThemeDocumentsResponse, ThemeSentimentResponse, ThemeMetricsItem, ThemeMetricsResponse)
+- `models.py`: Pydantic request/response models (EmbedRequest, EmbedResponse, SearchRequest, SearchResponse, SentimentRequest, SentimentResponse, ThemeItem, ThemeListResponse, ThemeDetailResponse, ThemeDocumentItem, ThemeDocumentsResponse, ThemeSentimentResponse, ThemeMetricsItem, ThemeMetricsResponse, ThemeEventItem, ThemeEventsResponse)
 - `dependencies.py`: Dependency injection for EmbeddingService, SentimentService, Redis, VectorStoreManager, ThemeRepository, DocumentRepository, and SentimentAggregator
 - `routes/embed.py`: POST /embed endpoint with auto model selection
 - `routes/sentiment.py`: POST /sentiment endpoint with optional entity-level analysis
@@ -249,6 +253,8 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
   - GET /themes/{theme_id}/documents — documents in a theme with platform/authority filters
   - GET /themes/{theme_id}/sentiment — aggregated sentiment with exponential decay weighting
   - GET /themes/{theme_id}/metrics — daily metrics time series with date range
+- `routes/events.py`: Event endpoints for theme-linked event retrieval:
+  - GET /themes/{theme_id}/events — events linked via ticker overlap with dedup, event_type/days/limit filters, investment_signal
 
 **Services** (`src/services/`):
 - `IngestionService`: Runs adapters concurrently, publishes to queue
@@ -396,6 +402,10 @@ async def fetch(self):
 - **Additive Confidence Scoring**: Base 0.7 per regex match, +0.1 for actor/ticker/quantity signals, capped at 1.0
 - **Chain-of-Responsibility TimeNormalizer**: Each `_try_*` method returns `None` on non-match, falling through to the next — easy to extend with new time patterns
 - **Opt-in Event Extraction**: Events disabled by default (`events_enabled=False`) to avoid overhead when not needed, follows NER/Keywords pattern
+- **Query-Time Ticker Linkage**: `get_events_by_tickers()` uses `&&` (array overlap) operator + GIN index for on-the-fly event-theme association — no FK column or schema migration needed
+- **Over-Fetch Then Dedup**: Events endpoint fetches `limit * 3` rows, deduplicates in Python, truncates to `limit` — accounts for cross-document event redundancy
+- **Composite-Key Dedup**: `(actor, action, object, time_ref)` lowercased composite key for event deduplication; +0.05 confidence per confirming source, capped at 1.0
+- **Directional Investment Signal**: `ThemeWithEvents.investment_signal()` compares supply-side vs product-side event counts to derive `supply_increasing | supply_decreasing | product_momentum | product_risk`
 
 ### Testing
 
@@ -481,6 +491,7 @@ uv run pytest tests/test_event_extraction/test_patterns.py -v              # Run
 uv run pytest tests/test_event_extraction/test_normalizer.py -v            # Run time normalizer tests
 uv run pytest tests/test_event_extraction/test_schemas.py -v               # Run schema tests
 uv run pytest tests/test_event_extraction/test_preprocessor_integration.py -v  # Run integration tests
+uv run pytest tests/test_event_extraction/test_theme_integration.py -v         # Run event-theme integration tests
 
 # Clustering testing
 uv run pytest tests/test_clustering/ -v   # Run all clustering tests (schema + service + config + worker + daily job)
@@ -521,4 +532,7 @@ uv run pytest tests/test_api/test_themes.py -v -k "GetTheme and not Documents"  
 uv run pytest tests/test_api/test_themes.py -v -k "Documents"     # Run documents endpoint tests
 uv run pytest tests/test_api/test_themes.py -v -k "Sentiment"     # Run sentiment endpoint tests
 uv run pytest tests/test_api/test_themes.py -v -k "Metrics"       # Run metrics endpoint tests
+uv run pytest tests/test_api/test_events.py -v                    # Run event endpoint tests
+uv run pytest tests/test_api/test_events.py -v -k "deduplication"        # Run dedup tests
+uv run pytest tests/test_api/test_events.py -v -k "investment_signal"    # Run signal tests
 ```

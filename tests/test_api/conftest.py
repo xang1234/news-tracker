@@ -77,6 +77,7 @@ def mock_doc_repo():
     repo = AsyncMock()
     repo.get_documents_by_theme = AsyncMock(return_value=[])
     repo.get_sentiments_for_theme = AsyncMock(return_value=[])
+    repo.get_events_by_tickers = AsyncMock(return_value=[])
     return repo
 
 

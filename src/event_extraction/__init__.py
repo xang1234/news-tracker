@@ -17,11 +17,14 @@ from src.event_extraction.config import EventExtractionConfig
 from src.event_extraction.normalizer import TimeNormalizer
 from src.event_extraction.patterns import PatternExtractor
 from src.event_extraction.schemas import EventRecord, EventType
+from src.event_extraction.theme_integration import EventThemeLinker, ThemeWithEvents
 
 __all__ = [
     "EventExtractionConfig",
     "EventRecord",
     "EventType",
+    "EventThemeLinker",
     "PatternExtractor",
+    "ThemeWithEvents",
     "TimeNormalizer",
 ]

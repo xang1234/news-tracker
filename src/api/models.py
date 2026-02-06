@@ -387,3 +387,41 @@ class ThemeMetricsResponse(BaseModel):
     total: int = Field(..., description="Number of metric data points")
     theme_id: str = Field(..., description="Theme identifier")
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+# Event models
+
+
+class ThemeEventItem(BaseModel):
+    """Single event linked to a theme."""
+
+    event_id: str = Field(..., description="Unique event identifier")
+    doc_id: str = Field(..., description="Source document identifier")
+    event_type: str = Field(..., description="Event category (e.g., capacity_expansion)")
+    actor: str | None = Field(default=None, description="Entity performing the action")
+    action: str = Field(..., description="Action phrase from the text")
+    object: str | None = Field(default=None, description="Target of the action")
+    time_ref: str | None = Field(default=None, description="Temporal reference (e.g., Q3 2026)")
+    quantity: str | None = Field(default=None, description="Numeric quantity mentioned")
+    tickers: list[str] = Field(default_factory=list, description="Ticker symbols linked to this event")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Extraction confidence score")
+    source_doc_ids: list[str] = Field(
+        default_factory=list, description="Document IDs confirming this event (after dedup)"
+    )
+    created_at: str | None = Field(default=None, description="Event extraction timestamp (ISO format)")
+
+
+class ThemeEventsResponse(BaseModel):
+    """Response model for events linked to a theme."""
+
+    events: list[ThemeEventItem] = Field(..., description="Events linked to this theme")
+    total: int = Field(..., description="Number of events returned")
+    theme_id: str = Field(..., description="Theme identifier")
+    event_counts: dict[str, int] = Field(
+        default_factory=dict, description="Event counts by type"
+    )
+    investment_signal: str | None = Field(
+        default=None,
+        description="Derived investment signal: supply_increasing, supply_decreasing, product_momentum, product_risk, or null",
+    )
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")

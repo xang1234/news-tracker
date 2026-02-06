@@ -1291,6 +1291,82 @@ class DocumentRepository:
 
         return results
 
+    async def get_events_by_tickers(
+        self,
+        tickers: list[str],
+        since: datetime,
+        until: datetime | None = None,
+        event_type: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """
+        Get events whose tickers overlap with the given list.
+
+        Uses the GIN index on events.tickers with the && (overlap) operator
+        for efficient set intersection queries.
+
+        Args:
+            tickers: Ticker symbols to match against event tickers.
+            since: Start of time window (inclusive).
+            until: End of time window (optional, defaults to now).
+            event_type: Optional event type filter.
+            limit: Maximum events to return.
+
+        Returns:
+            List of event dicts with all event table columns.
+        """
+        if not tickers:
+            return []
+
+        until = until or datetime.now()
+
+        conditions = ["tickers && $1::text[]", "created_at >= $2"]
+        params: list[Any] = [tickers, since]
+        param_idx = 3
+
+        conditions.append(f"created_at <= ${param_idx}")
+        params.append(until)
+        param_idx += 1
+
+        if event_type:
+            conditions.append(f"event_type = ${param_idx}")
+            params.append(event_type)
+            param_idx += 1
+
+        where_clause = " AND ".join(conditions)
+        sql = f"""
+            SELECT event_id, doc_id, event_type, actor, action, object,
+                   time_ref, quantity, tickers, confidence, span_start,
+                   span_end, extractor_version, created_at
+            FROM events
+            WHERE {where_clause}
+            ORDER BY created_at DESC
+            LIMIT ${param_idx}
+        """
+        params.append(limit)
+
+        rows = await self._db.fetch(sql, *params)
+
+        return [
+            {
+                "event_id": row["event_id"],
+                "doc_id": row["doc_id"],
+                "event_type": row["event_type"],
+                "actor": row["actor"],
+                "action": row["action"],
+                "object": row["object"],
+                "time_ref": row["time_ref"],
+                "quantity": row["quantity"],
+                "tickers": list(row.get("tickers", [])),
+                "confidence": row["confidence"],
+                "span_start": row["span_start"],
+                "span_end": row["span_end"],
+                "extractor_version": row["extractor_version"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
+
     async def get_documents_by_theme(
         self,
         theme_id: str,
