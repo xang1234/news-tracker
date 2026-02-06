@@ -383,12 +383,13 @@ class ThemeRepository:
         """
         sql = """
             INSERT INTO theme_metrics (
-                theme_id, date, document_count,
+                theme_id, date, document_count, weighted_volume,
                 sentiment_score, volume_zscore, velocity,
                 acceleration, avg_authority, bullish_ratio
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             ON CONFLICT (theme_id, date) DO UPDATE SET
                 document_count  = EXCLUDED.document_count,
+                weighted_volume = EXCLUDED.weighted_volume,
                 sentiment_score = EXCLUDED.sentiment_score,
                 volume_zscore   = EXCLUDED.volume_zscore,
                 velocity        = EXCLUDED.velocity,
@@ -401,6 +402,7 @@ class ThemeRepository:
             metrics.theme_id,
             metrics.date,
             metrics.document_count,
+            metrics.weighted_volume,
             metrics.sentiment_score,
             metrics.volume_zscore,
             metrics.velocity,
@@ -517,6 +519,7 @@ def _row_to_metrics(row: Any) -> ThemeMetrics:
         theme_id=row["theme_id"],
         date=row["date"],
         document_count=row.get("document_count", 0),
+        weighted_volume=row.get("weighted_volume"),
         sentiment_score=row.get("sentiment_score"),
         volume_zscore=row.get("volume_zscore"),
         velocity=row.get("velocity"),

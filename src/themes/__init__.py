@@ -14,6 +14,7 @@ Components:
 """
 
 from src.themes.lifecycle import LifecycleClassifier
+from src.themes.metrics import VolumeMetricsConfig, VolumeMetricsService
 from src.themes.repository import ThemeRepository
 from src.themes.schemas import VALID_LIFECYCLE_STAGES, Theme, ThemeMetrics
 from src.themes.transitions import ALERTABLE_TRANSITIONS, LifecycleTransition
@@ -26,4 +27,6 @@ __all__ = [
     "ThemeMetrics",
     "ThemeRepository",
     "VALID_LIFECYCLE_STAGES",
+    "VolumeMetricsConfig",
+    "VolumeMetricsService",
 ]

@@ -730,12 +730,13 @@ class TestAddMetrics:
         assert args[1] == "theme_a1b2c3d4e5f6"  # theme_id
         assert args[2] == date(2025, 6, 15)       # date
         assert args[3] == 42                       # document_count
-        assert args[4] == pytest.approx(0.35)      # sentiment_score
-        assert args[5] == pytest.approx(1.8)       # volume_zscore
-        assert args[6] == pytest.approx(0.12)      # velocity
-        assert args[7] == pytest.approx(0.03)      # acceleration
-        assert args[8] == pytest.approx(0.65)      # avg_authority
-        assert args[9] == pytest.approx(0.72)      # bullish_ratio
+        assert args[4] is None                     # weighted_volume
+        assert args[5] == pytest.approx(0.35)      # sentiment_score
+        assert args[6] == pytest.approx(1.8)       # volume_zscore
+        assert args[7] == pytest.approx(0.12)      # velocity
+        assert args[8] == pytest.approx(0.03)      # acceleration
+        assert args[9] == pytest.approx(0.65)      # avg_authority
+        assert args[10] == pytest.approx(0.72)     # bullish_ratio
 
     @pytest.mark.asyncio
     async def test_nullable_fields(

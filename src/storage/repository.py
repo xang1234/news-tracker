@@ -177,6 +177,7 @@ class DocumentRepository:
             theme_id        TEXT NOT NULL REFERENCES themes(theme_id) ON DELETE CASCADE,
             date            DATE NOT NULL,
             document_count  INTEGER NOT NULL DEFAULT 0,
+            weighted_volume REAL,
             sentiment_score REAL,
             volume_zscore   REAL,
             velocity        REAL,
@@ -220,6 +221,9 @@ class DocumentRepository:
         -- GIN index for keyword queries
         CREATE INDEX IF NOT EXISTS idx_documents_keywords
             ON documents USING GIN(keywords_extracted);
+
+        -- Add weighted_volume column to theme_metrics if it doesn't exist
+        ALTER TABLE theme_metrics ADD COLUMN IF NOT EXISTS weighted_volume REAL;
         """
         await self._db.execute(migrations_sql)
 

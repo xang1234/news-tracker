@@ -185,6 +185,17 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
   - `is_alertable` / `alert_message`: Properties checking against `ALERTABLE_TRANSITIONS` lookup table
   - Key transitions: emerging→accelerating ("gaining momentum"), accelerating→mature ("peaking"), *→fading ("losing momentum")
 - Integrated into `run_daily_clustering()` as Phase 11 after metrics computation
+- `VolumeMetricsConfig`: Pydantic settings (prefix `VOLUME_`) for decay, windows, thresholds, EMA spans
+- `VolumeMetricsService`: Stateless volume metrics computation (follows LifecycleClassifier pattern)
+  - `compute_weighted_volume(docs, reference_time)`: platform weight * recency decay * authority
+  - `compute_volume_zscore(current, history)`: (current - mean) / std with min_history_days guard
+  - `compute_velocity(zscores)`: short EMA - long EMA for momentum detection
+  - `compute_acceleration(velocities)`: delta of last two velocity values
+  - `detect_volume_anomaly(zscore)` → `"surge" | "collapse" | None` via threshold comparison
+  - `compute_for_theme(theme_id, target_date)`: async orchestrator fetching docs + history, returns ThemeMetrics
+  - Duck-typed doc input: accepts any object with `.timestamp`, `.platform`, `.authority_score`
+- `DEFAULT_PLATFORM_WEIGHTS`: `{"twitter": 1.0, "reddit": 5.0, "news": 20.0, "substack": 100.0}`
+- `volume_metrics_enabled` (false) in settings.py for opt-in activation
 
 **Storage Layer** (`src/storage/`):
 - `Database`: asyncpg connection pool with transaction context managers
@@ -258,6 +269,8 @@ Settings in `src/config/settings.py` use Pydantic BaseSettings with env var over
 - Keywords settings can be overridden via `KEYWORDS_*` environment variables (e.g., `KEYWORDS_TOP_N=15`, `KEYWORDS_MIN_SCORE=0.01`)
 - `clustering_enabled` (false), `clustering_stream_name` (clustering_queue), `clustering_consumer_group` (clustering_workers) for BERTopic clustering
 - Clustering settings can be overridden via `CLUSTERING_*` environment variables (e.g., `CLUSTERING_HDBSCAN_MIN_CLUSTER_SIZE=20`, `CLUSTERING_UMAP_N_COMPONENTS=15`)
+- `volume_metrics_enabled` (false) for volume metrics computation
+- Volume metrics settings can be overridden via `VOLUME_*` environment variables (e.g., `VOLUME_DECAY_FACTOR=0.5`, `VOLUME_SURGE_THRESHOLD=4.0`)
 
 Semiconductor tickers and company mappings are in `src/config/tickers.py`.
 
@@ -357,6 +370,10 @@ async def fetch(self):
 - **BERTopicService Reuse**: Daily job populates `_themes` dict from DB `Theme` records and sets `_initialized=True` to reuse `merge_similar_themes()` and `check_new_themes()` without reimplementing
 - **Phase-Resilient Error Handling**: Each phase (fetch, assign, centroid update, metrics, lifecycle, merge) has independent try/except — failures are logged to `result.errors` without aborting the job
 - **Stateless Classifier**: `LifecycleClassifier` has no instance state — takes Theme + metrics, returns stage + confidence. Trivially testable without mocking DB
+- **Stateless Volume Service**: `VolumeMetricsService` pure methods accept duck-typed docs (any object with `.timestamp`, `.platform`, `.authority_score`) — no DB mocking needed for unit tests
+- **EMA-Based Velocity**: Short EMA minus long EMA on z-scores detects momentum changes faster than SMA, with configurable spans for sensitivity tuning
+- **Platform-Weighted Volume**: `DEFAULT_PLATFORM_WEIGHTS` scales document contributions by platform signal quality (Substack 100× vs Twitter 1×), combined with exponential recency decay and authority score
+- **Persisted Weighted Volume**: Raw `weighted_volume` stored in `theme_metrics` so z-score history can reference 30-day rolling volumes without expensive doc re-fetches
 - **Normalized Trend Analysis**: `_compute_trend()` divides raw least-squares slope by `abs(mean)` so thresholds work across themes with different volume scales
 - **Alertable Transition Lookup**: `ALERTABLE_TRANSITIONS` dict maps `(from, to)` tuples to messages — O(1) lookup, easy to extend without modifying class logic
 - **Opt-In Centroid Serialization**: Theme API excludes 768-float centroid (~6KB) by default; `?include_centroid=true` opts in. `_theme_to_item()` centralizes Theme→ThemeItem conversion
@@ -458,6 +475,12 @@ uv run pytest tests/test_themes/test_repository.py -v -k "Metrics"  # Run metric
 uv run pytest tests/test_themes/test_lifecycle.py -v              # Run lifecycle classifier tests
 uv run pytest tests/test_themes/test_lifecycle.py -v -k "Classify"  # Run only classification tests
 uv run pytest tests/test_themes/test_lifecycle.py -v -k "Transition"  # Run transition detection tests
+uv run pytest tests/test_themes/test_metrics.py -v               # Run volume metrics tests
+uv run pytest tests/test_themes/test_metrics.py -v -k "WeightedVolume"   # Run weighted volume tests
+uv run pytest tests/test_themes/test_metrics.py -v -k "Zscore"          # Run z-score tests
+uv run pytest tests/test_themes/test_metrics.py -v -k "Velocity or Acceleration"  # Run velocity/acceleration tests
+uv run pytest tests/test_themes/test_metrics.py -v -k "Anomaly"         # Run anomaly detection tests
+uv run pytest tests/test_themes/test_metrics.py -v -k "ComputeForTheme" # Run orchestrator tests
 
 # CLI testing
 uv run pytest tests/test_cli/ -v                         # Run all CLI tests

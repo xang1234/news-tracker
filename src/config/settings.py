@@ -128,6 +128,9 @@ class Settings(BaseSettings):
     keywords_enabled: bool = Field(default=False, description="Enable keyword extraction in preprocessing")
     keywords_top_n: int = Field(default=10, ge=1, le=50, description="Max keywords per document")
 
+    # Volume Metrics
+    volume_metrics_enabled: bool = Field(default=False, description="Enable volume metrics computation for themes")
+
     # Clustering (BERTopic)
     clustering_enabled: bool = Field(default=False, description="Enable BERTopic clustering in processing")
     clustering_stream_name: str = Field(default="clustering_queue", description="Redis stream for clustering jobs")

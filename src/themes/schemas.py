@@ -147,6 +147,7 @@ class ThemeMetrics:
         theme_id: Parent theme identifier.
         date: Calendar date for this metrics snapshot.
         document_count: Number of documents assigned on this date.
+        weighted_volume: Platform-weighted volume with recency decay.
         sentiment_score: Aggregate sentiment (-1.0 to 1.0).
         volume_zscore: Standard deviations from mean volume.
         velocity: Rate of volume change.
@@ -158,6 +159,7 @@ class ThemeMetrics:
     theme_id: str
     date: date
     document_count: int = 0
+    weighted_volume: float | None = None
     sentiment_score: float | None = None
     volume_zscore: float | None = None
     velocity: float | None = None
