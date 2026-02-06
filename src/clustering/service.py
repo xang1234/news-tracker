@@ -14,6 +14,7 @@ Architecture:
 
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 import numpy as np
@@ -56,6 +57,7 @@ class BERTopicService:
         self._model: Any = None
         self._themes: dict[str, ThemeCluster] = {}
         self._initialized = False
+        self._new_theme_candidates: list[tuple[str, np.ndarray]] = []
 
     @property
     def is_initialized(self) -> bool:
@@ -71,6 +73,11 @@ class BERTopicService:
     def model(self) -> Any:
         """Access the underlying BERTopic model (None before fit)."""
         return self._model
+
+    @property
+    def new_theme_candidates(self) -> list[tuple[str, np.ndarray]]:
+        """Return a copy of new theme candidate (doc_id, embedding) pairs."""
+        return list(self._new_theme_candidates)
 
     def fit(
         self,
@@ -145,6 +152,127 @@ class BERTopicService:
         except Exception:
             logger.exception("Clustering failed")
             return {}
+
+    def transform(
+        self,
+        documents: list[str],
+        embeddings: np.ndarray,
+        document_ids: list[str],
+    ) -> list[tuple[str, list[str], float]]:
+        """
+        Assign new documents to existing themes via cosine similarity.
+
+        Uses three-tier assignment against theme centroids:
+        - Strong (>= similarity_threshold_assign): assign + EMA centroid update
+        - Weak (>= similarity_threshold_new, < assign): assign, no centroid update
+        - New candidate (< similarity_threshold_new): buffered for future theme creation
+
+        Args:
+            documents: List of document text strings (unused in similarity, kept for API consistency).
+            embeddings: Pre-computed embedding matrix of shape (n_docs, embedding_dim).
+            document_ids: List of document IDs corresponding to each document.
+
+        Returns:
+            List of (doc_id, [theme_ids], max_similarity) tuples.
+            Empty list if not initialized, no themes, or on internal error.
+
+        Raises:
+            ValueError: If input lengths don't match.
+        """
+        n_docs = len(documents)
+        if n_docs != len(document_ids):
+            raise ValueError(
+                f"documents ({n_docs}) and document_ids ({len(document_ids)}) "
+                f"must have the same length"
+            )
+        if n_docs != embeddings.shape[0]:
+            raise ValueError(
+                f"documents ({n_docs}) and embeddings ({embeddings.shape[0]}) "
+                f"must have the same length"
+            )
+
+        if n_docs == 0:
+            return []
+
+        if not self._initialized or not self._themes:
+            return []
+
+        try:
+            return self._assign_documents(embeddings, document_ids)
+        except Exception:
+            logger.exception("Transform failed")
+            return []
+
+    def _assign_documents(
+        self,
+        embeddings: np.ndarray,
+        document_ids: list[str],
+    ) -> list[tuple[str, list[str], float]]:
+        """
+        Core assignment logic: batch cosine similarity + three-tier routing.
+
+        Args:
+            embeddings: Document embedding matrix (n_docs, dim).
+            document_ids: Document ID list.
+
+        Returns:
+            List of (doc_id, [theme_ids], max_similarity) tuples.
+        """
+        theme_ids_ordered = list(self._themes.keys())
+        themes_ordered = [self._themes[tid] for tid in theme_ids_ordered]
+
+        # Build centroid matrix (n_themes, dim)
+        centroid_matrix = np.vstack([t.centroid for t in themes_ordered])
+
+        # Batch cosine similarity via normalized dot product
+        # Normalize embeddings
+        emb_norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
+        emb_norms = np.where(emb_norms == 0, 1.0, emb_norms)
+        emb_normalized = embeddings / emb_norms
+
+        # Normalize centroids
+        cen_norms = np.linalg.norm(centroid_matrix, axis=1, keepdims=True)
+        cen_norms = np.where(cen_norms == 0, 1.0, cen_norms)
+        cen_normalized = centroid_matrix / cen_norms
+
+        # Similarity matrix: (n_docs, n_themes)
+        sim_matrix = emb_normalized @ cen_normalized.T
+
+        # Per-document assignment
+        results: list[tuple[str, list[str], float]] = []
+        now = datetime.now(timezone.utc)
+        lr = self.config.centroid_learning_rate
+        assign_threshold = self.config.similarity_threshold_assign
+        new_threshold = self.config.similarity_threshold_new
+
+        for i, doc_id in enumerate(document_ids):
+            max_idx = int(np.argmax(sim_matrix[i]))
+            max_sim = float(sim_matrix[i, max_idx])
+
+            if max_sim >= assign_threshold:
+                # Strong assignment: assign + EMA centroid update
+                theme = themes_ordered[max_idx]
+                theme.document_ids.append(doc_id)
+                theme.document_count += 1
+                theme.centroid = (1 - lr) * theme.centroid + lr * embeddings[i]
+                theme.updated_at = now
+                results.append((doc_id, [theme_ids_ordered[max_idx]], max_sim))
+
+            elif max_sim >= new_threshold:
+                # Weak assignment: assign, no centroid update
+                theme = themes_ordered[max_idx]
+                theme.document_ids.append(doc_id)
+                theme.document_count += 1
+                results.append((doc_id, [theme_ids_ordered[max_idx]], max_sim))
+
+            else:
+                # New theme candidate: buffer for future theme creation
+                self._new_theme_candidates.append(
+                    (doc_id, embeddings[i].copy())
+                )
+                results.append((doc_id, [], max_sim))
+
+        return results
 
     def _create_model(self) -> Any:
         """
@@ -267,6 +395,7 @@ class BERTopicService:
                 "initialized": False,
                 "n_themes": 0,
                 "n_documents": 0,
+                "n_new_theme_candidates": len(self._new_theme_candidates),
             }
 
         total_docs = sum(t.document_count for t in self._themes.values())
@@ -274,6 +403,7 @@ class BERTopicService:
             "initialized": True,
             "n_themes": len(self._themes),
             "n_documents": total_docs,
+            "n_new_theme_candidates": len(self._new_theme_candidates),
             "themes": [
                 {
                     "theme_id": t.theme_id,

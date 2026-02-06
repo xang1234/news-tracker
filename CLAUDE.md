@@ -110,6 +110,10 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 - `ClusteringConfig`: Pydantic settings for UMAP, HDBSCAN, c-TF-IDF, assignment thresholds, Redis queue
 - `ThemeCluster`: Dataclass for discovered themes with deterministic IDs, centroid embeddings, topic words, serialization
 - `BERTopicService`: Sync fit() runs UMAP → HDBSCAN → c-TF-IDF on pre-computed FinBERT embeddings to discover themes
+- `BERTopicService.transform()`: Incremental assignment of new documents to existing themes via cosine similarity against centroids
+  - Three-tier: strong (>= assign threshold, EMA centroid update), weak (>= new threshold, no update), new candidate (buffered)
+  - `_new_theme_candidates`: List of `(doc_id, embedding)` pairs for documents below similarity_threshold_new
+  - `updated_at` field on ThemeCluster tracks when centroid was last updated via EMA
 - Theme IDs: `theme_{sha256(sorted_topic_words)[:12]}` for cross-run stability
 - Outlier documents (BERTopic topic -1) excluded from theme assignments
 - Deferred imports for heavy dependencies (bertopic, hdbscan, umap-learn)
@@ -259,6 +263,9 @@ async def fetch(self):
 - **NUXT Data Extraction**: Tweet data extracted directly from embedded NUXT JavaScript using regex (no Node.js required)
 - **Per-Run Model Creation**: BERTopicService creates a fresh model per `fit()` call (training artifact, not reused), unlike inference services that cache models
 - **Deterministic Theme IDs**: SHA256 hash of sorted topic words ensures stable IDs across re-fits with the same topic words
+- **Batch Cosine Similarity**: `transform()` uses normalized matrix multiply `embeddings @ centroids.T` for O(n_docs × n_themes) similarity without Python loops
+- **Three-Tier Assignment**: Strong/weak/new-candidate routing based on cosine similarity thresholds controls centroid drift and new theme detection
+- **EMA Centroid Update**: `centroid = (1 - lr) * centroid + lr * embedding` adapts themes to evolving content with O(1) per-document cost
 
 ### Testing
 
@@ -340,4 +347,5 @@ for kw in keywords:
 
 # Clustering testing
 uv run pytest tests/test_clustering/ -v   # Run all clustering tests (schema + service + config)
+uv run pytest tests/test_clustering/test_service.py -v -k "Transform"  # Run only transform tests
 ```

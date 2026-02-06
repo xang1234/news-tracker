@@ -30,6 +30,7 @@ class ThemeCluster:
         document_count: Number of documents assigned to this theme.
         document_ids: List of document IDs belonging to this cluster.
         created_at: Timestamp when the theme was discovered.
+        updated_at: Timestamp when the centroid was last updated via EMA (None if never updated).
         metadata: Additional information (e.g., bertopic_topic_id).
 
     Example:
@@ -52,6 +53,7 @@ class ThemeCluster:
     document_count: int
     document_ids: list[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime | None = field(default=None)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @staticmethod
@@ -106,6 +108,7 @@ class ThemeCluster:
             "document_count": self.document_count,
             "document_ids": self.document_ids,
             "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "metadata": self.metadata,
         }
 
@@ -135,6 +138,10 @@ class ThemeCluster:
         elif created_at is None:
             created_at = datetime.now(timezone.utc)
 
+        updated_at = data.get("updated_at")
+        if isinstance(updated_at, str):
+            updated_at = datetime.fromisoformat(updated_at)
+
         return cls(
             theme_id=data["theme_id"],
             name=data["name"],
@@ -143,6 +150,7 @@ class ThemeCluster:
             document_count=data["document_count"],
             document_ids=data.get("document_ids", []),
             created_at=created_at,
+            updated_at=updated_at,
             metadata=data.get("metadata", {}),
         )
 

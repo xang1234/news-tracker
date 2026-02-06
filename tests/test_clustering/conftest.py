@@ -1,11 +1,12 @@
 """Shared fixtures for clustering tests."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 
 from src.clustering.config import ClusteringConfig
+from src.clustering.service import BERTopicService
 
 
 @pytest.fixture
@@ -126,3 +127,28 @@ def mock_bertopic_model():
     model.get_topic.side_effect = lambda tid: topic_words.get(tid, [])
 
     return model
+
+
+@pytest.fixture
+def fitted_service(
+    clustering_config,
+    sample_documents,
+    sample_embeddings,
+    sample_document_ids,
+    mock_bertopic_model,
+):
+    """
+    BERTopicService with 3 themes pre-fitted via mock model.
+
+    Themes are built from sample_embeddings with 3 well-separated clusters:
+    - Cluster 0 (GPU/AI): doc_000..doc_004, centroid ≈ center[0]
+    - Cluster 1 (Memory): doc_005..doc_009, centroid ≈ center[1]
+    - Cluster 2 (Manufacturing): doc_010..doc_013, centroid ≈ center[2]
+    - doc_014 is an outlier (excluded)
+    """
+    service = BERTopicService(config=clustering_config)
+
+    with patch.object(service, "_create_model", return_value=mock_bertopic_model):
+        service.fit(sample_documents, sample_embeddings, sample_document_ids)
+
+    return service

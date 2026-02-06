@@ -10,6 +10,14 @@ from src.clustering.schemas import ThemeCluster
 from src.clustering.service import BERTopicService
 
 
+def _get_theme_by_topic_id(service, topic_id):
+    """Helper to find a theme by its bertopic_topic_id metadata."""
+    for theme in service._themes.values():
+        if theme.metadata.get("bertopic_topic_id") == topic_id:
+            return theme
+    return None
+
+
 class TestServiceInit:
     """Tests for BERTopicService initialization."""
 
@@ -366,3 +374,332 @@ class TestGetStats:
             assert "document_count" in theme_stat
             assert "top_words" in theme_stat
             assert len(theme_stat["top_words"]) <= 5
+
+
+# ──────────────────────────────────────────────────────
+# transform() tests
+# ──────────────────────────────────────────────────────
+
+
+class TestTransformInputValidation:
+    """Tests for transform() input validation."""
+
+    def test_mismatched_documents_and_ids(self, fitted_service, sample_embeddings):
+        """Should raise ValueError when documents and IDs have different lengths."""
+        with pytest.raises(ValueError, match="documents.*document_ids.*must have the same length"):
+            fitted_service.transform(["doc1", "doc2"], sample_embeddings[:2], ["id1"])
+
+    def test_mismatched_documents_and_embeddings(self, fitted_service):
+        """Should raise ValueError when documents and embeddings have different lengths."""
+        embeddings = np.zeros((3, 768))
+        with pytest.raises(ValueError, match="documents.*embeddings.*must have the same length"):
+            fitted_service.transform(["doc1", "doc2"], embeddings, ["id1", "id2"])
+
+    def test_not_initialized_returns_empty(self):
+        """Should return empty list when service is not initialized."""
+        service = BERTopicService()
+        embeddings = np.random.randn(1, 768).astype(np.float32)
+        result = service.transform(["some doc"], embeddings, ["new_001"])
+        assert result == []
+
+    def test_empty_input_returns_empty(self, fitted_service):
+        """Should return empty list for empty input."""
+        result = fitted_service.transform([], np.empty((0, 768)), [])
+        assert result == []
+
+
+class TestTransformStrongAssignment:
+    """Tests for strong-tier assignment (>= similarity_threshold_assign)."""
+
+    def test_assigns_to_nearest_theme(self, fitted_service):
+        """Embedding near cluster 0 centroid should assign to that theme."""
+        theme_0 = _get_theme_by_topic_id(fitted_service, 0)
+        # Create an embedding very close to cluster 0's centroid
+        near_centroid = theme_0.centroid.copy()
+        near_centroid += np.random.RandomState(99).randn(768) * 0.01
+        near_centroid = near_centroid / np.linalg.norm(near_centroid)
+        emb = near_centroid.reshape(1, -1).astype(np.float32)
+
+        results = fitted_service.transform(["New GPU news"], emb, ["new_001"])
+
+        assert len(results) == 1
+        doc_id, theme_ids, sim = results[0]
+        assert doc_id == "new_001"
+        assert len(theme_ids) == 1
+        assert theme_ids[0] == theme_0.theme_id
+        assert sim >= fitted_service.config.similarity_threshold_assign
+
+    def test_centroid_updated_via_ema(self, fitted_service):
+        """Strong assignment should update the centroid via EMA."""
+        theme_0 = _get_theme_by_topic_id(fitted_service, 0)
+        original_centroid = theme_0.centroid.copy()
+        lr = fitted_service.config.centroid_learning_rate
+
+        # Embedding very close to centroid (will be strong assignment)
+        near_centroid = theme_0.centroid.copy()
+        near_centroid += np.random.RandomState(99).randn(768) * 0.01
+        near_centroid = near_centroid / np.linalg.norm(near_centroid)
+        emb = near_centroid.reshape(1, -1).astype(np.float32)
+
+        fitted_service.transform(["New GPU news"], emb, ["new_001"])
+
+        expected = (1 - lr) * original_centroid + lr * emb[0]
+        np.testing.assert_array_almost_equal(theme_0.centroid, expected)
+
+    def test_updated_at_set(self, fitted_service):
+        """Strong assignment should set updated_at on the theme."""
+        theme_0 = _get_theme_by_topic_id(fitted_service, 0)
+        assert theme_0.updated_at is None  # Not set by fit()
+
+        near_centroid = theme_0.centroid.copy()
+        near_centroid += np.random.RandomState(99).randn(768) * 0.01
+        near_centroid = near_centroid / np.linalg.norm(near_centroid)
+        emb = near_centroid.reshape(1, -1).astype(np.float32)
+
+        fitted_service.transform(["New GPU news"], emb, ["new_001"])
+
+        assert theme_0.updated_at is not None
+
+    def test_document_count_incremented(self, fitted_service):
+        """Strong assignment should increment document_count."""
+        theme_0 = _get_theme_by_topic_id(fitted_service, 0)
+        original_count = theme_0.document_count
+
+        near_centroid = theme_0.centroid.copy()
+        near_centroid += np.random.RandomState(99).randn(768) * 0.01
+        near_centroid = near_centroid / np.linalg.norm(near_centroid)
+        emb = near_centroid.reshape(1, -1).astype(np.float32)
+
+        fitted_service.transform(["New GPU news"], emb, ["new_001"])
+
+        assert theme_0.document_count == original_count + 1
+
+    def test_document_ids_includes_new_doc(self, fitted_service):
+        """Strong assignment should add doc_id to theme's document_ids."""
+        theme_0 = _get_theme_by_topic_id(fitted_service, 0)
+
+        near_centroid = theme_0.centroid.copy()
+        near_centroid += np.random.RandomState(99).randn(768) * 0.01
+        near_centroid = near_centroid / np.linalg.norm(near_centroid)
+        emb = near_centroid.reshape(1, -1).astype(np.float32)
+
+        fitted_service.transform(["New GPU news"], emb, ["new_001"])
+
+        assert "new_001" in theme_0.document_ids
+
+
+class TestTransformWeakAssignment:
+    """Tests for weak-tier assignment (between new and assign thresholds)."""
+
+    def test_assigns_without_centroid_update(self, fitted_service):
+        """Weak assignment should assign but NOT update the centroid."""
+        # Use a very high assign threshold to force weak tier
+        fitted_service.config.similarity_threshold_assign = 0.999
+        fitted_service.config.similarity_threshold_new = 0.01
+
+        theme_0 = _get_theme_by_topic_id(fitted_service, 0)
+        original_centroid = theme_0.centroid.copy()
+
+        near_centroid = theme_0.centroid.copy()
+        near_centroid += np.random.RandomState(99).randn(768) * 0.01
+        near_centroid = near_centroid / np.linalg.norm(near_centroid)
+        emb = near_centroid.reshape(1, -1).astype(np.float32)
+
+        results = fitted_service.transform(["New GPU news"], emb, ["new_001"])
+
+        # Should still assign (similarity > new_threshold)
+        assert len(results) == 1
+        _, theme_ids, sim = results[0]
+        assert len(theme_ids) == 1
+        # Centroid should NOT change
+        np.testing.assert_array_equal(theme_0.centroid, original_centroid)
+
+    def test_updated_at_remains_none(self, fitted_service):
+        """Weak assignment should NOT set updated_at."""
+        fitted_service.config.similarity_threshold_assign = 0.999
+        fitted_service.config.similarity_threshold_new = 0.01
+
+        theme_0 = _get_theme_by_topic_id(fitted_service, 0)
+        assert theme_0.updated_at is None
+
+        near_centroid = theme_0.centroid.copy()
+        near_centroid += np.random.RandomState(99).randn(768) * 0.01
+        near_centroid = near_centroid / np.linalg.norm(near_centroid)
+        emb = near_centroid.reshape(1, -1).astype(np.float32)
+
+        fitted_service.transform(["New GPU news"], emb, ["new_001"])
+
+        assert theme_0.updated_at is None
+
+
+class TestTransformNewThemeCandidate:
+    """Tests for new-candidate tier (below similarity_threshold_new)."""
+
+    def _make_orthogonal_embedding(self, fitted_service, dim=768):
+        """Create an embedding far from all centroids."""
+        rng = np.random.RandomState(123)
+        # Random direction in high-dim space is nearly orthogonal to any fixed vectors
+        emb = rng.randn(dim).astype(np.float32)
+        emb = emb / np.linalg.norm(emb)
+        return emb
+
+    def test_returns_empty_theme_ids(self, fitted_service):
+        """New candidates should have empty theme_ids in the result."""
+        # Set a high new_threshold so everything below it becomes a candidate
+        fitted_service.config.similarity_threshold_new = 0.99
+        fitted_service.config.similarity_threshold_assign = 0.999
+
+        emb = self._make_orthogonal_embedding(fitted_service).reshape(1, -1)
+        results = fitted_service.transform(["Something unrelated"], emb, ["new_001"])
+
+        assert len(results) == 1
+        _, theme_ids, _ = results[0]
+        assert theme_ids == []
+
+    def test_stored_in_new_theme_candidates(self, fitted_service):
+        """New candidates should be buffered in the service."""
+        fitted_service.config.similarity_threshold_new = 0.99
+        fitted_service.config.similarity_threshold_assign = 0.999
+
+        emb = self._make_orthogonal_embedding(fitted_service).reshape(1, -1)
+        fitted_service.transform(["Something unrelated"], emb, ["new_001"])
+
+        candidates = fitted_service.new_theme_candidates
+        assert len(candidates) == 1
+        assert candidates[0][0] == "new_001"
+        np.testing.assert_array_almost_equal(candidates[0][1], emb[0])
+
+    def test_candidates_accumulate_across_calls(self, fitted_service):
+        """Multiple transform() calls should accumulate candidates."""
+        fitted_service.config.similarity_threshold_new = 0.99
+        fitted_service.config.similarity_threshold_assign = 0.999
+
+        rng = np.random.RandomState(200)
+        for i in range(3):
+            emb = rng.randn(1, 768).astype(np.float32)
+            emb = emb / np.linalg.norm(emb)
+            fitted_service.transform([f"Doc {i}"], emb, [f"new_{i:03d}"])
+
+        assert len(fitted_service.new_theme_candidates) == 3
+
+
+class TestTransformBatch:
+    """Tests for batch transform with multiple documents."""
+
+    def test_multiple_docs_processed(self, fitted_service):
+        """Should return one result per input document."""
+        theme_0 = _get_theme_by_topic_id(fitted_service, 0)
+        theme_1 = _get_theme_by_topic_id(fitted_service, 1)
+
+        # Two embeddings near different clusters
+        rng = np.random.RandomState(42)
+        emb0 = theme_0.centroid + rng.randn(768) * 0.01
+        emb0 = emb0 / np.linalg.norm(emb0)
+        emb1 = theme_1.centroid + rng.randn(768) * 0.01
+        emb1 = emb1 / np.linalg.norm(emb1)
+        batch_emb = np.vstack([emb0, emb1]).astype(np.float32)
+
+        results = fitted_service.transform(
+            ["GPU news", "Memory news"],
+            batch_emb,
+            ["new_001", "new_002"],
+        )
+
+        assert len(results) == 2
+        # First doc should go to theme 0, second to theme 1
+        assert results[0][1] == [theme_0.theme_id]
+        assert results[1][1] == [theme_1.theme_id]
+
+    def test_mixed_tiers_in_batch(self, fitted_service):
+        """A single batch can produce strong assignments and new candidates."""
+        theme_0 = _get_theme_by_topic_id(fitted_service, 0)
+
+        # One near centroid (strong), one far away (candidate)
+        rng = np.random.RandomState(42)
+        near = theme_0.centroid + rng.randn(768) * 0.01
+        near = near / np.linalg.norm(near)
+
+        # Far-away embedding: very high new_threshold not needed —
+        # random vector in 768-dim is ~orthogonal to any centroid
+        far = rng.randn(768).astype(np.float32)
+        far = far / np.linalg.norm(far)
+
+        batch_emb = np.vstack([near, far]).astype(np.float32)
+
+        results = fitted_service.transform(
+            ["GPU news", "Totally unrelated"],
+            batch_emb,
+            ["new_001", "new_002"],
+        )
+
+        assert len(results) == 2
+        # First should be assigned
+        assert len(results[0][1]) == 1
+        # Second's tier depends on similarity — just verify it returned
+        assert results[1][0] == "new_002"
+
+
+class TestTransformEdgeCases:
+    """Tests for edge cases in transform()."""
+
+    def test_no_themes_returns_all_candidates(
+        self, clustering_config, sample_documents, sample_embeddings, sample_document_ids,
+    ):
+        """If fit() produced no themes (all outliers), transform returns empty."""
+        service = BERTopicService(config=clustering_config)
+        model = MagicMock()
+        model.fit_transform.return_value = ([-1] * 15, np.zeros((15, 3)))
+
+        with patch.object(service, "_create_model", return_value=model):
+            service.fit(sample_documents, sample_embeddings, sample_document_ids)
+
+        assert service.is_initialized
+        assert len(service._themes) == 0
+
+        emb = np.random.randn(1, 768).astype(np.float32)
+        result = service.transform(["new doc"], emb, ["new_001"])
+        assert result == []
+
+    def test_zero_norm_embedding_no_crash(self, fitted_service):
+        """A zero-norm embedding should not raise (guarded by np.where)."""
+        zero_emb = np.zeros((1, 768), dtype=np.float32)
+        results = fitted_service.transform(["Empty"], zero_emb, ["new_001"])
+        assert len(results) == 1  # Should complete without error
+
+    def test_internal_error_returns_empty(self, fitted_service):
+        """If _assign_documents raises, transform should return empty list."""
+        with patch.object(
+            fitted_service, "_assign_documents", side_effect=RuntimeError("numpy broke")
+        ):
+            results = fitted_service.transform(
+                ["test"], np.random.randn(1, 768).astype(np.float32), ["new_001"]
+            )
+        assert results == []
+
+
+class TestTransformGetStats:
+    """Tests for get_stats() after transform."""
+
+    def test_stats_include_new_theme_candidates(self, fitted_service):
+        """Stats should report n_new_theme_candidates count."""
+        fitted_service.config.similarity_threshold_new = 0.99
+        fitted_service.config.similarity_threshold_assign = 0.999
+
+        rng = np.random.RandomState(42)
+        emb = rng.randn(1, 768).astype(np.float32)
+        emb = emb / np.linalg.norm(emb)
+        fitted_service.transform(["Unrelated"], emb, ["new_001"])
+
+        stats = fitted_service.get_stats()
+        assert stats["n_new_theme_candidates"] == 1
+
+    def test_stats_candidates_zero_before_transform(self, fitted_service):
+        """Before any transform, n_new_theme_candidates should be 0."""
+        stats = fitted_service.get_stats()
+        assert stats["n_new_theme_candidates"] == 0
+
+    def test_stats_candidates_before_fit(self):
+        """Even before fit, stats should include n_new_theme_candidates."""
+        service = BERTopicService()
+        stats = service.get_stats()
+        assert stats["n_new_theme_candidates"] == 0

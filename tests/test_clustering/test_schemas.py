@@ -1,5 +1,7 @@
 """Tests for ThemeCluster dataclass."""
 
+from datetime import datetime, timezone
+
 import numpy as np
 import pytest
 
@@ -30,6 +32,33 @@ class TestThemeClusterToDict:
         assert result["document_ids"] == ["doc_001", "doc_002"]
         assert result["metadata"] == {"bertopic_topic_id": 0}
         assert "created_at" in result
+        assert "updated_at" in result
+
+    def test_to_dict_updated_at_none(self):
+        """updated_at should serialize as None when not set."""
+        theme = ThemeCluster(
+            theme_id="theme_x",
+            name="test",
+            topic_words=[("a", 0.1)],
+            centroid=np.zeros(3),
+            document_count=1,
+        )
+        result = theme.to_dict()
+        assert result["updated_at"] is None
+
+    def test_to_dict_updated_at_datetime(self):
+        """updated_at should serialize as ISO string when set."""
+        ts = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+        theme = ThemeCluster(
+            theme_id="theme_x",
+            name="test",
+            topic_words=[("a", 0.1)],
+            centroid=np.zeros(3),
+            document_count=1,
+            updated_at=ts,
+        )
+        result = theme.to_dict()
+        assert result["updated_at"] == "2025-06-15T12:00:00+00:00"
 
     def test_to_dict_centroid_is_list(self):
         """Centroid ndarray should be converted to a plain list."""
@@ -83,6 +112,7 @@ class TestThemeClusterFromDict:
         theme = ThemeCluster.from_dict(data)
 
         assert theme.document_ids == []
+        assert theme.updated_at is None
         assert theme.metadata == {}
 
     def test_from_dict_parses_iso_datetime(self):
@@ -99,6 +129,45 @@ class TestThemeClusterFromDict:
 
         assert theme.created_at.year == 2025
         assert theme.created_at.month == 1
+
+    def test_from_dict_updated_at_roundtrip(self):
+        """to_dict → from_dict should preserve updated_at."""
+        ts = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+        original = ThemeCluster(
+            theme_id="theme_x",
+            name="test",
+            topic_words=[("word", 0.1)],
+            centroid=np.array([1.0, 2.0]),
+            document_count=5,
+            updated_at=ts,
+        )
+        restored = ThemeCluster.from_dict(original.to_dict())
+        assert restored.updated_at == ts
+
+    def test_from_dict_missing_updated_at(self):
+        """Missing updated_at should default to None."""
+        data = {
+            "theme_id": "theme_x",
+            "name": "test",
+            "topic_words": [("word", 0.1)],
+            "centroid": [0.0],
+            "document_count": 1,
+        }
+        theme = ThemeCluster.from_dict(data)
+        assert theme.updated_at is None
+
+    def test_from_dict_null_updated_at(self):
+        """Explicit null updated_at should remain None."""
+        data = {
+            "theme_id": "theme_x",
+            "name": "test",
+            "topic_words": [("word", 0.1)],
+            "centroid": [0.0],
+            "document_count": 1,
+            "updated_at": None,
+        }
+        theme = ThemeCluster.from_dict(data)
+        assert theme.updated_at is None
 
 
 class TestThemeClusterEquality:
