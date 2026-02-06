@@ -15,11 +15,13 @@ from src.clustering.config import ClusteringConfig
 from src.clustering.queue import ClusteringJob, ClusteringQueue
 from src.clustering.schemas import ThemeCluster
 from src.clustering.service import BERTopicService
+from src.clustering.worker import ClusteringWorker
 
 __all__ = [
     "ClusteringConfig",
     "ClusteringJob",
     "ClusteringQueue",
+    "ClusteringWorker",
     "ThemeCluster",
     "BERTopicService",
 ]

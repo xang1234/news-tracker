@@ -30,6 +30,7 @@ uv run news-tracker run-once --mock    # Single cycle for testing
 uv run news-tracker run-once --mock --with-sentiment  # Include sentiment analysis
 uv run news-tracker serve              # Start embedding API server
 uv run news-tracker sentiment-worker   # Run sentiment analysis worker
+uv run news-tracker clustering-worker  # Run clustering worker for theme assignment
 uv run news-tracker vector-search "query" --limit 10  # Semantic search
 uv run news-tracker cleanup --days 90  # Remove old documents (storage management)
 
@@ -131,6 +132,12 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 - Deferred imports for heavy dependencies (bertopic, hdbscan, umap-learn)
 - Configurable via `CLUSTERING_*` environment variables (e.g., `CLUSTERING_HDBSCAN_MIN_CLUSTER_SIZE=20`)
 - `clustering_enabled` (false) in settings.py for opt-in activation
+- `ClusteringWorker`: Real-time per-document theme assignment via pgvector HNSW (unlike batch BERTopicService)
+  - Consumes from `clustering_queue` Redis Stream, finds similar centroids via `ThemeRepository.find_similar()`
+  - Assigns document `theme_ids`, EMA centroid update, atomic `document_count + 1`
+  - Idempotency: `idempotent:cluster:{doc_id}:{model}` Redis SET NX with 7-day TTL
+  - Skips MiniLM-only documents (theme centroids are 768-dim FinBERT)
+  - CLI: `news-tracker clustering-worker [--batch-size N] [--metrics-port 8002]`
 
 **Themes Layer** (`src/themes/`):
 - `Theme`: Dataclass mapping 1:1 to the `themes` DB table (distinct from in-memory `ThemeCluster`)
@@ -150,7 +157,7 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 
 **Storage Layer** (`src/storage/`):
 - `Database`: asyncpg connection pool with transaction context managers
-- `DocumentRepository`: CRUD operations, batch upserts, full-text search, similarity search
+- `DocumentRepository`: CRUD operations, batch upserts, full-text search, similarity search, `update_themes()` array merge
 
 **Embedding Layer** (`src/embedding/`):
 - `EmbeddingConfig`: Pydantic settings for model, batching, caching, queue configuration
@@ -303,6 +310,10 @@ async def fetch(self):
 - **TTL Cache without External Deps**: `_TTLCache` in ThemeRepository uses a simple dict + `time.monotonic()` expiry instead of adding `cachetools` dependency — minimal code for key→(value, expiry) with lazy eviction
 - **Cache-Through Batch Reads**: `get_centroids_batch()` checks cache first, fetches only uncached IDs in a single `ANY($1)` query, populates cache on read, invalidates on write — read-heavy pattern for ClusteringWorker
 - **Idempotent Metrics Upsert**: `add_metrics()` uses `ON CONFLICT (theme_id, date) DO UPDATE SET` for safe re-runs of daily batch jobs
+- **pgvector for Real-Time Assignment**: ClusteringWorker uses `ThemeRepository.find_similar()` (HNSW index) for O(log n) per-document lookup, not BERTopicService (batch UMAP + HDBSCAN)
+- **Redis SET NX Idempotency**: `idempotent:cluster:{doc_id}:{model}` with 7-day TTL prevents reprocessing; key is deleted if embedding missing so re-queue succeeds
+- **Atomic Array Merge**: `update_themes()` uses `ARRAY(SELECT DISTINCT unnest(theme_ids || $2))` for safe concurrent theme assignment without read-modify-write races
+- **Atomic Counter Increment**: `document_count = document_count + 1` raw SQL avoids stale-read increment races between concurrent workers
 
 ### Testing
 
@@ -383,9 +394,10 @@ for kw in keywords:
 "
 
 # Clustering testing
-uv run pytest tests/test_clustering/ -v   # Run all clustering tests (schema + service + config)
+uv run pytest tests/test_clustering/ -v   # Run all clustering tests (schema + service + config + worker)
 uv run pytest tests/test_clustering/test_service.py -v -k "Transform"  # Run only transform tests
 uv run pytest tests/test_clustering/test_service.py -v -k "Merge or CheckNew"  # Run merge + new theme tests
+uv run pytest tests/test_clustering/test_worker.py -v   # Run clustering worker tests
 
 # Themes testing
 uv run pytest tests/test_themes/ -v              # Run all theme tests (schema + repository + search + metrics)

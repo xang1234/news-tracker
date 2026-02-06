@@ -249,6 +249,43 @@ class MetricsCollector:
             buckets=(0, 1, 2, 3, 5, 10, 20),
         )
 
+        # Clustering metrics
+        self.clustering_assigned = Counter(
+            "news_tracker_clustering_assigned_total",
+            "Total documents assigned to themes",
+            ["platform"],
+        )
+
+        self.clustering_errors = Counter(
+            "news_tracker_clustering_errors_total",
+            "Total clustering processing errors",
+            ["error_type"],
+        )
+
+        self.clustering_queue_depth = Gauge(
+            "news_tracker_clustering_queue_depth",
+            "Number of jobs in clustering queue",
+        )
+
+        self.clustering_batch_size = Histogram(
+            "news_tracker_clustering_batch_size",
+            "Clustering batch sizes",
+            buckets=(1, 5, 10, 20, 32, 50, 100),
+        )
+
+        self.clustering_similarity = Histogram(
+            "news_tracker_clustering_similarity",
+            "Distribution of best theme similarity scores",
+            buckets=(0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95),
+        )
+
+        self.clustering_latency = Histogram(
+            "news_tracker_clustering_latency_seconds",
+            "Time to process clustering operations",
+            ["operation"],
+            buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+        )
+
         # Queue reclaim metrics
         self.pending_reclaimed = Counter(
             "news_tracker_queue_pending_reclaimed_total",
@@ -547,6 +584,61 @@ class MetricsCollector:
             entity_count: Number of entities
         """
         self.sentiment_entity_count.observe(entity_count)
+
+    def record_clustering_assigned(
+        self,
+        platform: Platform | str,
+        count: int = 1,
+    ) -> None:
+        """
+        Record document theme assignment.
+
+        Args:
+            platform: Source platform
+            count: Number of documents assigned
+        """
+        platform_str = platform.value if isinstance(platform, Platform) else platform
+        self.clustering_assigned.labels(platform=platform_str).inc(count)
+
+    def record_clustering_error(self, error_type: str) -> None:
+        """
+        Record clustering processing error.
+
+        Args:
+            error_type: Error type/category
+        """
+        self.clustering_errors.labels(error_type=error_type).inc()
+
+    def set_clustering_queue_depth(self, depth: int) -> None:
+        """
+        Set clustering queue depth metric.
+
+        Args:
+            depth: Number of jobs in queue
+        """
+        self.clustering_queue_depth.set(depth)
+
+    def record_clustering_batch(
+        self,
+        processed: int,
+        skipped: int,
+        errors: int,
+        latency: float,
+    ) -> None:
+        """
+        Record clustering batch processing metrics.
+
+        Args:
+            processed: Number of documents assigned to themes
+            skipped: Number of documents skipped
+            errors: Number of errors
+            latency: Total batch latency in seconds
+        """
+        total = processed + skipped + errors
+        if total > 0:
+            self.clustering_batch_size.observe(total)
+        if latency > 0:
+            self.clustering_latency.labels(operation="batch").observe(latency)
 
 
 # Global metrics instance

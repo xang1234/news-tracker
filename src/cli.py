@@ -467,6 +467,39 @@ def sentiment_worker(batch_size: int | None, metrics: bool, metrics_port: int) -
     asyncio.run(run())
 
 
+@main.command("clustering-worker")
+@click.option("--batch-size", default=None, type=int, help="Jobs to process per batch")
+@click.option("--metrics/--no-metrics", default=True, help="Enable metrics server")
+@click.option("--metrics-port", default=8002, help="Metrics server port")
+def clustering_worker(batch_size: int | None, metrics: bool, metrics_port: int) -> None:
+    """Run the clustering worker for real-time theme assignment.
+
+    Consumes document IDs from Redis Streams clustering queue,
+    finds similar theme centroids via pgvector HNSW, and assigns
+    documents to matching themes.
+
+    Example:
+        news-tracker clustering-worker
+        news-tracker clustering-worker --batch-size 16
+    """
+    from src.clustering.worker import ClusteringWorker
+
+    async def run():
+        worker = ClusteringWorker(batch_size=batch_size)
+
+        if metrics:
+            get_metrics().start_server(port=metrics_port)
+
+        # Handle shutdown signals
+        loop = asyncio.get_event_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, lambda: asyncio.create_task(worker.stop()))
+
+        await worker.start()
+
+    asyncio.run(run())
+
+
 @main.command("vector-search")
 @click.argument("query")
 @click.option("--limit", default=10, help="Maximum results to return")

@@ -760,6 +760,37 @@ class DocumentRepository:
         result = await self._db.fetchval(sql, doc_id, json.dumps(sentiment))
         return result is not None
 
+    async def update_themes(
+        self,
+        doc_id: str,
+        theme_ids: list[str],
+    ) -> bool:
+        """
+        Add theme IDs to a document's theme_ids array (merge, no duplicates).
+
+        Uses array concatenation + DISTINCT unnest to safely merge
+        new theme_ids with any existing ones, supporting concurrent
+        workers assigning different themes.
+
+        Args:
+            doc_id: Document ID
+            theme_ids: Theme IDs to add
+
+        Returns:
+            True if document was updated, False if not found
+        """
+        sql = """
+            UPDATE documents
+            SET theme_ids = (
+                SELECT ARRAY(SELECT DISTINCT unnest(theme_ids || $2))
+            ),
+            updated_at = NOW()
+            WHERE id = $1
+            RETURNING id
+        """
+        result = await self._db.fetchval(sql, doc_id, theme_ids)
+        return result is not None
+
     async def get_documents_without_sentiment(
         self,
         limit: int = 100,
