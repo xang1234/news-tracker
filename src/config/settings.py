@@ -134,6 +134,9 @@ class Settings(BaseSettings):
     # Volume Metrics
     volume_metrics_enabled: bool = Field(default=False, description="Enable volume metrics computation for themes")
 
+    # Theme Ranking
+    ranking_enabled: bool = Field(default=False, description="Enable theme ranking engine for actionability scoring")
+
     # Causal Graph
     graph_enabled: bool = Field(default=False, description="Enable causal graph for supply chain modeling")
 

@@ -425,3 +425,27 @@ class ThemeEventsResponse(BaseModel):
         description="Derived investment signal: supply_increasing, supply_decreasing, product_momentum, product_risk, or null",
     )
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+# Ranking models
+
+
+class RankedThemeItem(BaseModel):
+    """Single ranked theme with score and tier."""
+
+    theme: ThemeItem = Field(..., description="Theme details")
+    score: float = Field(..., description="Composite ranking score (higher = more actionable)")
+    tier: int = Field(..., ge=1, le=3, description="Tier: 1 (top 5%), 2 (top 20%), 3 (rest)")
+    components: dict = Field(
+        default_factory=dict,
+        description="Score component breakdown (volume_component, compellingness_component, lifecycle_multiplier, volume_zscore, strategy)",
+    )
+
+
+class RankedThemesResponse(BaseModel):
+    """Response model for ranked themes."""
+
+    themes: list[RankedThemeItem] = Field(..., description="Ranked themes sorted by score")
+    total: int = Field(..., description="Number of ranked themes returned")
+    strategy: str = Field(..., description="Ranking strategy used (swing or position)")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")

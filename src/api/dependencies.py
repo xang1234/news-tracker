@@ -14,6 +14,7 @@ from src.sentiment.config import SentimentConfig
 from src.sentiment.service import SentimentService
 from src.storage.database import Database
 from src.storage.repository import DocumentRepository
+from src.themes.ranking import ThemeRankingService
 from src.themes.repository import ThemeRepository
 from src.vectorstore.manager import VectorStoreManager
 
@@ -26,6 +27,7 @@ _database: Database | None = None
 _theme_repository: ThemeRepository | None = None
 _document_repository: DocumentRepository | None = None
 _sentiment_aggregator: SentimentAggregator | None = None
+_ranking_service: ThemeRankingService | None = None
 
 
 async def get_redis_client() -> AsyncGenerator[redis.Redis, None]:
@@ -220,6 +222,26 @@ async def get_document_repository() -> DocumentRepository:
     return _document_repository
 
 
+async def get_ranking_service() -> ThemeRankingService:
+    """
+    Get ranking service instance.
+
+    Creates a singleton service backed by the shared ThemeRepository.
+    """
+    global _ranking_service, _theme_repository, _database
+
+    if _ranking_service is None:
+        if _theme_repository is None:
+            if _database is None:
+                _database = Database()
+                await _database.connect()
+            _theme_repository = ThemeRepository(_database)
+
+        _ranking_service = ThemeRankingService(theme_repo=_theme_repository)
+
+    return _ranking_service
+
+
 def get_sentiment_aggregator() -> SentimentAggregator:
     """
     Get sentiment aggregator instance.
@@ -237,12 +259,13 @@ def get_sentiment_aggregator() -> SentimentAggregator:
 async def cleanup_dependencies() -> None:
     """Clean up global dependencies on shutdown."""
     global _embedding_service, _sentiment_service, _redis_client, _vector_store_manager, _database
-    global _theme_repository, _document_repository, _sentiment_aggregator
+    global _theme_repository, _document_repository, _sentiment_aggregator, _ranking_service
 
     _vector_store_manager = None
     _theme_repository = None
     _document_repository = None
     _sentiment_aggregator = None
+    _ranking_service = None
 
     if _embedding_service is not None:
         await _embedding_service.close()

@@ -11,9 +11,11 @@ from src.api.app import create_app
 from src.api.auth import verify_api_key
 from src.api.dependencies import (
     get_document_repository,
+    get_ranking_service,
     get_sentiment_aggregator,
     get_theme_repository,
 )
+from src.themes.ranking import RankedTheme, ThemeRankingService
 from src.themes.schemas import Theme, ThemeMetrics
 
 
@@ -88,7 +90,15 @@ def mock_aggregator():
 
 
 @pytest.fixture
-def client(mock_theme_repo, mock_doc_repo, mock_aggregator):
+def mock_ranking_service():
+    """Mock ThemeRankingService."""
+    service = AsyncMock(spec=ThemeRankingService)
+    service.get_actionable = AsyncMock(return_value=[])
+    return service
+
+
+@pytest.fixture
+def client(mock_theme_repo, mock_doc_repo, mock_aggregator, mock_ranking_service):
     """FastAPI TestClient with dependency overrides."""
     app = create_app()
 
@@ -99,6 +109,7 @@ def client(mock_theme_repo, mock_doc_repo, mock_aggregator):
     app.dependency_overrides[get_theme_repository] = lambda: mock_theme_repo
     app.dependency_overrides[get_document_repository] = lambda: mock_doc_repo
     app.dependency_overrides[get_sentiment_aggregator] = lambda: mock_aggregator
+    app.dependency_overrides[get_ranking_service] = lambda: mock_ranking_service
 
     with TestClient(app) as c:
         yield c

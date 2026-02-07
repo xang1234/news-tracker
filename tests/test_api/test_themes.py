@@ -453,3 +453,103 @@ class TestGetThemeMetrics:
         data = resp.json()
         assert data["total"] == 0
         assert data["metrics"] == []
+
+
+# ── GET /themes/ranked ─────────────────────────────────
+
+
+class TestRankedThemes:
+    """Tests for the ranked themes endpoint."""
+
+    def test_empty_ranked(self, client, mock_ranking_service):
+        mock_ranking_service.get_actionable.return_value = []
+
+        resp = client.get("/themes/ranked")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["themes"] == []
+        assert data["total"] == 0
+        assert data["strategy"] == "swing"
+        assert "latency_ms" in data
+
+    def test_returns_ranked_themes(self, client, mock_ranking_service):
+        from src.themes.ranking import RankedTheme
+
+        theme = _make_theme("t1", "ranked_theme", lifecycle_stage="accelerating")
+        ranked = RankedTheme(
+            theme_id="t1",
+            theme=theme,
+            score=8.5,
+            tier=1,
+            components={
+                "volume_component": 2.0,
+                "compellingness_component": 2.5,
+                "lifecycle_multiplier": 1.2,
+                "volume_zscore": 3.0,
+                "strategy": "swing",
+            },
+        )
+        mock_ranking_service.get_actionable.return_value = [ranked]
+
+        resp = client.get("/themes/ranked")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        item = data["themes"][0]
+        assert item["theme"]["theme_id"] == "t1"
+        assert item["score"] == 8.5
+        assert item["tier"] == 1
+        assert "volume_component" in item["components"]
+
+    def test_strategy_param(self, client, mock_ranking_service):
+        mock_ranking_service.get_actionable.return_value = []
+
+        resp = client.get("/themes/ranked?strategy=position")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["strategy"] == "position"
+        mock_ranking_service.get_actionable.assert_called_once_with(
+            strategy="position", max_tier=3,
+        )
+
+    def test_max_tier_param(self, client, mock_ranking_service):
+        mock_ranking_service.get_actionable.return_value = []
+
+        resp = client.get("/themes/ranked?max_tier=1")
+        assert resp.status_code == 200
+        mock_ranking_service.get_actionable.assert_called_once_with(
+            strategy="swing", max_tier=1,
+        )
+
+    def test_limit_param(self, client, mock_ranking_service):
+        from src.themes.ranking import RankedTheme
+
+        # Return 5 ranked themes
+        ranked = [
+            RankedTheme(
+                theme_id=f"t{i}",
+                theme=_make_theme(f"t{i}"),
+                score=float(10 - i),
+                tier=2,
+                components={},
+            )
+            for i in range(5)
+        ]
+        mock_ranking_service.get_actionable.return_value = ranked
+
+        resp = client.get("/themes/ranked?limit=2")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 2
+
+    def test_invalid_strategy(self, client, mock_ranking_service):
+        resp = client.get("/themes/ranked?strategy=invalid")
+        assert resp.status_code == 400
+        assert "Invalid strategy" in resp.json()["detail"]
+
+    def test_ranked_does_not_conflict_with_theme_id(self, client, mock_theme_repo):
+        """Ensure /themes/ranked is not captured by /themes/{theme_id}."""
+        # If routing is wrong, this would try to look up theme_id="ranked"
+        # and return 404. Instead it should return 200 from the ranked endpoint.
+        resp = client.get("/themes/ranked")
+        assert resp.status_code == 200

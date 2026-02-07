@@ -11,11 +11,14 @@ import structlog
 from src.api.auth import verify_api_key
 from src.api.dependencies import (
     get_document_repository,
+    get_ranking_service,
     get_sentiment_aggregator,
     get_theme_repository,
 )
 from src.api.models import (
     ErrorResponse,
+    RankedThemeItem,
+    RankedThemesResponse,
     ThemeDetailResponse,
     ThemeDocumentItem,
     ThemeDocumentsResponse,
@@ -27,6 +30,7 @@ from src.api.models import (
 )
 from src.sentiment.aggregation import DocumentSentiment, SentimentAggregator
 from src.storage.repository import DocumentRepository
+from src.themes.ranking import ThemeRankingService
 from src.themes.repository import ThemeRepository
 from src.themes.schemas import Theme
 
@@ -104,6 +108,93 @@ async def list_themes(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list themes: {str(e)}",
+        )
+
+
+@router.get(
+    "/themes/ranked",
+    response_model=RankedThemesResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Invalid API key"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
+    summary="Get ranked themes",
+    description="""
+    Rank themes by trading actionability using strategy-specific scoring.
+
+    The scoring formula combines volume momentum (z-score), narrative
+    compellingness, and lifecycle stage into a single composite score.
+    Themes are assigned to tiers: Tier 1 (top 5%), Tier 2 (top 20%),
+    Tier 3 (rest).
+
+    Strategies:
+    - **swing**: Emphasizes volume momentum (alpha=0.6) for short-term trades
+    - **position**: Emphasizes compellingness (beta=0.6) for longer-term positions
+    """,
+)
+async def get_ranked_themes(
+    strategy: str = Query(
+        default="swing",
+        description="Ranking strategy: swing (volume-biased) or position (compellingness-biased)",
+    ),
+    max_tier: int = Query(
+        default=3, ge=1, le=3, description="Maximum tier to include (1=top 5%, 2=top 20%, 3=all)"
+    ),
+    limit: int = Query(default=50, ge=1, le=500, description="Maximum themes to return"),
+    api_key: str = Depends(verify_api_key),
+    ranking_service: ThemeRankingService = Depends(get_ranking_service),
+) -> RankedThemesResponse:
+    start_time = time.perf_counter()
+
+    try:
+        if strategy not in ("swing", "position"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid strategy {strategy!r}. Must be 'swing' or 'position'.",
+            )
+
+        ranked = await ranking_service.get_actionable(
+            strategy=strategy,
+            max_tier=max_tier,
+        )
+
+        # Apply limit
+        ranked = ranked[:limit]
+
+        items = [
+            RankedThemeItem(
+                theme=_theme_to_item(r.theme),
+                score=round(r.score, 4),
+                tier=r.tier,
+                components=r.components,
+            )
+            for r in ranked
+        ]
+
+        latency_ms = (time.perf_counter() - start_time) * 1000
+
+        logger.info(
+            "Themes ranked",
+            strategy=strategy,
+            max_tier=max_tier,
+            total=len(items),
+            latency_ms=round(latency_ms, 2),
+        )
+
+        return RankedThemesResponse(
+            themes=items,
+            total=len(items),
+            strategy=strategy,
+            latency_ms=round(latency_ms, 2),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to rank themes: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to rank themes: {str(e)}",
         )
 
 
@@ -445,3 +536,5 @@ async def get_theme_metrics(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get theme metrics: {str(e)}",
         )
+
+

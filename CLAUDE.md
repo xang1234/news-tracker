@@ -234,6 +234,20 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
   - Duck-typed doc input: accepts any object with `.timestamp`, `.platform`, `.authority_score`
 - `DEFAULT_PLATFORM_WEIGHTS`: `{"twitter": 1.0, "reddit": 5.0, "news": 20.0, "substack": 100.0}`
 - `volume_metrics_enabled` (false) in settings.py for opt-in activation
+- `ThemeRankingService`: Stateless theme ranking engine for trading actionability (follows LifecycleClassifier/VolumeMetricsService pattern)
+  - `RankingConfig`: Pydantic settings (prefix `RANKING_`) for default_strategy, tier percentiles, min_zscore, compellingness fallback
+  - `RankedTheme`: Dataclass with theme_id, theme ref, score, tier (1/2/3), components breakdown
+  - `RankingStrategy`: Literal["swing", "position"] for strategy selection
+  - `compute_score(theme, metrics, strategy)`: Core formula `(volume_component ** alpha) * (compellingness ** beta) * lifecycle_multiplier`
+    - volume_component: `max(0, zscore + 2) ** alpha` — shift prevents negative base with fractional exponent
+    - compellingness: `metadata.get("compellingness", 5.0) ** beta` — future LLM scorer fills this
+    - lifecycle_multiplier: `{"emerging": 1.5, "accelerating": 1.2, "mature": 0.8, "fading": 0.3}`
+  - `rank_themes(themes, metrics_map, strategy)`: Score all, sort descending, assign tiers, filter by min_score
+  - `_assign_tiers(ranked, metrics_map)`: Tier 1 = top 5% AND (zscore >= 2.0 OR accelerating), Tier 2 = top 20%, Tier 3 = rest
+  - `get_actionable(strategy, max_tier)`: Async orchestrator fetching themes + latest metrics from ThemeRepository
+  - `STRATEGY_CONFIGS`: `{"swing": {"alpha": 0.6, "beta": 0.4}, "position": {"alpha": 0.4, "beta": 0.6}}`
+- `ranking_enabled` (false) in settings.py for opt-in activation
+- Ranking settings can be overridden via `RANKING_*` environment variables (e.g., `RANKING_DEFAULT_STRATEGY=position`)
 
 **Storage Layer** (`src/storage/`):
 - `Database`: asyncpg connection pool with transaction context managers
@@ -266,8 +280,8 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 **API Layer** (`src/api/`):
 - `app.py`: FastAPI application factory with structlog integration
 - `auth.py`: X-API-KEY header authentication with dev mode bypass
-- `models.py`: Pydantic request/response models (EmbedRequest, EmbedResponse, SearchRequest, SearchResponse, SentimentRequest, SentimentResponse, ThemeItem, ThemeListResponse, ThemeDetailResponse, ThemeDocumentItem, ThemeDocumentsResponse, ThemeSentimentResponse, ThemeMetricsItem, ThemeMetricsResponse, ThemeEventItem, ThemeEventsResponse)
-- `dependencies.py`: Dependency injection for EmbeddingService, SentimentService, Redis, VectorStoreManager, ThemeRepository, DocumentRepository, and SentimentAggregator
+- `models.py`: Pydantic request/response models (EmbedRequest, EmbedResponse, SearchRequest, SearchResponse, SentimentRequest, SentimentResponse, ThemeItem, ThemeListResponse, ThemeDetailResponse, ThemeDocumentItem, ThemeDocumentsResponse, ThemeSentimentResponse, ThemeMetricsItem, ThemeMetricsResponse, ThemeEventItem, ThemeEventsResponse, RankedThemeItem, RankedThemesResponse)
+- `dependencies.py`: Dependency injection for EmbeddingService, SentimentService, Redis, VectorStoreManager, ThemeRepository, DocumentRepository, SentimentAggregator, and ThemeRankingService
 - `routes/embed.py`: POST /embed endpoint with auto model selection
 - `routes/sentiment.py`: POST /sentiment endpoint with optional entity-level analysis
 - `routes/search.py`: POST /search/similar endpoint for semantic search with filters
@@ -278,6 +292,8 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
   - GET /themes/{theme_id}/documents — documents in a theme with platform/authority filters
   - GET /themes/{theme_id}/sentiment — aggregated sentiment with exponential decay weighting
   - GET /themes/{theme_id}/metrics — daily metrics time series with date range
+- `routes/themes.py` (ranked endpoint):
+  - GET /themes/ranked — ranked themes by actionability with strategy/max_tier/limit params, returns RankedThemesResponse
 - `routes/events.py`: Event endpoints for theme-linked event retrieval:
   - GET /themes/{theme_id}/events — events linked via ticker overlap with dedup, event_type/days/limit filters, investment_signal
 
@@ -313,6 +329,8 @@ Settings in `src/config/settings.py` use Pydantic BaseSettings with env var over
 - Clustering settings can be overridden via `CLUSTERING_*` environment variables (e.g., `CLUSTERING_HDBSCAN_MIN_CLUSTER_SIZE=20`, `CLUSTERING_UMAP_N_COMPONENTS=15`)
 - `volume_metrics_enabled` (false) for volume metrics computation
 - Volume metrics settings can be overridden via `VOLUME_*` environment variables (e.g., `VOLUME_DECAY_FACTOR=0.5`, `VOLUME_SURGE_THRESHOLD=4.0`)
+- `ranking_enabled` (false) for theme ranking engine actionability scoring
+- Ranking settings can be overridden via `RANKING_*` environment variables (e.g., `RANKING_DEFAULT_STRATEGY=position`, `RANKING_TIER_1_PERCENTILE=0.10`)
 - `graph_enabled` (false) for causal graph supply chain modeling
 - Graph settings can be overridden via `GRAPH_*` environment variables (e.g., `GRAPH_MAX_TRAVERSAL_DEPTH=5`, `GRAPH_DEFAULT_CONFIDENCE=1.0`)
 
@@ -442,6 +460,13 @@ async def fetch(self):
 - **Frozen Dataclass Definitions**: Seed uses `@dataclass(frozen=True)` helper types (`_NodeDef`, `_EdgeDef`) to prevent accidental mutation of static domain data
 - **Categorized Edge Lists**: Edges split into domain categories (foundry, equipment, memory, EDA, competition, technology, demand) for maintainability and selective testing
 - **Bidirectional Competition Edges**: Competition relationships are explicitly bidirectional (A→B and B→A) since `competes_with` is symmetric but the directed graph requires both edges
+- **Multiplicative Ranking Score**: `volume ** alpha * compellingness ** beta * lifecycle_multiplier` — zero in any factor collapses the total, preventing low-quality themes from ranking high on volume alone
+- **Z-Score Shift by +2**: `max(0, zscore + 2)` before exponentiation prevents complex numbers from negative base with fractional exponent, maps z=-2 to 0, z=0 to 2, z=3 to 5
+- **Strategy-Specific Exponents**: Swing (alpha=0.6 volume-biased) vs Position (alpha=0.4 compellingness-biased) — exponents are sublinear so diminishing returns on extreme values
+- **Percentile-Based Tiers**: Top 5%/20% of sorted list scales naturally with theme count, unlike absolute thresholds
+- **Tier 1 Gate**: Top percentile alone isn't enough — must also pass z-score >= 2.0 OR be accelerating, preventing low-activity themes from reaching Tier 1 by luck of small population
+- **Compellingness Fallback**: Default 5.0 when metadata missing, designed for future LLM Compellingness Scorer (Feature 7.1) to fill `theme.metadata["compellingness"]`
+- **Route Order for Static Paths**: `/themes/ranked` must be registered before `/themes/{theme_id}` to prevent FastAPI path parameter from capturing "ranked" as a theme_id
 
 ### Testing
 
@@ -552,6 +577,11 @@ uv run pytest tests/test_themes/test_metrics.py -v -k "Zscore"          # Run z-
 uv run pytest tests/test_themes/test_metrics.py -v -k "Velocity or Acceleration"  # Run velocity/acceleration tests
 uv run pytest tests/test_themes/test_metrics.py -v -k "Anomaly"         # Run anomaly detection tests
 uv run pytest tests/test_themes/test_metrics.py -v -k "ComputeForTheme" # Run orchestrator tests
+uv run pytest tests/test_themes/test_ranking.py -v              # Run ranking engine tests
+uv run pytest tests/test_themes/test_ranking.py -v -k "ComputeScore"   # Run scoring formula tests
+uv run pytest tests/test_themes/test_ranking.py -v -k "RankThemes"     # Run sorting/filtering tests
+uv run pytest tests/test_themes/test_ranking.py -v -k "AssignTiers"    # Run tier assignment tests
+uv run pytest tests/test_themes/test_ranking.py -v -k "GetActionable"  # Run orchestrator tests
 
 # Graph testing
 uv run pytest tests/test_graph/ -v                         # Run all graph tests
@@ -582,6 +612,7 @@ uv run pytest tests/test_api/test_themes.py -v -k "GetTheme and not Documents"  
 uv run pytest tests/test_api/test_themes.py -v -k "Documents"     # Run documents endpoint tests
 uv run pytest tests/test_api/test_themes.py -v -k "Sentiment"     # Run sentiment endpoint tests
 uv run pytest tests/test_api/test_themes.py -v -k "Metrics"       # Run metrics endpoint tests
+uv run pytest tests/test_api/test_themes.py -v -k "Ranked"        # Run ranked endpoint tests
 uv run pytest tests/test_api/test_events.py -v                    # Run event endpoint tests
 uv run pytest tests/test_api/test_events.py -v -k "deduplication"        # Run dedup tests
 uv run pytest tests/test_api/test_events.py -v -k "investment_signal"    # Run signal tests
