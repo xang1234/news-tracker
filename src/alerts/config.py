@@ -82,3 +82,11 @@ class AlertConfig(BaseSettings):
         ge=1.0,
         description="Volume z-score above which volume_surge becomes critical",
     )
+
+    # Propagated impact thresholds
+    propagated_impact_threshold: float = Field(
+        default=0.05,
+        ge=0.0,
+        le=1.0,
+        description="Minimum abs(impact) from sentiment propagation to generate alert",
+    )

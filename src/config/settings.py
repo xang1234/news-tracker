@@ -146,6 +146,9 @@ class Settings(BaseSettings):
     # Causal Graph
     graph_enabled: bool = Field(default=False, description="Enable causal graph for supply chain modeling")
 
+    # Sentiment Propagation
+    propagation_enabled: bool = Field(default=False, description="Enable sentiment propagation through causal graph")
+
     # Backtest
     backtest_enabled: bool = Field(default=False, description="Enable backtest data infrastructure")
 

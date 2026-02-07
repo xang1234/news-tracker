@@ -8,6 +8,9 @@ import redis.asyncio as redis
 
 from src.alerts.repository import AlertRepository
 from src.config.settings import get_settings
+from src.graph.causal_graph import CausalGraph
+from src.graph.config import GraphConfig
+from src.graph.propagation import SentimentPropagation
 from src.embedding.config import EmbeddingConfig
 from src.embedding.service import EmbeddingService
 from src.sentiment.aggregation import SentimentAggregator
@@ -30,6 +33,8 @@ _document_repository: DocumentRepository | None = None
 _sentiment_aggregator: SentimentAggregator | None = None
 _ranking_service: ThemeRankingService | None = None
 _alert_repository: AlertRepository | None = None
+_causal_graph: CausalGraph | None = None
+_propagation_service: SentimentPropagation | None = None
 
 
 async def get_redis_client() -> AsyncGenerator[redis.Redis, None]:
@@ -276,11 +281,52 @@ def get_sentiment_aggregator() -> SentimentAggregator:
     return _sentiment_aggregator
 
 
+async def get_causal_graph() -> CausalGraph:
+    """
+    Get causal graph instance.
+
+    Creates a singleton CausalGraph backed by the shared Database.
+    """
+    global _causal_graph, _database
+
+    if _causal_graph is None:
+        if _database is None:
+            _database = Database()
+            await _database.connect()
+
+        _causal_graph = CausalGraph(_database, config=GraphConfig())
+
+    return _causal_graph
+
+
+async def get_propagation_service() -> SentimentPropagation:
+    """
+    Get sentiment propagation service instance.
+
+    Creates a singleton service backed by the shared CausalGraph.
+    """
+    global _propagation_service, _causal_graph, _database
+
+    if _propagation_service is None:
+        if _causal_graph is None:
+            if _database is None:
+                _database = Database()
+                await _database.connect()
+            _causal_graph = CausalGraph(_database, config=GraphConfig())
+
+        _propagation_service = SentimentPropagation(
+            graph=_causal_graph,
+            config=GraphConfig(),
+        )
+
+    return _propagation_service
+
+
 async def cleanup_dependencies() -> None:
     """Clean up global dependencies on shutdown."""
     global _embedding_service, _sentiment_service, _redis_client, _vector_store_manager, _database
     global _theme_repository, _document_repository, _sentiment_aggregator, _ranking_service
-    global _alert_repository
+    global _alert_repository, _causal_graph, _propagation_service
 
     _vector_store_manager = None
     _theme_repository = None
@@ -288,6 +334,8 @@ async def cleanup_dependencies() -> None:
     _sentiment_aggregator = None
     _ranking_service = None
     _alert_repository = None
+    _causal_graph = None
+    _propagation_service = None
 
     if _embedding_service is not None:
         await _embedding_service.close()

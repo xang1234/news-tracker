@@ -51,7 +51,7 @@ Adapters → Redis Streams → Processing → PostgreSQL + pgvector
 | Sentiment | `src/sentiment/` | `SentimentService` (ProsusAI/finbert), `SentimentWorker` |
 | Clustering | `src/clustering/` | `BERTopicService` (batch), `ClusteringWorker` (real-time), `run_daily_clustering()` |
 | Themes | `src/themes/` | `ThemeRepository`, `LifecycleClassifier`, `VolumeMetricsService`, `ThemeRankingService` |
-| Graph | `src/graph/` | `GraphRepository` (recursive CTE), `CausalGraph`, `seed_data.py` |
+| Graph | `src/graph/` | `GraphRepository` (recursive CTE), `CausalGraph`, `SentimentPropagation` (BFS impact), `seed_data.py` |
 | Alerts | `src/alerts/` | `AlertService`, `triggers.py` (stateless functions), `AlertRepository` |
 | Notifications | `src/alerts/` | `NotificationDispatcher`, `WebhookChannel`, `SlackChannel`, `CircuitBreaker` |
 | Backtest | `src/backtest/` | `BacktestEngine`, `BacktestMetrics`, `PointInTimeService`, `PriceDataFeed`, `BacktestRunRepository` |
@@ -123,6 +123,8 @@ class Config: ...  # ❌ Never use this
 - **Point-in-Time Queries**: Filter on `fetched_at` (ingestion time), not `timestamp` (publication time), to prevent look-ahead bias
 - **Circuit Breaker Decorator**: `CircuitBreaker` wraps any `NotificationChannel` transparently (CLOSED→OPEN→HALF_OPEN→CLOSED)
 - **Graceful Notification Degradation**: Dispatcher failures never block alert persistence; Redis fallback queue for retries
+- **Edge-Type-Aware BFS**: Sentiment propagation multiplies edge weights (with sign) per hop; `competes_with` (-0.3) flips impact direction
+- **First Arrival Wins**: Propagation uses shallowest path to determine impact — deeper paths to already-reached nodes are skipped
 
 ## Configuration
 
@@ -142,6 +144,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | Volume Metrics | `volume_metrics_enabled` | `VOLUME_*` | decay, windows, thresholds, EMA spans |
 | Ranking | `ranking_enabled` | `RANKING_*` | `default_strategy` (swing/position), tier percentiles |
 | Graph | `graph_enabled` | `GRAPH_*` | `max_traversal_depth`, `default_confidence` |
+| Propagation | `propagation_enabled` | `GRAPH_*` | `propagation_default_decay` (0.7), `propagation_max_depth` (3), `propagation_min_impact`, edge type weights |
 | Alerts | `alerts_enabled` | `ALERTS_*` | dedup TTL, daily rate limits, trigger thresholds |
 | Notifications | `notifications_enabled` | `NOTIFICATIONS_*` | retry attempts/delays, circuit breaker threshold/recovery, queue TTL |
 | Backtest | `backtest_enabled` | `BACKTEST_*` | price cache TTL, forward horizons, yfinance rate limit |
@@ -172,6 +175,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | GET | /themes/{id}/events | Events via ticker overlap (dedup, investment_signal) |
 | GET | /alerts | List (severity, trigger_type, theme_id, acknowledged) |
 | PATCH | /alerts/{id}/acknowledge | Mark alert as acknowledged |
+| POST | /graph/propagate | Sentiment propagation through causal graph |
 | GET | /health | Service status |
 
 ## Module Conventions

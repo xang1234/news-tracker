@@ -18,6 +18,7 @@ AlertTriggerType = Literal[
     "volume_surge",
     "lifecycle_change",
     "new_theme",
+    "propagated_impact",
 ]
 
 VALID_TRIGGER_TYPES: frozenset[str] = frozenset({
@@ -26,6 +27,7 @@ VALID_TRIGGER_TYPES: frozenset[str] = frozenset({
     "volume_surge",
     "lifecycle_change",
     "new_theme",
+    "propagated_impact",
 })
 
 AlertSeverity = Literal["critical", "warning", "info"]

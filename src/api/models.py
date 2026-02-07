@@ -482,3 +482,45 @@ class AlertAcknowledgeResponse(BaseModel):
     alert_id: str = Field(..., description="Acknowledged alert identifier")
     acknowledged: bool = Field(..., description="New acknowledgement status")
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+# Graph propagation models
+
+
+class PropagateRequest(BaseModel):
+    """Request model for sentiment propagation."""
+
+    source_node: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Node ID where sentiment changed (e.g., 'theme_hbm_demand')",
+    )
+    sentiment_delta: float = Field(
+        ...,
+        ge=-1.0,
+        le=1.0,
+        description="Magnitude of sentiment change (-1.0 to 1.0)",
+    )
+
+
+class PropagationImpactItem(BaseModel):
+    """Single propagation impact result."""
+
+    node_id: str = Field(..., description="Affected downstream node ID")
+    impact: float = Field(..., description="Propagated sentiment impact (signed)")
+    depth: int = Field(..., ge=1, description="Hops from source node")
+    relation: str = Field(..., description="Edge type of the first hop reaching this node")
+    edge_confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence of that edge")
+
+
+class PropagateResponse(BaseModel):
+    """Response model for sentiment propagation."""
+
+    source_node: str = Field(..., description="Source node where sentiment changed")
+    sentiment_delta: float = Field(..., description="Input sentiment delta")
+    impacts: list[PropagationImpactItem] = Field(
+        ..., description="Affected nodes sorted by absolute impact (descending)"
+    )
+    total_affected: int = Field(..., description="Number of affected downstream nodes")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")

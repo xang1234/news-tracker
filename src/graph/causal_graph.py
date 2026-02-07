@@ -92,6 +92,17 @@ class CausalGraph:
         """Remove an edge. Returns True if an edge was actually deleted."""
         return await self._repo.remove_edge(source, target, relation)
 
+    async def get_downstream_edges(
+        self, node_id: str, max_depth: int = 3
+    ) -> list[tuple[str, str, str, float, int]]:
+        """Get all downstream edges with full edge info for propagation.
+
+        Returns:
+            List of (source, target, relation, confidence, depth) tuples.
+        """
+        depth = min(max_depth, self._config.max_traversal_depth)
+        return await self._repo.get_downstream_edges(node_id, max_depth=depth)
+
     async def get_downstream(
         self, node_id: str, max_depth: int = 2
     ) -> list[tuple[str, int]]:

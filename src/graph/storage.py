@@ -166,6 +166,47 @@ class GraphRepository:
     # Graph traversal
     # ------------------------------------------------------------------
 
+    async def get_downstream_edges(
+        self, node_id: str, max_depth: int = 2
+    ) -> list[tuple[str, str, str, float, int]]:
+        """Get all edges reachable by following outgoing edges with full edge info.
+
+        Returns edges grouped by depth for level-by-level propagation.
+        Uses a recursive CTE with cycle detection via path tracking.
+
+        Returns:
+            List of (source, target, relation, confidence, depth) tuples,
+            ordered by depth.
+        """
+        rows = await self._db.fetch(
+            """
+            WITH RECURSIVE downstream AS (
+                SELECT source, target, relation, confidence, 1 AS depth,
+                       ARRAY[source, target] AS path
+                FROM causal_edges
+                WHERE source = $1
+
+                UNION ALL
+
+                SELECT e.source, e.target, e.relation, e.confidence, d.depth + 1,
+                       d.path || e.target
+                FROM causal_edges e
+                JOIN downstream d ON e.source = d.target
+                WHERE d.depth < $2
+                  AND NOT e.target = ANY(d.path)
+            )
+            SELECT source, target, relation, confidence, depth
+            FROM downstream
+            ORDER BY depth
+            """,
+            node_id,
+            max_depth,
+        )
+        return [
+            (row["source"], row["target"], row["relation"], row["confidence"], row["depth"])
+            for row in rows
+        ]
+
     async def get_downstream(
         self, node_id: str, max_depth: int = 2
     ) -> list[tuple[str, int]]:

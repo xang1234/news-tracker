@@ -14,6 +14,7 @@ Components:
 
 from src.graph.causal_graph import CausalGraph
 from src.graph.config import GraphConfig
+from src.graph.propagation import PropagationImpact, SentimentPropagation
 from src.graph.schemas import (
     VALID_NODE_TYPES,
     VALID_RELATION_TYPES,
@@ -29,7 +30,9 @@ __all__ = [
     "CausalNode",
     "GraphConfig",
     "GraphRepository",
+    "PropagationImpact",
     "SEED_VERSION",
+    "SentimentPropagation",
     "VALID_NODE_TYPES",
     "VALID_RELATION_TYPES",
     "seed_graph",

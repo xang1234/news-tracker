@@ -15,6 +15,7 @@ from src.alerts.triggers import (
     check_extreme_sentiment,
     check_lifecycle_change,
     check_new_theme,
+    check_propagated_impact,
     check_sentiment_velocity,
     check_volume_surge,
 )
@@ -359,3 +360,103 @@ class TestCheckAllTriggers:
         result = check_all_triggers(theme, today, yesterday, config)
         assert len(result) == 1
         assert result[0].trigger_type == "volume_surge"
+
+
+# ── Propagated Impact ───────────────────────────────────
+
+
+class TestCheckPropagatedImpact:
+    """Test propagated impact trigger."""
+
+    def test_no_alert_below_threshold(self, config):
+        result = check_propagated_impact(
+            source_theme_name="HBM Shortage",
+            target_node_id="NVDA",
+            impact=0.03,
+            depth=1,
+            config=config,
+        )
+        assert result is None
+
+    def test_warning_at_threshold(self, config):
+        result = check_propagated_impact(
+            source_theme_name="HBM Shortage",
+            target_node_id="NVDA",
+            impact=-0.06,
+            depth=1,
+            config=config,
+        )
+        assert result is not None
+        assert result.severity == "warning"
+        assert result.trigger_type == "propagated_impact"
+        assert result.trigger_data["direction"] == "negative"
+
+    def test_critical_at_double_threshold(self, config):
+        # default threshold = 0.05, critical = 2× = 0.10
+        result = check_propagated_impact(
+            source_theme_name="HBM Shortage",
+            target_node_id="NVDA",
+            impact=-0.15,
+            depth=1,
+            config=config,
+        )
+        assert result is not None
+        assert result.severity == "critical"
+
+    def test_positive_impact_direction(self, config):
+        result = check_propagated_impact(
+            source_theme_name="AI Demand",
+            target_node_id="NVDA",
+            impact=0.12,
+            depth=2,
+            config=config,
+        )
+        assert result is not None
+        assert result.trigger_data["direction"] == "positive"
+        assert result.trigger_data["depth"] == 2
+
+    def test_trigger_data_contents(self, config):
+        result = check_propagated_impact(
+            source_theme_name="HBM Shortage",
+            target_node_id="SK_HYNIX",
+            impact=-0.08,
+            depth=1,
+            config=config,
+        )
+        assert result.trigger_data["source_theme"] == "HBM Shortage"
+        assert result.trigger_data["target_node"] == "SK_HYNIX"
+        assert result.trigger_data["impact"] == pytest.approx(-0.08)
+        assert result.trigger_data["depth"] == 1
+
+    def test_message_contains_source_and_target(self, config):
+        result = check_propagated_impact(
+            source_theme_name="Memory Pricing",
+            target_node_id="NVDA",
+            impact=-0.07,
+            depth=3,
+            config=config,
+        )
+        assert "Memory Pricing" in result.message
+        assert "NVDA" in result.message
+        assert "3 hops" in result.message
+
+    def test_singular_hop_in_message(self, config):
+        result = check_propagated_impact(
+            source_theme_name="Test",
+            target_node_id="X",
+            impact=-0.06,
+            depth=1,
+            config=config,
+        )
+        assert "1 hop " in result.message
+
+    def test_theme_id_is_target_node(self, config):
+        """Alert theme_id should be the target node (the affected entity)."""
+        result = check_propagated_impact(
+            source_theme_name="Source",
+            target_node_id="TARGET_NODE",
+            impact=-0.06,
+            depth=1,
+            config=config,
+        )
+        assert result.theme_id == "TARGET_NODE"

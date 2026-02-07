@@ -230,6 +230,59 @@ def check_new_theme(
     )
 
 
+def check_propagated_impact(
+    source_theme_name: str,
+    target_node_id: str,
+    impact: float,
+    depth: int,
+    config: AlertConfig,
+) -> Alert | None:
+    """Generate alert for significant propagated sentiment impact.
+
+    Fires when a sentiment change in one theme propagates through the causal
+    graph and produces a significant impact on a downstream node. Severity
+    is critical if abs(impact) >= 2× threshold, warning otherwise.
+
+    Args:
+        source_theme_name: Human-readable name of the source theme.
+        target_node_id: ID of the downstream node receiving impact.
+        impact: Propagated impact magnitude (can be negative).
+        depth: Number of hops from source.
+        config: Alert configuration with threshold.
+
+    Returns:
+        Alert or None.
+    """
+    if abs(impact) < config.propagated_impact_threshold:
+        return None
+
+    direction = "negative" if impact < 0 else "positive"
+
+    if abs(impact) >= config.propagated_impact_threshold * 2:
+        severity = "critical"
+    else:
+        severity = "warning"
+
+    return Alert(
+        theme_id=target_node_id,
+        trigger_type="propagated_impact",
+        severity=severity,
+        title=f"Propagated impact: {target_node_id}",
+        message=(
+            f"Sentiment change in '{source_theme_name}' propagated "
+            f"{direction} impact of {impact:+.3f} to {target_node_id} "
+            f"({depth} hop{'s' if depth != 1 else ''} away)"
+        ),
+        trigger_data={
+            "source_theme": source_theme_name,
+            "target_node": target_node_id,
+            "impact": round(impact, 6),
+            "depth": depth,
+            "direction": direction,
+        },
+    )
+
+
 def check_all_triggers(
     theme: Theme,
     today_metrics: ThemeMetrics,
