@@ -42,3 +42,15 @@ class BacktestConfig(BaseSettings):
         default=False,
         description="Automatically snapshot model version when daily clustering runs",
     )
+    backtest_lookback_days: int = Field(
+        default=7,
+        ge=1,
+        le=90,
+        description="Lookback window (days) for fetching theme metrics during backtest",
+    )
+    backtest_calibration_buckets: int = Field(
+        default=5,
+        ge=2,
+        le=20,
+        description="Number of quantile buckets for score-vs-return calibration",
+    )

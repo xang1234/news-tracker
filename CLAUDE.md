@@ -18,6 +18,8 @@ uv run news-tracker daily-clustering --date 2026-02-05  # Batch clustering
 uv run news-tracker graph seed            # Seed causal graph
 uv run news-tracker vector-search "query" --limit 10    # Semantic search
 uv run news-tracker cleanup --days 90     # Remove old documents
+uv run news-tracker backtest run --start 2025-01-01 --end 2025-06-30  # Run backtest
+uv run news-tracker backtest run --start 2025-01-01 --end 2025-06-30 --strategy position --horizon 20
 ```
 
 Test markers: `@pytest.mark.performance` (benchmarks), `@pytest.mark.integration` (requires running services).
@@ -52,7 +54,7 @@ Adapters → Redis Streams → Processing → PostgreSQL + pgvector
 | Graph | `src/graph/` | `GraphRepository` (recursive CTE), `CausalGraph`, `seed_data.py` |
 | Alerts | `src/alerts/` | `AlertService`, `triggers.py` (stateless functions), `AlertRepository` |
 | Notifications | `src/alerts/` | `NotificationDispatcher`, `WebhookChannel`, `SlackChannel`, `CircuitBreaker` |
-| Backtest | `src/backtest/` | `PointInTimeService`, `PriceDataFeed`, `ModelVersionRepository`, `BacktestRunRepository` |
+| Backtest | `src/backtest/` | `BacktestEngine`, `BacktestMetrics`, `PointInTimeService`, `PriceDataFeed`, `BacktestRunRepository` |
 | Scoring | `src/scoring/` | `CompellingnessService` (3-tier: rule→GPT→Claude), `LLMClient`, `GenericCircuitBreaker` |
 | Storage | `src/storage/` | `Database` (asyncpg), `DocumentRepository` |
 | API | `src/api/` | FastAPI with `routes/` (embed, sentiment, search, themes, events, alerts, health) |

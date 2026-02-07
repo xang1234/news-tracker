@@ -1116,6 +1116,112 @@ def cluster_recompute_centroids() -> None:
 
 
 @main.group()
+def backtest() -> None:
+    """Backtest commands."""
+
+
+@backtest.command("run")
+@click.option("--start", "start_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
+              help="Start date (inclusive)")
+@click.option("--end", "end_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
+              help="End date (inclusive)")
+@click.option("--strategy", default="swing", type=click.Choice(["swing", "position"]),
+              help="Ranking strategy (default: swing)")
+@click.option("--top-n", default=10, type=int, help="Number of top themes per day (default: 10)")
+@click.option("--horizon", default=5, type=int, help="Forward return horizon in trading days (default: 5)")
+def backtest_run(
+    start_date: Any,
+    end_date: Any,
+    strategy: str,
+    top_n: int,
+    horizon: int,
+) -> None:
+    """Run a historical backtest simulation.
+
+    Iterates over trading days, ranks themes using point-in-time data,
+    collects tickers from top themes, measures forward returns, and
+    computes performance metrics.
+
+    Example:
+        news-tracker backtest run --start 2025-01-01 --end 2025-06-30
+        news-tracker backtest run --start 2025-01-01 --end 2025-06-30 --strategy position --horizon 20
+    """
+    from src.backtest.engine import BacktestEngine
+    from src.storage.database import Database
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            engine = BacktestEngine(db)
+            start = start_date.date()
+            end = end_date.date()
+
+            if start > end:
+                click.echo(click.style("Error: start date must be before end date", fg="red"))
+                return
+
+            click.echo(f"Running backtest: {start} to {end}")
+            click.echo(f"  Strategy: {strategy}")
+            click.echo(f"  Top N: {top_n}")
+            click.echo(f"  Horizon: {horizon} trading days")
+            click.echo("")
+
+            results = await engine.run_backtest(
+                start_date=start,
+                end_date=end,
+                strategy=strategy,
+                top_n=top_n,
+                horizon=horizon,
+            )
+
+            # Summary table
+            click.echo(f"Backtest Results ({results.run_id})")
+            click.echo("=" * 50)
+            click.echo(f"  Trading days:   {results.trading_days}")
+            click.echo(f"  Hit rate:       {_fmt_pct(results.hit_rate)}")
+            click.echo(f"  Mean return:    {_fmt_pct(results.mean_return)}")
+            click.echo(f"  Total return:   {_fmt_pct(results.total_return)}")
+            click.echo(f"  Volatility:     {_fmt_pct(results.volatility)}")
+            click.echo(f"  Sharpe ratio:   {_fmt_float(results.sharpe_ratio)}")
+            click.echo(f"  Sortino ratio:  {_fmt_float(results.sortino_ratio)}")
+            click.echo(f"  Max drawdown:   {_fmt_pct(results.max_drawdown)}")
+            click.echo(f"  Win rate:       {_fmt_pct(results.win_rate)}")
+            click.echo(f"  Profit factor:  {_fmt_float(results.profit_factor)}")
+
+            if results.calibration:
+                click.echo(f"\n  Calibration Buckets:")
+                click.echo(f"  {'Bucket':<25} {'Count':>6} {'Avg Score':>10} {'Avg Return':>11} {'Hit Rate':>9}")
+                click.echo(f"  {'-'*25} {'-'*6} {'-'*10} {'-'*11} {'-'*9}")
+                for b in results.calibration:
+                    click.echo(
+                        f"  {b['bucket_label']:<25} {b['count']:>6} "
+                        f"{b['avg_score']:>10.4f} {b['avg_return']:>10.4%} "
+                        f"{b['hit_rate']:>8.1%}"
+                    )
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
+def _fmt_pct(value: float | None) -> str:
+    """Format a float as percentage or N/A."""
+    if value is None:
+        return "N/A"
+    return f"{value:.4%}"
+
+
+def _fmt_float(value: float | None) -> str:
+    """Format a float to 4 decimal places or N/A."""
+    if value is None:
+        return "N/A"
+    return f"{value:.4f}"
+
+
+@main.group()
 def graph() -> None:
     """Causal graph management commands."""
 
