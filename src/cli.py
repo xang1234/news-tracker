@@ -1115,5 +1115,44 @@ def cluster_recompute_centroids() -> None:
     asyncio.run(run())
 
 
+@main.group()
+def graph() -> None:
+    """Causal graph management commands."""
+
+
+@graph.command("seed")
+def graph_seed() -> None:
+    """Seed the causal graph with semiconductor supply chain data.
+
+    Populates ~50 nodes and ~100+ edges covering foundry supply chains,
+    equipment suppliers, memory suppliers, EDA/IP, competition, technology
+    dependencies, and demand drivers.
+
+    Idempotent: safe to re-run (uses ON CONFLICT upserts).
+
+    Example:
+        news-tracker graph seed
+    """
+    from src.graph.seed_data import seed_graph
+    from src.storage.database import Database
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            result = await seed_graph(db)
+
+            click.echo(f"\nGraph Seed Results (v{result['seed_version']}):")
+            click.echo(f"  Nodes seeded: {result['node_count']}")
+            click.echo(f"  Edges seeded: {result['edge_count']}")
+            click.echo(click.style("\nGraph seeded successfully!", fg="green"))
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
 if __name__ == "__main__":
     main()

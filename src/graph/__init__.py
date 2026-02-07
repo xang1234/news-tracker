@@ -20,6 +20,7 @@ from src.graph.schemas import (
     CausalEdge,
     CausalNode,
 )
+from src.graph.seed_data import SEED_VERSION, seed_graph
 from src.graph.storage import GraphRepository
 
 __all__ = [
@@ -28,6 +29,8 @@ __all__ = [
     "CausalNode",
     "GraphConfig",
     "GraphRepository",
+    "SEED_VERSION",
     "VALID_NODE_TYPES",
     "VALID_RELATION_TYPES",
+    "seed_graph",
 ]

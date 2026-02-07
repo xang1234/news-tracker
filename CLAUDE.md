@@ -40,6 +40,7 @@ uv run news-tracker cluster backfill --start 2026-01-01 --end 2026-01-31  # Back
 uv run news-tracker cluster merge --dry-run            # Preview theme merges
 uv run news-tracker cluster status                     # Show theme summary
 uv run news-tracker cluster recompute-centroids        # Recompute all centroids from docs
+uv run news-tracker graph seed                         # Seed causal graph with semiconductor supply chain
 uv run news-tracker vector-search "query" --limit 10  # Semantic search
 uv run news-tracker cleanup --days 90  # Remove old documents (storage management)
 
@@ -146,6 +147,12 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 - ON DELETE CASCADE from nodes to edges
 - Opt-in activation via `graph_enabled` in settings.py
 - DB: migration `005_add_causal_graph_tables.sql` with B-tree indexes on edges(source) and edges(target)
+- `seed_data.py`: Static semiconductor supply chain seed with 51 nodes (30 tickers, 13 technologies, 8 themes) and 149 edges
+- `seed_graph(database)`: Async function to populate graph, idempotent via ON CONFLICT upserts
+- `SEED_VERSION`: Integer constant for tracking seed data revisions
+- Node IDs: tickers use exchange symbols (`NVDA`, `TSM`), non-US companies use readable IDs (`SK_HYNIX`, `SAMSUNG`)
+- Edge categories: foundry supply, equipment supply, memory supply, EDA/IP supply, competition, technology deps, demand drivers
+- CLI: `news-tracker graph seed` command for one-step graph population
 
 **Clustering Layer** (`src/clustering/`):
 - `ClusteringConfig`: Pydantic settings for UMAP, HDBSCAN, c-TF-IDF, assignment thresholds, Redis queue
@@ -431,6 +438,10 @@ async def fetch(self):
 - **Idempotent Edge Upsert**: `add_edge()` uses `ON CONFLICT (source, target, relation) DO UPDATE` with `DISTINCT unnest()` for `source_doc_ids` array merge
 - **Two-Layer Graph Architecture**: `GraphRepository` (raw SQL, testable with mock DB) vs `CausalGraph` (config defaults, depth clamping, convenience methods) separates persistence from business logic
 - **Composite PK for Multi-Relation Edges**: `PRIMARY KEY (source, target, relation)` allows multiple relationship types between the same node pair (e.g., TSMC supplies_to AND competes_with Samsung)
+- **Versioned Seed Data**: `SEED_VERSION` constant enables tracking graph data revisions; `seed_graph()` is idempotent via underlying ON CONFLICT upserts
+- **Frozen Dataclass Definitions**: Seed uses `@dataclass(frozen=True)` helper types (`_NodeDef`, `_EdgeDef`) to prevent accidental mutation of static domain data
+- **Categorized Edge Lists**: Edges split into domain categories (foundry, equipment, memory, EDA, competition, technology, demand) for maintainability and selective testing
+- **Bidirectional Competition Edges**: Competition relationships are explicitly bidirectional (A→B and B→A) since `competes_with` is symmetric but the directed graph requires both edges
 
 ### Testing
 
@@ -550,6 +561,10 @@ uv run pytest tests/test_graph/test_causal_graph.py -v     # Run high-level serv
 uv run pytest tests/test_graph/test_storage.py -v -k "Downstream or Upstream"  # Run traversal tests
 uv run pytest tests/test_graph/test_storage.py -v -k "FindPath"               # Run path finding tests
 uv run pytest tests/test_graph/test_storage.py -v -k "Subgraph"               # Run subgraph extraction tests
+uv run pytest tests/test_graph/test_seed_data.py -v                            # Run seed data tests
+uv run pytest tests/test_graph/test_seed_data.py -v -k "Integrity"            # Run data integrity tests
+uv run pytest tests/test_graph/test_seed_data.py -v -k "Coverage"             # Run domain coverage tests
+uv run pytest tests/test_graph/test_seed_data.py -v -k "SeedGraphFunction"    # Run seed function tests
 
 # CLI testing
 uv run pytest tests/test_cli/ -v                         # Run all CLI tests
@@ -557,6 +572,7 @@ uv run pytest tests/test_cli/test_cluster.py -v          # Run cluster command t
 uv run pytest tests/test_cli/test_cluster.py -v -k "Fit"       # Run fit subcommand tests
 uv run pytest tests/test_cli/test_cluster.py -v -k "Backfill"  # Run backfill tests
 uv run pytest tests/test_cli/test_cluster.py -v -k "Merge"     # Run merge tests
+uv run pytest tests/test_cli/test_graph.py -v              # Run graph CLI command tests
 
 # API testing
 uv run pytest tests/test_api/ -v                        # Run all API tests
