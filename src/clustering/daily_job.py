@@ -44,6 +44,7 @@ class DailyClusteringResult:
     new_themes_created: int = 0
     themes_merged: int = 0
     metrics_computed: int = 0
+    alerts_generated: int = 0
     lifecycle_transitions: list[LifecycleTransition] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     elapsed_seconds: float = 0.0
@@ -179,12 +180,13 @@ async def run_daily_clustering(
             result.errors.append(f"doc_count:{tid}: {e}")
 
     # Phase 9: New theme detection
+    new_theme_ids: list[str] = []
     if unassigned_indices:
         try:
-            new_count = await _detect_new_themes(
+            new_theme_ids = await _detect_new_themes(
                 docs, embeddings, unassigned_indices, themes, config, theme_repo,
             )
-            result.new_themes_created = new_count
+            result.new_themes_created = len(new_theme_ids)
         except Exception as e:
             logger.exception("New theme detection failed")
             result.errors.append(f"new_themes: {e}")
@@ -224,10 +226,21 @@ async def run_daily_clustering(
             logger.exception("Weekly merge failed")
             result.errors.append(f"merge: {e}")
 
+    # Phase 12: Alert generation (gated by settings.alerts_enabled)
+    try:
+        alerts_count = await _generate_daily_alerts(
+            target_date, themes, theme_doc_counts, theme_repo,
+            result.lifecycle_transitions, new_theme_ids, database,
+        )
+        result.alerts_generated = alerts_count
+    except Exception as e:
+        logger.exception("Alert generation failed")
+        result.errors.append(f"alerts: {e}")
+
     result.elapsed_seconds = time.monotonic() - start_time
     logger.info(
         "Daily clustering complete for %s: fetched=%d assigned=%d unassigned=%d "
-        "new_themes=%d merged=%d metrics=%d errors=%d elapsed=%.2fs",
+        "new_themes=%d merged=%d metrics=%d alerts=%d errors=%d elapsed=%.2fs",
         target_date,
         result.documents_fetched,
         result.documents_assigned,
@@ -235,6 +248,7 @@ async def run_daily_clustering(
         result.new_themes_created,
         result.themes_merged,
         result.metrics_computed,
+        result.alerts_generated,
         len(result.errors),
         result.elapsed_seconds,
     )
@@ -325,7 +339,7 @@ async def _detect_new_themes(
     existing_themes: list[Theme],
     config: ClusteringConfig,
     theme_repo: ThemeRepository,
-) -> int:
+) -> list[str]:
     """
     Detect new themes from unassigned documents via BERTopicService.check_new_themes().
 
@@ -333,7 +347,7 @@ async def _detect_new_themes(
     unassigned candidates through its mini-clustering pipeline.
 
     Returns:
-        Number of new themes created.
+        List of created theme IDs (empty if none detected).
     """
     min_candidates = max(3, config.hdbscan_min_cluster_size // 2)
     if len(unassigned_indices) < min_candidates:
@@ -342,7 +356,7 @@ async def _detect_new_themes(
             len(unassigned_indices),
             min_candidates,
         )
-        return 0
+        return []
 
     # Build BERTopicService pre-populated with existing themes
     service = BERTopicService(config=config)
@@ -359,16 +373,16 @@ async def _detect_new_themes(
     new_clusters = service.check_new_themes(candidates)
 
     # Persist new themes to DB
-    created = 0
+    created_ids: list[str] = []
     for cluster in new_clusters:
         theme = _cluster_to_theme(cluster)
         try:
             await theme_repo.create(theme)
-            created += 1
+            created_ids.append(theme.theme_id)
         except Exception as e:
             logger.error("Failed to persist new theme %s: %s", cluster.theme_id, e)
 
-    return created
+    return created_ids
 
 
 async def _compute_daily_metrics(
@@ -571,3 +585,95 @@ async def _classify_lifecycle_stages(
             )
 
     return transitions
+
+
+async def _generate_daily_alerts(
+    target_date: date,
+    themes: list[Theme],
+    theme_doc_counts: dict[str, int],
+    theme_repo: ThemeRepository,
+    lifecycle_transitions: list[LifecycleTransition],
+    new_theme_ids: list[str],
+    database: Database,
+) -> int:
+    """
+    Generate alerts based on daily metrics analysis (Phase 12).
+
+    Gated by ``settings.alerts_enabled``. Fetches today's and yesterday's
+    metrics, runs all trigger functions, and persists filtered alerts.
+
+    Returns:
+        Number of alerts persisted.
+    """
+    from src.config.settings import get_settings
+
+    settings = get_settings()
+    if not settings.alerts_enabled:
+        return 0
+
+    from src.alerts.config import AlertConfig
+    from src.alerts.repository import AlertRepository
+    from src.alerts.service import AlertService
+
+    # Only generate alerts for themes that had activity today
+    active_theme_ids = {tid for tid, count in theme_doc_counts.items() if count > 0}
+    if not active_theme_ids and not new_theme_ids and not lifecycle_transitions:
+        return 0
+
+    # Fetch today's and yesterday's metrics for active themes
+    yesterday = target_date - timedelta(days=1)
+    today_metrics_map: dict[str, ThemeMetrics] = {}
+    yesterday_metrics_map: dict[str, ThemeMetrics] = {}
+
+    for theme in themes:
+        if theme.theme_id not in active_theme_ids:
+            continue
+        try:
+            today_rows = await theme_repo.get_metrics_range(
+                theme.theme_id, target_date, target_date,
+            )
+            if today_rows:
+                today_metrics_map[theme.theme_id] = today_rows[0]
+
+            yesterday_rows = await theme_repo.get_metrics_range(
+                theme.theme_id, yesterday, yesterday,
+            )
+            if yesterday_rows:
+                yesterday_metrics_map[theme.theme_id] = yesterday_rows[0]
+        except Exception as e:
+            logger.error("Failed to fetch metrics for alert gen %s: %s", theme.theme_id, e)
+
+    # Build AlertService with optional Redis
+    alert_config = AlertConfig()
+    alert_repo = AlertRepository(database)
+
+    redis_client = None
+    try:
+        import redis.asyncio as redis_lib
+        redis_client = redis_lib.from_url(
+            str(settings.redis_url), encoding="utf-8", decode_responses=True,
+        )
+    except Exception as e:
+        logger.warning("Redis unavailable for alert dedup: %s", e)
+
+    service = AlertService(
+        config=alert_config,
+        alert_repo=alert_repo,
+        redis_client=redis_client,
+    )
+
+    try:
+        alerts = await service.generate_alerts(
+            themes=themes,
+            today_metrics_map=today_metrics_map,
+            yesterday_metrics_map=yesterday_metrics_map,
+            lifecycle_transitions=lifecycle_transitions,
+            new_theme_ids=new_theme_ids,
+        )
+        return len(alerts)
+    finally:
+        if redis_client is not None:
+            try:
+                await redis_client.aclose()
+            except Exception:
+                pass

@@ -449,3 +449,28 @@ class RankedThemesResponse(BaseModel):
     total: int = Field(..., description="Number of ranked themes returned")
     strategy: str = Field(..., description="Ranking strategy used (swing or position)")
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+# Alert models
+
+
+class AlertItem(BaseModel):
+    """Single alert record."""
+
+    alert_id: str = Field(..., description="Unique alert identifier")
+    theme_id: str = Field(..., description="Theme that triggered the alert")
+    trigger_type: str = Field(..., description="Alert trigger type")
+    severity: str = Field(..., description="Severity level: critical, warning, info")
+    title: str = Field(..., description="Short human-readable summary")
+    message: str = Field(..., description="Detailed alert description")
+    trigger_data: dict = Field(default_factory=dict, description="Trigger-specific context")
+    acknowledged: bool = Field(default=False, description="Whether the alert has been reviewed")
+    created_at: str = Field(..., description="Alert creation timestamp (ISO format)")
+
+
+class AlertsResponse(BaseModel):
+    """Response model for listing alerts."""
+
+    alerts: list[AlertItem] = Field(..., description="List of alerts")
+    total: int = Field(..., description="Number of alerts returned")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")

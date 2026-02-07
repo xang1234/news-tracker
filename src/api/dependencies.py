@@ -6,6 +6,7 @@ from typing import AsyncGenerator
 
 import redis.asyncio as redis
 
+from src.alerts.repository import AlertRepository
 from src.config.settings import get_settings
 from src.embedding.config import EmbeddingConfig
 from src.embedding.service import EmbeddingService
@@ -28,6 +29,7 @@ _theme_repository: ThemeRepository | None = None
 _document_repository: DocumentRepository | None = None
 _sentiment_aggregator: SentimentAggregator | None = None
 _ranking_service: ThemeRankingService | None = None
+_alert_repository: AlertRepository | None = None
 
 
 async def get_redis_client() -> AsyncGenerator[redis.Redis, None]:
@@ -242,6 +244,24 @@ async def get_ranking_service() -> ThemeRankingService:
     return _ranking_service
 
 
+async def get_alert_repository() -> AlertRepository:
+    """
+    Get alert repository instance.
+
+    Creates a singleton repository backed by the shared Database.
+    """
+    global _alert_repository, _database
+
+    if _alert_repository is None:
+        if _database is None:
+            _database = Database()
+            await _database.connect()
+
+        _alert_repository = AlertRepository(_database)
+
+    return _alert_repository
+
+
 def get_sentiment_aggregator() -> SentimentAggregator:
     """
     Get sentiment aggregator instance.
@@ -260,12 +280,14 @@ async def cleanup_dependencies() -> None:
     """Clean up global dependencies on shutdown."""
     global _embedding_service, _sentiment_service, _redis_client, _vector_store_manager, _database
     global _theme_repository, _document_repository, _sentiment_aggregator, _ranking_service
+    global _alert_repository
 
     _vector_store_manager = None
     _theme_repository = None
     _document_repository = None
     _sentiment_aggregator = None
     _ranking_service = None
+    _alert_repository = None
 
     if _embedding_service is not None:
         await _embedding_service.close()

@@ -154,6 +154,27 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 - Edge categories: foundry supply, equipment supply, memory supply, EDA/IP supply, competition, technology deps, demand drivers
 - CLI: `news-tracker graph seed` command for one-step graph population
 
+**Alert Layer** (`src/alerts/`):
+- `AlertConfig`: Pydantic settings (prefix `ALERTS_`) for dedup TTL, daily rate limits, trigger thresholds
+- `Alert`: Dataclass mapping 1:1 to alerts table with uuid4 ID, `__post_init__` validation, `to_dict()`/`from_dict()`
+- `AlertTriggerType`: Literal 5 types: `sentiment_velocity`, `extreme_sentiment`, `volume_surge`, `lifecycle_change`, `new_theme`
+- `AlertSeverity`: Literal 3 levels: `critical`, `warning`, `info`
+- `AlertRepository`: CRUD, dynamic SQL filtered listing, `count_today_by_severity()` for rate limiting, `acknowledge()`
+- `AlertService`: Orchestrator with Redis SET NX dedup, DB count rate limiting, `generate_alerts()` entry point
+- Trigger functions (`triggers.py`): Pure stateless functions (follows LifecycleClassifier pattern):
+  - `check_sentiment_velocity()`: Fires on abs(delta) > 0.3, CRITICAL if > 0.6
+  - `check_extreme_sentiment()`: Fires on bullish_ratio > 0.85 or < 0.15, always WARNING
+  - `check_volume_surge()`: Fires on volume_zscore >= 3.0, CRITICAL if >= 4.0
+  - `check_lifecycle_change()`: Fires for alertable transitions, CRITICAL for emerging→accelerating
+  - `check_new_theme()`: Always fires, always INFO
+  - `check_all_triggers()`: Runs metric-based triggers (not lifecycle/new_theme)
+- Dedup key: `alert:dedup:{theme_id}:{trigger_type}` with configurable TTL (default 4h)
+- Rate limits: critical=5/day, warning=20/day, info=unlimited (0)
+- Graceful degradation: dedup returns False (allows alert) when Redis unavailable
+- Integrated as Phase 12 of `run_daily_clustering()`, gated by `settings.alerts_enabled`
+- DB: migration `006_add_alerts_table.sql` with B-tree indexes on severity+created_at, theme_id+created_at, created_at DESC
+- API: `GET /alerts` with severity, trigger_type, theme_id, acknowledged filters
+
 **Clustering Layer** (`src/clustering/`):
 - `ClusteringConfig`: Pydantic settings for UMAP, HDBSCAN, c-TF-IDF, assignment thresholds, Redis queue
 - `ClusteringQueue`: Redis Streams wrapper for clustering jobs (follows `BaseRedisQueue[ClusteringJob]` pattern)
@@ -296,6 +317,8 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
   - GET /themes/ranked — ranked themes by actionability with strategy/max_tier/limit params, returns RankedThemesResponse
 - `routes/events.py`: Event endpoints for theme-linked event retrieval:
   - GET /themes/{theme_id}/events — events linked via ticker overlap with dedup, event_type/days/limit filters, investment_signal
+- `routes/alerts.py`: Alert endpoints:
+  - GET /alerts — list alerts with severity/trigger_type/theme_id/acknowledged filters, pagination
 
 **Services** (`src/services/`):
 - `IngestionService`: Runs adapters concurrently, publishes to queue
@@ -332,6 +355,8 @@ Settings in `src/config/settings.py` use Pydantic BaseSettings with env var over
 - `ranking_enabled` (false) for theme ranking engine actionability scoring
 - Ranking settings can be overridden via `RANKING_*` environment variables (e.g., `RANKING_DEFAULT_STRATEGY=position`, `RANKING_TIER_1_PERCENTILE=0.10`)
 - `graph_enabled` (false) for causal graph supply chain modeling
+- `alerts_enabled` (false) for alert generation in daily clustering
+- Alert settings can be overridden via `ALERTS_*` environment variables (e.g., `ALERTS_DEDUP_TTL_HOURS=8`, `ALERTS_DAILY_LIMIT_CRITICAL=10`, `ALERTS_SENTIMENT_VELOCITY_THRESHOLD=0.4`)
 - Graph settings can be overridden via `GRAPH_*` environment variables (e.g., `GRAPH_MAX_TRAVERSAL_DEPTH=5`, `GRAPH_DEFAULT_CONFIDENCE=1.0`)
 
 Semiconductor tickers and company mappings are in `src/config/tickers.py`.
@@ -467,6 +492,11 @@ async def fetch(self):
 - **Tier 1 Gate**: Top percentile alone isn't enough — must also pass z-score >= 2.0 OR be accelerating, preventing low-activity themes from reaching Tier 1 by luck of small population
 - **Compellingness Fallback**: Default 5.0 when metadata missing, designed for future LLM Compellingness Scorer (Feature 7.1) to fill `theme.metadata["compellingness"]`
 - **Route Order for Static Paths**: `/themes/ranked` must be registered before `/themes/{theme_id}` to prevent FastAPI path parameter from capturing "ranked" as a theme_id
+- **Redis SET NX Alert Dedup**: `alert:dedup:{theme_id}:{trigger_type}` with configurable TTL — atomic duplicate prevention, graceful degradation when Redis unavailable
+- **DB Count Rate Limiting**: `count_today_by_severity()` query against alerts table — database is the source of truth for rate limits, not Redis counters
+- **Stateless Trigger Functions**: Pure functions in `triggers.py` take theme + metrics, return `Alert | None` — no DB, no Redis, trivially testable with boundary conditions
+- **Phase-Resilient Alert Integration**: Phase 12 of daily clustering has independent try/except — alert failures don't abort the batch job, errors logged to `result.errors`
+- **`_detect_new_themes` Returns IDs**: Refactored from `int` → `list[str]` to feed new theme IDs into alert generation without a second DB query
 
 ### Testing
 
@@ -595,6 +625,19 @@ uv run pytest tests/test_graph/test_seed_data.py -v                            #
 uv run pytest tests/test_graph/test_seed_data.py -v -k "Integrity"            # Run data integrity tests
 uv run pytest tests/test_graph/test_seed_data.py -v -k "Coverage"             # Run domain coverage tests
 uv run pytest tests/test_graph/test_seed_data.py -v -k "SeedGraphFunction"    # Run seed function tests
+
+# Alert testing
+uv run pytest tests/test_alerts/ -v                        # Run all alert tests
+uv run pytest tests/test_alerts/test_schemas.py -v         # Run schema validation tests
+uv run pytest tests/test_alerts/test_triggers.py -v        # Run trigger function tests (most critical)
+uv run pytest tests/test_alerts/test_service.py -v         # Run service orchestration tests
+uv run pytest tests/test_alerts/test_repository.py -v      # Run repository CRUD tests
+uv run pytest tests/test_alerts/test_triggers.py -v -k "SentimentVelocity"  # Run velocity tests
+uv run pytest tests/test_alerts/test_triggers.py -v -k "VolumeSurge"        # Run surge tests
+uv run pytest tests/test_alerts/test_triggers.py -v -k "Lifecycle"          # Run lifecycle tests
+uv run pytest tests/test_alerts/test_service.py -v -k "Deduplication"       # Run dedup tests
+uv run pytest tests/test_alerts/test_service.py -v -k "RateLimiting"        # Run rate limit tests
+uv run pytest tests/test_alerts/test_service.py -v -k "GenerateAlerts"      # Run e2e generation tests
 
 # CLI testing
 uv run pytest tests/test_cli/ -v                         # Run all CLI tests
