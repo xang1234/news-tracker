@@ -28,10 +28,12 @@ from src.alerts.schemas import (
     AlertSeverity,
     AlertTriggerType,
 )
+from src.alerts.broadcaster import AlertBroadcaster
 from src.alerts.service import AlertService
 
 __all__ = [
     "Alert",
+    "AlertBroadcaster",
     "AlertConfig",
     "AlertRepository",
     "AlertService",

@@ -6,6 +6,7 @@ from typing import AsyncGenerator
 
 import redis.asyncio as redis
 
+from src.alerts.broadcaster import AlertBroadcaster
 from src.alerts.repository import AlertRepository
 from src.config.settings import get_settings
 from src.graph.causal_graph import CausalGraph
@@ -35,6 +36,7 @@ _ranking_service: ThemeRankingService | None = None
 _alert_repository: AlertRepository | None = None
 _causal_graph: CausalGraph | None = None
 _propagation_service: SentimentPropagation | None = None
+_alert_broadcaster: AlertBroadcaster | None = None
 
 
 async def get_redis_client() -> AsyncGenerator[redis.Redis, None]:
@@ -322,11 +324,47 @@ async def get_propagation_service() -> SentimentPropagation:
     return _propagation_service
 
 
+async def get_alert_broadcaster() -> AlertBroadcaster:
+    """Get or create the alert broadcaster singleton.
+
+    Initializes the broadcaster, connects to Redis, and starts the
+    background subscriber task. Called during app lifespan startup.
+    """
+    global _alert_broadcaster, _redis_client
+
+    if _alert_broadcaster is None:
+        settings = get_settings()
+
+        if _redis_client is None:
+            _redis_client = redis.from_url(
+                str(settings.redis_url),
+                encoding="utf-8",
+                decode_responses=True,
+            )
+
+        _alert_broadcaster = AlertBroadcaster(
+            max_connections=settings.ws_alerts_max_connections,
+            heartbeat_interval=settings.ws_alerts_heartbeat_seconds,
+        )
+        await _alert_broadcaster.start(_redis_client)
+
+    return _alert_broadcaster
+
+
+async def stop_alert_broadcaster() -> None:
+    """Stop the alert broadcaster (called during shutdown)."""
+    global _alert_broadcaster
+
+    if _alert_broadcaster is not None:
+        await _alert_broadcaster.stop()
+        _alert_broadcaster = None
+
+
 async def cleanup_dependencies() -> None:
     """Clean up global dependencies on shutdown."""
     global _embedding_service, _sentiment_service, _redis_client, _vector_store_manager, _database
     global _theme_repository, _document_repository, _sentiment_aggregator, _ranking_service
-    global _alert_repository, _causal_graph, _propagation_service
+    global _alert_repository, _causal_graph, _propagation_service, _alert_broadcaster
 
     _vector_store_manager = None
     _theme_repository = None
@@ -336,6 +374,10 @@ async def cleanup_dependencies() -> None:
     _alert_repository = None
     _causal_graph = None
     _propagation_service = None
+
+    if _alert_broadcaster is not None:
+        await _alert_broadcaster.stop()
+        _alert_broadcaster = None
 
     if _embedding_service is not None:
         await _embedding_service.close()

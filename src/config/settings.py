@@ -161,6 +161,11 @@ class Settings(BaseSettings):
     # Drift Detection
     drift_enabled: bool = Field(default=False, description="Enable drift detection and monitoring")
 
+    # WebSocket Alerts
+    ws_alerts_enabled: bool = Field(default=False, description="Enable WebSocket streaming for real-time alerts")
+    ws_alerts_max_connections: int = Field(default=100, ge=1, le=10000, description="Max concurrent WS connections")
+    ws_alerts_heartbeat_seconds: int = Field(default=30, ge=5, le=300, description="Heartbeat ping interval")
+
     # Clustering (BERTopic)
     clustering_enabled: bool = Field(default=False, description="Enable BERTopic clustering in processing")
     clustering_stream_name: str = Field(default="clustering_queue", description="Redis stream for clustering jobs")

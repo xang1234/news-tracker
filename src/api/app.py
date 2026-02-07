@@ -10,8 +10,10 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from src.api.dependencies import cleanup_dependencies
+from src.api.dependencies import cleanup_dependencies, get_alert_broadcaster, stop_alert_broadcaster
 from src.api.routes import alerts, embed, events, graph, health, search, sentiment, themes
+from src.api.routes import ws_alerts
+from src.api.routes.ws_alerts import set_broadcaster
 from src.config.settings import get_settings
 
 logger = structlog.get_logger(__name__)
@@ -21,8 +23,21 @@ logger = structlog.get_logger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     logger.info("Embedding API starting up")
+
+    # Start WebSocket alert broadcaster if enabled
+    settings = get_settings()
+    if settings.ws_alerts_enabled:
+        try:
+            broadcaster = await get_alert_broadcaster()
+            set_broadcaster(broadcaster)
+            logger.info("WebSocket alert broadcaster started")
+        except Exception as e:
+            logger.warning("Failed to start WebSocket alert broadcaster: %s", e)
+
     yield
+
     logger.info("Embedding API shutting down")
+    await stop_alert_broadcaster()
     await cleanup_dependencies()
 
 
@@ -98,6 +113,7 @@ Requires `X-API-KEY` header for all requests except `/health`.
     app.include_router(events.router, tags=["events"])
     app.include_router(alerts.router, tags=["alerts"])
     app.include_router(graph.router, tags=["graph"])
+    app.include_router(ws_alerts.router, tags=["websocket"])
 
     # Root endpoint
     @app.get("/", include_in_schema=False)

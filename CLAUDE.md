@@ -62,6 +62,7 @@ Adapters → Redis Streams → Processing → PostgreSQL + pgvector
 | Scoring | `src/scoring/` | `CompellingnessService` (3-tier: rule→GPT→Claude), `LLMClient`, `GenericCircuitBreaker` |
 | Security Master | `src/security_master/` | `SecurityMasterService` (cached DB-backed tickers), `SecurityMasterRepository` (pg_trgm fuzzy search), `Security` dataclass |
 | Monitoring | `src/monitoring/` | `DriftService` (4 checks: embedding KL, fragmentation, sentiment z-score, centroid stability), `DriftConfig`, `DriftReport` |
+| WS Alerts | `src/alerts/broadcaster.py` + `src/api/routes/ws_alerts.py` | `AlertBroadcaster` (Redis pub/sub fan-out to WebSocket clients), `/ws/alerts` endpoint |
 | Storage | `src/storage/` | `Database` (asyncpg), `DocumentRepository` |
 | API | `src/api/` | FastAPI with `routes/` (embed, sentiment, search, themes, events, alerts, health) |
 
@@ -133,6 +134,8 @@ class Config: ...  # ❌ Never use this
 - **Transparent Cache Injection**: `init_security_master()` populates module-level caches in `tickers.py`; existing consumers use cached DB data with zero code changes
 - **Composite PK Securities**: `(ticker, exchange)` identifies securities across exchanges (e.g., Samsung on KRX vs US ADR)
 - **pg_trgm Fuzzy Search**: GIN trigram index on `securities.name` enables typo-tolerant company lookup via `similarity()`
+- **Redis Pub/Sub Fan-Out**: `alerts:broadcast` channel for WS alert push; each uvicorn worker subscribes independently
+- **WS Auth via Query Param**: `?api_key=...` since browsers can't set custom headers on WebSocket upgrade
 
 ## Configuration
 
@@ -159,6 +162,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | Scoring | `scoring_enabled` | `SCORING_*` | LLM API keys, tier thresholds, budget caps, circuit breaker, cache TTL |
 | Security Master | `security_master_enabled` | `SECURITY_MASTER_*` | `cache_ttl_seconds` (300), `fuzzy_threshold` (0.3), `seed_on_init` (True) |
 | Drift Detection | `drift_enabled` | `DRIFT_*` | KL thresholds, fragmentation limits, sentiment z-score, stability cosine distance |
+| WS Alerts | `ws_alerts_enabled` | (top-level) | `ws_alerts_max_connections` (100), `ws_alerts_heartbeat_seconds` (30) |
 
 ### Other Config
 - Tickers/companies: `src/config/tickers.py`
@@ -186,6 +190,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | GET | /alerts | List (severity, trigger_type, theme_id, acknowledged) |
 | PATCH | /alerts/{id}/acknowledge | Mark alert as acknowledged |
 | POST | /graph/propagate | Sentiment propagation through causal graph |
+| WS | /ws/alerts | Real-time alert stream (severity, theme_id, api_key query params) |
 | GET | /health | Service status |
 
 ## Module Conventions

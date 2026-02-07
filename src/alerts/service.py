@@ -199,6 +199,16 @@ class AlertService:
                 except Exception as e:
                     logger.error("Notification dispatch failed: %s", e)
 
+            # Broadcast to WebSocket clients via Redis pub/sub
+            if self._redis is not None and persisted:
+                from src.alerts.broadcaster import AlertBroadcaster
+
+                for alert in persisted:
+                    try:
+                        await AlertBroadcaster.publish(self._redis, alert)
+                    except Exception as e:
+                        logger.warning("WS broadcast failed for %s: %s", alert.alert_id, e)
+
             return persisted
 
         logger.info(
