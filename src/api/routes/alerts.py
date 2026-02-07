@@ -9,7 +9,7 @@ from src.alerts.repository import AlertRepository
 from src.alerts.schemas import VALID_SEVERITIES, VALID_TRIGGER_TYPES
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_alert_repository
-from src.api.models import AlertItem, AlertsResponse, ErrorResponse
+from src.api.models import AlertAcknowledgeResponse, AlertItem, AlertsResponse, ErrorResponse
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -120,4 +120,55 @@ async def list_alerts(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list alerts: {str(e)}",
+        )
+
+
+@router.patch(
+    "/alerts/{alert_id}/acknowledge",
+    response_model=AlertAcknowledgeResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Invalid API key"},
+        404: {"model": ErrorResponse, "description": "Alert not found or already acknowledged"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
+    summary="Acknowledge an alert",
+    description="Mark an alert as acknowledged. Idempotent — already-acknowledged alerts return 404.",
+)
+async def acknowledge_alert(
+    alert_id: str,
+    api_key: str = Depends(verify_api_key),
+    alert_repo: AlertRepository = Depends(get_alert_repository),
+) -> AlertAcknowledgeResponse:
+    start_time = time.perf_counter()
+
+    try:
+        updated = await alert_repo.acknowledge(alert_id)
+
+        if not updated:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Alert {alert_id!r} not found or already acknowledged",
+            )
+
+        latency_ms = (time.perf_counter() - start_time) * 1000
+
+        logger.info(
+            "Alert acknowledged",
+            alert_id=alert_id,
+            latency_ms=round(latency_ms, 2),
+        )
+
+        return AlertAcknowledgeResponse(
+            alert_id=alert_id,
+            acknowledged=True,
+            latency_ms=round(latency_ms, 2),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to acknowledge alert: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to acknowledge alert: {str(e)}",
         )

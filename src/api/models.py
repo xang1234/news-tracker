@@ -474,3 +474,11 @@ class AlertsResponse(BaseModel):
     alerts: list[AlertItem] = Field(..., description="List of alerts")
     total: int = Field(..., description="Number of alerts returned")
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class AlertAcknowledgeResponse(BaseModel):
+    """Response model for acknowledging an alert."""
+
+    alert_id: str = Field(..., description="Acknowledged alert identifier")
+    acknowledged: bool = Field(..., description="New acknowledgement status")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")

@@ -162,6 +162,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | GET | /themes/{id}/metrics | Daily metrics time series |
 | GET | /themes/{id}/events | Events via ticker overlap (dedup, investment_signal) |
 | GET | /alerts | List (severity, trigger_type, theme_id, acknowledged) |
+| PATCH | /alerts/{id}/acknowledge | Mark alert as acknowledged |
 | GET | /health | Service status |
 
 ## Module Conventions
