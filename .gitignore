@@ -55,3 +55,9 @@ data/
 # OS
 .DS_Store
 Thumbs.db
+
+# bv (beads viewer) local config and caches
+.bv/
+
+# scratch pad plans
+.plans/
