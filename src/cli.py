@@ -1346,5 +1346,148 @@ def graph_seed() -> None:
     asyncio.run(run())
 
 
+@main.group()
+def drift() -> None:
+    """Drift detection and monitoring commands."""
+
+
+@drift.command("check-quick")
+def drift_check_quick() -> None:
+    """Run quick embedding drift check (hourly cron).
+
+    Compares L2 norm distribution of recent vs baseline embeddings
+    using KL divergence.
+
+    Example:
+        news-tracker drift check-quick
+    """
+    from src.monitoring.config import DriftConfig
+    from src.monitoring.service import DriftService
+    from src.storage.database import Database
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            service = DriftService(db, DriftConfig())
+            report = await service.run_quick_check()
+            _display_drift_report(report)
+
+            metrics = get_metrics()
+            metrics.record_drift_check(report)
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
+@drift.command("check-daily")
+def drift_check_daily() -> None:
+    """Run all four drift checks (daily cron).
+
+    Checks embedding drift, theme fragmentation, sentiment
+    calibration, and cluster stability.
+
+    Example:
+        news-tracker drift check-daily
+    """
+    from src.monitoring.config import DriftConfig
+    from src.monitoring.service import DriftService
+    from src.storage.database import Database
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            service = DriftService(db, DriftConfig())
+            report = await service.run_daily_check()
+            _display_drift_report(report)
+
+            metrics = get_metrics()
+            metrics.record_drift_check(report)
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
+@drift.command("report")
+def drift_report() -> None:
+    """Run weekly drift report with verbose output.
+
+    Same checks as daily but with detailed metadata output.
+
+    Example:
+        news-tracker drift report
+    """
+    from src.monitoring.config import DriftConfig
+    from src.monitoring.service import DriftService
+    from src.storage.database import Database
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            service = DriftService(db, DriftConfig())
+            report = await service.run_weekly_report()
+            _display_drift_report(report, verbose=True)
+
+            metrics = get_metrics()
+            metrics.record_drift_check(report)
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
+def _display_drift_report(report: Any, verbose: bool = False) -> None:
+    """Format and display a DriftReport to the terminal.
+
+    Args:
+        report: DriftReport instance.
+        verbose: If True, show metadata details for each check.
+    """
+    severity_colors = {"ok": "green", "warning": "yellow", "critical": "red"}
+    severity_icons = {"ok": "OK", "warning": "WARN", "critical": "CRIT"}
+
+    click.echo(f"\nDrift Report ({len(report.results)} check(s))")
+    click.echo("=" * 50)
+
+    for result in report.results:
+        icon = severity_icons.get(result.severity, "?")
+        color = severity_colors.get(result.severity, "white")
+        label = result.drift_type.replace("_", " ").title()
+
+        click.echo(
+            click.style(f"  [{icon:4s}] ", fg=color)
+            + f"{label}: {result.message}"
+        )
+
+        if verbose and result.metadata:
+            for key, val in result.metadata.items():
+                click.echo(f"         {key}: {val}")
+
+    click.echo("=" * 50)
+    overall_color = severity_colors.get(report.overall_severity, "white")
+    click.echo(
+        "Overall: "
+        + click.style(report.overall_severity.upper(), fg=overall_color, bold=True)
+    )
+
+    if report.has_issues:
+        click.echo(
+            click.style(
+                "  Action recommended — review drift details above.",
+                fg="yellow",
+            )
+        )
+
+
 if __name__ == "__main__":
     main()

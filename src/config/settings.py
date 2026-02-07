@@ -155,6 +155,9 @@ class Settings(BaseSettings):
     # Scoring (LLM compellingness)
     scoring_enabled: bool = Field(default=False, description="Enable LLM compellingness scoring for themes")
 
+    # Drift Detection
+    drift_enabled: bool = Field(default=False, description="Enable drift detection and monitoring")
+
     # Clustering (BERTopic)
     clustering_enabled: bool = Field(default=False, description="Enable BERTopic clustering in processing")
     clustering_stream_name: str = Field(default="clustering_queue", description="Redis stream for clustering jobs")

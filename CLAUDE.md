@@ -20,6 +20,9 @@ uv run news-tracker vector-search "query" --limit 10    # Semantic search
 uv run news-tracker cleanup --days 90     # Remove old documents
 uv run news-tracker backtest run --start 2025-01-01 --end 2025-06-30  # Run backtest
 uv run news-tracker backtest run --start 2025-01-01 --end 2025-06-30 --strategy position --horizon 20
+uv run news-tracker drift check-quick     # Embedding drift only (hourly)
+uv run news-tracker drift check-daily     # All 4 drift checks (daily)
+uv run news-tracker drift report          # Weekly verbose report
 ```
 
 Test markers: `@pytest.mark.performance` (benchmarks), `@pytest.mark.integration` (requires running services).
@@ -57,6 +60,7 @@ Adapters → Redis Streams → Processing → PostgreSQL + pgvector
 | Backtest | `src/backtest/` | `BacktestEngine`, `BacktestMetrics`, `PointInTimeService`, `PriceDataFeed`, `BacktestRunRepository` |
 | Visualization | `src/backtest/` | `BacktestVisualizer` (matplotlib charts: cumulative returns, drawdown, scatter, heatmap) |
 | Scoring | `src/scoring/` | `CompellingnessService` (3-tier: rule→GPT→Claude), `LLMClient`, `GenericCircuitBreaker` |
+| Monitoring | `src/monitoring/` | `DriftService` (4 checks: embedding KL, fragmentation, sentiment z-score, centroid stability), `DriftConfig`, `DriftReport` |
 | Storage | `src/storage/` | `Database` (asyncpg), `DocumentRepository` |
 | API | `src/api/` | FastAPI with `routes/` (embed, sentiment, search, themes, events, alerts, health) |
 
@@ -149,6 +153,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | Notifications | `notifications_enabled` | `NOTIFICATIONS_*` | retry attempts/delays, circuit breaker threshold/recovery, queue TTL |
 | Backtest | `backtest_enabled` | `BACKTEST_*` | price cache TTL, forward horizons, yfinance rate limit |
 | Scoring | `scoring_enabled` | `SCORING_*` | LLM API keys, tier thresholds, budget caps, circuit breaker, cache TTL |
+| Drift Detection | `drift_enabled` | `DRIFT_*` | KL thresholds, fragmentation limits, sentiment z-score, stability cosine distance |
 
 ### Other Config
 - Tickers/companies: `src/config/tickers.py`

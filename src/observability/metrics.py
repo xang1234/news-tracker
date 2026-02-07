@@ -286,6 +286,32 @@ class MetricsCollector:
             buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
         )
 
+        # Drift detection gauges
+        self.embedding_drift_kl = Gauge(
+            "news_tracker_embedding_drift_kl",
+            "KL divergence of embedding L2 norm distribution",
+        )
+
+        self.theme_fragmentation_rate = Gauge(
+            "news_tracker_theme_fragmentation_rate",
+            "Theme creation rate on most recent day",
+        )
+
+        self.sentiment_calibration_zscore = Gauge(
+            "news_tracker_sentiment_calibration_zscore",
+            "Bullish ratio z-score vs baseline",
+        )
+
+        self.centroid_stability_avg = Gauge(
+            "news_tracker_centroid_stability_avg",
+            "Average centroid cosine distance across themes",
+        )
+
+        self.model_last_retrained_timestamp = Gauge(
+            "news_tracker_model_last_retrained_timestamp",
+            "Unix timestamp of last model retrain (placeholder)",
+        )
+
         # Queue reclaim metrics
         self.pending_reclaimed = Counter(
             "news_tracker_queue_pending_reclaimed_total",
@@ -584,6 +610,23 @@ class MetricsCollector:
             entity_count: Number of entities
         """
         self.sentiment_entity_count.observe(entity_count)
+
+    def record_drift_check(self, report: Any) -> None:
+        """Update drift detection gauges from a DriftReport.
+
+        Args:
+            report: DriftReport with results from drift checks.
+        """
+        gauge_map = {
+            "embedding_drift": self.embedding_drift_kl,
+            "theme_fragmentation": self.theme_fragmentation_rate,
+            "sentiment_calibration": self.sentiment_calibration_zscore,
+            "cluster_stability": self.centroid_stability_avg,
+        }
+        for result in report.results:
+            gauge = gauge_map.get(result.drift_type)
+            if gauge is not None:
+                gauge.set(result.value)
 
     def record_clustering_assigned(
         self,
