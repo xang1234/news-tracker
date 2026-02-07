@@ -129,6 +129,24 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
   - `deduplicate_events(events)`: Composite key `(actor, action, object, time_ref)`, keeps earliest, tracks `source_doc_ids`, +0.05 confidence per source (capped at 1.0)
 - `ThemeWithEvents`: Summary dataclass with `event_counts`, `investment_signal()` → `supply_increasing | supply_decreasing | product_momentum | product_risk | None`
 
+**Causal Graph Layer** (`src/graph/`):
+- `GraphConfig`: Pydantic settings (prefix `GRAPH_`) for max_traversal_depth, default_confidence
+- `CausalNode`: Dataclass for graph nodes with node_type (ticker, theme, technology) and metadata
+- `CausalEdge`: Dataclass for directed edges with relation type, confidence, source_doc_ids provenance
+- `GraphRepository`: asyncpg CRUD + recursive CTE traversals (downstream, upstream, path finding, subgraph extraction)
+- `CausalGraph`: High-level service with depth clamping, config-driven defaults, ensure_node convenience
+- Node types: `ticker`, `theme`, `technology`
+- Relation types: `depends_on`, `supplies_to`, `competes_with`, `drives`, `blocks`
+- Composite PK on edges: `(source, target, relation)` — same nodes can have multiple relationship types
+- Recursive CTEs with cycle detection via path array (`NOT node_id = ANY(path)`)
+- `get_downstream(node, max_depth)` / `get_upstream(node, max_depth)`: BFS traversal returning `(node_id, depth)` tuples
+- `find_path(source, target, max_depth)`: Shortest path via recursive CTE with `ORDER BY depth LIMIT 1`
+- `get_subgraph(node, depth)`: Extracts local neighborhood with both nodes and edges
+- Idempotent upsert for edges with `source_doc_ids` array merge via `DISTINCT unnest()`
+- ON DELETE CASCADE from nodes to edges
+- Opt-in activation via `graph_enabled` in settings.py
+- DB: migration `005_add_causal_graph_tables.sql` with B-tree indexes on edges(source) and edges(target)
+
 **Clustering Layer** (`src/clustering/`):
 - `ClusteringConfig`: Pydantic settings for UMAP, HDBSCAN, c-TF-IDF, assignment thresholds, Redis queue
 - `ClusteringQueue`: Redis Streams wrapper for clustering jobs (follows `BaseRedisQueue[ClusteringJob]` pattern)
@@ -288,6 +306,8 @@ Settings in `src/config/settings.py` use Pydantic BaseSettings with env var over
 - Clustering settings can be overridden via `CLUSTERING_*` environment variables (e.g., `CLUSTERING_HDBSCAN_MIN_CLUSTER_SIZE=20`, `CLUSTERING_UMAP_N_COMPONENTS=15`)
 - `volume_metrics_enabled` (false) for volume metrics computation
 - Volume metrics settings can be overridden via `VOLUME_*` environment variables (e.g., `VOLUME_DECAY_FACTOR=0.5`, `VOLUME_SURGE_THRESHOLD=4.0`)
+- `graph_enabled` (false) for causal graph supply chain modeling
+- Graph settings can be overridden via `GRAPH_*` environment variables (e.g., `GRAPH_MAX_TRAVERSAL_DEPTH=5`, `GRAPH_DEFAULT_CONFIDENCE=1.0`)
 
 Semiconductor tickers and company mappings are in `src/config/tickers.py`.
 
@@ -406,6 +426,11 @@ async def fetch(self):
 - **Over-Fetch Then Dedup**: Events endpoint fetches `limit * 3` rows, deduplicates in Python, truncates to `limit` — accounts for cross-document event redundancy
 - **Composite-Key Dedup**: `(actor, action, object, time_ref)` lowercased composite key for event deduplication; +0.05 confidence per confirming source, capped at 1.0
 - **Directional Investment Signal**: `ThemeWithEvents.investment_signal()` compares supply-side vs product-side event counts to derive `supply_increasing | supply_decreasing | product_momentum | product_risk`
+- **Recursive CTE Graph Traversal**: `get_downstream()` / `get_upstream()` use `WITH RECURSIVE` with cycle detection via `NOT node_id = ANY(path)` for O(1) roundtrip multi-hop traversal
+- **Depth-Clamped Traversal**: `CausalGraph` clamps caller-supplied depth to `config.max_traversal_depth` to prevent runaway recursive queries
+- **Idempotent Edge Upsert**: `add_edge()` uses `ON CONFLICT (source, target, relation) DO UPDATE` with `DISTINCT unnest()` for `source_doc_ids` array merge
+- **Two-Layer Graph Architecture**: `GraphRepository` (raw SQL, testable with mock DB) vs `CausalGraph` (config defaults, depth clamping, convenience methods) separates persistence from business logic
+- **Composite PK for Multi-Relation Edges**: `PRIMARY KEY (source, target, relation)` allows multiple relationship types between the same node pair (e.g., TSMC supplies_to AND competes_with Samsung)
 
 ### Testing
 
@@ -516,6 +541,15 @@ uv run pytest tests/test_themes/test_metrics.py -v -k "Zscore"          # Run z-
 uv run pytest tests/test_themes/test_metrics.py -v -k "Velocity or Acceleration"  # Run velocity/acceleration tests
 uv run pytest tests/test_themes/test_metrics.py -v -k "Anomaly"         # Run anomaly detection tests
 uv run pytest tests/test_themes/test_metrics.py -v -k "ComputeForTheme" # Run orchestrator tests
+
+# Graph testing
+uv run pytest tests/test_graph/ -v                         # Run all graph tests
+uv run pytest tests/test_graph/test_schemas.py -v          # Run schema validation tests
+uv run pytest tests/test_graph/test_storage.py -v          # Run repository CRUD + traversal tests
+uv run pytest tests/test_graph/test_causal_graph.py -v     # Run high-level service tests
+uv run pytest tests/test_graph/test_storage.py -v -k "Downstream or Upstream"  # Run traversal tests
+uv run pytest tests/test_graph/test_storage.py -v -k "FindPath"               # Run path finding tests
+uv run pytest tests/test_graph/test_storage.py -v -k "Subgraph"               # Run subgraph extraction tests
 
 # CLI testing
 uv run pytest tests/test_cli/ -v                         # Run all CLI tests
