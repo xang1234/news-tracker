@@ -138,7 +138,8 @@ class TestGetAll:
         result = await repo.get_all()
 
         sql = mock_database.fetch.call_args[0][0]
-        assert "WHERE" not in sql
+        assert "deleted_at IS NULL" in sql
+        assert "lifecycle_stage" not in sql
         assert "ORDER BY updated_at DESC" in sql
         assert "LIMIT" in sql
         assert result == []

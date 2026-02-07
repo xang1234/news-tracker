@@ -143,6 +143,9 @@ class Settings(BaseSettings):
     # Causal Graph
     graph_enabled: bool = Field(default=False, description="Enable causal graph for supply chain modeling")
 
+    # Backtest
+    backtest_enabled: bool = Field(default=False, description="Enable backtest data infrastructure")
+
     # Clustering (BERTopic)
     clustering_enabled: bool = Field(default=False, description="Enable BERTopic clustering in processing")
     clustering_stream_name: str = Field(default="clustering_queue", description="Redis stream for clustering jobs")

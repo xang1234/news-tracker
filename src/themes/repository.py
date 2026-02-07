@@ -8,7 +8,7 @@ storage, HNSW similarity search, and daily metrics time series.
 import json
 import logging
 import time
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 import numpy as np
@@ -136,7 +136,7 @@ class ThemeRepository:
         Returns:
             Theme or None if not found.
         """
-        sql = "SELECT * FROM themes WHERE theme_id = $1"
+        sql = "SELECT * FROM themes WHERE theme_id = $1 AND deleted_at IS NULL"
         row = await self._db.fetchrow(sql, theme_id)
         if row is None:
             return None
@@ -161,6 +161,7 @@ class ThemeRepository:
             sql = """
                 SELECT * FROM themes
                 WHERE lifecycle_stage = ANY($1)
+                  AND deleted_at IS NULL
                 ORDER BY updated_at DESC
                 LIMIT $2
             """
@@ -168,6 +169,7 @@ class ThemeRepository:
         else:
             sql = """
                 SELECT * FROM themes
+                WHERE deleted_at IS NULL
                 ORDER BY updated_at DESC
                 LIMIT $1
             """
@@ -288,7 +290,11 @@ class ThemeRepository:
         Returns:
             True if deleted, False if not found.
         """
-        sql = "DELETE FROM themes WHERE theme_id = $1 RETURNING theme_id"
+        sql = """
+            UPDATE themes SET deleted_at = NOW()
+            WHERE theme_id = $1 AND deleted_at IS NULL
+            RETURNING theme_id
+        """
         result = await self._db.fetchval(sql, theme_id)
         if result is not None:
             self._centroid_cache.invalidate(theme_id)
@@ -319,6 +325,7 @@ class ThemeRepository:
             SELECT *, 1 - (centroid <=> $1) AS similarity
             FROM themes
             WHERE 1 - (centroid <=> $1) >= $2
+              AND deleted_at IS NULL
             ORDER BY centroid <=> $1
             LIMIT $3
         """
@@ -361,6 +368,7 @@ class ThemeRepository:
                 SELECT theme_id, centroid
                 FROM themes
                 WHERE theme_id = ANY($1)
+                  AND deleted_at IS NULL
             """
             rows = await self._db.fetch(sql, uncached)
             for row in rows:
@@ -369,6 +377,75 @@ class ThemeRepository:
                 result[row["theme_id"]] = vec
 
         return result
+
+    # ── Point-in-Time Queries ─────────────────────────────────
+
+    async def get_all_as_of(
+        self,
+        as_of: datetime,
+        lifecycle_stages: list[str] | None = None,
+        limit: int = 100,
+    ) -> list[Theme]:
+        """Get themes that were active at a specific point in time.
+
+        A theme is "active at time T" if:
+        - created_at <= T, AND
+        - (deleted_at IS NULL OR deleted_at > T)
+
+        Args:
+            as_of: Point in time to query.
+            lifecycle_stages: Optional lifecycle stage filter.
+            limit: Maximum themes to return.
+
+        Returns:
+            Themes that existed at the given time, ordered by updated_at DESC.
+        """
+        if lifecycle_stages:
+            sql = """
+                SELECT * FROM themes
+                WHERE created_at <= $1
+                  AND (deleted_at IS NULL OR deleted_at > $1)
+                  AND lifecycle_stage = ANY($2)
+                ORDER BY updated_at DESC
+                LIMIT $3
+            """
+            rows = await self._db.fetch(sql, as_of, lifecycle_stages, limit)
+        else:
+            sql = """
+                SELECT * FROM themes
+                WHERE created_at <= $1
+                  AND (deleted_at IS NULL OR deleted_at > $1)
+                ORDER BY updated_at DESC
+                LIMIT $2
+            """
+            rows = await self._db.fetch(sql, as_of, limit)
+
+        return [_row_to_theme(row) for row in rows]
+
+    async def get_by_id_as_of(
+        self,
+        theme_id: str,
+        as_of: datetime,
+    ) -> Theme | None:
+        """Get a theme by ID as it existed at a specific point in time.
+
+        Args:
+            theme_id: Theme identifier.
+            as_of: Point in time to query.
+
+        Returns:
+            Theme or None if not found / not yet created / already deleted.
+        """
+        sql = """
+            SELECT * FROM themes
+            WHERE theme_id = $1
+              AND created_at <= $2
+              AND (deleted_at IS NULL OR deleted_at > $2)
+        """
+        row = await self._db.fetchrow(sql, theme_id, as_of)
+        if row is None:
+            return None
+        return _row_to_theme(row)
 
     # ── Metrics Time Series ───────────────────────────────────
 
@@ -510,6 +587,7 @@ def _row_to_theme(row: Any) -> Theme:
         description=row.get("description"),
         top_entities=top_entities,
         metadata=metadata,
+        deleted_at=row.get("deleted_at"),
     )
 
 

@@ -151,7 +151,8 @@ class DocumentRepository:
                 CHECK (lifecycle_stage IN ('emerging', 'accelerating', 'mature', 'fading')),
             created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            metadata        JSONB NOT NULL DEFAULT '{}'
+            metadata        JSONB NOT NULL DEFAULT '{}',
+            deleted_at      TIMESTAMPTZ
         );
 
         CREATE INDEX IF NOT EXISTS idx_themes_centroid_hnsw

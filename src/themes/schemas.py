@@ -56,6 +56,7 @@ class Theme:
     description: str | None = None
     top_entities: list[dict] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    deleted_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if self.lifecycle_stage not in VALID_LIFECYCLE_STAGES:
@@ -87,6 +88,7 @@ class Theme:
             "description": self.description,
             "top_entities": self.top_entities,
             "metadata": self.metadata,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
         }
 
     @classmethod
@@ -120,6 +122,10 @@ class Theme:
         if isinstance(metadata, str):
             metadata = json.loads(metadata)
 
+        deleted_at = data.get("deleted_at")
+        if isinstance(deleted_at, str):
+            deleted_at = datetime.fromisoformat(deleted_at)
+
         return cls(
             theme_id=data["theme_id"],
             name=data["name"],
@@ -133,6 +139,7 @@ class Theme:
             description=data.get("description"),
             top_entities=top_entities,
             metadata=metadata,
+            deleted_at=deleted_at,
         )
 
 

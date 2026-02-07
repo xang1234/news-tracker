@@ -85,6 +85,8 @@ dev = [
     "types-redis>=4.6.0",
     # spaCy model for NER and Keywords tests
     "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
+    # Price data for backtesting
+    "yfinance>=0.2.36",
 ]
 
 [project.scripts]
