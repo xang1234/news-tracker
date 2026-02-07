@@ -6,7 +6,7 @@ functions in ``triggers.py``.
 """
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.alerts.config import AlertConfig
 from src.alerts.repository import AlertRepository
@@ -34,10 +34,12 @@ class AlertService:
         config: AlertConfig,
         alert_repo: AlertRepository,
         redis_client: Any | None = None,
+        dispatcher: Any | None = None,
     ) -> None:
         self._config = config
         self._alert_repo = alert_repo
         self._redis = redis_client
+        self._dispatcher = dispatcher
 
     async def _is_duplicate(self, theme_id: str, trigger_type: str) -> bool:
         """Check Redis SET NX for recent duplicate alerts.
@@ -189,6 +191,14 @@ class AlertService:
                 len(filtered),
                 len(persisted),
             )
+
+            # Dispatch notifications (never blocks alert persistence)
+            if self._dispatcher is not None and persisted:
+                try:
+                    await self._dispatcher.dispatch_batch(persisted)
+                except Exception as e:
+                    logger.error("Notification dispatch failed: %s", e)
+
             return persisted
 
         logger.info(

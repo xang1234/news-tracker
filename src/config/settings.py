@@ -140,6 +140,9 @@ class Settings(BaseSettings):
     # Alerts
     alerts_enabled: bool = Field(default=False, description="Enable alert generation in daily clustering")
 
+    # Notifications
+    notifications_enabled: bool = Field(default=False, description="Enable notification delivery for alerts")
+
     # Causal Graph
     graph_enabled: bool = Field(default=False, description="Enable causal graph for supply chain modeling")
 

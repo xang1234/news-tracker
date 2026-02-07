@@ -51,6 +51,7 @@ Adapters → Redis Streams → Processing → PostgreSQL + pgvector
 | Themes | `src/themes/` | `ThemeRepository`, `LifecycleClassifier`, `VolumeMetricsService`, `ThemeRankingService` |
 | Graph | `src/graph/` | `GraphRepository` (recursive CTE), `CausalGraph`, `seed_data.py` |
 | Alerts | `src/alerts/` | `AlertService`, `triggers.py` (stateless functions), `AlertRepository` |
+| Notifications | `src/alerts/` | `NotificationDispatcher`, `WebhookChannel`, `SlackChannel`, `CircuitBreaker` |
 | Backtest | `src/backtest/` | `PointInTimeService`, `PriceDataFeed`, `ModelVersionRepository`, `BacktestRunRepository` |
 | Storage | `src/storage/` | `Database` (asyncpg), `DocumentRepository` |
 | API | `src/api/` | FastAPI with `routes/` (embed, sentiment, search, themes, events, alerts, health) |
@@ -116,6 +117,8 @@ class Config: ...  # ❌ Never use this
 - **Soft Delete Themes**: `deleted_at` column enables point-in-time queries; `AND deleted_at IS NULL` on all live queries
 - **Deterministic Model Versions**: `mv_{sha256(config_json)[:12]}` — idempotent, same config = same version ID
 - **Point-in-Time Queries**: Filter on `fetched_at` (ingestion time), not `timestamp` (publication time), to prevent look-ahead bias
+- **Circuit Breaker Decorator**: `CircuitBreaker` wraps any `NotificationChannel` transparently (CLOSED→OPEN→HALF_OPEN→CLOSED)
+- **Graceful Notification Degradation**: Dispatcher failures never block alert persistence; Redis fallback queue for retries
 
 ## Configuration
 
@@ -136,6 +139,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | Ranking | `ranking_enabled` | `RANKING_*` | `default_strategy` (swing/position), tier percentiles |
 | Graph | `graph_enabled` | `GRAPH_*` | `max_traversal_depth`, `default_confidence` |
 | Alerts | `alerts_enabled` | `ALERTS_*` | dedup TTL, daily rate limits, trigger thresholds |
+| Notifications | `notifications_enabled` | `NOTIFICATIONS_*` | retry attempts/delays, circuit breaker threshold/recovery, queue TTL |
 | Backtest | `backtest_enabled` | `BACKTEST_*` | price cache TTL, forward horizons, yfinance rate limit |
 
 ### Other Config
