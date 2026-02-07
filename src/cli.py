@@ -1207,6 +1207,92 @@ def backtest_run(
     asyncio.run(run())
 
 
+@backtest.command("plot")
+@click.option("--run-id", required=True, help="Backtest run ID to visualize")
+@click.option("--output-dir", default="./backtest_plots", help="Directory to save plots (default: ./backtest_plots)")
+def backtest_plot(run_id: str, output_dir: str) -> None:
+    """Generate visualization charts for a completed backtest run.
+
+    Loads the stored results from a previous backtest run and produces
+    four charts: cumulative returns, drawdown, score vs return scatter,
+    and monthly performance heatmap.
+
+    Example:
+        news-tracker backtest plot --run-id run_abc123def456
+        news-tracker backtest plot --run-id run_abc123def456 --output-dir ./my_plots
+    """
+    from datetime import date as date_type
+
+    from src.backtest.audit import BacktestRunRepository
+    from src.backtest.engine import BacktestResults, DailyBacktestResult
+    from src.backtest.visualization import BacktestVisualizer
+    from src.storage.database import Database
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            repo = BacktestRunRepository(db)
+            bt_run = await repo.get_by_id(run_id)
+
+            if bt_run is None:
+                click.echo(click.style(f"Error: Backtest run '{run_id}' not found", fg="red"))
+                return
+
+            if bt_run.status != "completed":
+                click.echo(click.style(
+                    f"Error: Backtest run '{run_id}' has status '{bt_run.status}' (expected 'completed')",
+                    fg="red",
+                ))
+                return
+
+            if not bt_run.results:
+                click.echo(click.style(f"Error: Backtest run '{run_id}' has no results data", fg="red"))
+                return
+
+            # Reconstruct BacktestResults from stored JSONB
+            data = bt_run.results
+            daily_results = []
+            for dr in data.get("daily_results", []):
+                daily_results.append(DailyBacktestResult(
+                    date=date_type.fromisoformat(dr["date"]) if isinstance(dr["date"], str) else dr["date"],
+                    top_n_tickers=dr.get("top_n_tickers", []),
+                    top_n_avg_return=dr.get("top_n_avg_return"),
+                    direction_correct=dr.get("direction_correct"),
+                    theme_count=dr.get("theme_count", 0),
+                    ranked_themes=dr.get("ranked_themes", []),
+                ))
+
+            results = BacktestResults(
+                run_id=data.get("run_id", run_id),
+                strategy=data.get("strategy", bt_run.parameters.get("strategy", "swing")),
+                horizon=data.get("horizon", bt_run.parameters.get("horizon", 5)),
+                top_n=data.get("top_n", bt_run.parameters.get("top_n", 10)),
+                trading_days=data.get("trading_days", len(daily_results)),
+                daily_results=daily_results,
+                hit_rate=data.get("hit_rate"),
+                mean_return=data.get("mean_return"),
+                total_return=data.get("total_return"),
+                max_drawdown=data.get("max_drawdown"),
+            )
+
+            click.echo(f"Generating plots for backtest run '{run_id}'...")
+            paths = BacktestVisualizer.generate_all(results, output_dir)
+
+            if paths:
+                click.echo(click.style(f"\nGenerated {len(paths)} chart(s):", fg="green"))
+                for p in paths:
+                    click.echo(f"  {p}")
+            else:
+                click.echo(click.style("No charts generated (insufficient data)", fg="yellow"))
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
 def _fmt_pct(value: float | None) -> str:
     """Format a float as percentage or N/A."""
     if value is None:

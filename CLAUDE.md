@@ -55,6 +55,7 @@ Adapters → Redis Streams → Processing → PostgreSQL + pgvector
 | Alerts | `src/alerts/` | `AlertService`, `triggers.py` (stateless functions), `AlertRepository` |
 | Notifications | `src/alerts/` | `NotificationDispatcher`, `WebhookChannel`, `SlackChannel`, `CircuitBreaker` |
 | Backtest | `src/backtest/` | `BacktestEngine`, `BacktestMetrics`, `PointInTimeService`, `PriceDataFeed`, `BacktestRunRepository` |
+| Visualization | `src/backtest/` | `BacktestVisualizer` (matplotlib charts: cumulative returns, drawdown, scatter, heatmap) |
 | Scoring | `src/scoring/` | `CompellingnessService` (3-tier: rule→GPT→Claude), `LLMClient`, `GenericCircuitBreaker` |
 | Storage | `src/storage/` | `Database` (asyncpg), `DocumentRepository` |
 | API | `src/api/` | FastAPI with `routes/` (embed, sentiment, search, themes, events, alerts, health) |

@@ -17,6 +17,7 @@ from src.backtest.engine import BacktestEngine, BacktestResults, DailyBacktestRe
 from src.backtest.metrics import BacktestMetrics, CalibrationBucket
 from src.backtest.model_versions import ModelVersion, ModelVersionRepository
 from src.backtest.point_in_time import PointInTimeService
+from src.backtest.visualization import BacktestVisualizer
 
 __all__ = [
     "BacktestConfig",
@@ -25,6 +26,7 @@ __all__ = [
     "BacktestResults",
     "BacktestRun",
     "BacktestRunRepository",
+    "BacktestVisualizer",
     "CalibrationBucket",
     "DailyBacktestResult",
     "ModelVersion",
