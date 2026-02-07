@@ -155,6 +155,9 @@ class Settings(BaseSettings):
     # Scoring (LLM compellingness)
     scoring_enabled: bool = Field(default=False, description="Enable LLM compellingness scoring for themes")
 
+    # Security Master
+    security_master_enabled: bool = Field(default=False, description="Enable database-backed security master for tickers")
+
     # Drift Detection
     drift_enabled: bool = Field(default=False, description="Enable drift detection and monitoring")
 

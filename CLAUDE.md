@@ -60,6 +60,7 @@ Adapters → Redis Streams → Processing → PostgreSQL + pgvector
 | Backtest | `src/backtest/` | `BacktestEngine`, `BacktestMetrics`, `PointInTimeService`, `PriceDataFeed`, `BacktestRunRepository` |
 | Visualization | `src/backtest/` | `BacktestVisualizer` (matplotlib charts: cumulative returns, drawdown, scatter, heatmap) |
 | Scoring | `src/scoring/` | `CompellingnessService` (3-tier: rule→GPT→Claude), `LLMClient`, `GenericCircuitBreaker` |
+| Security Master | `src/security_master/` | `SecurityMasterService` (cached DB-backed tickers), `SecurityMasterRepository` (pg_trgm fuzzy search), `Security` dataclass |
 | Monitoring | `src/monitoring/` | `DriftService` (4 checks: embedding KL, fragmentation, sentiment z-score, centroid stability), `DriftConfig`, `DriftReport` |
 | Storage | `src/storage/` | `Database` (asyncpg), `DocumentRepository` |
 | API | `src/api/` | FastAPI with `routes/` (embed, sentiment, search, themes, events, alerts, health) |
@@ -129,6 +130,9 @@ class Config: ...  # ❌ Never use this
 - **Graceful Notification Degradation**: Dispatcher failures never block alert persistence; Redis fallback queue for retries
 - **Edge-Type-Aware BFS**: Sentiment propagation multiplies edge weights (with sign) per hop; `competes_with` (-0.3) flips impact direction
 - **First Arrival Wins**: Propagation uses shallowest path to determine impact — deeper paths to already-reached nodes are skipped
+- **Transparent Cache Injection**: `init_security_master()` populates module-level caches in `tickers.py`; existing consumers use cached DB data with zero code changes
+- **Composite PK Securities**: `(ticker, exchange)` identifies securities across exchanges (e.g., Samsung on KRX vs US ADR)
+- **pg_trgm Fuzzy Search**: GIN trigram index on `securities.name` enables typo-tolerant company lookup via `similarity()`
 
 ## Configuration
 
@@ -153,6 +157,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | Notifications | `notifications_enabled` | `NOTIFICATIONS_*` | retry attempts/delays, circuit breaker threshold/recovery, queue TTL |
 | Backtest | `backtest_enabled` | `BACKTEST_*` | price cache TTL, forward horizons, yfinance rate limit |
 | Scoring | `scoring_enabled` | `SCORING_*` | LLM API keys, tier thresholds, budget caps, circuit breaker, cache TTL |
+| Security Master | `security_master_enabled` | `SECURITY_MASTER_*` | `cache_ttl_seconds` (300), `fuzzy_threshold` (0.3), `seed_on_init` (True) |
 | Drift Detection | `drift_enabled` | `DRIFT_*` | KL thresholds, fragmentation limits, sentiment z-score, stability cosine distance |
 
 ### Other Config

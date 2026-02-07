@@ -4,7 +4,26 @@ This module provides:
 1. A curated list of semiconductor tickers to track
 2. Company name -> ticker mappings for fuzzy matching
 3. Common abbreviations and alternate names
+
+When security_master_enabled is True, `init_security_master()` populates
+module-level caches from the database. The public functions (`get_all_tickers`,
+`normalize_ticker`, `company_to_ticker`) check these caches first, falling back
+to the static dicts when the feature is disabled or the DB is unavailable.
 """
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from src.storage.database import Database
+
+logger = logging.getLogger(__name__)
+
+# Module-level caches populated by init_security_master()
+_cached_tickers: set[str] | None = None
+_cached_company_map: dict[str, str] | None = None
 
 # Primary semiconductor tickers to track
 SEMICONDUCTOR_TICKERS: set[str] = {
@@ -220,13 +239,18 @@ SEMICONDUCTOR_KEYWORDS: set[str] = {
 
 
 def get_all_tickers() -> set[str]:
-    """Get all tracked tickers."""
+    """Get all tracked tickers.
+
+    Returns DB-backed data when security master is initialized,
+    otherwise falls back to the static SEMICONDUCTOR_TICKERS dict.
+    """
+    if _cached_tickers is not None:
+        return _cached_tickers.copy()
     return SEMICONDUCTOR_TICKERS.copy()
 
 
 def normalize_ticker(ticker: str) -> str | None:
-    """
-    Normalize a ticker symbol to standard format.
+    """Normalize a ticker symbol to standard format.
 
     Returns None if ticker is not in our tracked set.
     """
@@ -234,15 +258,49 @@ def normalize_ticker(ticker: str) -> str | None:
     if ticker.startswith("$"):
         ticker = ticker[1:]
 
-    if ticker in SEMICONDUCTOR_TICKERS:
+    active = _cached_tickers if _cached_tickers is not None else SEMICONDUCTOR_TICKERS
+    if ticker in active:
         return ticker
     return None
 
 
 def company_to_ticker(company_name: str) -> str | None:
-    """
-    Look up ticker from company name (exact match).
+    """Look up ticker from company name (exact match).
 
     Returns None if no match found.
     """
-    return COMPANY_TO_TICKER.get(company_name.lower().strip())
+    source = _cached_company_map if _cached_company_map is not None else COMPANY_TO_TICKER
+    return source.get(company_name.lower().strip())
+
+
+async def init_security_master(db: Database) -> None:
+    """Load security master data from the DB into module-level caches.
+
+    Called at application startup when security_master_enabled is True.
+    Falls back silently on error so the static dicts remain available.
+    """
+    global _cached_tickers, _cached_company_map
+
+    try:
+        from src.security_master.service import SecurityMasterService
+
+        svc = SecurityMasterService(db)
+        await svc.ensure_seeded()
+        _cached_tickers = await svc.get_all_tickers()
+        _cached_company_map = await svc.get_company_map()
+        logger.info(
+            "Security master initialized: %d tickers, %d company aliases",
+            len(_cached_tickers),
+            len(_cached_company_map),
+        )
+    except Exception:
+        logger.exception("Failed to initialize security master, using static fallback")
+        _cached_tickers = None
+        _cached_company_map = None
+
+
+def _reset_cache() -> None:
+    """Clear module-level caches (for testing)."""
+    global _cached_tickers, _cached_company_map
+    _cached_tickers = None
+    _cached_company_map = None
