@@ -149,6 +149,9 @@ class Settings(BaseSettings):
     # Backtest
     backtest_enabled: bool = Field(default=False, description="Enable backtest data infrastructure")
 
+    # Scoring (LLM compellingness)
+    scoring_enabled: bool = Field(default=False, description="Enable LLM compellingness scoring for themes")
+
     # Clustering (BERTopic)
     clustering_enabled: bool = Field(default=False, description="Enable BERTopic clustering in processing")
     clustering_stream_name: str = Field(default="clustering_queue", description="Redis stream for clustering jobs")

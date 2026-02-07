@@ -53,6 +53,7 @@ Adapters → Redis Streams → Processing → PostgreSQL + pgvector
 | Alerts | `src/alerts/` | `AlertService`, `triggers.py` (stateless functions), `AlertRepository` |
 | Notifications | `src/alerts/` | `NotificationDispatcher`, `WebhookChannel`, `SlackChannel`, `CircuitBreaker` |
 | Backtest | `src/backtest/` | `PointInTimeService`, `PriceDataFeed`, `ModelVersionRepository`, `BacktestRunRepository` |
+| Scoring | `src/scoring/` | `CompellingnessService` (3-tier: rule→GPT→Claude), `LLMClient`, `GenericCircuitBreaker` |
 | Storage | `src/storage/` | `Database` (asyncpg), `DocumentRepository` |
 | API | `src/api/` | FastAPI with `routes/` (embed, sentiment, search, themes, events, alerts, health) |
 
@@ -141,6 +142,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | Alerts | `alerts_enabled` | `ALERTS_*` | dedup TTL, daily rate limits, trigger thresholds |
 | Notifications | `notifications_enabled` | `NOTIFICATIONS_*` | retry attempts/delays, circuit breaker threshold/recovery, queue TTL |
 | Backtest | `backtest_enabled` | `BACKTEST_*` | price cache TTL, forward horizons, yfinance rate limit |
+| Scoring | `scoring_enabled` | `SCORING_*` | LLM API keys, tier thresholds, budget caps, circuit breaker, cache TTL |
 
 ### Other Config
 - Tickers/companies: `src/config/tickers.py`
