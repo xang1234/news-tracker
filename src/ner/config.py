@@ -65,6 +65,16 @@ class NERConfig(BaseSettings):
         default=True,
         description="Enable coreference resolution to link pronouns to entities.",
     )
+    coref_min_length: int = Field(
+        default=500,
+        ge=0,
+        description="Minimum text length (chars) to run coreference resolution. "
+        "Short content like tweets is skipped for performance.",
+    )
+    coref_device: str = Field(
+        default="cpu",
+        description="Device for fastcoref model ('cpu' or 'cuda').",
+    )
 
     # Performance configuration
     batch_size: int = Field(

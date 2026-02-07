@@ -541,6 +541,113 @@ class TestSemanticThemeLinking:
         assert scores_ai["NVIDIA GPU"] > 0
 
 
+class TestCoreferenceResolution:
+    """Tests for pre-NER coreference resolution via fastcoref."""
+
+    def test_coref_bypassed_for_short_text(self, mock_ner_service_with_coref):
+        """Short text (<coref_min_length) should skip coreference resolution."""
+        short_text = "Nvidia is great. It leads AI."
+        assert len(short_text) < mock_ner_service_with_coref.config.coref_min_length
+
+        entities = mock_ner_service_with_coref.extract_sync(short_text)
+
+        # Should find Nvidia but NOT resolve "It" (coref skipped)
+        company_entities = [e for e in entities if e.type == "COMPANY"]
+        assert any("NVIDIA" in e.normalized.upper() for e in company_entities)
+
+    def test_coref_runs_for_long_text(self, mock_ner_service_with_coref):
+        """Long text (>=coref_min_length) should resolve coreferences before NER."""
+        # This text is below 500 chars, so set min_length low for testing
+        mock_ner_service_with_coref.config.coref_min_length = 10
+
+        text = (
+            "Samsung announced new HBM capacity. "
+            "The Korean chipmaker expects strong demand."
+        )
+
+        entities = mock_ner_service_with_coref.extract_sync(text)
+
+        # After coref resolution, "The Korean chipmaker" becomes "Samsung",
+        # so NER should find Samsung in the resolved text
+        company_entities = [e for e in entities if e.type == "COMPANY"]
+        assert any("SAMSUNG" in e.normalized.upper() for e in company_entities)
+
+    def test_coref_min_length_boundary(self, mock_ner_service_with_coref):
+        """Text exactly at coref_min_length should trigger resolution."""
+        text = (
+            "Samsung announced new HBM capacity. "
+            "The Korean chipmaker expects strong demand."
+        )
+        # Set min_length to exactly the text length
+        mock_ner_service_with_coref.config.coref_min_length = len(text)
+
+        entities = mock_ner_service_with_coref.extract_sync(text)
+
+        # Should still run coref (>= threshold)
+        company_entities = [e for e in entities if e.type == "COMPANY"]
+        assert len(company_entities) >= 1
+
+    def test_resolve_text_returns_resolved(self, mock_ner_service_with_coref):
+        """_resolve_text should replace pronouns with antecedents."""
+        text = (
+            "Nvidia unveiled the Blackwell architecture. "
+            "The company claims it delivers 4x the performance of Hopper."
+        )
+
+        resolved = mock_ner_service_with_coref._resolve_text(text)
+
+        assert "Nvidia" in resolved
+        # "The company" should be replaced
+        assert "The company claims" not in resolved
+
+    def test_resolve_text_graceful_on_failure(self, ner_config_with_coref):
+        """_resolve_text should return original text if coref model fails."""
+        service = NERService(config=ner_config_with_coref)
+        service._initialized = True
+        service._nlp = MagicMock()
+        service._nlp.meta = {"name": "test"}
+
+        # Create a coref model that raises
+        mock_coref = MagicMock()
+        mock_coref.predict.side_effect = RuntimeError("Model error")
+        service._coref_model = mock_coref
+
+        text = "Some text that will fail coref."
+        resolved = service._resolve_text(text)
+
+        assert resolved == text  # Falls back to original
+
+    def test_resolve_text_without_coref_model(self, mock_ner_service):
+        """_resolve_text should return original text when no coref model."""
+        text = "Some text without coref."
+        resolved = mock_ner_service._resolve_text(text)
+        assert resolved == text
+
+    def test_coref_disabled_in_config(self, ner_config):
+        """When enable_coreference=False, no coref model should be loaded."""
+        ner_config.enable_coreference = False
+
+        service = NERService(config=ner_config)
+        assert service._coref_model is None
+
+    @pytest.mark.asyncio
+    async def test_batch_coref_respects_min_length(self, mock_ner_service_with_coref):
+        """Batch extraction should apply coref only to texts above min_length."""
+        mock_ner_service_with_coref.config.coref_min_length = 50
+
+        short_text = "Nvidia is great. It leads AI."  # < 50 chars
+        long_text = (
+            "Samsung announced new HBM capacity. "
+            "The Korean chipmaker expects strong demand."
+        )  # > 50 chars
+
+        results = await mock_ner_service_with_coref.extract_batch(
+            [short_text, long_text]
+        )
+
+        assert len(results) == 2
+
+
 class TestEdgeCases:
     """Tests for edge cases."""
 

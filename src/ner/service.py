@@ -203,8 +203,9 @@ class NERService:
         try:
             from fastcoref import FCoref
 
-            logger.info("Loading fastcoref model...")
-            self._coref_model = FCoref(device="cpu")
+            device = self.config.coref_device
+            logger.info(f"Loading fastcoref model on {device}...")
+            self._coref_model = FCoref(device=device)
             logger.info("Coreference model loaded")
         except ImportError:
             logger.warning(
@@ -215,6 +216,36 @@ class NERService:
         except Exception as e:
             logger.warning(f"Failed to load coref model: {e}")
             self._coref_model = None
+
+    def _resolve_text(self, text: str) -> str:
+        """
+        Resolve coreferences in text by replacing pronouns with antecedents.
+
+        Uses fastcoref's get_resolved_text() to produce text where references
+        like "the company", "it", "the chipmaker" are replaced by their referent
+        entity names. This resolved text is then passed to NER for better
+        entity extraction coverage.
+
+        Args:
+            text: Original text with potential coreferences.
+
+        Returns:
+            Text with coreferences resolved, or original text on failure.
+        """
+        if self._coref_model is None:
+            return text
+
+        try:
+            preds = self._coref_model.predict(texts=[text])
+            if not preds or not preds[0]:
+                return text
+            resolved = preds[0].get_resolved_text()
+            if resolved:
+                return resolved
+            return text
+        except Exception as e:
+            logger.warning(f"Coreference text resolution failed: {e}")
+            return text
 
     def extract_sync(self, text: str) -> list[FinancialEntity]:
         """
@@ -237,21 +268,25 @@ class NERService:
             text = text[: self.config.max_text_length]
             logger.debug(f"Text truncated to {self.config.max_text_length} chars")
 
+        # Resolve coreferences before NER for long documents
+        working_text = text
+        if (
+            self._coref_model is not None
+            and len(text) >= self.config.coref_min_length
+        ):
+            working_text = self._resolve_text(text)
+
         # Process with spaCy
-        doc = self._nlp(text)
+        doc = self._nlp(working_text)
 
         # Extract entities from spaCy NER + EntityRuler
-        entities = self._extract_from_doc(doc, text)
+        entities = self._extract_from_doc(doc, working_text)
 
         # Add cashtag entities (pattern-based)
-        entities.extend(self._extract_cashtags(text))
-
-        # Apply coreference resolution if available
-        if self._coref_model is not None:
-            entities = self._resolve_coreferences(text, entities)
+        entities.extend(self._extract_cashtags(working_text))
 
         # Fuzzy match company names not caught by NER
-        entities.extend(self._fuzzy_match_companies(text, entities))
+        entities.extend(self._fuzzy_match_companies(working_text, entities))
 
         # Deduplicate overlapping entities
         entities = self._deduplicate_entities(entities)
@@ -314,15 +349,23 @@ class NERService:
                 for t in batch
             ]
 
-            # Process batch with spaCy pipe
-            docs = list(self._nlp.pipe(batch))
+            # Resolve coreferences for long texts before NER
+            working_batch = []
+            for t in batch:
+                if (
+                    self._coref_model is not None
+                    and len(t) >= self.config.coref_min_length
+                ):
+                    working_batch.append(self._resolve_text(t))
+                else:
+                    working_batch.append(t)
 
-            for doc, text in zip(docs, batch):
+            # Process batch with spaCy pipe
+            docs = list(self._nlp.pipe(working_batch))
+
+            for doc, text in zip(docs, working_batch):
                 entities = self._extract_from_doc(doc, text)
                 entities.extend(self._extract_cashtags(text))
-
-                if self._coref_model is not None:
-                    entities = self._resolve_coreferences(text, entities)
 
                 entities.extend(self._fuzzy_match_companies(text, entities))
                 entities = self._deduplicate_entities(entities)
@@ -572,71 +615,6 @@ class NERService:
                         )
                     )
                     break  # Only match first occurrence
-
-        return entities
-
-    def _resolve_coreferences(
-        self, text: str, entities: list[FinancialEntity]
-    ) -> list[FinancialEntity]:
-        """
-        Resolve coreferences to link pronouns to entities.
-
-        Uses fastcoref to find mentions like "the company" and
-        link them to their antecedents (e.g., "Nvidia").
-        """
-        if self._coref_model is None:
-            return entities
-
-        try:
-            # Get coreference clusters
-            result = self._coref_model.predict(texts=[text])
-            if not result or not result[0]:
-                return entities
-
-            clusters = result[0].get_clusters(as_strings=False)
-
-            # Build a map of coreferent spans
-            # For each mention, find if it refers to a known entity
-            for cluster in clusters:
-                # Find if any span in the cluster matches a known entity
-                entity_ref: FinancialEntity | None = None
-                for start, end in cluster:
-                    for entity in entities:
-                        if entity.start <= start and entity.end >= end:
-                            entity_ref = entity
-                            break
-                    if entity_ref:
-                        break
-
-                # If we found an entity reference, add entries for other mentions
-                if entity_ref:
-                    for start, end in cluster:
-                        mention_text = text[start:end]
-                        # Skip if this is the original entity
-                        if start == entity_ref.start and end == entity_ref.end:
-                            continue
-                        # Skip if already covered by another entity
-                        if any(e.start == start and e.end == end for e in entities):
-                            continue
-
-                        # Add a new entity for this coreference
-                        entities.append(
-                            FinancialEntity(
-                                text=mention_text,
-                                type=entity_ref.type,
-                                normalized=entity_ref.normalized,
-                                start=start,
-                                end=end,
-                                confidence=entity_ref.confidence * 0.8,  # Slightly lower confidence
-                                metadata={
-                                    **entity_ref.metadata,
-                                    "coreference_of": entity_ref.text,
-                                },
-                            )
-                        )
-
-        except Exception as e:
-            logger.warning(f"Coreference resolution failed: {e}")
 
         return entities
 

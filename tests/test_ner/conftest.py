@@ -185,6 +185,56 @@ def mock_spacy_nlp():
     return MockSpacyNlp(entities_map)
 
 
+class MockCorefPrediction:
+    """Mock fastcoref prediction result."""
+
+    def __init__(self, resolved_text: str):
+        self._resolved_text = resolved_text
+
+    def get_resolved_text(self) -> str:
+        return self._resolved_text
+
+
+class MockCorefModel:
+    """Mock fastcoref FCoref model."""
+
+    def __init__(self, resolutions: dict[str, str] | None = None):
+        """
+        Args:
+            resolutions: Mapping from input text to resolved text.
+        """
+        self._resolutions = resolutions or {}
+
+    def predict(self, texts: list[str]) -> list[MockCorefPrediction]:
+        results = []
+        for text in texts:
+            resolved = self._resolutions.get(text, text)
+            results.append(MockCorefPrediction(resolved))
+        return results
+
+
+@pytest.fixture
+def mock_coref_model():
+    """Create a mock coreference model with semiconductor resolutions."""
+    resolutions = {
+        (
+            "Samsung announced new HBM capacity. "
+            "The Korean chipmaker expects strong demand."
+        ): (
+            "Samsung announced new HBM capacity. "
+            "Samsung expects strong demand."
+        ),
+        (
+            "Nvidia unveiled the Blackwell architecture. "
+            "The company claims it delivers 4x the performance of Hopper."
+        ): (
+            "Nvidia unveiled the Blackwell architecture. "
+            "Nvidia claims Blackwell delivers 4x the performance of Hopper."
+        ),
+    }
+    return MockCorefModel(resolutions)
+
+
 @pytest.fixture
 def mock_ner_service(ner_config, mock_spacy_nlp):
     """Create NERService with mocked spaCy."""
@@ -194,5 +244,43 @@ def mock_ner_service(ner_config, mock_spacy_nlp):
     # Manually set up the service without calling _initialize
     service._nlp = mock_spacy_nlp
     service._coref_model = None
+    service._initialized = True
+    return service
+
+
+@pytest.fixture
+def mock_ner_service_with_coref(ner_config_with_coref, mock_coref_model):
+    """Create NERService with mocked spaCy and coref model."""
+    from src.ner.service import NERService
+
+    # Build a spaCy mock that recognizes resolved texts
+    entities_map = {
+        # Original texts (NER may miss coreferences)
+        (
+            "Samsung announced new HBM capacity. "
+            "The Korean chipmaker expects strong demand."
+        ): [
+            ("Samsung", 0, 7, "ORG"),
+            ("HBM", 22, 25, "TECHNOLOGY"),
+        ],
+        # Resolved texts (NER finds the entity directly)
+        (
+            "Samsung announced new HBM capacity. "
+            "Samsung expects strong demand."
+        ): [
+            ("Samsung", 0, 7, "ORG"),
+            ("HBM", 22, 25, "TECHNOLOGY"),
+            ("Samsung", 36, 43, "ORG"),
+        ],
+        # Short text (below coref_min_length)
+        "Nvidia is great. It leads AI.": [
+            ("Nvidia", 0, 6, "ORG"),
+        ],
+    }
+    nlp = MockSpacyNlp(entities_map)
+
+    service = NERService(config=ner_config_with_coref)
+    service._nlp = nlp
+    service._coref_model = mock_coref_model
     service._initialized = True
     return service

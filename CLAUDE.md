@@ -120,6 +120,7 @@ class Config: ...  # ❌ Never use this
 - **DB vs Clustering Schemas**: `Theme` (persistence) vs `ThemeCluster` (in-memory BERTopic)
 - **Deterministic Theme IDs**: `theme_{sha256(sorted_topic_words)[:12]}`
 - **EntityRuler Before NER**: spaCy EntityRuler runs before statistical NER for domain pattern priority
+- **Pre-NER Coref Resolution**: fastcoref resolves text ("The chipmaker" → "Samsung") BEFORE NER runs, gated by `coref_min_length` (500 chars) to skip short content
 - **Recursive CTE Traversal**: Graph uses `WITH RECURSIVE` + cycle detection via `NOT node_id = ANY(path)`
 - **Composite PK Edges**: `(source, target, relation)` allows multiple relation types between same nodes
 - **Bidirectional Competition**: `competes_with` requires explicit A→B and B→A edges
@@ -148,7 +149,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 
 | Feature | Flag | Env Prefix | Key Settings |
 |---------|------|------------|--------------|
-| NER | `ner_enabled` | `NER_*` | `ner_spacy_model` (en_core_web_trf), semantic linking |
+| NER | `ner_enabled` | `NER_*` | `ner_spacy_model` (en_core_web_trf), semantic linking, `coref_min_length` (500), `coref_device` (cpu) |
 | Keywords | `keywords_enabled` | `KEYWORDS_*` | `top_n` (10), `min_score` |
 | Events | `events_enabled` | `EVENTS_*` | `min_confidence`, `max_events_per_doc` |
 | Clustering | `clustering_enabled` | `CLUSTERING_*` | HDBSCAN/UMAP params, assignment thresholds |
