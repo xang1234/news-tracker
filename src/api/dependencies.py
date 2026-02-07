@@ -8,6 +8,7 @@ import redis.asyncio as redis
 
 from src.alerts.broadcaster import AlertBroadcaster
 from src.alerts.repository import AlertRepository
+from src.feedback.repository import FeedbackRepository
 from src.config.settings import get_settings
 from src.graph.causal_graph import CausalGraph
 from src.graph.config import GraphConfig
@@ -36,6 +37,7 @@ _ranking_service: ThemeRankingService | None = None
 _alert_repository: AlertRepository | None = None
 _causal_graph: CausalGraph | None = None
 _propagation_service: SentimentPropagation | None = None
+_feedback_repository: FeedbackRepository | None = None
 _alert_broadcaster: AlertBroadcaster | None = None
 
 
@@ -269,6 +271,24 @@ async def get_alert_repository() -> AlertRepository:
     return _alert_repository
 
 
+async def get_feedback_repository() -> FeedbackRepository:
+    """
+    Get feedback repository instance.
+
+    Creates a singleton repository backed by the shared Database.
+    """
+    global _feedback_repository, _database
+
+    if _feedback_repository is None:
+        if _database is None:
+            _database = Database()
+            await _database.connect()
+
+        _feedback_repository = FeedbackRepository(_database)
+
+    return _feedback_repository
+
+
 def get_sentiment_aggregator() -> SentimentAggregator:
     """
     Get sentiment aggregator instance.
@@ -364,7 +384,7 @@ async def cleanup_dependencies() -> None:
     """Clean up global dependencies on shutdown."""
     global _embedding_service, _sentiment_service, _redis_client, _vector_store_manager, _database
     global _theme_repository, _document_repository, _sentiment_aggregator, _ranking_service
-    global _alert_repository, _causal_graph, _propagation_service, _alert_broadcaster
+    global _alert_repository, _feedback_repository, _causal_graph, _propagation_service, _alert_broadcaster
 
     _vector_store_manager = None
     _theme_repository = None
@@ -372,6 +392,7 @@ async def cleanup_dependencies() -> None:
     _sentiment_aggregator = None
     _ranking_service = None
     _alert_repository = None
+    _feedback_repository = None
     _causal_graph = None
     _propagation_service = None
 

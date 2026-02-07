@@ -161,6 +161,9 @@ class Settings(BaseSettings):
     # Drift Detection
     drift_enabled: bool = Field(default=False, description="Enable drift detection and monitoring")
 
+    # Feedback
+    feedback_enabled: bool = Field(default=False, description="Enable user feedback collection for quality calibration")
+
     # WebSocket Alerts
     ws_alerts_enabled: bool = Field(default=False, description="Enable WebSocket streaming for real-time alerts")
     ws_alerts_max_connections: int = Field(default=100, ge=1, le=10000, description="Max concurrent WS connections")

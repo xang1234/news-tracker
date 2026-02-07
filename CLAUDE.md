@@ -62,6 +62,7 @@ Adapters → Redis Streams → Processing → PostgreSQL + pgvector
 | Scoring | `src/scoring/` | `CompellingnessService` (3-tier: rule→GPT→Claude), `LLMClient`, `GenericCircuitBreaker` |
 | Security Master | `src/security_master/` | `SecurityMasterService` (cached DB-backed tickers), `SecurityMasterRepository` (pg_trgm fuzzy search), `Security` dataclass |
 | Monitoring | `src/monitoring/` | `DriftService` (4 checks: embedding KL, fragmentation, sentiment z-score, centroid stability), `DriftConfig`, `DriftReport` |
+| Feedback | `src/feedback/` | `FeedbackRepository` (create, list_by_entity, get_stats), `Feedback` dataclass, `FeedbackConfig` |
 | WS Alerts | `src/alerts/broadcaster.py` + `src/api/routes/ws_alerts.py` | `AlertBroadcaster` (Redis pub/sub fan-out to WebSocket clients), `/ws/alerts` endpoint |
 | Storage | `src/storage/` | `Database` (asyncpg), `DocumentRepository` |
 | API | `src/api/` | FastAPI with `routes/` (embed, sentiment, search, themes, events, alerts, health) |
@@ -162,6 +163,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | Backtest | `backtest_enabled` | `BACKTEST_*` | price cache TTL, forward horizons, yfinance rate limit |
 | Scoring | `scoring_enabled` | `SCORING_*` | LLM API keys, tier thresholds, budget caps, circuit breaker, cache TTL |
 | Security Master | `security_master_enabled` | `SECURITY_MASTER_*` | `cache_ttl_seconds` (300), `fuzzy_threshold` (0.3), `seed_on_init` (True) |
+| Feedback | `feedback_enabled` | `FEEDBACK_*` | `max_comment_length` (2000) |
 | Drift Detection | `drift_enabled` | `DRIFT_*` | KL thresholds, fragmentation limits, sentiment z-score, stability cosine distance |
 | WS Alerts | `ws_alerts_enabled` | (top-level) | `ws_alerts_max_connections` (100), `ws_alerts_heartbeat_seconds` (30) |
 
@@ -191,6 +193,8 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | GET | /alerts | List (severity, trigger_type, theme_id, acknowledged) |
 | PATCH | /alerts/{id}/acknowledge | Mark alert as acknowledged |
 | POST | /graph/propagate | Sentiment propagation through causal graph |
+| POST | /feedback | Submit quality rating for theme/alert/document |
+| GET | /feedback/stats | Aggregated feedback statistics by entity type |
 | WS | /ws/alerts | Real-time alert stream (severity, theme_id, api_key query params) |
 | GET | /health | Service status |
 

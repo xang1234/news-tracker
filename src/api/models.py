@@ -524,3 +524,76 @@ class PropagateResponse(BaseModel):
     )
     total_affected: int = Field(..., description="Number of affected downstream nodes")
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+# Feedback models
+
+
+class FeedbackRequest(BaseModel):
+    """Request model for submitting feedback."""
+
+    entity_type: str = Field(
+        ...,
+        description="Type of entity being rated: theme, alert, document",
+    )
+    entity_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="Identifier of the entity being rated",
+    )
+    rating: int = Field(
+        ...,
+        ge=1,
+        le=5,
+        description="Quality rating from 1 (poor) to 5 (excellent)",
+    )
+    quality_label: str | None = Field(
+        default=None,
+        description="Optional categorical label: useful, noise, too_late, wrong_direction",
+    )
+    comment: str | None = Field(
+        default=None,
+        max_length=2000,
+        description="Optional free-text comment",
+    )
+
+
+class FeedbackItem(BaseModel):
+    """Single feedback record."""
+
+    feedback_id: str = Field(..., description="Unique feedback identifier")
+    entity_type: str = Field(..., description="Entity type: theme, alert, document")
+    entity_id: str = Field(..., description="Entity identifier")
+    rating: int = Field(..., ge=1, le=5, description="Quality rating (1-5)")
+    quality_label: str | None = Field(default=None, description="Categorical quality label")
+    comment: str | None = Field(default=None, description="Free-text comment")
+    user_id: str | None = Field(default=None, description="User who submitted the feedback")
+    created_at: str = Field(..., description="Submission timestamp (ISO format)")
+
+
+class FeedbackResponse(BaseModel):
+    """Response model for creating feedback."""
+
+    feedback: FeedbackItem = Field(..., description="Created feedback record")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class FeedbackStatsItem(BaseModel):
+    """Aggregated feedback statistics for an entity type."""
+
+    entity_type: str = Field(..., description="Entity type: theme, alert, document")
+    total_count: int = Field(..., description="Total number of feedback records")
+    avg_rating: float = Field(..., description="Average rating (1.0-5.0)")
+    label_distribution: dict[str, int] = Field(
+        default_factory=dict,
+        description="Count of each quality label",
+    )
+
+
+class FeedbackStatsResponse(BaseModel):
+    """Response model for feedback statistics."""
+
+    stats: list[FeedbackStatsItem] = Field(..., description="Statistics grouped by entity type")
+    total: int = Field(..., description="Number of entity type groups")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
