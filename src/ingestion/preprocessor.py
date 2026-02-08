@@ -31,6 +31,7 @@ from src.config.tickers import (
 from src.ingestion.schemas import NormalizedDocument, Platform
 
 if TYPE_CHECKING:
+    from src.authority.service import AuthorityService
     from src.event_extraction.patterns import PatternExtractor
     from src.keywords.service import KeywordsService
     from src.ner.service import NERService
@@ -513,6 +514,8 @@ class Preprocessor:
         enable_keywords: bool = False,
         event_extractor: "PatternExtractor | None" = None,
         enable_events: bool = False,
+        authority_service: "AuthorityService | None" = None,
+        enable_authority: bool = False,
     ):
         """
         Initialize preprocessor.
@@ -527,6 +530,8 @@ class Preprocessor:
             enable_keywords: Whether to run keyword extraction (default False)
             event_extractor: PatternExtractor for event extraction (optional)
             enable_events: Whether to run event extraction (default False)
+            authority_service: Authority service for Bayesian scoring (optional)
+            enable_authority: Whether to compute authority scores (default False)
         """
         self.spam_detector = spam_detector or SpamDetector()
         self.bot_detector = bot_detector or BotDetector()
@@ -537,6 +542,8 @@ class Preprocessor:
         self._enable_keywords = enable_keywords
         self._event_extractor = event_extractor
         self._enable_events = enable_events
+        self._authority_service = authority_service
+        self._enable_authority = enable_authority
 
     def process(self, doc: NormalizedDocument) -> NormalizedDocument:
         """
@@ -587,6 +594,18 @@ class Preprocessor:
             except Exception as e:
                 logger.warning(f"Event extraction failed for {doc.id}: {e}")
                 doc.events_extracted = []
+
+        # 7. Authority scoring (if enabled)
+        if self._enable_authority and self._authority_service is not None:
+            try:
+                doc.authority_score = self._authority_service.compute_score_simple(
+                    author_verified=doc.author_verified,
+                    author_name=doc.author_name,
+                    author_followers=doc.author_followers,
+                    platform=doc.platform,
+                )
+            except Exception as e:
+                logger.warning(f"Authority scoring failed for {doc.id}: {e}")
 
         logger.debug(
             f"Preprocessed {doc.id}: "

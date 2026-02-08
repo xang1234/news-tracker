@@ -50,6 +50,7 @@ Adapters → Redis Streams → Processing → PostgreSQL + pgvector
 | NER | `src/ner/` | `NERService` (spaCy + EntityRuler + rapidfuzz) |
 | Keywords | `src/keywords/` | `KeywordsService` (TextRank via rapid-textrank) |
 | Events | `src/event_extraction/` | `PatternExtractor` (regex SVO), `TimeNormalizer`, `EventThemeLinker` |
+| Authority | `src/authority/` | `AuthorityService` (Bayesian scoring + time decay + probation), `AuthorityRepository`, `AuthorityProfile` |
 | Embedding | `src/embedding/` | `EmbeddingService` (FinBERT 768-dim + MiniLM 384-dim), `EmbeddingWorker` |
 | Sentiment | `src/sentiment/` | `SentimentService` (ProsusAI/finbert), `SentimentWorker` |
 | Clustering | `src/clustering/` | `BERTopicService` (batch), `ClusteringWorker` (real-time), `run_daily_clustering()` |
@@ -122,6 +123,9 @@ class Config: ...  # ❌ Never use this
 - **Deterministic Theme IDs**: `theme_{sha256(sorted_topic_words)[:12]}`
 - **EntityRuler Before NER**: spaCy EntityRuler runs before statistical NER for domain pattern priority
 - **Pre-NER Coref Resolution**: fastcoref resolves text ("The chipmaker" → "Samsung") BEFORE NER runs, gated by `coref_min_length` (500 chars) to skip short content
+- **Bayesian Authority Smoothing**: `(correct + alpha) / (total + alpha + beta)` Beta prior prevents new sources with 1/1 accuracy from outranking established sources
+- **Authority Probation Ramp**: `min(1.0, days_active / 30)` linearly gates new sources over their first 30 days
+- **Tier-Based Base Weight**: anonymous (1.0) / verified (5.0) / research (10.0) multiplied into authority formula
 - **Recursive CTE Traversal**: Graph uses `WITH RECURSIVE` + cycle detection via `NOT node_id = ANY(path)`
 - **Composite PK Edges**: `(source, target, relation)` allows multiple relation types between same nodes
 - **Bidirectional Competition**: `competes_with` requires explicit A→B and B→A edges
@@ -164,6 +168,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | Scoring | `scoring_enabled` | `SCORING_*` | LLM API keys, tier thresholds, budget caps, circuit breaker, cache TTL |
 | Security Master | `security_master_enabled` | `SECURITY_MASTER_*` | `cache_ttl_seconds` (300), `fuzzy_threshold` (0.3), `seed_on_init` (True) |
 | Feedback | `feedback_enabled` | `FEEDBACK_*` | `max_comment_length` (2000) |
+| Authority | `authority_enabled` | `AUTHORITY_*` | `prior_alpha` (2.0), `prior_beta` (5.0), `decay_lambda` (0.01), `probation_days` (30), tier weights |
 | Drift Detection | `drift_enabled` | `DRIFT_*` | KL thresholds, fragmentation limits, sentiment z-score, stability cosine distance |
 | WS Alerts | `ws_alerts_enabled` | (top-level) | `ws_alerts_max_connections` (100), `ws_alerts_heartbeat_seconds` (30) |
 

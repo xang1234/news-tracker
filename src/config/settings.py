@@ -164,6 +164,9 @@ class Settings(BaseSettings):
     # Feedback
     feedback_enabled: bool = Field(default=False, description="Enable user feedback collection for quality calibration")
 
+    # Authority Scoring
+    authority_enabled: bool = Field(default=False, description="Enable Bayesian authority scoring for content authors")
+
     # WebSocket Alerts
     ws_alerts_enabled: bool = Field(default=False, description="Enable WebSocket streaming for real-time alerts")
     ws_alerts_max_connections: int = Field(default=100, ge=1, le=10000, description="Max concurrent WS connections")
