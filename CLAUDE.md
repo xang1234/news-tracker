@@ -62,6 +62,7 @@ Adapters → Redis Streams → Processing → PostgreSQL + pgvector
 | Visualization | `src/backtest/` | `BacktestVisualizer` (matplotlib charts: cumulative returns, drawdown, scatter, heatmap) |
 | Scoring | `src/scoring/` | `CompellingnessService` (3-tier: rule→GPT→Claude), `LLMClient`, `GenericCircuitBreaker` |
 | Security Master | `src/security_master/` | `SecurityMasterService` (cached DB-backed tickers), `SecurityMasterRepository` (pg_trgm fuzzy search), `Security` dataclass |
+| Tracing | `src/observability/tracing.py` | `setup_tracing` (OTLP exporter), `traced` (span context manager), `inject_trace_context`/`extract_trace_context` (Redis Streams propagation), `add_trace_context` (structlog processor) |
 | Monitoring | `src/monitoring/` | `DriftService` (4 checks: embedding KL, fragmentation, sentiment z-score, centroid stability), `DriftConfig`, `DriftReport` |
 | Feedback | `src/feedback/` | `FeedbackRepository` (create, list_by_entity, get_stats), `Feedback` dataclass, `FeedbackConfig` |
 | WS Alerts | `src/alerts/broadcaster.py` + `src/api/routes/ws_alerts.py` | `AlertBroadcaster` (Redis pub/sub fan-out to WebSocket clients), `/ws/alerts` endpoint |
@@ -142,6 +143,8 @@ class Config: ...  # ❌ Never use this
 - **pg_trgm Fuzzy Search**: GIN trigram index on `securities.name` enables typo-tolerant company lookup via `similarity()`
 - **Redis Pub/Sub Fan-Out**: `alerts:broadcast` channel for WS alert push; each uvicorn worker subscribes independently
 - **WS Auth via Query Param**: `?api_key=...` since browsers can't set custom headers on WebSocket upgrade
+- **W3C Traceparent in Redis Streams**: `traceparent` field injected on XADD, extracted on XREADGROUP via `BaseRedisQueue._trace_fields()` — propagates trace context across worker boundaries
+- **SimpleSpanProcessor for Tests**: Custom exporter path uses synchronous export; production uses `BatchSpanProcessor` for efficiency
 
 ## Configuration
 
@@ -170,6 +173,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | Feedback | `feedback_enabled` | `FEEDBACK_*` | `max_comment_length` (2000) |
 | Authority | `authority_enabled` | `AUTHORITY_*` | `prior_alpha` (2.0), `prior_beta` (5.0), `decay_lambda` (0.01), `probation_days` (30), tier weights |
 | Drift Detection | `drift_enabled` | `DRIFT_*` | KL thresholds, fragmentation limits, sentiment z-score, stability cosine distance |
+| Tracing | `tracing_enabled` | (top-level) | `otel_service_name` (news-tracker), `otel_exporter_otlp_endpoint` (OTLP gRPC endpoint) |
 | WS Alerts | `ws_alerts_enabled` | (top-level) | `ws_alerts_max_connections` (100), `ws_alerts_heartbeat_seconds` (30) |
 
 ### Other Config

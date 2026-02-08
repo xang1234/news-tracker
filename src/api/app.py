@@ -24,8 +24,15 @@ async def lifespan(app: FastAPI):
     """Application lifespan handler."""
     logger.info("Embedding API starting up")
 
-    # Start WebSocket alert broadcaster if enabled
+    # Initialize tracing if enabled
     settings = get_settings()
+    if settings.tracing_enabled:
+        from src.observability.tracing import setup_tracing
+
+        setup_tracing(
+            service_name=settings.otel_service_name,
+            otlp_endpoint=settings.otel_exporter_otlp_endpoint,
+        )
     if settings.ws_alerts_enabled:
         try:
             broadcaster = await get_alert_broadcaster()
@@ -79,12 +86,30 @@ Requires `X-API-KEY` header for all requests except `/health`.
         allow_headers=["*"],
     )
 
-    # Request logging middleware
+    # Request logging and tracing middleware
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
+        from src.observability.tracing import get_tracer, is_tracing_enabled
+
         start_time = time.perf_counter()
-        response = await call_next(request)
-        duration = time.perf_counter() - start_time
+
+        if is_tracing_enabled():
+            tracer = get_tracer("news-tracker.api")
+            with tracer.start_as_current_span(
+                f"{request.method} {request.url.path}",
+                attributes={
+                    "http.method": request.method,
+                    "http.url": str(request.url),
+                    "http.route": request.url.path,
+                },
+            ) as span:
+                response = await call_next(request)
+                duration = time.perf_counter() - start_time
+                span.set_attribute("http.status_code", response.status_code)
+                span.set_attribute("http.duration_ms", round(duration * 1000, 2))
+        else:
+            response = await call_next(request)
+            duration = time.perf_counter() - start_time
 
         logger.info(
             "HTTP request",

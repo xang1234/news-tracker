@@ -24,8 +24,15 @@ from types import TracebackType
 from typing import Generic, TypeVar
 
 import redis.asyncio as redis
+from opentelemetry import context as otel_context
 
 from src.observability.metrics import get_metrics
+from src.observability.tracing import (
+    extract_trace_context,
+    get_tracer,
+    inject_trace_context,
+    is_tracing_enabled,
+)
 from src.queues.config import QueueConfig
 
 logger = logging.getLogger(__name__)
@@ -274,7 +281,19 @@ class BaseRedisQueue(ABC, Generic[T]):
                             job = self._parse_job(msg_id, fields)
                             # New messages have retry_count = 0
                             self._set_job_retry_count(job, 0)
-                            yield job
+
+                            # Attach trace context from message for consumer
+                            token = None
+                            if is_tracing_enabled():
+                                parent_ctx = extract_trace_context(fields)
+                                if parent_ctx is not None:
+                                    token = otel_context.attach(parent_ctx)
+
+                            try:
+                                yield job
+                            finally:
+                                if token is not None:
+                                    otel_context.detach(token)
                         except Exception as e:
                             logger.error(f"Failed to parse message {msg_id}: {e}")
                             # Move to DLQ and acknowledge original
@@ -362,7 +381,18 @@ class BaseRedisQueue(ABC, Generic[T]):
                         queue=self.stream_config.stream_name
                     ).inc()
 
-                    yield job
+                    # Attach trace context from reclaimed message
+                    token = None
+                    if is_tracing_enabled():
+                        parent_ctx = extract_trace_context(fields)
+                        if parent_ctx is not None:
+                            token = otel_context.attach(parent_ctx)
+
+                    try:
+                        yield job
+                    finally:
+                        if token is not None:
+                            otel_context.detach(token)
                 except Exception as e:
                     logger.error(f"Failed to parse reclaimed message {msg_id}: {e}")
                     await self._move_to_dlq(msg_id, fields, str(e))
@@ -481,6 +511,18 @@ class BaseRedisQueue(ABC, Generic[T]):
             maxlen=10000,  # Keep last 10k failed messages
         )
         logger.warning(f"Moved message {original_id} to DLQ: {error}")
+
+    def _trace_fields(self) -> dict[str, str]:
+        """
+        Return trace context fields to include in XADD messages.
+
+        Returns an empty dict when tracing is disabled or no active span.
+        Queues should merge these into their publish fields:
+            fields = {"data": ..., **self._trace_fields()}
+        """
+        if not is_tracing_enabled():
+            return {}
+        return inject_trace_context()
 
     async def get_pending_count(self) -> int:
         """Get count of pending (unacknowledged) messages."""

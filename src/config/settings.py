@@ -167,6 +167,9 @@ class Settings(BaseSettings):
     # Authority Scoring
     authority_enabled: bool = Field(default=False, description="Enable Bayesian authority scoring for content authors")
 
+    # Tracing (OpenTelemetry)
+    tracing_enabled: bool = Field(default=False, description="Enable OpenTelemetry distributed tracing")
+
     # WebSocket Alerts
     ws_alerts_enabled: bool = Field(default=False, description="Enable WebSocket streaming for real-time alerts")
     ws_alerts_max_connections: int = Field(default=100, ge=1, le=10000, description="Max concurrent WS connections")

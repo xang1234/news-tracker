@@ -111,7 +111,7 @@ class DocumentQueue(BaseRedisQueue[QueueMessage]):
         """
         message_id = await self.redis.xadd(
             name=self.stream_config.stream_name,
-            fields={"data": doc.model_dump_json()},
+            fields={"data": doc.model_dump_json(), **self._trace_fields()},
             maxlen=self.stream_config.max_stream_length,
             approximate=True,  # More efficient trimming
         )
@@ -134,11 +134,12 @@ class DocumentQueue(BaseRedisQueue[QueueMessage]):
         if not docs:
             return []
 
+        trace_fields = self._trace_fields()
         pipe = self.redis.pipeline()
         for doc in docs:
             pipe.xadd(
                 name=self.stream_config.stream_name,
-                fields={"data": doc.model_dump_json()},
+                fields={"data": doc.model_dump_json(), **trace_fields},
                 maxlen=self.stream_config.max_stream_length,
                 approximate=True,
             )

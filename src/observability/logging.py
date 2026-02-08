@@ -29,6 +29,8 @@ def setup_logging() -> None:
     """
     settings = get_settings()
 
+    from src.observability.tracing import add_trace_context
+
     # Common processors for all environments
     shared_processors: list[Processor] = [
         structlog.contextvars.merge_contextvars,
@@ -38,6 +40,7 @@ def setup_logging() -> None:
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.UnicodeDecoder(),
+        add_trace_context,
     ]
 
     if settings.is_production:

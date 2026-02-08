@@ -112,6 +112,7 @@ class ClusteringQueue(BaseRedisQueue[ClusteringJob]):
                 "document_id": document_id,
                 "embedding_model": embedding_model,
                 "queued_at": str(time.time()),
+                **self._trace_fields(),
             },
             maxlen=self.stream_config.max_stream_length,
             approximate=True,
@@ -140,6 +141,7 @@ class ClusteringQueue(BaseRedisQueue[ClusteringJob]):
             return []
 
         queued_at = str(time.time())
+        trace_fields = self._trace_fields()
         pipe = self.redis.pipeline()
         for doc_id in document_ids:
             pipe.xadd(
@@ -148,6 +150,7 @@ class ClusteringQueue(BaseRedisQueue[ClusteringJob]):
                     "document_id": doc_id,
                     "embedding_model": embedding_model,
                     "queued_at": queued_at,
+                    **trace_fields,
                 },
                 maxlen=self.stream_config.max_stream_length,
                 approximate=True,

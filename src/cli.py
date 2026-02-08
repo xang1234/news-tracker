@@ -35,6 +35,16 @@ def main(debug: bool) -> None:
 
     setup_logging()
 
+    # Initialize tracing if enabled
+    settings = get_settings()
+    if settings.tracing_enabled:
+        from src.observability.tracing import setup_tracing
+
+        setup_tracing(
+            service_name=settings.otel_service_name,
+            otlp_endpoint=settings.otel_exporter_otlp_endpoint,
+        )
+
 
 @main.command()
 @click.option("--mock", is_flag=True, help="Use mock adapters")

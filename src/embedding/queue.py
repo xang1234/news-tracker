@@ -123,6 +123,7 @@ class EmbeddingQueue(BaseRedisQueue[EmbeddingJob]):
                 "document_id": document_id,
                 "priority": str(priority),
                 "queued_at": str(time.time()),
+                **self._trace_fields(),
             },
             maxlen=self.stream_config.max_stream_length,
             approximate=True,
@@ -150,6 +151,7 @@ class EmbeddingQueue(BaseRedisQueue[EmbeddingJob]):
             return []
 
         queued_at = str(time.time())
+        trace_fields = self._trace_fields()
         pipe = self.redis.pipeline()
 
         for doc_id in document_ids:
@@ -159,6 +161,7 @@ class EmbeddingQueue(BaseRedisQueue[EmbeddingJob]):
                     "document_id": doc_id,
                     "priority": str(priority),
                     "queued_at": queued_at,
+                    **trace_fields,
                 },
                 maxlen=self.stream_config.max_stream_length,
                 approximate=True,

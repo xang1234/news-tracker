@@ -105,7 +105,7 @@ class SentimentQueue(BaseRedisQueue[SentimentJob]):
         """
         message_id = await self.redis.xadd(
             name=self.stream_config.stream_name,
-            fields={"document_id": document_id},
+            fields={"document_id": document_id, **self._trace_fields()},
             maxlen=self.stream_config.max_stream_length,
             approximate=True,
         )
@@ -126,11 +126,12 @@ class SentimentQueue(BaseRedisQueue[SentimentJob]):
         if not document_ids:
             return []
 
+        trace_fields = self._trace_fields()
         pipe = self.redis.pipeline()
         for doc_id in document_ids:
             pipe.xadd(
                 name=self.stream_config.stream_name,
-                fields={"document_id": doc_id},
+                fields={"document_id": doc_id, **trace_fields},
                 maxlen=self.stream_config.max_stream_length,
                 approximate=True,
             )
