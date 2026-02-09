@@ -1,0 +1,57 @@
+@import 'tailwindcss';
+
+/*
+ * News Tracker — dark financial terminal theme
+ * Slate/cyan palette inspired by Bloomberg Terminal / Refinitiv Eikon
+ */
+
+@theme {
+  --color-background: oklch(0.129 0.042 264.695);    /* slate-950 */
+  --color-foreground: oklch(0.968 0.007 264.695);     /* slate-50 */
+  --color-card: oklch(0.208 0.042 265.755);           /* slate-900 */
+  --color-card-foreground: oklch(0.968 0.007 264.695);
+  --color-primary: oklch(0.715 0.143 215.221);        /* cyan-500 */
+  --color-primary-foreground: oklch(0.129 0.042 264.695);
+  --color-secondary: oklch(0.279 0.029 260.031);      /* slate-800 */
+  --color-secondary-foreground: oklch(0.968 0.007 264.695);
+  --color-muted: oklch(0.279 0.029 260.031);
+  --color-muted-foreground: oklch(0.554 0.046 257.417); /* slate-400 */
+  --color-accent: oklch(0.789 0.154 211.53);           /* cyan-400 */
+  --color-accent-foreground: oklch(0.129 0.042 264.695);
+  --color-destructive: oklch(0.577 0.245 27.325);     /* red-600 */
+  --color-destructive-foreground: oklch(0.968 0.007 264.695);
+  --color-warning: oklch(0.769 0.188 84.429);          /* amber-500 */
+  --color-success: oklch(0.696 0.17 162.48);            /* emerald-500 */
+  --color-border: oklch(0.279 0.029 260.031);
+  --color-input: oklch(0.279 0.029 260.031);
+  --color-ring: oklch(0.715 0.143 215.221);
+  --radius: 0.5rem;
+}
+
+/* Base body styling */
+body {
+  margin: 0;
+  font-family: ui-monospace, 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Menlo, Monaco,
+    Consolas, monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling for the financial terminal look */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: oklch(0.129 0.042 264.695);
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(0.372 0.044 257.287);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.554 0.046 257.417);
+}
