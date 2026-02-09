@@ -27,6 +27,45 @@ uv run news-tracker drift report          # Weekly verbose report
 
 Test markers: `@pytest.mark.performance` (benchmarks), `@pytest.mark.integration` (requires running services).
 
+## Frontend (Node.js)
+
+### Node.js Setup
+
+System Node (`/usr/local/bin/node`) is v14 — **too old** for the frontend toolchain. Always use nvm Node v22:
+
+```bash
+# ✅ CORRECT: Prefix PATH with nvm node, then use local binaries
+export PATH="/Users/admin/.nvm/versions/node/v22.18.0/bin:$PATH"
+cd frontend && node_modules/.bin/tsc --noEmit    # Type check
+cd frontend && node_modules/.bin/vite --port 5173 # Dev server
+
+# ❌ WRONG: npx/npm from system PATH uses Node v14 and crashes
+npx tsc --noEmit   # "Cannot find module 'node:path'"
+```
+
+### Frontend Commands
+
+```bash
+# Always from frontend/ with nvm Node on PATH
+npm install                          # Install dependencies
+node_modules/.bin/vite               # Dev server (default :5173)
+node_modules/.bin/tsc --noEmit       # Type check (zero output = success)
+node_modules/.bin/eslint .           # Lint
+node_modules/.bin/vite build         # Production build
+```
+
+### Frontend Tips
+
+- **Stack**: React 18 + TypeScript + Vite + Tailwind CSS + React Query + Zustand
+- **Path alias**: `@/` maps to `frontend/src/` (configured in `tsconfig.json`)
+- **API client**: `src/api/http.ts` — axios instance with `/api` baseURL, auth interceptor, correlation IDs
+- **Query keys**: All in `src/api/queryKeys.ts` — use the factory functions, never hand-craft key arrays
+- **Hooks pattern**: `src/api/hooks/use*.ts` — one hook per API endpoint, typed request/response interfaces co-located
+- **Shared utilities**: `src/lib/constants.ts` (PLATFORMS, colors), `src/lib/formatters.ts` (timeAgo, pct, truncate, latency), `src/lib/utils.ts` (cn for Tailwind merge)
+- **Domain components**: `src/components/domain/` — reusable cards/panels, always export a Skeleton variant for loading states
+- **Pages**: `src/pages/` — one default export per route, lazy-loaded in `App.tsx`
+- **Dark theme**: Always on (`<html class="dark">`), use `text-foreground`, `bg-card`, `border-border` etc.
+
 ## Architecture
 
 Semiconductor news ingestion pipeline. Data flows through:
