@@ -597,3 +597,99 @@ class FeedbackStatsResponse(BaseModel):
     stats: list[FeedbackStatsItem] = Field(..., description="Statistics grouped by entity type")
     total: int = Field(..., description="Number of entity type groups")
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+# Document explorer models
+
+
+class DocumentListItem(BaseModel):
+    """Lightweight document for list views (no embeddings or raw_data)."""
+
+    document_id: str = Field(..., description="Unique document identifier")
+    platform: str | None = Field(default=None, description="Source platform")
+    content_type: str | None = Field(default=None, description="Content type (post, article, etc.)")
+    title: str | None = Field(default=None, description="Document title if available")
+    content_preview: str | None = Field(default=None, description="First 300 characters of content")
+    url: str | None = Field(default=None, description="Original document URL")
+    author_name: str | None = Field(default=None, description="Author display name")
+    author_verified: bool = Field(default=False, description="Whether author is verified")
+    author_followers: int | None = Field(default=None, description="Author follower count")
+    tickers: list[str] = Field(default_factory=list, description="Ticker symbols mentioned")
+    spam_score: float | None = Field(default=None, description="Spam detection score (0-1)")
+    authority_score: float | None = Field(default=None, description="Document authority score (0-1)")
+    sentiment_label: str | None = Field(default=None, description="Sentiment label if available")
+    sentiment_confidence: float | None = Field(default=None, description="Sentiment confidence if available")
+    engagement: dict = Field(default_factory=dict, description="Engagement metrics")
+    theme_ids: list[str] = Field(default_factory=list, description="Assigned theme IDs")
+    timestamp: str | None = Field(default=None, description="Document creation timestamp (ISO format)")
+    fetched_at: str | None = Field(default=None, description="Ingestion timestamp (ISO format)")
+
+
+class DocumentListResponse(BaseModel):
+    """Response model for listing documents."""
+
+    documents: list[DocumentListItem] = Field(..., description="List of documents")
+    total: int = Field(..., description="Total matching documents")
+    page_size: int = Field(..., description="Page size used")
+    offset: int = Field(..., description="Offset used")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class DocumentDetailResponse(BaseModel):
+    """Full document detail including extracted entities, keywords, events."""
+
+    document_id: str = Field(..., description="Unique document identifier")
+    platform: str | None = Field(default=None, description="Source platform")
+    content_type: str | None = Field(default=None, description="Content type (post, article, etc.)")
+    title: str | None = Field(default=None, description="Document title if available")
+    content_preview: str | None = Field(default=None, description="First 300 characters of content")
+    content: str | None = Field(default=None, description="Full document content")
+    url: str | None = Field(default=None, description="Original document URL")
+    author_id: str | None = Field(default=None, description="Author identifier")
+    author_name: str | None = Field(default=None, description="Author display name")
+    author_verified: bool = Field(default=False, description="Whether author is verified")
+    author_followers: int | None = Field(default=None, description="Author follower count")
+    tickers: list[str] = Field(default_factory=list, description="Ticker symbols mentioned")
+    spam_score: float | None = Field(default=None, description="Spam detection score (0-1)")
+    bot_probability: float | None = Field(default=None, description="Bot detection probability (0-1)")
+    authority_score: float | None = Field(default=None, description="Document authority score (0-1)")
+    sentiment_label: str | None = Field(default=None, description="Sentiment label if available")
+    sentiment_confidence: float | None = Field(default=None, description="Sentiment confidence if available")
+    sentiment: dict | None = Field(default=None, description="Full sentiment analysis object")
+    engagement: dict = Field(default_factory=dict, description="Engagement metrics")
+    entities: list[dict] = Field(default_factory=list, description="Extracted entities")
+    keywords: list[dict] = Field(default_factory=list, description="Extracted keywords")
+    events: list[dict] = Field(default_factory=list, description="Extracted events")
+    urls_mentioned: list[str] = Field(default_factory=list, description="URLs found in content")
+    theme_ids: list[str] = Field(default_factory=list, description="Assigned theme IDs")
+    has_embedding: bool = Field(default=False, description="Whether FinBERT embedding exists")
+    has_embedding_minilm: bool = Field(default=False, description="Whether MiniLM embedding exists")
+    timestamp: str | None = Field(default=None, description="Document creation timestamp (ISO format)")
+    fetched_at: str | None = Field(default=None, description="Ingestion timestamp (ISO format)")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class PlatformCount(BaseModel):
+    """Document count per platform."""
+
+    platform: str = Field(..., description="Platform name")
+    count: int = Field(..., description="Document count")
+
+
+class EmbeddingCoverage(BaseModel):
+    """Embedding coverage percentages."""
+
+    finbert_pct: float = Field(..., description="Fraction of docs with FinBERT embeddings")
+    minilm_pct: float = Field(..., description="Fraction of docs with MiniLM embeddings")
+
+
+class DocumentStatsResponse(BaseModel):
+    """Aggregate document statistics for the explorer dashboard."""
+
+    total_count: int = Field(..., description="Total number of documents")
+    platform_counts: list[PlatformCount] = Field(..., description="Document counts by platform")
+    embedding_coverage: EmbeddingCoverage = Field(..., description="Embedding coverage stats")
+    sentiment_coverage: float = Field(..., description="Fraction of docs with sentiment")
+    earliest_document: str | None = Field(default=None, description="Earliest document timestamp (ISO)")
+    latest_document: str | None = Field(default=None, description="Latest document timestamp (ISO)")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")

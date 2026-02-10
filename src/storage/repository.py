@@ -1368,6 +1368,190 @@ class DocumentRepository:
             for row in rows
         ]
 
+    def _build_document_filters(
+        self,
+        *,
+        platform: str | None = None,
+        content_type: str | None = None,
+        ticker: str | None = None,
+        q: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        max_spam: float | None = None,
+        min_authority: float | None = None,
+        param_idx: int = 1,
+    ) -> tuple[str, list[Any], int]:
+        """
+        Build WHERE clause from optional document filters.
+
+        Returns (where_clause, params, next_param_idx). Reused by
+        list_documents and list_documents_count to avoid SQL duplication.
+        """
+        conditions: list[str] = []
+        params: list[Any] = []
+
+        if platform is not None:
+            conditions.append(f"platform = ${param_idx}")
+            params.append(platform)
+            param_idx += 1
+
+        if content_type is not None:
+            conditions.append(f"content_type = ${param_idx}")
+            params.append(content_type)
+            param_idx += 1
+
+        if ticker is not None:
+            conditions.append(f"${param_idx} = ANY(tickers)")
+            params.append(ticker.upper())
+            param_idx += 1
+
+        if q is not None:
+            conditions.append(
+                f"to_tsvector('english', content) @@ plainto_tsquery('english', ${param_idx})"
+            )
+            params.append(q)
+            param_idx += 1
+
+        if since is not None:
+            conditions.append(f"timestamp >= ${param_idx}")
+            params.append(since)
+            param_idx += 1
+
+        if until is not None:
+            conditions.append(f"timestamp <= ${param_idx}")
+            params.append(until)
+            param_idx += 1
+
+        if max_spam is not None:
+            conditions.append(f"spam_score <= ${param_idx}")
+            params.append(max_spam)
+            param_idx += 1
+
+        if min_authority is not None:
+            conditions.append(f"authority_score >= ${param_idx}")
+            params.append(min_authority)
+            param_idx += 1
+
+        where_clause = " AND ".join(conditions) if conditions else "TRUE"
+        return where_clause, params, param_idx
+
+    async def list_documents(
+        self,
+        *,
+        platform: str | None = None,
+        content_type: str | None = None,
+        ticker: str | None = None,
+        q: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        max_spam: float | None = None,
+        min_authority: float | None = None,
+        sort: str = "timestamp",
+        order: str = "desc",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[asyncpg.Record]:
+        """
+        List documents with a lightweight projection (no embeddings/raw_data).
+
+        Returns raw asyncpg Records to avoid materializing full
+        NormalizedDocument objects. Content is truncated to 300 chars at DB level.
+        """
+        where_clause, params, idx = self._build_document_filters(
+            platform=platform,
+            content_type=content_type,
+            ticker=ticker,
+            q=q,
+            since=since,
+            until=until,
+            max_spam=max_spam,
+            min_authority=min_authority,
+        )
+
+        sql = f"""
+            SELECT id, platform, content_type, title, LEFT(content, 300) AS content_preview,
+                   url, author_name, author_verified, author_followers, tickers,
+                   spam_score, authority_score, sentiment, engagement, theme_ids,
+                   timestamp, fetched_at
+            FROM documents
+            WHERE {where_clause}
+            ORDER BY {sort} {order}
+            LIMIT ${idx} OFFSET ${idx + 1}
+        """
+        params.extend([limit, offset])
+        return await self._db.fetch(sql, *params)
+
+    async def list_documents_count(
+        self,
+        *,
+        platform: str | None = None,
+        content_type: str | None = None,
+        ticker: str | None = None,
+        q: str | None = None,
+        since: datetime | None = None,
+        until: datetime | None = None,
+        max_spam: float | None = None,
+        min_authority: float | None = None,
+    ) -> int:
+        """Count documents matching the same filters as list_documents."""
+        where_clause, params, _idx = self._build_document_filters(
+            platform=platform,
+            content_type=content_type,
+            ticker=ticker,
+            q=q,
+            since=since,
+            until=until,
+            max_spam=max_spam,
+            min_authority=min_authority,
+        )
+        sql = f"SELECT COUNT(*) FROM documents WHERE {where_clause}"
+        return await self._db.fetchval(sql, *params)
+
+    async def get_document_stats(self) -> dict[str, Any]:
+        """
+        Get aggregate document statistics for the explorer dashboard.
+
+        Returns dict with total_count, platform_counts, embedding/sentiment
+        coverage, and date range.
+        """
+        summary_sql = """
+            SELECT
+                COUNT(*) AS total,
+                COUNT(embedding)::float / GREATEST(COUNT(*), 1) AS finbert_pct,
+                COUNT(embedding_minilm)::float / GREATEST(COUNT(*), 1) AS minilm_pct,
+                COUNT(sentiment)::float / GREATEST(COUNT(*), 1) AS sentiment_pct,
+                MIN(timestamp) AS earliest,
+                MAX(timestamp) AS latest
+            FROM documents
+        """
+        platform_sql = """
+            SELECT platform, COUNT(*) AS count
+            FROM documents
+            GROUP BY platform
+            ORDER BY count DESC
+        """
+        summary_row = await self._db.fetchrow(summary_sql)
+        platform_rows = await self._db.fetch(platform_sql)
+
+        return {
+            "total_count": summary_row["total"],
+            "platform_counts": [
+                {"platform": r["platform"], "count": r["count"]}
+                for r in platform_rows
+            ],
+            "embedding_coverage": {
+                "finbert_pct": round(summary_row["finbert_pct"], 4),
+                "minilm_pct": round(summary_row["minilm_pct"], 4),
+            },
+            "sentiment_coverage": round(summary_row["sentiment_pct"], 4),
+            "earliest_document": (
+                summary_row["earliest"].isoformat() if summary_row["earliest"] else None
+            ),
+            "latest_document": (
+                summary_row["latest"].isoformat() if summary_row["latest"] else None
+            ),
+        }
+
     async def get_documents_by_theme(
         self,
         theme_id: str,

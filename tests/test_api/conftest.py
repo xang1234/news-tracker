@@ -80,6 +80,18 @@ def mock_doc_repo():
     repo.get_documents_by_theme = AsyncMock(return_value=[])
     repo.get_sentiments_for_theme = AsyncMock(return_value=[])
     repo.get_events_by_tickers = AsyncMock(return_value=[])
+    # Document explorer endpoints
+    repo.list_documents = AsyncMock(return_value=[])
+    repo.list_documents_count = AsyncMock(return_value=0)
+    repo.get_document_stats = AsyncMock(return_value={
+        "total_count": 0,
+        "platform_counts": [],
+        "embedding_coverage": {"finbert_pct": 0.0, "minilm_pct": 0.0},
+        "sentiment_coverage": 0.0,
+        "earliest_document": None,
+        "latest_document": None,
+    })
+    repo.get_by_id = AsyncMock(return_value=None)
     return repo
 
 

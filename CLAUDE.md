@@ -238,6 +238,9 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | GET | /themes/{id}/sentiment | Aggregated sentiment (exponential decay) |
 | GET | /themes/{id}/metrics | Daily metrics time series |
 | GET | /themes/{id}/events | Events via ticker overlap (dedup, investment_signal) |
+| GET | /documents | List with filters (platform, ticker, q, sort, pagination) |
+| GET | /documents/stats | Aggregate stats (counts, coverage, date range) |
+| GET | /documents/{id} | Full detail (content, entities, keywords, events) |
 | GET | /alerts | List (severity, trigger_type, theme_id, acknowledged) |
 | PATCH | /alerts/{id}/acknowledge | Mark alert as acknowledged |
 | POST | /graph/propagate | Sentiment propagation through causal graph |
