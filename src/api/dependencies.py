@@ -30,6 +30,7 @@ from src.keywords.config import KeywordsConfig
 from src.keywords.service import KeywordsService
 from src.event_extraction.config import EventExtractionConfig
 from src.event_extraction.patterns import PatternExtractor
+from src.security_master.repository import SecurityMasterRepository
 
 # Global service instances (initialized on first request)
 _embedding_service: EmbeddingService | None = None
@@ -50,6 +51,7 @@ _graph_repository: GraphRepository | None = None
 _ner_service: NERService | None = None
 _keywords_service: KeywordsService | None = None
 _pattern_extractor: PatternExtractor | None = None
+_security_master_repository: SecurityMasterRepository | None = None
 
 
 async def get_database() -> Database:
@@ -446,12 +448,26 @@ def get_pattern_extractor() -> PatternExtractor:
     return _pattern_extractor
 
 
+async def get_security_master_repository() -> SecurityMasterRepository:
+    """Get security master repository instance (singleton)."""
+    global _security_master_repository, _database
+
+    if _security_master_repository is None:
+        if _database is None:
+            _database = Database()
+            await _database.connect()
+
+        _security_master_repository = SecurityMasterRepository(_database)
+
+    return _security_master_repository
+
+
 async def cleanup_dependencies() -> None:
     """Clean up global dependencies on shutdown."""
     global _embedding_service, _sentiment_service, _redis_client, _vector_store_manager, _database
     global _theme_repository, _document_repository, _sentiment_aggregator, _ranking_service
     global _alert_repository, _feedback_repository, _causal_graph, _propagation_service, _alert_broadcaster
-    global _graph_repository, _ner_service, _keywords_service, _pattern_extractor
+    global _graph_repository, _ner_service, _keywords_service, _pattern_extractor, _security_master_repository
 
     _vector_store_manager = None
     _theme_repository = None
@@ -466,6 +482,7 @@ async def cleanup_dependencies() -> None:
     _causal_graph = None
     _propagation_service = None
     _graph_repository = None
+    _security_master_repository = None
 
     if _alert_broadcaster is not None:
         await _alert_broadcaster.stop()

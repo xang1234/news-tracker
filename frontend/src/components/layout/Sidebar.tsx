@@ -11,6 +11,8 @@ import {
   Layers,
   Bell,
   GitBranch,
+  Fingerprint,
+  Shield,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -32,6 +34,8 @@ const NAV_ITEMS = [
   { to: '/themes', icon: Layers, label: 'Themes' },
   { to: '/alerts', icon: Bell, label: 'Alerts' },
   { to: '/graph', icon: GitBranch, label: 'Graph' },
+  { to: '/entities', icon: Fingerprint, label: 'Entities' },
+  { to: '/securities', icon: Shield, label: 'Securities' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ] as const;
 

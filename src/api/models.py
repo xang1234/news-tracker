@@ -874,3 +874,156 @@ class EventsExtractResponse(BaseModel):
     events: list[ExtractedEventItem] = Field(..., description="Extracted events")
     total: int = Field(..., description="Number of events found")
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+# ── Entity Explorer Models ────────────────────────────
+
+
+class EntitySummaryItem(BaseModel):
+    """Entity in the directory listing."""
+
+    type: str = Field(..., description="Entity type (COMPANY, PRODUCT, etc.)")
+    normalized: str = Field(..., description="Normalized entity name")
+    mention_count: int = Field(..., description="Total document mentions")
+    first_seen: str | None = Field(default=None, description="First mention timestamp (ISO)")
+    last_seen: str | None = Field(default=None, description="Most recent mention timestamp (ISO)")
+
+
+class EntityListResponse(BaseModel):
+    """Paginated entity directory."""
+
+    entities: list[EntitySummaryItem] = Field(..., description="Entity list")
+    total: int = Field(..., description="Total matching entities")
+    has_more: bool = Field(..., description="Whether more pages exist")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class TrendingEntityItem(BaseModel):
+    """Entity with a mention spike."""
+
+    type: str = Field(..., description="Entity type")
+    normalized: str = Field(..., description="Normalized entity name")
+    recent_count: int = Field(..., description="Mentions in recent window")
+    baseline_count: int = Field(..., description="Mentions in baseline window")
+    spike_ratio: float = Field(..., description="Recent rate / baseline rate")
+
+
+class TrendingEntitiesResponse(BaseModel):
+    """Trending entities response."""
+
+    trending: list[TrendingEntityItem] = Field(..., description="Trending entities")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class EntityStatsResponse(BaseModel):
+    """Aggregate entity statistics."""
+
+    total_entities: int = Field(..., description="Distinct entity count")
+    documents_with_entities: int = Field(..., description="Documents containing entities")
+    by_type: dict[str, int] = Field(default_factory=dict, description="Entity counts by type")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class EntityDetailResponse(BaseModel):
+    """Single entity detail."""
+
+    type: str = Field(..., description="Entity type")
+    normalized: str = Field(..., description="Normalized entity name")
+    mention_count: int = Field(..., description="Total document mentions")
+    first_seen: str | None = Field(default=None, description="First mention timestamp (ISO)")
+    last_seen: str | None = Field(default=None, description="Most recent mention timestamp (ISO)")
+    platforms: dict[str, int] = Field(default_factory=dict, description="Mention counts by platform")
+    graph_node_id: str | None = Field(default=None, description="Graph node ID if linked")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class EntitySentimentResponse(BaseModel):
+    """Sentiment breakdown for an entity."""
+
+    avg_score: float | None = Field(default=None, description="Average sentiment score")
+    pos_count: int = Field(default=0, description="Positive sentiment documents")
+    neg_count: int = Field(default=0, description="Negative sentiment documents")
+    neu_count: int = Field(default=0, description="Neutral sentiment documents")
+    trend: str = Field(default="stable", description="Trend: improving, declining, stable")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class CooccurringEntityItem(BaseModel):
+    """Co-occurring entity."""
+
+    type: str = Field(..., description="Entity type")
+    normalized: str = Field(..., description="Normalized entity name")
+    cooccurrence_count: int = Field(..., description="Number of shared documents")
+    jaccard: float = Field(..., description="Jaccard similarity (0-1)")
+
+
+class CooccurrenceResponse(BaseModel):
+    """Co-occurrence response."""
+
+    entities: list[CooccurringEntityItem] = Field(..., description="Co-occurring entities")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class EntityMergeRequest(BaseModel):
+    """Request to merge an entity into a target."""
+
+    to_type: str = Field(..., description="Target entity type")
+    to_normalized: str = Field(..., description="Target normalized name")
+
+
+class EntityMergeResponse(BaseModel):
+    """Result of an entity merge."""
+
+    affected_documents: int = Field(..., description="Number of documents updated")
+    merged_from: str = Field(..., description="Source entity (type:normalized)")
+    merged_to: str = Field(..., description="Target entity (type:normalized)")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+# ── Securities Admin Models ───────────────────────────
+
+
+class SecurityItem(BaseModel):
+    """Single security record."""
+
+    ticker: str = Field(..., description="Ticker symbol")
+    exchange: str = Field(..., description="Exchange code (e.g. US, KRX)")
+    name: str = Field(..., description="Company name")
+    aliases: list[str] = Field(default_factory=list, description="Alternative names")
+    sector: str = Field(default="", description="Sector classification")
+    country: str = Field(default="US", description="Country code")
+    currency: str = Field(default="USD", description="Trading currency")
+    is_active: bool = Field(default=True, description="Whether security is active")
+    created_at: str | None = Field(default=None, description="Creation timestamp (ISO)")
+    updated_at: str | None = Field(default=None, description="Last update timestamp (ISO)")
+
+
+class SecuritiesListResponse(BaseModel):
+    """Paginated securities list."""
+
+    securities: list[SecurityItem] = Field(..., description="Security records")
+    total: int = Field(..., description="Total matching securities")
+    has_more: bool = Field(..., description="Whether more pages exist")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class CreateSecurityRequest(BaseModel):
+    """Request to create a new security."""
+
+    ticker: str = Field(..., min_length=1, max_length=20, description="Ticker symbol")
+    exchange: str = Field(default="US", max_length=10, description="Exchange code")
+    name: str = Field(..., min_length=1, max_length=200, description="Company name")
+    aliases: list[str] = Field(default_factory=list, description="Alternative names")
+    sector: str = Field(default="", description="Sector classification")
+    country: str = Field(default="US", description="Country code")
+    currency: str = Field(default="USD", description="Trading currency")
+
+
+class UpdateSecurityRequest(BaseModel):
+    """Request to update a security."""
+
+    name: str | None = Field(default=None, description="Company name")
+    aliases: list[str] | None = Field(default=None, description="Alternative names")
+    sector: str | None = Field(default=None, description="Sector classification")
+    country: str | None = Field(default=None, description="Country code")
+    currency: str | None = Field(default=None, description="Trading currency")

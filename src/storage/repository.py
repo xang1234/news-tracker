@@ -1552,6 +1552,330 @@ class DocumentRepository:
             ),
         }
 
+    # ── Entity Explorer Methods ─────────────────────────
+
+    async def list_entities(
+        self,
+        entity_type: str | None = None,
+        search: str | None = None,
+        sort: str = "count",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """
+        Paginated entity directory with optional type filter and search.
+
+        Returns (entities, total) where each entity dict has:
+        type, normalized, mention_count, first_seen, last_seen.
+        """
+        conditions: list[str] = []
+        params: list[Any] = []
+        idx = 1
+
+        if entity_type:
+            conditions.append(f"entity->>'type' = ${idx}")
+            params.append(entity_type)
+            idx += 1
+
+        if search:
+            conditions.append(f"entity->>'normalized' ILIKE ${idx}")
+            params.append(f"%{search}%")
+            idx += 1
+
+        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+
+        order_col = "mention_count DESC" if sort == "count" else "last_seen DESC"
+
+        count_sql = f"""
+            SELECT COUNT(*) FROM (
+                SELECT entity->>'type' AS type, entity->>'normalized' AS normalized
+                FROM documents, jsonb_array_elements(entities_mentioned) AS entity
+                {where_clause}
+                GROUP BY entity->>'type', entity->>'normalized'
+            ) sub
+        """
+        total = await self._db.fetchval(count_sql, *params)
+
+        data_sql = f"""
+            SELECT
+                entity->>'type' AS type,
+                entity->>'normalized' AS normalized,
+                COUNT(*) AS mention_count,
+                MIN(d.timestamp) AS first_seen,
+                MAX(d.timestamp) AS last_seen
+            FROM documents d, jsonb_array_elements(d.entities_mentioned) AS entity
+            {where_clause}
+            GROUP BY entity->>'type', entity->>'normalized'
+            ORDER BY {order_col}
+            LIMIT ${idx} OFFSET ${idx + 1}
+        """
+        params.extend([limit, offset])
+        rows = await self._db.fetch(data_sql, *params)
+
+        entities = [
+            {
+                "type": r["type"],
+                "normalized": r["normalized"],
+                "mention_count": r["mention_count"],
+                "first_seen": r["first_seen"],
+                "last_seen": r["last_seen"],
+            }
+            for r in rows
+        ]
+        return entities, total or 0
+
+    async def get_entity_detail(
+        self,
+        entity_type: str,
+        normalized: str,
+    ) -> dict[str, Any] | None:
+        """
+        Single entity stats: count, first/last seen, platform breakdown.
+        """
+        entity_filter = json.dumps([{"type": entity_type, "normalized": normalized}])
+
+        sql = """
+            SELECT
+                COUNT(*) AS mention_count,
+                MIN(timestamp) AS first_seen,
+                MAX(timestamp) AS last_seen
+            FROM documents
+            WHERE entities_mentioned @> $1::jsonb
+        """
+        row = await self._db.fetchrow(sql, entity_filter)
+        if not row or row["mention_count"] == 0:
+            return None
+
+        platform_sql = """
+            SELECT platform, COUNT(*) AS count
+            FROM documents
+            WHERE entities_mentioned @> $1::jsonb
+            GROUP BY platform
+            ORDER BY count DESC
+        """
+        platform_rows = await self._db.fetch(platform_sql, entity_filter)
+
+        return {
+            "type": entity_type,
+            "normalized": normalized,
+            "mention_count": row["mention_count"],
+            "first_seen": row["first_seen"],
+            "last_seen": row["last_seen"],
+            "platforms": {r["platform"]: r["count"] for r in platform_rows},
+        }
+
+    async def get_entity_sentiment(
+        self,
+        entity_type: str,
+        normalized: str,
+    ) -> dict[str, Any] | None:
+        """
+        Aggregate sentiment from documents mentioning an entity.
+        """
+        entity_filter = json.dumps([{"type": entity_type, "normalized": normalized}])
+
+        sql = """
+            SELECT
+                AVG((sentiment->>'overall_score')::float) AS avg_score,
+                COUNT(*) FILTER (WHERE sentiment->>'overall_label' = 'positive') AS pos_count,
+                COUNT(*) FILTER (WHERE sentiment->>'overall_label' = 'negative') AS neg_count,
+                COUNT(*) FILTER (WHERE sentiment->>'overall_label' = 'neutral') AS neu_count,
+                AVG((sentiment->>'overall_score')::float) FILTER (
+                    WHERE timestamp >= NOW() - INTERVAL '7 days'
+                ) AS recent_avg,
+                AVG((sentiment->>'overall_score')::float) FILTER (
+                    WHERE timestamp < NOW() - INTERVAL '7 days'
+                      AND timestamp >= NOW() - INTERVAL '30 days'
+                ) AS baseline_avg
+            FROM documents
+            WHERE entities_mentioned @> $1::jsonb
+              AND sentiment IS NOT NULL
+        """
+        row = await self._db.fetchrow(sql, entity_filter)
+        if not row or (row["pos_count"] + row["neg_count"] + row["neu_count"]) == 0:
+            return None
+
+        # Determine trend
+        trend = "stable"
+        if row["recent_avg"] is not None and row["baseline_avg"] is not None:
+            delta = row["recent_avg"] - row["baseline_avg"]
+            if delta > 0.05:
+                trend = "improving"
+            elif delta < -0.05:
+                trend = "declining"
+
+        return {
+            "avg_score": row["avg_score"],
+            "pos_count": row["pos_count"],
+            "neg_count": row["neg_count"],
+            "neu_count": row["neu_count"],
+            "trend": trend,
+        }
+
+    async def get_trending_entities(
+        self,
+        hours_recent: int = 24,
+        hours_baseline: int = 168,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """
+        Entities with mention spikes: compare recent window to baseline.
+        """
+        sql = """
+            WITH recent AS (
+                SELECT
+                    entity->>'type' AS type,
+                    entity->>'normalized' AS normalized,
+                    COUNT(*) AS recent_count
+                FROM documents d, jsonb_array_elements(d.entities_mentioned) AS entity
+                WHERE d.fetched_at >= NOW() - make_interval(hours => $1)
+                GROUP BY entity->>'type', entity->>'normalized'
+            ),
+            baseline AS (
+                SELECT
+                    entity->>'type' AS type,
+                    entity->>'normalized' AS normalized,
+                    COUNT(*) AS baseline_count
+                FROM documents d, jsonb_array_elements(d.entities_mentioned) AS entity
+                WHERE d.fetched_at >= NOW() - make_interval(hours => $2)
+                  AND d.fetched_at < NOW() - make_interval(hours => $1)
+                GROUP BY entity->>'type', entity->>'normalized'
+            )
+            SELECT
+                r.type,
+                r.normalized,
+                r.recent_count,
+                COALESCE(b.baseline_count, 0) AS baseline_count,
+                CASE WHEN COALESCE(b.baseline_count, 0) = 0
+                     THEN r.recent_count::float
+                     ELSE r.recent_count::float * $2::float / (
+                         GREATEST(b.baseline_count, 1) * $1::float
+                     )
+                END AS spike_ratio
+            FROM recent r
+            LEFT JOIN baseline b ON r.type = b.type AND r.normalized = b.normalized
+            WHERE r.recent_count >= 2
+            ORDER BY spike_ratio DESC
+            LIMIT $3
+        """
+        rows = await self._db.fetch(sql, hours_recent, hours_baseline, limit)
+
+        return [
+            {
+                "type": r["type"],
+                "normalized": r["normalized"],
+                "recent_count": r["recent_count"],
+                "baseline_count": r["baseline_count"],
+                "spike_ratio": round(float(r["spike_ratio"]), 2),
+            }
+            for r in rows
+        ]
+
+    async def get_cooccurring_entities(
+        self,
+        entity_type: str,
+        normalized: str,
+        limit: int = 20,
+        min_count: int = 2,
+    ) -> list[dict[str, Any]]:
+        """
+        Entities frequently appearing in same documents as the target entity.
+        """
+        entity_filter = json.dumps([{"type": entity_type, "normalized": normalized}])
+
+        sql = """
+            WITH target_docs AS (
+                SELECT id FROM documents
+                WHERE entities_mentioned @> $1::jsonb
+            ),
+            target_count AS (
+                SELECT COUNT(*) AS cnt FROM target_docs
+            ),
+            cooccur AS (
+                SELECT
+                    entity->>'type' AS type,
+                    entity->>'normalized' AS normalized,
+                    COUNT(DISTINCT d.id) AS cooccurrence_count
+                FROM target_docs td
+                JOIN documents d ON d.id = td.id,
+                     jsonb_array_elements(d.entities_mentioned) AS entity
+                WHERE NOT (entity->>'type' = $2 AND entity->>'normalized' = $3)
+                GROUP BY entity->>'type', entity->>'normalized'
+                HAVING COUNT(DISTINCT d.id) >= $4
+            )
+            SELECT
+                c.type,
+                c.normalized,
+                c.cooccurrence_count,
+                ROUND(c.cooccurrence_count::numeric / GREATEST(tc.cnt, 1), 4) AS jaccard
+            FROM cooccur c, target_count tc
+            ORDER BY c.cooccurrence_count DESC
+            LIMIT $5
+        """
+        rows = await self._db.fetch(
+            sql, entity_filter, entity_type, normalized, min_count, limit
+        )
+
+        return [
+            {
+                "type": r["type"],
+                "normalized": r["normalized"],
+                "cooccurrence_count": r["cooccurrence_count"],
+                "jaccard": float(r["jaccard"]),
+            }
+            for r in rows
+        ]
+
+    async def merge_entity(
+        self,
+        from_type: str,
+        from_normalized: str,
+        to_type: str,
+        to_normalized: str,
+    ) -> int:
+        """
+        Rewrite entity references in all matching documents.
+
+        Replaces all occurrences of (from_type, from_normalized) with
+        (to_type, to_normalized) in entities_mentioned JSONB arrays.
+
+        Returns the number of affected documents.
+        """
+        entity_filter = json.dumps(
+            [{"type": from_type, "normalized": from_normalized}]
+        )
+
+        sql = """
+            WITH target_docs AS (
+                SELECT id FROM documents
+                WHERE entities_mentioned @> $1::jsonb
+            ),
+            updated AS (
+                UPDATE documents d
+                SET entities_mentioned = (
+                    SELECT jsonb_agg(
+                        CASE
+                            WHEN elem->>'type' = $2 AND elem->>'normalized' = $3
+                            THEN jsonb_set(
+                                jsonb_set(elem, '{type}', to_jsonb($4::text)),
+                                '{normalized}', to_jsonb($5::text)
+                            )
+                            ELSE elem
+                        END
+                    )
+                    FROM jsonb_array_elements(d.entities_mentioned) AS elem
+                ),
+                updated_at = NOW()
+                WHERE d.id IN (SELECT id FROM target_docs)
+                RETURNING d.id
+            )
+            SELECT COUNT(*) AS affected FROM updated
+        """
+        result = await self._db.fetchval(
+            sql, entity_filter, from_type, from_normalized, to_type, to_normalized
+        )
+        return result or 0
+
     async def get_documents_by_theme(
         self,
         theme_id: str,

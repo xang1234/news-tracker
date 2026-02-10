@@ -150,6 +150,49 @@ class SecurityMasterRepository:
         )
         return _record_to_security(row) if row else None
 
+    async def list_securities(
+        self,
+        search: str | None = None,
+        active_only: bool = False,
+        exchange: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[Security], int]:
+        """Paginated list with filters. Returns (securities, total)."""
+        conditions: list[str] = []
+        params: list = []
+        idx = 1
+
+        if active_only:
+            conditions.append("is_active = TRUE")
+
+        if exchange:
+            conditions.append(f"exchange = ${idx}")
+            params.append(exchange)
+            idx += 1
+
+        if search:
+            conditions.append(
+                f"(ticker ILIKE ${idx} OR name ILIKE ${idx} OR ${idx} ILIKE ANY(aliases))"
+            )
+            params.append(f"%{search}%")
+            idx += 1
+
+        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+
+        count_sql = f"SELECT COUNT(*) FROM securities{where_clause}"
+        total = await self._db.fetchval(count_sql, *params)
+
+        data_sql = f"""
+            SELECT * FROM securities{where_clause}
+            ORDER BY ticker, exchange
+            LIMIT ${idx} OFFSET ${idx + 1}
+        """
+        params.extend([limit, offset])
+        rows = await self._db.fetch(data_sql, *params)
+
+        return [_record_to_security(r) for r in rows], total or 0
+
     async def get_all_active(self) -> list[Security]:
         """Fetch all active securities."""
         rows = await self._db.fetch(

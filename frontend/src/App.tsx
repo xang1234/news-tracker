@@ -17,6 +17,9 @@ const ThemeExplorer = lazy(() => import('@/pages/Themes'));
 const ThemeDetail = lazy(() => import('@/pages/ThemeDetail'));
 const AlertCenter = lazy(() => import('@/pages/Alerts'));
 const GraphViewer = lazy(() => import('@/pages/Graph'));
+const EntityExplorer = lazy(() => import('@/pages/Entities'));
+const EntityDetailPage = lazy(() => import('@/pages/EntityDetail'));
+const SecuritiesPage = lazy(() => import('@/pages/Securities'));
 const SettingsPage = lazy(() => import('@/pages/Settings'));
 
 function PageLoader() {
@@ -140,6 +143,30 @@ const router = createBrowserRouter([
         element: (
           <Suspense fallback={<PageLoader />}>
             <GraphViewer />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'entities',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <EntityExplorer />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'entities/:type/:normalized',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <EntityDetailPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'securities',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <SecuritiesPage />
           </Suspense>
         ),
       },

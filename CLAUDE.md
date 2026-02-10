@@ -106,7 +106,7 @@ Adapters → Redis Streams → Processing → PostgreSQL + pgvector
 | Monitoring | `src/monitoring/` | `DriftService` (4 checks: embedding KL, fragmentation, sentiment z-score, centroid stability), `DriftConfig`, `DriftReport` |
 | Feedback | `src/feedback/` | `FeedbackRepository` (create, list_by_entity, get_stats), `Feedback` dataclass, `FeedbackConfig` |
 | WS Alerts | `src/alerts/broadcaster.py` + `src/api/routes/ws_alerts.py` | `AlertBroadcaster` (Redis pub/sub fan-out to WebSocket clients), `/ws/alerts` endpoint |
-| Storage | `src/storage/` | `Database` (asyncpg), `DocumentRepository` |
+| Storage | `src/storage/` | `Database` (asyncpg), `DocumentRepository` (includes entity queries: `list_entities`, `get_entity_detail`, `get_entity_sentiment`, `get_trending_entities`, `get_cooccurring_entities`, `merge_entity`) |
 | Queues | `src/queues/` | `BaseRedisQueue` (XREADGROUP + XAUTOCLAIM), `ExponentialBackoff`, `QueueConfig` |
 | API | `src/api/` | FastAPI with `routes/`, correlation ID middleware, `TimeoutMiddleware`, `rate_limit.py` (slowapi) |
 
@@ -271,6 +271,18 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | POST | /feedback | Submit quality rating for theme/alert/document |
 | GET | /feedback/stats | Aggregated feedback statistics by entity type |
 | WS | /ws/alerts | Real-time alert stream (severity, theme_id, api_key query params) |
+| GET | /entities | List entities with search/filter/sort (feature-gated: `ner_enabled`) |
+| GET | /entities/stats | Aggregate entity stats (total, by_type, docs with entities) |
+| GET | /entities/trending | Entities with mention spikes (recent vs baseline) |
+| GET | /entities/{type}/{normalized} | Entity detail (stats, platforms, graph link) |
+| GET | /entities/{type}/{normalized}/documents | Documents mentioning entity |
+| GET | /entities/{type}/{normalized}/cooccurrence | Co-occurring entities (Jaccard) |
+| GET | /entities/{type}/{normalized}/sentiment | Aggregate sentiment + trend |
+| POST | /entities/{type}/{normalized}/merge | Merge entity into another |
+| GET | /securities | List securities with filters (feature-gated: `security_master_enabled`) |
+| POST | /securities | Create a new security |
+| PUT | /securities/{ticker}/{exchange} | Update a security |
+| DELETE | /securities/{ticker}/{exchange} | Deactivate (soft delete) a security |
 | GET | /health | Service status |
 
 ## Module Conventions

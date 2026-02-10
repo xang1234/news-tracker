@@ -30,7 +30,18 @@ export const queryKeys = {
   version: () => ['ops', 'version'] as const,
 
   entities: (filters?: Record<string, unknown>) => ['entities', filters] as const,
-  entity: (name: string) => ['entities', name] as const,
+  entityDetail: (type: string, normalized: string) =>
+    ['entities', type, normalized] as const,
+  entityDocuments: (type: string, normalized: string, filters?: Record<string, unknown>) =>
+    ['entities', type, normalized, 'documents', filters] as const,
+  entityCooccurrence: (type: string, normalized: string) =>
+    ['entities', type, normalized, 'cooccurrence'] as const,
+  entitySentiment: (type: string, normalized: string) =>
+    ['entities', type, normalized, 'sentiment'] as const,
+  entityStats: () => ['entities', 'stats'] as const,
+  trendingEntities: () => ['entities', 'trending'] as const,
+
+  securities: (filters?: Record<string, unknown>) => ['securities', filters] as const,
 
   graphNodes: (filters?: Record<string, unknown>) => ['graph', 'nodes', filters] as const,
   graphSubgraph: (nodeId: string, depth?: number) => ['graph', 'subgraph', nodeId, depth] as const,
