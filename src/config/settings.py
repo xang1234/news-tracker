@@ -109,6 +109,25 @@ class Settings(BaseSettings):
     api_port: int = 8001
     api_keys: str | None = None  # Comma-separated API keys, None = no auth (dev mode)
 
+    # CORS
+    cors_origins: str = Field(default="*", description="Comma-separated allowed CORS origins")
+    cors_allow_credentials: bool = Field(default=True, description="Allow CORS credentials")
+
+    # Request timeout
+    request_timeout_seconds: float = Field(default=30.0, ge=5.0, le=300.0, description="Request timeout in seconds (0 to disable)")
+
+    # API rate limiting (slowapi)
+    rate_limit_enabled: bool = Field(default=False, description="Enable API rate limiting via slowapi")
+    rate_limit_default: str = Field(default="60/minute", description="Default rate limit for all endpoints")
+    rate_limit_embed: str = Field(default="30/minute", description="Rate limit for /embed endpoint")
+    rate_limit_sentiment: str = Field(default="30/minute", description="Rate limit for /sentiment endpoint")
+    rate_limit_search: str = Field(default="60/minute", description="Rate limit for /search/similar endpoint")
+
+    # Worker resilience
+    worker_max_consecutive_failures: int = Field(default=10, ge=1, le=100, description="Max consecutive worker failures before exit")
+    worker_backoff_base_delay: float = Field(default=2.0, ge=0.5, le=30.0, description="Base delay for worker exponential backoff")
+    worker_backoff_max_delay: float = Field(default=120.0, ge=10.0, le=600.0, description="Max delay for worker exponential backoff")
+
     # Observability
     metrics_port: int = 8000
     otel_exporter_otlp_endpoint: str | None = None

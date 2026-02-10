@@ -5,6 +5,7 @@ Sentiment analysis endpoint.
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from starlette.requests import Request
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_sentiment_service
@@ -16,6 +17,8 @@ from src.api.models import (
     SentimentResultItem,
     SentimentScores,
 )
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings
 from src.sentiment.service import SentimentService
 
 router = APIRouter()
@@ -42,8 +45,10 @@ router = APIRouter()
     Caching is enabled by default to speed up repeated requests.
     """,
 )
+@limiter.limit(lambda: get_settings().rate_limit_sentiment)
 async def analyze_sentiment(
-    request: SentimentRequest,
+    request: Request,
+    body: SentimentRequest,
     api_key: str = Depends(verify_api_key),
     service: SentimentService = Depends(get_sentiment_service),
 ) -> SentimentResponse:
@@ -51,7 +56,8 @@ async def analyze_sentiment(
     Analyze sentiment for a batch of texts.
 
     Args:
-        request: Sentiment request with texts and options
+        request: Starlette request (for rate limiting)
+        body: Sentiment request with texts and options
         api_key: Validated API key
         service: Sentiment service
 
@@ -63,7 +69,7 @@ async def analyze_sentiment(
     try:
         # Analyze batch (document-level)
         sentiment_results = await service.analyze_batch(
-            request.texts,
+            body.texts,
             show_progress=False,
         )
 

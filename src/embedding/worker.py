@@ -23,6 +23,7 @@ from src.embedding.queue import EmbeddingJob, EmbeddingQueue
 from src.embedding.service import EmbeddingService, ModelType
 from src.ingestion.schemas import Platform
 from src.observability.metrics import get_metrics
+from src.queues.backoff import ExponentialBackoff
 from src.storage.database import Database
 from src.storage.repository import DocumentRepository
 
@@ -91,18 +92,10 @@ class EmbeddingWorker:
             clustering_enabled=self._clustering_enabled,
         )
 
-    async def start(self) -> None:
-        """
-        Start the embedding worker.
-
-        Runs until stop() is called or a fatal error occurs.
-        """
-        self._running = True
+    async def _connect_dependencies(self) -> None:
+        """Connect to all external dependencies (Redis, DB, queues)."""
         settings = get_settings()
 
-        logger.info("Starting embedding worker")
-
-        # Connect to dependencies
         await self._queue.connect()
         await self._database.connect()
 
@@ -130,17 +123,52 @@ class EmbeddingWorker:
             await self._clustering_queue.connect()
             logger.info("Clustering queue connected")
 
-        try:
-            # Process jobs from queue
-            await self._process_loop()
+    async def start(self) -> None:
+        """
+        Start the embedding worker with supervised retry loop.
 
-        except asyncio.CancelledError:
-            logger.info("Embedding worker cancelled")
-        except Exception as e:
-            logger.error("Embedding worker error", error=str(e))
-            raise
-        finally:
-            await self._cleanup()
+        Automatically reconnects on transient failures using exponential
+        backoff. Exits after max_consecutive_failures or on CancelledError.
+        """
+        self._running = True
+        settings = get_settings()
+        backoff = ExponentialBackoff(
+            base_delay=settings.worker_backoff_base_delay,
+            max_delay=settings.worker_backoff_max_delay,
+        )
+
+        logger.info("Starting embedding worker")
+
+        while self._running:
+            try:
+                await self._connect_dependencies()
+                await self._process_loop()
+                if not self._running:
+                    break
+            except asyncio.CancelledError:
+                logger.info("Embedding worker cancelled")
+                break
+            except Exception as e:
+                if backoff.attempt >= settings.worker_max_consecutive_failures:
+                    logger.error(
+                        "Embedding worker exceeded max consecutive failures",
+                        failures=backoff.attempt,
+                        error=str(e),
+                    )
+                    raise
+                delay = backoff.next_delay()
+                logger.warning(
+                    "Embedding worker error, retrying",
+                    error=str(e),
+                    attempt=backoff.attempt,
+                    retry_delay=round(delay, 1),
+                )
+                await self._cleanup()
+                await asyncio.sleep(delay)
+            else:
+                backoff.reset()
+
+        await self._cleanup()
 
     async def stop(self) -> None:
         """Stop the embedding worker gracefully."""

@@ -17,6 +17,7 @@ import structlog
 
 from src.config.settings import get_settings
 from src.observability.metrics import get_metrics
+from src.queues.backoff import ExponentialBackoff
 from src.sentiment.config import SentimentConfig
 from src.sentiment.queue import SentimentJob, SentimentQueue
 from src.sentiment.service import SentimentService
@@ -81,18 +82,10 @@ class SentimentWorker:
             batch_size=self._batch_size,
         )
 
-    async def start(self) -> None:
-        """
-        Start the sentiment worker.
-
-        Runs until stop() is called or a fatal error occurs.
-        """
-        self._running = True
+    async def _connect_dependencies(self) -> None:
+        """Connect to all external dependencies (Redis, DB, queues)."""
         settings = get_settings()
 
-        logger.info("Starting sentiment worker")
-
-        # Connect to dependencies
         await self._queue.connect()
         await self._database.connect()
 
@@ -113,17 +106,52 @@ class SentimentWorker:
         # Create repository
         self._repository = DocumentRepository(self._database)
 
-        try:
-            # Process jobs from queue
-            await self._process_loop()
+    async def start(self) -> None:
+        """
+        Start the sentiment worker with supervised retry loop.
 
-        except asyncio.CancelledError:
-            logger.info("Sentiment worker cancelled")
-        except Exception as e:
-            logger.error("Sentiment worker error", error=str(e))
-            raise
-        finally:
-            await self._cleanup()
+        Automatically reconnects on transient failures using exponential
+        backoff. Exits after max_consecutive_failures or on CancelledError.
+        """
+        self._running = True
+        settings = get_settings()
+        backoff = ExponentialBackoff(
+            base_delay=settings.worker_backoff_base_delay,
+            max_delay=settings.worker_backoff_max_delay,
+        )
+
+        logger.info("Starting sentiment worker")
+
+        while self._running:
+            try:
+                await self._connect_dependencies()
+                await self._process_loop()
+                if not self._running:
+                    break
+            except asyncio.CancelledError:
+                logger.info("Sentiment worker cancelled")
+                break
+            except Exception as e:
+                if backoff.attempt >= settings.worker_max_consecutive_failures:
+                    logger.error(
+                        "Sentiment worker exceeded max consecutive failures",
+                        failures=backoff.attempt,
+                        error=str(e),
+                    )
+                    raise
+                delay = backoff.next_delay()
+                logger.warning(
+                    "Sentiment worker error, retrying",
+                    error=str(e),
+                    attempt=backoff.attempt,
+                    retry_delay=round(delay, 1),
+                )
+                await self._cleanup()
+                await asyncio.sleep(delay)
+            else:
+                backoff.reset()
+
+        await self._cleanup()
 
     async def stop(self) -> None:
         """Stop the sentiment worker gracefully."""

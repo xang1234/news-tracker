@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.api.dependencies import cleanup_dependencies, get_alert_broadcaster, stop_alert_broadcaster
+from src.api.middleware.timeout import TimeoutMiddleware
 from src.api.routes import alerts, documents, embed, events, events_extract, feedback, graph, health, keywords_route, ner, search, sentiment, themes
 from src.api.routes import ws_alerts
 from src.api.routes.ws_alerts import set_broadcaster
@@ -78,14 +79,23 @@ Requires `X-API-KEY` header for all requests except `/health`.
         lifespan=lifespan,
     )
 
-    # Add CORS middleware
+    # Add CORS middleware (origins from CORS_ORIGINS env var, comma-separated)
+    cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Configure appropriately for production
-        allow_credentials=True,
-        allow_methods=["*"],
+        allow_origins=cors_origins,
+        allow_credentials=settings.cors_allow_credentials,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
+
+    # Request timeout middleware (must be added before logging middleware
+    # so timeout wraps the entire request lifecycle)
+    if settings.request_timeout_seconds > 0:
+        app.add_middleware(
+            TimeoutMiddleware,
+            timeout_seconds=settings.request_timeout_seconds,
+        )
 
     # Request logging, correlation ID, and tracing middleware
     @app.middleware("http")
@@ -137,6 +147,16 @@ Requires `X-API-KEY` header for all requests except `/health`.
             return response
         finally:
             structlog.contextvars.clear_contextvars()
+
+    # Rate limiting (opt-in via RATE_LIMIT_ENABLED=true)
+    if settings.rate_limit_enabled:
+        from slowapi import _rate_limit_exceeded_handler
+        from slowapi.errors import RateLimitExceeded
+
+        from src.api.rate_limit import limiter
+
+        app.state.limiter = limiter
+        app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     # Exception handler
     @app.exception_handler(Exception)

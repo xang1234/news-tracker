@@ -5,10 +5,13 @@ Embedding endpoint for batch text embedding.
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from starlette.requests import Request
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_embedding_service
 from src.api.models import APIModelType, EmbedRequest, EmbedResponse, ErrorResponse
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings
 from src.embedding.service import EmbeddingService, ModelType
 
 router = APIRouter()
@@ -47,8 +50,10 @@ def _api_to_model_type(api_model: APIModelType, avg_length: float) -> ModelType:
     Caching is enabled by default to speed up repeated requests.
     """,
 )
+@limiter.limit(lambda: get_settings().rate_limit_embed)
 async def embed_texts(
-    request: EmbedRequest,
+    request: Request,
+    body: EmbedRequest,
     api_key: str = Depends(verify_api_key),
     service: EmbeddingService = Depends(get_embedding_service),
 ) -> EmbedResponse:
@@ -56,7 +61,8 @@ async def embed_texts(
     Generate embeddings for a batch of texts.
 
     Args:
-        request: Embedding request with texts and options
+        request: Starlette request (for rate limiting)
+        body: Embedding request with texts and options
         api_key: Validated API key
         service: Embedding service
 
@@ -66,13 +72,13 @@ async def embed_texts(
     start_time = time.perf_counter()
 
     # Calculate average text length for auto model selection
-    avg_length = sum(len(t) for t in request.texts) / len(request.texts)
-    model_type = _api_to_model_type(request.model, avg_length)
+    avg_length = sum(len(t) for t in body.texts) / len(body.texts)
+    model_type = _api_to_model_type(body.model, avg_length)
 
     try:
         # Generate embeddings
         embeddings = await service.embed_batch(
-            request.texts,
+            body.texts,
             model_type=model_type,
             show_progress=False,
         )

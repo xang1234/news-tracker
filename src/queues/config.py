@@ -31,3 +31,7 @@ class QueueConfig:
     idle_timeout_ms: int = 30_000  # 30 seconds
     max_delivery_attempts: int = 3
     reclaim_batch_size: int = 10
+
+    # Backoff settings for consume() error recovery
+    backoff_base_delay: float = 1.0
+    backoff_max_delay: float = 60.0

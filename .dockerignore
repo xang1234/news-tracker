@@ -1,0 +1,39 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.venv
+.mypy_cache
+.pytest_cache
+.ruff_cache
+
+# Node / Frontend
+frontend/node_modules
+frontend/dist
+
+# Environment
+.env
+.env.*
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Project tooling
+.beads/
+.claude/
+
+# Test artifacts
+htmlcov
+.coverage
+coverage.xml
+
+# OS
+.DS_Store
+Thumbs.db

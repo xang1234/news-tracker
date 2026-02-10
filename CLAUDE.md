@@ -9,7 +9,8 @@ uv run pytest tests/test_X/test_Y.py -v   # Single test file
 uv run pytest tests/ -v -m "not integration"  # Skip integration tests
 python3 -m py_compile src/module/file.py  # Syntax check
 
-docker compose up -d                      # Start PostgreSQL, Redis, Prometheus, Grafana, Jaeger, AlertManager
+docker compose up -d                      # Start PostgreSQL, Redis, Prometheus, Grafana, Jaeger, AlertManager + API
+docker build -t news-tracker .            # Build Docker image
 uv run news-tracker health                # Check all dependencies
 uv run news-tracker init-db               # Initialize database schema
 uv run news-tracker run-once --mock       # Single ingestion cycle (mock data)
@@ -106,7 +107,8 @@ Adapters → Redis Streams → Processing → PostgreSQL + pgvector
 | Feedback | `src/feedback/` | `FeedbackRepository` (create, list_by_entity, get_stats), `Feedback` dataclass, `FeedbackConfig` |
 | WS Alerts | `src/alerts/broadcaster.py` + `src/api/routes/ws_alerts.py` | `AlertBroadcaster` (Redis pub/sub fan-out to WebSocket clients), `/ws/alerts` endpoint |
 | Storage | `src/storage/` | `Database` (asyncpg), `DocumentRepository` |
-| API | `src/api/` | FastAPI with `routes/` (embed, sentiment, search, themes, events, alerts, health), correlation ID middleware (`X-Request-ID`) |
+| Queues | `src/queues/` | `BaseRedisQueue` (XREADGROUP + XAUTOCLAIM), `ExponentialBackoff`, `QueueConfig` |
+| API | `src/api/` | FastAPI with `routes/`, correlation ID middleware, `TimeoutMiddleware`, `rate_limit.py` (slowapi) |
 
 ### Data Schema
 
@@ -147,6 +149,8 @@ class Config: ...  # ❌ Never use this
 
 ## Key Patterns
 
+- **Worker Supervisor Loop**: `start()` wraps `_connect_dependencies()` + `_process_loop()` in a retry loop with `ExponentialBackoff`; `_cleanup()` between retries
+- **Queue Exponential Backoff**: `consume()` uses `ExponentialBackoff` from `QueueConfig` on error, with dedicated `_reconnect()` for Redis connection failures
 - **Adapter Pattern**: Extend `BaseAdapter`, implement `_fetch_raw()` (with rate limiting) and `_transform()`
 - **Lazy Model Loading**: All ML services defer model loading until first use
 - **Redis SET NX Idempotency**: Prevents reprocessing in ClusteringWorker and alert dedup
@@ -197,13 +201,14 @@ class Config: ...  # ❌ Never use this
 | AlertManager | 9093 | Alert routing (webhook placeholder) |
 | Grafana | 3000 | Auto-provisioned dashboards (admin/admin) |
 | Jaeger | 16686 (UI), 4317 (OTLP gRPC) | Distributed tracing |
+| news-tracker-api | 8001 | Application API (built from Dockerfile) |
 
 ## Configuration
 
 Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 
 ### Infrastructure
-`DATABASE_URL`, `REDIS_URL`, `api_host` (0.0.0.0), `api_port` (8000), `api_keys` (comma-separated, empty = dev mode)
+`DATABASE_URL`, `REDIS_URL`, `api_host` (0.0.0.0), `api_port` (8001), `api_keys` (comma-separated, empty = dev mode), `cors_origins` (`*`, comma-separated), `cors_allow_credentials` (true), `request_timeout_seconds` (30.0), `worker_max_consecutive_failures` (10), `worker_backoff_base_delay` (2.0), `worker_backoff_max_delay` (120.0)
 
 ### Opt-In Features (all `false` by default)
 
@@ -227,6 +232,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | Drift Detection | `drift_enabled` | `DRIFT_*` | KL thresholds, fragmentation limits, sentiment z-score, stability cosine distance |
 | Tracing | `tracing_enabled` | (top-level) | `otel_service_name` (news-tracker), `otel_exporter_otlp_endpoint` (OTLP gRPC endpoint) |
 | WS Alerts | `ws_alerts_enabled` | (top-level) | `ws_alerts_max_connections` (100), `ws_alerts_heartbeat_seconds` (30) |
+| Rate Limiting | `rate_limit_enabled` | (top-level) | `rate_limit_default` (60/minute), `rate_limit_embed` (30/min), `rate_limit_sentiment` (30/min), `rate_limit_search` (60/min) |
 
 ### Other Config
 - Tickers/companies: `src/config/tickers.py`

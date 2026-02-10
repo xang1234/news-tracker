@@ -33,6 +33,7 @@ from src.observability.tracing import (
     inject_trace_context,
     is_tracing_enabled,
 )
+from src.queues.backoff import ExponentialBackoff
 from src.queues.config import QueueConfig
 
 logger = logging.getLogger(__name__)
@@ -205,6 +206,37 @@ class BaseRedisQueue(ABC, Generic[T]):
                 f"{self._stream_config.stream_name if self._stream_config else 'unknown'}"
             )
 
+    async def _reconnect(self) -> None:
+        """Re-establish Redis connection after a connection failure."""
+        try:
+            if self._redis:
+                await self._redis.close()
+        except Exception:
+            pass  # Best effort close
+
+        self._redis = redis.from_url(
+            self._redis_url,
+            encoding="utf-8",
+            decode_responses=True,
+        )
+
+        # Re-create consumer group idempotently
+        if self._stream_config:
+            try:
+                await self._redis.xgroup_create(
+                    name=self._stream_config.stream_name,
+                    groupname=self._stream_config.consumer_group,
+                    id="0",
+                    mkstream=True,
+                )
+            except redis.ResponseError as e:
+                if "BUSYGROUP" not in str(e):
+                    raise
+
+        logger.info(
+            f"Reconnected to Redis, consumer={self._consumer_name}"
+        )
+
     async def __aenter__(self) -> "BaseRedisQueue[T]":
         await self.connect()
         return self
@@ -255,6 +287,11 @@ class BaseRedisQueue(ABC, Generic[T]):
         if self._consumer_name is None:
             raise RuntimeError("Not connected. Call connect() first.")
 
+        backoff = ExponentialBackoff(
+            base_delay=self._queue_config.backoff_base_delay,
+            max_delay=self._queue_config.backoff_max_delay,
+        )
+
         while True:
             try:
                 # Step 1: Reclaim idle pending messages FIRST (fairness + recovery)
@@ -269,6 +306,9 @@ class BaseRedisQueue(ABC, Generic[T]):
                     count=count,
                     block=block_ms,
                 )
+
+                # Successful read — reset backoff
+                backoff.reset()
 
                 if not messages:
                     # No messages within block time, continue waiting
@@ -303,9 +343,19 @@ class BaseRedisQueue(ABC, Generic[T]):
             except asyncio.CancelledError:
                 logger.info("Consumer cancelled, stopping gracefully")
                 break
+            except redis.ConnectionError as e:
+                delay = backoff.next_delay()
+                logger.warning(
+                    f"Redis connection lost, reconnecting in {delay:.1f}s: {e}"
+                )
+                await asyncio.sleep(delay)
+                await self._reconnect()
             except Exception as e:
-                logger.error(f"Error consuming messages: {e}")
-                await asyncio.sleep(1)  # Brief pause before retry
+                delay = backoff.next_delay()
+                logger.error(
+                    f"Error consuming messages, retrying in {delay:.1f}s: {e}"
+                )
+                await asyncio.sleep(delay)
 
     async def _reclaim_pending(self, count: int) -> AsyncIterator[T]:
         """

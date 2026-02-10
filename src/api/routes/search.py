@@ -5,6 +5,7 @@ Semantic search endpoint for finding similar documents.
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from starlette.requests import Request
 import structlog
 
 from src.api.auth import verify_api_key
@@ -15,6 +16,8 @@ from src.api.models import (
     SearchResultItem,
     ErrorResponse,
 )
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings
 from src.vectorstore.base import VectorSearchFilter
 from src.vectorstore.manager import VectorStoreManager
 
@@ -50,8 +53,10 @@ router = APIRouter()
     - Inverse spam score
     """,
 )
+@limiter.limit(lambda: get_settings().rate_limit_search)
 async def search_similar(
-    request: SearchRequest,
+    request: Request,
+    body: SearchRequest,
     api_key: str = Depends(verify_api_key),
     manager: VectorStoreManager = Depends(get_vector_store_manager),
 ) -> SearchResponse:
@@ -59,7 +64,8 @@ async def search_similar(
     Search for documents similar to query text.
 
     Args:
-        request: Search request with query and filters
+        request: Starlette request (for rate limiting)
+        body: Search request with query and filters
         api_key: Validated API key
         manager: Vector store manager
 
@@ -72,23 +78,23 @@ async def search_similar(
         # Build filter from request
         filters = None
         if any([
-            request.platforms,
-            request.tickers,
-            request.theme_ids,
-            request.min_authority_score is not None,
+            body.platforms,
+            body.tickers,
+            body.theme_ids,
+            body.min_authority_score is not None,
         ]):
             filters = VectorSearchFilter(
-                platforms=request.platforms,
-                tickers=request.tickers,
-                theme_ids=request.theme_ids,
-                min_authority_score=request.min_authority_score,
+                platforms=body.platforms,
+                tickers=body.tickers,
+                theme_ids=body.theme_ids,
+                min_authority_score=body.min_authority_score,
             )
 
         # Execute search
         results = await manager.query(
-            text=request.query,
-            limit=request.limit,
-            threshold=request.threshold,
+            text=body.query,
+            limit=body.limit,
+            threshold=body.threshold,
             filters=filters,
         )
 
@@ -114,7 +120,7 @@ async def search_similar(
 
         logger.info(
             "Search completed",
-            query_length=len(request.query),
+            query_length=len(body.query),
             results_count=len(items),
             latency_ms=round(latency_ms, 2),
         )

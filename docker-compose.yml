@@ -95,6 +95,31 @@ services:
       timeout: 5s
       retries: 5
 
+  # News Tracker API
+  news-tracker-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-tracker-api
+    ports:
+      - "8001:8001"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/news_tracker
+      REDIS_URL: redis://redis:6379/0
+      API_PORT: "8001"
+      LOG_LEVEL: INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
 volumes:
   postgres_data:
   redis_data:
