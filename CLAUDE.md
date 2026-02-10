@@ -38,7 +38,7 @@ System Node (`/usr/local/bin/node`) is v14 — **too old** for the frontend tool
 # ✅ CORRECT: Prefix PATH with nvm node, then use local binaries
 export PATH="/Users/admin/.nvm/versions/node/v22.18.0/bin:$PATH"
 cd frontend && node_modules/.bin/tsc --noEmit    # Type check
-cd frontend && node_modules/.bin/vite --port 5173 # Dev server
+cd frontend && node_modules/.bin/vite               # Dev server (:5151)
 
 # ❌ WRONG: npx/npm from system PATH uses Node v14 and crashes
 npx tsc --noEmit   # "Cannot find module 'node:path'"
@@ -49,7 +49,7 @@ npx tsc --noEmit   # "Cannot find module 'node:path'"
 ```bash
 # Always from frontend/ with nvm Node on PATH
 npm install                          # Install dependencies
-node_modules/.bin/vite               # Dev server (default :5173)
+node_modules/.bin/vite               # Dev server (default :5151)
 node_modules/.bin/tsc --noEmit       # Type check (zero output = success)
 node_modules/.bin/eslint .           # Lint
 node_modules/.bin/vite build         # Production build
