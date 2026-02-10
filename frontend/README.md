@@ -1,73 +1,78 @@
-# React + TypeScript + Vite
+# News Tracker — Web UI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React single-page application for the News Tracker platform. Provides dashboards for browsing documents, exploring themes and entities, monitoring alerts, visualizing the causal graph, and testing NLP endpoints.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **React 18** with TypeScript
+- **Vite** for builds and HMR
+- **Tailwind CSS** for styling (persistent dark theme)
+- **React Query** for server state management
+- **Zustand** for client state
+- **React Router** for client-side routing
 
-## React Compiler
+## Getting Started
 
-The React Compiler is currently not compatible with SWC. See [this issue](https://github.com/vitejs/vite-plugin-react/issues/428) for tracking the progress.
+Requires Node.js 18+ (22 recommended).
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install                      # Install dependencies
+npx vite                         # Dev server at http://localhost:5173
+npx tsc --noEmit                 # Type check (zero output = success)
+npx eslint .                     # Lint
+npx vite build                   # Production build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The dev server proxies API requests to the backend at `http://localhost:8001`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Project Structure
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+src/
+├── api/
+│   ├── http.ts              # Axios instance with /api baseURL, auth, correlation IDs
+│   ├── queryKeys.ts         # React Query key factories (use these, never hand-craft keys)
+│   └── hooks/use*.ts        # One hook per API endpoint, typed request/response
+├── components/
+│   ├── layout/              # DashboardShell, navigation, sidebar
+│   ├── domain/              # Reusable cards/panels (each exports a Skeleton variant)
+│   └── ui/                  # Base UI primitives
+├── lib/
+│   ├── constants.ts         # PLATFORMS, color maps
+│   ├── formatters.ts        # timeAgo, pct, truncate, latency
+│   └── utils.ts             # cn() for Tailwind class merging
+├── pages/                   # One default export per route, lazy-loaded in App.tsx
+├── stores/                  # Zustand stores
+└── App.tsx                  # Router definition
+```
+
+## Pages
+
+| Page | Route | Description |
+|------|-------|-------------|
+| Dashboard | `/` | System overview and key metrics |
+| Search | `/search` | Semantic search with filters |
+| Documents | `/documents` | Document browser with filters and sorting |
+| Document Detail | `/documents/:documentId` | Full document view (entities, keywords, events) |
+| Theme Explorer | `/themes` | Themes by lifecycle stage |
+| Theme Detail | `/themes/:themeId` | Theme documents, sentiment, metrics, events |
+| Alert Center | `/alerts` | Alert list with severity/trigger filters |
+| Causal Graph | `/graph` | Interactive graph visualization and propagation |
+| Entity Explorer | `/entities` | Entity list with trending and search |
+| Entity Detail | `/entities/:type/:normalized` | Entity stats, co-occurrence, sentiment, merge |
+| Securities | `/securities` | Security master CRUD |
+| Monitoring | `/monitoring` | Drift detection and system health |
+| Embed Playground | `/playground/embed` | Test embedding endpoint |
+| Sentiment Playground | `/playground/sentiment` | Test sentiment analysis |
+| NER Playground | `/playground/ner` | Test entity extraction |
+| Keywords Playground | `/playground/keywords` | Test keyword extraction |
+| Events Playground | `/playground/events` | Test event extraction |
+| Settings | `/settings` | Configuration and preferences |
+
+## Conventions
+
+- **Path alias:** `@/` maps to `src/` (configured in `tsconfig.json`)
+- **Dark theme:** Always on (`<html class="dark">`). Use semantic tokens: `text-foreground`, `bg-card`, `border-border`
+- **Loading states:** Domain components export a `Skeleton` variant for suspense/loading
+- **Query keys:** Always use factory functions from `src/api/queryKeys.ts`
+- **Hooks:** One file per API endpoint in `src/api/hooks/`, with typed interfaces co-located

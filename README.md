@@ -1,40 +1,59 @@
 # News Tracker
 
-Multi-platform financial data ingestion framework for tracking semiconductor and tech news.
+Full-stack financial news intelligence platform for semiconductor and tech markets. Ingests multi-platform data, applies NLP enrichment (NER, sentiment, keywords, events), clusters documents into tradeable themes, ranks them by actionability, models causal supply chain relationships, and surfaces alerts — with a React web UI, REST API, backtesting engine, and comprehensive observability.
 
 ## Architecture
 
 ```
-Adapters → Redis Streams → Processing Pipeline → PostgreSQL
-                                    │
-                    ┌───────────────┼───────────────┐
-                    ▼               ▼               ▼
-            embedding_queue  sentiment_queue   (direct store)
-            (Redis Stream)   (Redis Stream)
-            [auto-queued]    [auto-queued]
-                    │               │
-                    ▼               ▼
-            EmbeddingWorker  SentimentWorker
-                    │               │
-            ┌───────┴───────┐       │
-            ▼               ▼       ▼
-    FinBERT (768-dim)  MiniLM   FinBERT
-    Long/financial     (384)    Sentiment
-                    │               │
-                    └───────┬───────┘
-                            ▼
-                    PostgreSQL + pgvector
-                    (HNSW indexes, sentiment JSONB)
-                            │
-                    ┌───────┴───────┐
-                    ▼               ▼
-            ┌─────────────┐  ┌─────────────┐
-            │ FastAPI     │  │ CLI         │
-            │ /embed      │  │ vector-     │
-            │ /search     │  │ search      │
-            │ /sentiment  │  │ sentiment-  │
-            │ /health     │  │ worker      │
-            └─────────────┘  └─────────────┘
+                        ┌────────────────────────────────────────────────────────┐
+                        │                     Data Sources                       │
+                        │  Twitter · Reddit · Substack · Finnhub · NewsAPI       │
+                        │  Alpha Vantage · Newsfilter · Marketaux · Finlight     │
+                        └──────────────────────┬─────────────────────────────────┘
+                                               ▼
+                                    ┌─────────────────────┐
+                                    │  Adapters (fetch +   │
+                                    │  rate-limited I/O)   │
+                                    └──────────┬──────────┘
+                                               ▼
+                                    ┌─────────────────────┐
+                                    │    Redis Streams     │
+                                    │  (document_queue)    │
+                                    └──────────┬──────────┘
+                                               ▼
+                                    ┌─────────────────────┐
+                                    │  Processing Pipeline │
+                                    │  Spam · Dedup · NER  │
+                                    │  Keywords · Events   │
+                                    │  Tickers · Authority │
+                                    └──────────┬──────────┘
+                                               │
+                        ┌──────────────────────┼──────────────────────┐
+                        ▼                      ▼                      ▼
+              ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+              │  embedding_queue │  │ sentiment_queue   │  │ clustering_queue  │
+              │  (Redis Stream)  │  │ (Redis Stream)    │  │ (Redis Stream)    │
+              └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘
+                       ▼                     ▼                      ▼
+              ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
+              │ EmbeddingWorker  │  │ SentimentWorker   │  │ ClusteringWorker │
+              │ FinBERT (768)    │  │ FinBERT sentiment │  │ pgvector HNSW    │
+              │ MiniLM  (384)    │  │ + entity-level    │  │ real-time assign │
+              └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘
+                       └──────────────────────┼──────────────────────┘
+                                              ▼
+                            ┌─────────────────────────────────┐
+                            │     PostgreSQL + pgvector        │
+                            │  Documents · Themes · Graph      │
+                            │  Alerts · Backtest · Securities  │
+                            └────────────────┬────────────────┘
+                                             │
+                        ┌────────────────────┼────────────────────┐
+                        ▼                    ▼                    ▼
+              ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+              │   FastAPI REST   │ │  WebSocket /ws/   │ │   React Web UI   │
+              │   39 endpoints   │ │  alerts (pub/sub) │ │  18 pages        │
+              └──────────────────┘ └──────────────────┘ └──────────────────┘
 ```
 
 ## Data Sources
@@ -46,35 +65,8 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 | **Substack** | RSS feeds (public) | 10 req/min | Newsletter articles from SemiAnalysis, Stratechery, Asianometry |
 | **News APIs** | Finnhub, NewsAPI, Alpha Vantage, Newsfilter, Marketaux, Finlight | 60 req/min | Financial news with multi-source fallback |
 
-## Ingestion Methods
-
-### Twitter
-- Queries posts containing tracked semiconductor tickers ($NVDA, $AMD, $INTC, etc.)
-- Filters by verified accounts and engagement thresholds
-- Extracts cashtags and maps company mentions to tickers
-
-### Reddit
-- Monitors financial subreddits: wallstreetbets, stocks, investing, semiconductors, AMD_Stock, nvidia, intel
-- Fetches hot posts per subreddit
-- Extracts tickers from natural language (Reddit doesn't use cashtags)
-
-### Substack
-- Polls RSS feeds from curated publications:
-  - SemiAnalysis (semiconductor deep dives)
-  - Stratechery (tech business analysis)
-  - Asianometry (tech and economics)
-  - Doomberg (commodities and energy)
-- Parses HTML content, extracts clean text
-
-### News APIs
-- **Finnhub** (primary): Company-specific financial news by ticker
-- **NewsAPI** (fallback): Broader keyword-based news search
-- **Alpha Vantage** (tertiary): News sentiment with ticker relevance scores
-- **Newsfilter.io**: Real-time SEC filings and financial news (POST, Bearer token auth)
-- **Marketaux**: Global financial news with entity recognition (GET, query param auth)
-- **Finlight.me**: AI-curated financial news with sentiment analysis (POST, X-API-KEY auth)
 - Deduplicates across sources, applies source authority weighting (WSJ/Bloomberg/Reuters ranked higher)
-- New sources support multiple API keys with round-robin rotation and exponential backoff on rate limits
+- Newsfilter, Marketaux, and Finlight support multiple API keys with round-robin rotation and exponential backoff on rate limits
 
 ## Quick Start
 
@@ -82,545 +74,562 @@ Adapters → Redis Streams → Processing Pipeline → PostgreSQL
 # Install dependencies
 uv sync --extra dev
 
-# Start infrastructure
+# Start infrastructure (PostgreSQL, Redis, Prometheus, Grafana, Jaeger)
 docker compose up -d
 
-# Initialize database
+# Initialize database schema
 uv run news-tracker init-db
 
-# Run with mock data (for testing)
-uv run news-tracker worker --mock
+# Seed causal graph with semiconductor supply chain data
+uv run news-tracker graph seed
 
-# Run with real APIs (requires API keys in .env)
-uv run news-tracker worker
+# Run with mock data (for testing)
+uv run news-tracker run-once --mock
+
+# Run full pipeline (embeddings + sentiment + verification)
+uv run news-tracker run-once --mock --with-embeddings --with-sentiment --verify
+
+# Start the API server
+uv run news-tracker serve
+
+# Start the frontend dev server (requires Node.js 18+)
+cd frontend && npm install && npx vite
 ```
 
-## Configuration
+## CLI Reference
 
-Copy `.env.example` to `.env` and configure:
+All commands are available via the `news-tracker` entry point.
+
+### Core Services
 
 ```bash
-# Required for real data
-TWITTER_BEARER_TOKEN=...
-REDDIT_CLIENT_ID=...
-REDDIT_CLIENT_SECRET=...
-FINNHUB_API_KEY=...
-
-# Optional news sources (single key)
-NEWSAPI_API_KEY=...
-ALPHA_VANTAGE_API_KEY=...
-
-# Optional news sources (comma-separated for key rotation)
-NEWSFILTER_API_KEYS=key1,key2,key3
-MARKETAUX_API_KEYS=...
-FINLIGHT_API_KEYS=...
-
-# HTTP retry configuration
-MAX_HTTP_RETRIES=3
-MAX_BACKOFF_SECONDS=60.0
-
-# Embedding service
-EMBEDDING_MODEL_NAME=ProsusAI/finbert
-EMBEDDING_MINILM_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
-EMBEDDING_BATCH_SIZE=32
-EMBEDDING_USE_FP16=true
-EMBEDDING_DEVICE=auto
-EMBEDDING_CACHE_ENABLED=true
-EMBEDDING_CACHE_TTL_HOURS=168
-
-# Embedding API
-API_HOST=0.0.0.0
-API_PORT=8000
-API_KEYS=key1,key2  # Comma-separated valid keys (empty = dev mode, no auth)
-
-# Sentiment service
-SENTIMENT_MODEL_NAME=ProsusAI/finbert
-SENTIMENT_BATCH_SIZE=16
-SENTIMENT_USE_FP16=true
-SENTIMENT_DEVICE=auto
-SENTIMENT_CACHE_ENABLED=true
-SENTIMENT_CACHE_TTL_HOURS=168
-SENTIMENT_ENABLE_ENTITY_SENTIMENT=true
+news-tracker ingest [--mock] [--metrics/--no-metrics]       # Run ingestion service
+news-tracker process [--batch-size 32] [--metrics/--no-metrics]  # Run processing service
+news-tracker worker [--mock] [--metrics-port 8000]          # Run ingestion + processing together
+news-tracker serve [--host 0.0.0.0] [--port 8001] [--reload] [--metrics-port 8000]  # FastAPI server
+news-tracker init-db                                         # Initialize database schema
+news-tracker health                                          # Check all dependencies
 ```
 
-## Embedding Service
+### Ingestion & Processing
 
-The embedding service generates vector representations using a tiered model approach:
+```bash
+# Single ingestion cycle with optional enrichment stages
+news-tracker run-once [--mock] [--with-embeddings] [--with-sentiment] [--verify]
+
+# Storage management
+news-tracker cleanup [--days 90] [--dry-run]
+```
+
+### Workers
+
+```bash
+news-tracker sentiment-worker [--batch-size 16] [--metrics/--no-metrics] [--metrics-port 8001]
+news-tracker clustering-worker [--batch-size 32] [--metrics/--no-metrics] [--metrics-port 8002]
+```
+
+### Theme Clustering
+
+```bash
+news-tracker cluster fit [--days 30]                         # Discover themes via BERTopic
+news-tracker cluster run [--date YYYY-MM-DD] [--dry-run]     # Daily batch clustering
+news-tracker cluster backfill --start YYYY-MM-DD --end YYYY-MM-DD  # Backfill date range
+news-tracker cluster merge [--dry-run] [--threshold 0.85]    # Merge similar themes
+news-tracker cluster status                                   # Theme count + lifecycle breakdown
+news-tracker cluster recompute-centroids                      # Recalculate centroids from embeddings
+
+# Standalone daily clustering (cron-friendly)
+news-tracker daily-clustering [--date YYYY-MM-DD] [--dry-run]
+```
+
+### Semantic Search
+
+```bash
+news-tracker vector-search "NVIDIA AI demand" --limit 10
+news-tracker vector-search "semiconductor supply chain" \
+  --platform twitter --platform reddit \
+  --ticker NVDA --ticker AMD \
+  --min-authority 0.6 --threshold 0.7
+```
+
+### Backtesting
+
+```bash
+news-tracker backtest run --start 2025-01-01 --end 2025-06-30 \
+  [--strategy swing|position] [--top-n 10] [--horizon 5]
+
+news-tracker backtest plot --run-id <id> [--output-dir ./backtest_plots]
+```
+
+### Causal Graph
+
+```bash
+news-tracker graph seed    # Seed ~50 nodes + 100 edges (supply chain, competition, tech deps)
+```
+
+### Drift Detection
+
+```bash
+news-tracker drift check-quick    # Embedding KL divergence only (hourly cron)
+news-tracker drift check-daily    # All 4 checks (daily cron)
+news-tracker drift report         # Verbose weekly report
+```
+
+### Global Options
+
+```bash
+news-tracker --debug <command>    # Enable debug logging
+news-tracker <command> --help     # Show help for any command
+```
+
+## Feature Flags
+
+All features are opt-in (disabled by default) to allow flexible deployment. Enable via environment variables:
+
+| Feature | Env Variable | Description |
+|---------|-------------|-------------|
+| NER | `NER_ENABLED=true` | Named entity recognition (spaCy + EntityRuler + fastcoref) |
+| Keywords | `KEYWORDS_ENABLED=true` | TextRank keyword extraction |
+| Events | `EVENTS_ENABLED=true` | SVO event extraction with time normalization |
+| Clustering | `CLUSTERING_ENABLED=true` | BERTopic theme discovery + real-time assignment |
+| Volume Metrics | `VOLUME_METRICS_ENABLED=true` | EMA-based volume and velocity tracking |
+| Ranking | `RANKING_ENABLED=true` | Theme actionability ranking (swing/position strategies) |
+| Graph | `GRAPH_ENABLED=true` | Causal supply chain graph |
+| Propagation | `PROPAGATION_ENABLED=true` | Sentiment propagation through causal graph |
+| Alerts | `ALERTS_ENABLED=true` | Alert triggers (volume spike, sentiment shift, new theme) |
+| Notifications | `NOTIFICATIONS_ENABLED=true` | Webhook + Slack notification channels |
+| Backtest | `BACKTEST_ENABLED=true` | Historical backtesting engine |
+| Scoring | `SCORING_ENABLED=true` | LLM compellingness scoring (rule → GPT → Claude) |
+| Security Master | `SECURITY_MASTER_ENABLED=true` | DB-backed ticker/company database with fuzzy search |
+| Feedback | `FEEDBACK_ENABLED=true` | User quality ratings for themes/alerts/documents |
+| Authority | `AUTHORITY_ENABLED=true` | Bayesian source authority scoring with time decay |
+| Drift Detection | `DRIFT_ENABLED=true` | Embedding, fragmentation, sentiment, and stability drift checks |
+| Tracing | `TRACING_ENABLED=true` | OpenTelemetry distributed tracing (OTLP gRPC) |
+| WebSocket Alerts | `WS_ALERTS_ENABLED=true` | Real-time alert streaming via WebSocket |
+| Rate Limiting | `RATE_LIMIT_ENABLED=true` | Per-endpoint rate limiting (slowapi) |
+
+## API
+
+The FastAPI server exposes 39 endpoints across 15 categories, with optional API key authentication, CORS, request timeouts, correlation ID tracking, and per-endpoint rate limiting.
+
+### Authentication
+
+All endpoints (except `/health`) require an `X-API-KEY` header when `API_KEYS` is configured. Leave `API_KEYS` empty for development mode (no auth).
+
+### Endpoints
+
+#### Embeddings & NLP
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/embed` | Generate embeddings (auto/finbert/minilm model selection) |
+| POST | `/sentiment` | Document + optional entity-level sentiment analysis |
+| POST | `/ner` | Batch NER entity extraction (feature-gated) |
+| POST | `/keywords` | Batch TextRank keyword extraction (feature-gated) |
+| POST | `/events/extract` | SVO event extraction from text (feature-gated) |
+
+#### Search
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/search/similar` | Semantic similarity search with filters (platform, ticker, authority, date range) |
+
+#### Documents
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/documents` | List with filters (platform, ticker, query, sort, pagination) |
+| GET | `/documents/stats` | Aggregate stats (counts, coverage, date range) |
+| GET | `/documents/{id}` | Full detail (content, entities, keywords, events) |
+
+#### Themes
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/themes` | List themes (lifecycle_stage filter, pagination) |
+| GET | `/themes/ranked` | Ranked by actionability (strategy, max_tier, limit) |
+| GET | `/themes/{id}` | Theme detail (optional centroid via `?include_centroid=true`) |
+| GET | `/themes/{id}/documents` | Documents assigned to theme (platform, authority filters) |
+| GET | `/themes/{id}/sentiment` | Aggregated sentiment with exponential decay weighting |
+| GET | `/themes/{id}/metrics` | Daily metrics time series |
+| GET | `/themes/{id}/events` | Events via ticker overlap (dedup, investment_signal) |
+
+#### Alerts
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/alerts` | List (severity, trigger_type, theme_id, acknowledged filters) |
+| PATCH | `/alerts/{id}/acknowledge` | Mark alert as acknowledged |
+
+#### Causal Graph
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/graph/nodes` | List graph nodes (optional node_type filter) |
+| GET | `/graph/nodes/{id}/subgraph` | Subgraph around a node (depth param, 1-5) |
+| POST | `/graph/propagate` | Sentiment propagation through causal edges |
+
+#### Entities
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/entities` | List entities with search/filter/sort (feature-gated: `ner_enabled`) |
+| GET | `/entities/stats` | Aggregate entity stats (total, by_type, docs_with_entities) |
+| GET | `/entities/trending` | Entities with mention spikes (recent vs baseline) |
+| GET | `/entities/{type}/{normalized}` | Entity detail (stats, platforms, graph link) |
+| GET | `/entities/{type}/{normalized}/documents` | Documents mentioning entity |
+| GET | `/entities/{type}/{normalized}/cooccurrence` | Co-occurring entities (Jaccard similarity) |
+| GET | `/entities/{type}/{normalized}/sentiment` | Aggregate sentiment + trend |
+| POST | `/entities/{type}/{normalized}/merge` | Merge entity into another (admin) |
+
+#### Securities
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/securities` | List securities with filters (feature-gated: `security_master_enabled`) |
+| POST | `/securities` | Create a new security |
+| PUT | `/securities/{ticker}/{exchange}` | Update a security |
+| DELETE | `/securities/{ticker}/{exchange}` | Deactivate (soft delete) a security |
+
+#### Feedback
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/feedback` | Submit quality rating for theme/alert/document |
+| GET | `/feedback/stats` | Aggregated feedback statistics by entity type |
+
+#### WebSocket
+
+| Method | Path | Description |
+|--------|------|-------------|
+| WS | `/ws/alerts` | Real-time alert stream (severity, theme_id, api_key query params) |
+
+#### Health
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Three-tier status: unhealthy (DB down) → degraded (Redis down) → healthy |
+
+### Rate Limiting
+
+When `RATE_LIMIT_ENABLED=true`, endpoints are rate-limited per client IP:
+
+| Scope | Default | Applies To |
+|-------|---------|-----------|
+| `RATE_LIMIT_DEFAULT` | 60/min | Most endpoints |
+| `RATE_LIMIT_EMBED` | 30/min | `/embed` |
+| `RATE_LIMIT_SENTIMENT` | 30/min | `/sentiment`, theme sentiment |
+| `RATE_LIMIT_SEARCH` | 60/min | `/search/similar`, document stats |
+| `RATE_LIMIT_GRAPH` | 30/min | `/graph/*` |
+| `RATE_LIMIT_ENTITIES` | 60/min | `/entities/*` |
+| `RATE_LIMIT_ADMIN` | 30/min | Entity merge, security CRUD |
+
+## Web UI
+
+A React single-page application provides a full dashboard for exploring data, themes, alerts, and system health.
+
+**Stack:** React 18 + TypeScript + Vite + Tailwind CSS + React Query + Zustand
+
+| Page | Route | Description |
+|------|-------|-------------|
+| Dashboard | `/` | System overview, key metrics, recent activity |
+| Search | `/search` | Semantic search with filter controls and result cards |
+| Documents | `/documents` | Browse, filter, and inspect ingested documents |
+| Document Detail | `/documents/:id` | Full document view with entities, keywords, events, sentiment |
+| Theme Explorer | `/themes` | List themes by lifecycle stage, search, pagination |
+| Theme Detail | `/themes/:id` | Theme documents, sentiment, metrics, events, graph links |
+| Alert Center | `/alerts` | Alerts with severity/trigger filters, acknowledge actions |
+| Causal Graph | `/graph` | Interactive graph visualization, node detail, propagation |
+| Entity Explorer | `/entities` | Entity list with search, type filter, trending view |
+| Entity Detail | `/entities/:type/:name` | Entity stats, documents, co-occurrence, sentiment, merge |
+| Securities | `/securities` | Security master CRUD (create, edit, deactivate) |
+| Monitoring | `/monitoring` | Drift detection results and system health |
+| Embed Playground | `/playground/embed` | Test embedding endpoint with model selection |
+| Sentiment Playground | `/playground/sentiment` | Test sentiment analysis |
+| NER Playground | `/playground/ner` | Test entity extraction |
+| Keywords Playground | `/playground/keywords` | Test keyword extraction |
+| Events Playground | `/playground/events` | Test event extraction |
+| Settings | `/settings` | Configuration and preferences |
+
+All pages are lazy-loaded for optimal bundle splitting. The UI uses a persistent dark theme.
+
+## Processing Pipeline
+
+### Embedding Service
+
+Generates vector representations using a tiered model approach:
 
 | Model | Dimensions | Use Case | Selection Criteria |
 |-------|------------|----------|-------------------|
 | **FinBERT** | 768 | Financial domain, longer text | Default for most content |
-| **MiniLM** | 384 | General purpose, fast | Twitter posts < 300 chars |
+| **MiniLM** | 384 | General purpose, fast | Twitter posts and short text (<300 chars) |
 
-### Features
+Features: automatic model selection, lazy loading, CUDA/MPS/CPU auto-detection, chunking for documents >512 tokens with overlap and mean pooling, Redis content-hash caching, async processing via Redis Streams.
 
-- **Tiered model selection** - Automatically selects model based on platform and content length
-- **Lazy model loading** - Each model loads on first use, saving memory
-- **Automatic device detection** - Uses CUDA > MPS > CPU
-- **Long document handling** - Chunks documents >512 tokens with overlapping windows and mean pooling
-- **Redis caching** - Content-hash based caching with model prefix avoids recomputation
-- **Async processing** - Decoupled from main pipeline via Redis Streams
-- **Similarity search** - HNSW indexes for efficient cosine similarity queries
+### Sentiment Analysis
 
-### Database Migration
+ProsusAI/finbert classifies documents as positive, negative, or neutral with confidence scores. Entity-level sentiment extracts context windows around each mentioned entity for per-entity analysis. Runs as a dedicated worker consuming from `sentiment_queue`.
 
-For existing installations, run migrations to set up embedding columns:
+### Named Entity Recognition
+
+spaCy transformer model + custom EntityRuler for domain-specific patterns + fastcoref coreference resolution (resolves "the chipmaker" → "Samsung" before NER runs). Extracts five entity types:
+
+| Type | Examples |
+|------|----------|
+| **TICKER** | $NVDA, $AMD, $INTC |
+| **COMPANY** | Nvidia → NVIDIA, Taiwan Semiconductor → TSM |
+| **PRODUCT** | H100, A100, Snapdragon, GeForce RTX |
+| **TECHNOLOGY** | HBM3E, CoWoS, 3nm, EUV lithography |
+| **METRIC** | $5.6 billion, 10% YoY, 51% margin |
+
+### Keyword Extraction
+
+TextRank via rapid-textrank extracts top-N keywords per document with relevance scores.
+
+### Event Extraction
+
+Regex-based Subject-Verb-Object pattern extraction with time normalization and theme linking. Surfaces investment-relevant events (launches, earnings, partnerships, supply disruptions).
+
+### Authority Scoring
+
+Bayesian authority model with Beta prior smoothing `(correct + α) / (total + α + β)`, exponential time decay, 30-day probation ramp for new sources, and tier-based base weights (anonymous 1.0, verified 5.0, research 10.0).
+
+## Theme Clustering
+
+Dual-path clustering combines batch discovery with real-time assignment:
+
+- **Batch (daily):** BERTopic (UMAP + HDBSCAN + c-TF-IDF) discovers themes from recent documents. Runs via `daily-clustering` CLI command.
+- **Real-time:** ClusteringWorker assigns incoming documents to existing themes via pgvector HNSW cosine similarity. Three-tier assignment: strong (centroid update), weak (assign only), or new candidate.
+
+Theme lifecycle stages: `emerging` → `active` → `mature` → `declining` → `dead`. Centroids update via EMA: `(1 - lr) * old + lr * new`.
+
+The ranking service scores themes by actionability for swing or position trading strategies, producing tiered output (Tier 1/2/3).
+
+## Causal Graph
+
+A directed graph models semiconductor supply chain relationships:
+
+- **Node types:** company, technology, product, market_segment
+- **Edge types:** supplies_to, competes_with, depends_on, manufactures, develops
+- **Traversal:** Recursive CTE with cycle detection (`NOT node_id = ANY(path)`)
+- **Propagation:** BFS sentiment propagation through causal edges, with edge-type-aware sign and weight. `competes_with` edges flip impact direction.
+
+Seed data covers ~50 nodes and 100+ edges across foundries, fabless designers, equipment suppliers, and technology dependencies.
+
+## Alerts & Notifications
+
+Stateless trigger functions evaluate conditions (volume spike, sentiment shift, new theme, authority change) and persist alerts with severity levels and deduplication via Redis SET NX.
+
+Notification dispatch supports Webhook and Slack channels, each wrapped in a circuit breaker (CLOSED → OPEN → HALF_OPEN → CLOSED). Failures never block alert persistence; a Redis fallback queue handles retries.
+
+Real-time alerts stream to WebSocket clients via Redis pub/sub fan-out (`alerts:broadcast` channel). Each uvicorn worker subscribes independently.
+
+## Backtesting
+
+The backtest engine evaluates theme ranking strategies against historical price data:
+
+1. **Point-in-time queries** filter on `fetched_at` (ingestion time), not `timestamp` (publication time), to prevent look-ahead bias
+2. **Theme ranking** runs per-day using only data available at that point
+3. **Forward returns** measure price change over configurable horizons
+4. **Metrics:** Sharpe ratio, max drawdown, hit rate, cumulative returns
+
+Visualization generates matplotlib charts: cumulative returns, drawdown, return scatter, and correlation heatmap.
+
+## Drift Detection
+
+Four monitoring checks detect model and data drift:
+
+| Check | Metric | Frequency |
+|-------|--------|-----------|
+| **Embedding** | KL divergence on L2 norm distributions | Hourly |
+| **Fragmentation** | Cluster count and singleton ratio | Daily |
+| **Sentiment** | Z-score deviation from baseline distribution | Daily |
+| **Centroid Stability** | Cosine distance of theme centroids over time | Daily |
+
+## Observability
+
+- **Tracing:** OpenTelemetry with OTLP gRPC exporter to Jaeger. W3C `traceparent` propagated through Redis Streams via `BaseRedisQueue._trace_fields()`.
+- **Metrics:** Prometheus scraping with auto-provisioned Grafana dashboards. Workers expose `/metrics` on configurable ports.
+- **Logging:** structlog with correlation ID contextvars. `X-Request-ID` / `X-Correlation-ID` headers auto-propagate through request lifecycle.
+- **Health:** Three-tier status — `unhealthy` (DB down) → `degraded` (Redis down) → `healthy` — with per-subsystem `ComponentHealth` detail.
+
+## Infrastructure
+
+### Docker Compose Services
 
 ```bash
-# FinBERT 768-dim column
+docker compose up -d    # Start all services
+```
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| PostgreSQL + pgvector | 5432 | Document storage, vector search (HNSW indexes) |
+| Redis | 6379 | Streams (queues), pub/sub (alerts), caching |
+| Prometheus | 9090 | Metrics scraping + alert rules |
+| AlertManager | 9093 | Alert routing |
+| Grafana | 3000 | Auto-provisioned dashboards (login: admin/admin) |
+| Jaeger | 16686 (UI), 4317 (OTLP gRPC) | Distributed tracing |
+| news-tracker-api | 8001 | FastAPI application server |
+
+### Database Migrations
+
+Migrations live in `migrations/` and run automatically via `init-db`. For manual application:
+
+```bash
+psql $DATABASE_URL -f migrations/001_initial_schema.sql
 psql $DATABASE_URL -f migrations/001_embedding_vector_768.sql
-
-# MiniLM 384-dim column
-psql $DATABASE_URL -f migrations/002_add_minilm_embedding.sql
+# ... through 013_authority.sql
 ```
 
-### Similarity Search
+## Configuration
 
-Query similar documents using pgvector:
+Settings are managed via environment variables (Pydantic BaseSettings). Copy `.env.example` to `.env` and configure:
 
-```sql
--- FinBERT similarity search (768-dim)
-SELECT id, platform, title,
-       1 - (embedding <=> $1) AS similarity
-FROM documents
-WHERE embedding IS NOT NULL
-  AND 1 - (embedding <=> $1) >= 0.7
-ORDER BY embedding <=> $1
-LIMIT 10;
-
--- MiniLM similarity search (384-dim)
-SELECT id, platform, title,
-       1 - (embedding_minilm <=> $1) AS similarity
-FROM documents
-WHERE embedding_minilm IS NOT NULL
-  AND 1 - (embedding_minilm <=> $1) >= 0.7
-ORDER BY embedding_minilm <=> $1
-LIMIT 10;
-```
-
-## Embedding API
-
-A FastAPI server provides HTTP access to the embedding service for external clients.
-
-### Start the API Server
+### Infrastructure
 
 ```bash
-uv run news-tracker serve --host 0.0.0.0 --port 8000
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/news_tracker
+REDIS_URL=redis://localhost:6379/0
+API_HOST=0.0.0.0
+API_PORT=8001
+API_KEYS=key1,key2            # Comma-separated (empty = dev mode, no auth)
+CORS_ORIGINS=*                 # Comma-separated origins
+REQUEST_TIMEOUT_SECONDS=30.0
 ```
 
-### Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/embed` | Generate embeddings for batch of texts (1-100) |
-| POST | `/sentiment` | Analyze sentiment for batch of texts (1-100) |
-| POST | `/search/similar` | Semantic search with filters |
-| GET | `/health` | Service health check with model and cache status |
-
-### Example Usage
+### Data Sources
 
 ```bash
-# Generate embeddings (auto model selection)
-curl -X POST http://localhost:8000/embed \
-  -H "Content-Type: application/json" \
-  -H "X-API-KEY: your-api-key" \
-  -d '{"texts": ["NVIDIA reports record Q4 earnings"], "model": "auto"}'
+# Twitter
+TWITTER_BEARER_TOKEN=...
+TWITTER_API_KEY=...
+TWITTER_API_SECRET=...
 
-# Force specific model
-curl -X POST http://localhost:8000/embed \
-  -H "Content-Type: application/json" \
-  -H "X-API-KEY: your-api-key" \
-  -d '{"texts": ["Short tweet"], "model": "minilm"}'
+# Reddit
+REDDIT_CLIENT_ID=...
+REDDIT_CLIENT_SECRET=...
 
-# Health check (no auth required)
-curl http://localhost:8000/health
+# News APIs (single key)
+FINNHUB_API_KEY=...
+NEWSAPI_API_KEY=...
+ALPHA_VANTAGE_API_KEY=...
+
+# News APIs (comma-separated for key rotation)
+NEWSFILTER_API_KEYS=key1,key2,key3
+MARKETAUX_API_KEYS=...
+FINLIGHT_API_KEYS=...
+
+# Substack
+SUBSTACK_COOKIE=...
+
+# Sotwe (Twitter fallback)
+SOTWE_ENABLED=true
+SOTWE_USERNAMES=user1,user2
+SOTWE_RATE_LIMIT=10
 ```
 
-### Response Format
-
-```json
-{
-  "embeddings": [[0.123, -0.456, ...]],
-  "model_used": "finbert",
-  "dimensions": 768,
-  "latency_ms": 45.23
-}
-```
-
-## Sentiment Analysis
-
-The sentiment service classifies financial documents using ProsusAI/finbert, providing both document-level and entity-level sentiment analysis.
-
-### Sentiment Labels
-
-| Label | Description | Example |
-|-------|-------------|---------|
-| **positive** | Bullish sentiment, good news | "NVIDIA reports record Q4 earnings, stock surges 10%" |
-| **negative** | Bearish sentiment, bad news | "AMD shares plunge on weak guidance and supply concerns" |
-| **neutral** | Factual reporting, no sentiment | "Intel will report earnings next week" |
-
-### Features
-
-- **Automatic queuing** - Documents are automatically queued for sentiment analysis by ProcessingService
-- **Document-level sentiment** - Overall sentiment classification with confidence scores
-- **Entity-level sentiment** - Sentiment specific to each mentioned entity via context windows
-- **FinBERT model** - Financial domain-specific BERT for accurate financial sentiment
-- **Lazy model loading** - Model loads on first use to save memory
-- **Redis caching** - Content-hash based caching avoids recomputation
-- **Async worker** - Decoupled from main pipeline via Redis Streams
-
-### CLI Usage
+### ML Models
 
 ```bash
-# Run sentiment worker (continuous processing)
-uv run news-tracker sentiment-worker
-uv run news-tracker sentiment-worker --batch-size 8
+# Embedding
+EMBEDDING_MODEL_NAME=ProsusAI/finbert
+MINILM_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+EMBEDDING_BATCH_SIZE=32
+EMBEDDING_USE_FP16=true
+EMBEDDING_DEVICE=auto            # auto | cpu | cuda | mps
+EMBEDDING_CACHE_ENABLED=true
+EMBEDDING_CACHE_TTL_HOURS=168
 
-# Single pipeline run with sentiment
-uv run news-tracker run-once --mock --with-sentiment
-
-# Full pipeline (embeddings + sentiment + verification)
-uv run news-tracker run-once --mock --with-embeddings --with-sentiment --verify
-```
-
-### API Endpoint
-
-```bash
-# Analyze sentiment for texts
-curl -X POST http://localhost:8000/sentiment \
-  -H "Content-Type: application/json" \
-  -H "X-API-KEY: your-api-key" \
-  -d '{
-    "texts": ["NVIDIA stock surged 10% on strong AI chip demand"]
-  }'
-```
-
-### Response Format
-
-```json
-{
-  "results": [
-    {
-      "label": "positive",
-      "confidence": 0.9234,
-      "scores": {
-        "positive": 0.9234,
-        "negative": 0.0156,
-        "neutral": 0.0610
-      },
-      "entity_sentiments": []
-    }
-  ],
-  "model": "ProsusAI/finbert",
-  "total": 1,
-  "latency_ms": 48.5
-}
-```
-
-### Entity-Level Sentiment
-
-Entity-level sentiment is available through the internal processing pipeline when NER is enabled. The API endpoint provides document-level sentiment only. For entity-level sentiment:
-
-1. Enable NER in configuration: `NER_ENABLED=true`
-2. Use the processing pipeline: `uv run news-tracker run-once --mock --with-sentiment`
-3. Query results from the database which includes `sentiment.entity_sentiments`
-
-The processing pipeline automatically extracts entities via NER, then analyzes sentiment for each entity mention using context windows around the entity text.
-
-### Configuration
-
-```bash
-# In .env
+# Sentiment
 SENTIMENT_MODEL_NAME=ProsusAI/finbert
 SENTIMENT_BATCH_SIZE=16
 SENTIMENT_USE_FP16=true
 SENTIMENT_DEVICE=auto
 SENTIMENT_CACHE_ENABLED=true
-SENTIMENT_CACHE_TTL_HOURS=168
 SENTIMENT_ENABLE_ENTITY_SENTIMENT=true
 SENTIMENT_ENTITY_CONTEXT_WINDOW=100
-SENTIMENT_STREAM_NAME=sentiment_queue
-SENTIMENT_CONSUMER_GROUP=sentiment_workers
+
+# NER
+NER_SPACY_MODEL=en_core_web_trf   # en_core_web_trf (accurate) or en_core_web_sm (fast)
+NER_FUZZY_THRESHOLD=85
+NER_ENABLE_COREFERENCE=true
+NER_CONFIDENCE_THRESHOLD=0.5
+COREF_MIN_LENGTH=500               # Skip coreference for short content
+COREF_DEVICE=cpu
 ```
 
-### Disabling Auto-Queuing
-
-By default, `ProcessingService` automatically queues documents for both embedding and sentiment analysis. To disable:
-
-```python
-# Disable sentiment queuing
-service = ProcessingService(enable_sentiment_queue=False)
-
-# Disable both
-service = ProcessingService(
-    enable_embedding_queue=False,
-    enable_sentiment_queue=False,
-)
-```
-
-### Prometheus Metrics
-
-Sentiment analysis exposes the following metrics for observability:
-
-| Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
-| `news_tracker_sentiment_analyzed_total` | Counter | platform, label | Total sentiment analyses performed |
-| `news_tracker_sentiment_latency_seconds` | Histogram | operation | Analysis latency (single/batch/entity) |
-| `news_tracker_sentiment_cache_hits_total` | Counter | - | Cache hits |
-| `news_tracker_sentiment_cache_misses_total` | Counter | - | Cache misses |
-| `news_tracker_sentiment_errors_total` | Counter | error_type | Analysis errors |
-| `news_tracker_sentiment_queue_depth` | Gauge | - | Pending jobs in queue |
-| `news_tracker_sentiment_batch_size` | Histogram | - | Batch sizes processed |
-| `news_tracker_sentiment_confidence` | Histogram | label | Confidence score distribution |
-| `news_tracker_sentiment_entity_count` | Histogram | - | Entities analyzed per document |
-
-Example Prometheus queries:
-```promql
-# Sentiment analysis rate by label
-rate(news_tracker_sentiment_analyzed_total[5m])
-
-# Cache hit ratio
-rate(news_tracker_sentiment_cache_hits_total[5m]) /
-(rate(news_tracker_sentiment_cache_hits_total[5m]) + rate(news_tracker_sentiment_cache_misses_total[5m]))
-
-# 95th percentile latency
-histogram_quantile(0.95, rate(news_tracker_sentiment_latency_seconds_bucket[5m]))
-
-# Error rate
-rate(news_tracker_sentiment_errors_total[5m])
-```
-
-### Database Schema
-
-Sentiment is stored in the `sentiment` JSONB column:
-
-```json
-{
-  "label": "positive",
-  "confidence": 0.92,
-  "scores": {"positive": 0.92, "negative": 0.03, "neutral": 0.05},
-  "model": "ProsusAI/finbert",
-  "analyzed_at": "2026-02-03T12:00:00Z",
-  "entity_sentiments": [
-    {
-      "entity": "NVIDIA",
-      "type": "COMPANY",
-      "label": "positive",
-      "confidence": 0.95
-    }
-  ]
-}
-```
-
-## Vector Search
-
-Semantic search over documents using the VectorStore abstraction layer built on pgvector.
-
-### Authority Score
-
-Documents are scored for authority (0.0-1.0) based on:
-
-| Component | Max Score | Calculation |
-|-----------|-----------|-------------|
-| Verified Author | +0.2 | Boolean bonus |
-| Follower Count | +0.3 | Log-scaled, caps at 1M followers |
-| Engagement | +0.3 | Log-scaled (likes + 2×shares + comments) |
-| Inverse Spam | +0.2 | 0.2 × (1 - spam_score) |
-
-### CLI Usage
+### Processing
 
 ```bash
-# Basic semantic search
-uv run news-tracker vector-search "NVIDIA AI demand" --limit 5
-
-# With filters
-uv run news-tracker vector-search "semiconductor supply chain" \
-  --platform twitter \
-  --platform reddit \
-  --ticker NVDA \
-  --ticker AMD \
-  --min-authority 0.6
-
-# Cleanup old documents (storage management)
-uv run news-tracker cleanup --days 90              # Delete docs older than 90 days
-uv run news-tracker cleanup --days 30 --dry-run   # Preview without deleting
+SPAM_THRESHOLD=0.7
+DUPLICATE_THRESHOLD=0.85
 ```
 
-### API Endpoint
+### Worker Resilience
 
 ```bash
-# Semantic search with filters
-curl -X POST http://localhost:8001/search/similar \
-  -H "Content-Type: application/json" \
-  -H "X-API-KEY: your-api-key" \
-  -d '{
-    "query": "NVIDIA datacenter revenue growth",
-    "limit": 10,
-    "threshold": 0.7,
-    "platforms": ["twitter", "news"],
-    "tickers": ["NVDA"],
-    "min_authority_score": 0.5,
-    "timestamp_after": "2026-01-01T00:00:00Z",
-    "timestamp_before": "2026-02-01T00:00:00Z"
-  }'
+WORKER_MAX_CONSECUTIVE_FAILURES=10
+WORKER_BACKOFF_BASE_DELAY=2.0
+WORKER_BACKOFF_MAX_DELAY=120.0
 ```
 
-### Search Response
-
-```json
-{
-  "results": [
-    {
-      "document_id": "twitter_123456",
-      "score": 0.92,
-      "platform": "twitter",
-      "title": null,
-      "content_preview": "NVIDIA reports record Q4...",
-      "author_name": "analyst_pro",
-      "author_verified": true,
-      "tickers": ["NVDA"],
-      "authority_score": 0.78,
-      "timestamp": "2026-02-03T10:30:00Z"
-    }
-  ],
-  "total": 1,
-  "latency_ms": 45.2
-}
-```
-
-### Filter Options
-
-| Filter | Type | Description |
-|--------|------|-------------|
-| `platforms` | string[] | Filter by platform (twitter, reddit, news, substack) |
-| `tickers` | string[] | Filter by mentioned ticker symbols |
-| `theme_ids` | string[] | Filter by theme cluster IDs |
-| `min_authority_score` | float | Minimum authority score (0.0-1.0) |
-| `timestamp_after` | datetime | Filter to documents created after this time (ISO 8601) |
-| `timestamp_before` | datetime | Filter to documents created before this time (ISO 8601) |
-| `threshold` | float | Minimum similarity score (default: 0.7) |
-| `limit` | int | Maximum results (default: 10, max: 100) |
-
-## Named Entity Recognition (NER)
-
-Optional NER extraction identifies financial entities beyond simple ticker symbols.
-
-### Entity Types
-
-| Type | Description | Examples |
-|------|-------------|----------|
-| **TICKER** | Stock ticker symbols | $NVDA, $AMD, $INTC |
-| **COMPANY** | Company names (normalized to standard form) | Nvidia → NVIDIA, Taiwan Semiconductor → TSM |
-| **PRODUCT** | Hardware products | H100, A100, Snapdragon, GeForce RTX |
-| **TECHNOLOGY** | Technical terms | HBM3E, CoWoS, 3nm, EUV lithography |
-| **METRIC** | Financial metrics | $5.6 billion, 10% YoY, 51% margin |
-
-### Enable NER
-
-NER is disabled by default to save memory (~500MB for transformer model). Enable via environment variable:
+### Observability
 
 ```bash
-# In .env
-NER_ENABLED=true
-NER_SPACY_MODEL=en_core_web_trf  # High accuracy (default)
-# NER_SPACY_MODEL=en_core_web_sm  # Faster, lower memory
-
-# Download the spaCy model
-python -m spacy download en_core_web_trf
+TRACING_ENABLED=true
+OTEL_SERVICE_NAME=news-tracker
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
 ```
 
-### Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NER_ENABLED` | false | Enable NER extraction in preprocessing |
-| `NER_SPACY_MODEL` | en_core_web_trf | spaCy model (trf=transformer, sm=small) |
-| `NER_FUZZY_THRESHOLD` | 85 | Fuzzy matching threshold (0-100) |
-| `NER_ENABLE_COREFERENCE` | true | Resolve "the company" → entity |
-| `NER_CONFIDENCE_THRESHOLD` | 0.5 | Minimum confidence for entities |
-| `NER_ENABLE_SEMANTIC_LINKING` | false | Enable embedding-based theme linking |
-| `NER_SEMANTIC_SIMILARITY_THRESHOLD` | 0.5 | Minimum cosine similarity for theme match |
-| `NER_SEMANTIC_BASE_SCORE` | 0.6 | Base weight for semantic similarity score |
-
-### Example Output
-
-```python
-from src.ner import NERService
-
-service = NERService()
-entities = service.extract_sync("Nvidia announced HBM3E support for H200 GPUs")
-
-for e in entities:
-    print(f"{e.type}: {e.text} → {e.normalized}")
-
-# Output:
-# COMPANY: Nvidia → NVIDIA
-# TECHNOLOGY: HBM3E → HBM3E
-# PRODUCT: H200 → H200
-```
-
-### Extracted Entity Schema
-
-Entities are stored in the `entities_mentioned` JSONB column:
-
-```json
-{
-  "text": "Nvidia",
-  "type": "COMPANY",
-  "normalized": "NVIDIA",
-  "start": 0,
-  "end": 6,
-  "confidence": 0.95,
-  "metadata": {"ticker": "NVDA"}
-}
-```
-
-### Semantic Theme Linking
-
-For robust entity disambiguation (e.g., distinguishing "Samsung Electronics" from "Samsung Galaxy"), use embedding-based semantic similarity:
-
-```python
-from src.embedding.service import EmbeddingService
-from src.ner import NERService
-
-# Initialize with embedding service for semantic linking
-embedding_svc = EmbeddingService()
-ner_svc = NERService(embedding_service=embedding_svc)
-
-# Extract entities
-entities = ner_svc.extract_sync("Nvidia announced HBM3E support for H200")
-
-# Calculate semantic relevance to theme keywords
-scores = await ner_svc.link_entities_to_theme_semantic(
-    entities,
-    ["AI accelerator", "deep learning", "graphics processing"]
-)
-# {'NVIDIA': 0.82, 'HBM3E': 0.71, 'H200': 0.65}
-```
-
-The scoring formula combines semantic similarity with domain-specific bonuses:
-- **Semantic similarity**: Cosine similarity between entity and theme embeddings (weighted by `semantic_base_score`)
-- **Semiconductor ticker bonus**: +0.2 for entities with known semiconductor ticker symbols
-- **Tech entity bonus**: +0.1 for TECHNOLOGY and PRODUCT entity types
-
-This is useful for:
-- **Conglomerate disambiguation**: "Samsung" in a semiconductor context vs. consumer electronics
-- **Theme clustering**: Grouping entities by topic relevance
-- **Search ranking**: Prioritizing entities that match user intent
-
-## Storage Management
-
-The cleanup command removes old documents to prevent unbounded database growth:
+### WebSocket Alerts
 
 ```bash
-# Delete documents older than 90 days (default)
-uv run news-tracker cleanup
-
-# Custom retention period
-uv run news-tracker cleanup --days 30
-
-# Preview deletion count without actually deleting
-uv run news-tracker cleanup --days 30 --dry-run
+WS_ALERTS_ENABLED=true
+WS_ALERTS_MAX_CONNECTIONS=100
+WS_ALERTS_HEARTBEAT_SECONDS=30
 ```
 
-Programmatic cleanup is also available via `VectorStoreManager.cleanup_old_documents(days_to_keep=90)`.
+Each opt-in feature has its own `ENV_PREFIX_*` namespace for fine-grained configuration. See `src/config/settings.py` for the full reference.
+
+## Development
+
+```bash
+# Install all dependencies (including test/dev)
+uv sync --extra dev
+
+# Run all tests
+uv run pytest tests/ -v
+
+# Run a single test file
+uv run pytest tests/test_embedding/test_service.py -v
+
+# Skip integration tests (requires running services)
+uv run pytest tests/ -v -m "not integration"
+
+# Syntax check a module
+python3 -m py_compile src/module/file.py
+
+# Build Docker image
+docker build -t news-tracker .
+```
+
+### Frontend Development
+
+The frontend requires Node.js 18+ (22 recommended).
+
+```bash
+cd frontend
+npm install                      # Install dependencies
+npx vite                         # Dev server (default :5173)
+npx tsc --noEmit                 # Type check (zero output = success)
+npx eslint .                     # Lint
+npx vite build                   # Production build
+```
+
+### Project Structure
+
+Tests mirror the source tree: `tests/test_<module>/test_<file>.py`. Every service module follows the convention of `config.py`, `service.py`, and `__init__.py` with `__all__` exports.
+
+## License
+
+MIT
