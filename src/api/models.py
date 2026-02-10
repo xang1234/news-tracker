@@ -555,6 +555,44 @@ class PropagateResponse(BaseModel):
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
 
 
+# Graph node/subgraph models
+
+
+class GraphNodeItem(BaseModel):
+    """Single graph node for list and subgraph responses."""
+
+    node_id: str = Field(..., description="Unique node identifier")
+    node_type: str = Field(..., description="Node type: ticker, theme, or technology")
+    name: str = Field(..., description="Human-readable node name")
+    metadata: dict = Field(default_factory=dict, description="Node metadata")
+
+
+class GraphEdgeItem(BaseModel):
+    """Single graph edge for subgraph responses."""
+
+    source: str = Field(..., description="Source node ID")
+    target: str = Field(..., description="Target node ID")
+    relation: str = Field(..., description="Edge relation type")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Edge confidence score")
+
+
+class GraphNodesResponse(BaseModel):
+    """Response model for listing graph nodes."""
+
+    nodes: list[GraphNodeItem] = Field(..., description="List of graph nodes")
+    total: int = Field(..., description="Number of nodes returned")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class SubgraphResponse(BaseModel):
+    """Response model for a subgraph around a node."""
+
+    nodes: list[GraphNodeItem] = Field(..., description="Nodes in the subgraph")
+    edges: list[GraphEdgeItem] = Field(..., description="Edges in the subgraph")
+    center_node: str = Field(..., description="The node this subgraph is centered on")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
 # Feedback models
 
 

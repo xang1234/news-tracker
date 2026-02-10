@@ -355,6 +355,33 @@ class GraphRepository:
         )
         return list(row["path"]) if row else None
 
+    async def get_all_nodes(
+        self,
+        node_type: str | None = None,
+        limit: int = 200,
+    ) -> list[CausalNode]:
+        """List all graph nodes with optional type filter.
+
+        Args:
+            node_type: Optional filter to a specific node type (ticker, theme, technology).
+            limit: Maximum number of nodes to return.
+
+        Returns:
+            List of CausalNode objects.
+        """
+        if node_type:
+            rows = await self._db.fetch(
+                "SELECT * FROM causal_nodes WHERE node_type = $1 ORDER BY name LIMIT $2",
+                node_type,
+                limit,
+            )
+        else:
+            rows = await self._db.fetch(
+                "SELECT * FROM causal_nodes ORDER BY name LIMIT $1",
+                limit,
+            )
+        return [_row_to_node(r) for r in rows]
+
     async def get_subgraph(
         self, node_id: str, depth: int = 2
     ) -> dict[str, Any]:

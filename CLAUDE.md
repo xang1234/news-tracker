@@ -265,6 +265,8 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | GET | /documents/{id} | Full detail (content, entities, keywords, events) |
 | GET | /alerts | List (severity, trigger_type, theme_id, acknowledged) |
 | PATCH | /alerts/{id}/acknowledge | Mark alert as acknowledged |
+| GET | /graph/nodes | List graph nodes (optional node_type filter) |
+| GET | /graph/nodes/{id}/subgraph | Subgraph around a node (depth param) |
 | POST | /graph/propagate | Sentiment propagation through causal graph |
 | POST | /feedback | Submit quality rating for theme/alert/document |
 | GET | /feedback/stats | Aggregated feedback statistics by entity type |

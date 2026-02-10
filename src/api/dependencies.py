@@ -13,6 +13,7 @@ from src.config.settings import get_settings
 from src.graph.causal_graph import CausalGraph
 from src.graph.config import GraphConfig
 from src.graph.propagation import SentimentPropagation
+from src.graph.storage import GraphRepository
 from src.embedding.config import EmbeddingConfig
 from src.embedding.service import EmbeddingService
 from src.sentiment.aggregation import SentimentAggregator
@@ -45,6 +46,7 @@ _causal_graph: CausalGraph | None = None
 _propagation_service: SentimentPropagation | None = None
 _feedback_repository: FeedbackRepository | None = None
 _alert_broadcaster: AlertBroadcaster | None = None
+_graph_repository: GraphRepository | None = None
 _ner_service: NERService | None = None
 _keywords_service: KeywordsService | None = None
 _pattern_extractor: PatternExtractor | None = None
@@ -323,6 +325,20 @@ def get_sentiment_aggregator() -> SentimentAggregator:
     return _sentiment_aggregator
 
 
+async def get_graph_repository() -> GraphRepository:
+    """Get graph repository instance (singleton)."""
+    global _graph_repository, _database
+
+    if _graph_repository is None:
+        if _database is None:
+            _database = Database()
+            await _database.connect()
+
+        _graph_repository = GraphRepository(_database)
+
+    return _graph_repository
+
+
 async def get_causal_graph() -> CausalGraph:
     """
     Get causal graph instance.
@@ -435,7 +451,7 @@ async def cleanup_dependencies() -> None:
     global _embedding_service, _sentiment_service, _redis_client, _vector_store_manager, _database
     global _theme_repository, _document_repository, _sentiment_aggregator, _ranking_service
     global _alert_repository, _feedback_repository, _causal_graph, _propagation_service, _alert_broadcaster
-    global _ner_service, _keywords_service, _pattern_extractor
+    global _graph_repository, _ner_service, _keywords_service, _pattern_extractor
 
     _vector_store_manager = None
     _theme_repository = None
@@ -449,6 +465,7 @@ async def cleanup_dependencies() -> None:
     _feedback_repository = None
     _causal_graph = None
     _propagation_service = None
+    _graph_repository = None
 
     if _alert_broadcaster is not None:
         await _alert_broadcaster.stop()

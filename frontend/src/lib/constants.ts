@@ -31,6 +31,32 @@ export const SEVERITY_COLORS: Record<string, string> = {
   info: 'bg-cyan-500/20 text-cyan-400',
 };
 
+/** Graph node type colors */
+export const NODE_TYPE_COLORS: Record<string, string> = {
+  ticker: '#3b82f6',
+  theme: '#22c55e',
+  technology: '#a855f7',
+};
+
+/** Graph relation colors */
+export const RELATION_COLORS: Record<string, string> = {
+  supplies_to: '#60a5fa',
+  depends_on: '#34d399',
+  competes_with: '#f87171',
+  enables: '#c084fc',
+  derived_from: '#fbbf24',
+};
+
+/** Alert trigger type display labels */
+export const TRIGGER_TYPE_LABELS: Record<string, string> = {
+  volume_spike: 'Volume Spike',
+  sentiment_shift: 'Sentiment Shift',
+  new_theme: 'New Theme',
+  theme_acceleration: 'Theme Acceleration',
+  extreme_sentiment: 'Extreme Sentiment',
+  cross_theme: 'Cross-Theme',
+};
+
 /** Similarity score color thresholds */
 export function similarityColor(score: number): string {
   if (score >= 0.9) return 'bg-emerald-500/20 text-emerald-400';
