@@ -1,0 +1,97 @@
+groups:
+  - name: news-tracker-pipeline
+    rules:
+      # ── Adapter & Ingestion ──────────────────────────────────
+      - alert: HighAdapterErrorRate
+        expr: rate(news_tracker_adapter_errors_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High adapter error rate"
+          description: "Adapter {{ $labels.platform }} error rate {{ $value | printf \"%.2f\" }}/s over last 5 minutes."
+
+      - alert: ServiceDown
+        expr: up{job="news-tracker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "News tracker service is down"
+          description: "Prometheus cannot scrape the news-tracker metrics endpoint."
+
+      # ── Queue Backlogs ───────────────────────────────────────
+      - alert: EmbeddingQueueBacklog
+        expr: news_tracker_embedding_queue_depth > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Embedding queue backlog"
+          description: "Embedding queue depth is {{ $value }}, exceeding 1000 for 10+ minutes."
+
+      - alert: SentimentQueueBacklog
+        expr: news_tracker_sentiment_queue_depth > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sentiment queue backlog"
+          description: "Sentiment queue depth is {{ $value }}, exceeding 1000 for 10+ minutes."
+
+      - alert: ClusteringQueueBacklog
+        expr: news_tracker_clustering_queue_depth > 500
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Clustering queue backlog"
+          description: "Clustering queue depth is {{ $value }}, exceeding 500 for 10+ minutes."
+
+  - name: news-tracker-drift
+    rules:
+      # ── Drift Detection ──────────────────────────────────────
+      - alert: EmbeddingDriftWarning
+        expr: news_tracker_embedding_drift_kl > 0.1
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Embedding distribution drift detected"
+          description: "KL divergence {{ $value | printf \"%.4f\" }} exceeds warning threshold (0.1) for 1+ hour."
+
+      - alert: EmbeddingDriftCritical
+        expr: news_tracker_embedding_drift_kl > 0.2
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical embedding distribution drift"
+          description: "KL divergence {{ $value | printf \"%.4f\" }} exceeds critical threshold (0.2) for 30+ minutes."
+
+      - alert: ThemeFragmentationHigh
+        expr: news_tracker_theme_fragmentation_rate > 30
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "High theme fragmentation rate"
+          description: "Theme creation rate {{ $value | printf \"%.0f\" }} exceeds 30 themes/day for 1+ hour."
+
+      - alert: SentimentCalibrationDrift
+        expr: news_tracker_sentiment_calibration_zscore > 2
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sentiment calibration drift"
+          description: "Bullish ratio z-score {{ $value | printf \"%.2f\" }} exceeds 2.0 for 1+ hour."
+
+      - alert: CentroidInstability
+        expr: news_tracker_centroid_stability_avg > 0.1
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Theme centroid instability"
+          description: "Average centroid cosine distance {{ $value | printf \"%.4f\" }} exceeds 0.1 for 1+ hour."

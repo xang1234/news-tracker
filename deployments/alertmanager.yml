@@ -1,0 +1,22 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default
+  group_by: ['alertname', 'severity']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+
+  routes:
+    - match:
+        severity: critical
+      receiver: default
+      repeat_interval: 15m
+
+receivers:
+  - name: default
+    webhook_configs: []
+    # To enable webhook alerts, uncomment and configure:
+    # - url: 'http://your-webhook-endpoint:5001/alerts'
+    #   send_resolved: true

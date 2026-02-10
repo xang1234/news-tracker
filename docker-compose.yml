@@ -41,6 +41,7 @@ services:
       - "9090:9090"
     volumes:
       - ./deployments/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./deployments/alert_rules.yml:/etc/prometheus/alert_rules.yml
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -49,6 +50,17 @@ services:
     depends_on:
       - redis
       - postgres
+
+  # AlertManager for Prometheus alert routing
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: news-tracker-alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./deployments/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    depends_on:
+      - prometheus
 
   # Grafana for dashboards
   grafana:
@@ -62,8 +74,26 @@ services:
       GF_USERS_ALLOW_SIGN_UP: false
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./deployments/grafana/provisioning:/etc/grafana/provisioning
+      - ./deployments/grafana/dashboards:/var/lib/grafana/dashboards
     depends_on:
       - prometheus
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    container_name: news-tracker-jaeger
+    ports:
+      - "16686:16686"   # UI
+      - "4317:4317"     # OTLP gRPC
+      - "4318:4318"     # OTLP HTTP
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:16686 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

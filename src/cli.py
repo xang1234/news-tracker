@@ -1379,13 +1379,18 @@ def drift_check_quick() -> None:
         db = Database()
         await db.connect()
 
+        metrics = get_metrics()
+        metrics.start_server()
+
         try:
             service = DriftService(db, DriftConfig())
             report = await service.run_quick_check()
             _display_drift_report(report)
 
-            metrics = get_metrics()
             metrics.record_drift_check(report)
+
+            # Allow one Prometheus scrape cycle before exiting
+            await asyncio.sleep(16)
 
         finally:
             await db.close()
@@ -1411,13 +1416,18 @@ def drift_check_daily() -> None:
         db = Database()
         await db.connect()
 
+        metrics = get_metrics()
+        metrics.start_server()
+
         try:
             service = DriftService(db, DriftConfig())
             report = await service.run_daily_check()
             _display_drift_report(report)
 
-            metrics = get_metrics()
             metrics.record_drift_check(report)
+
+            # Allow one Prometheus scrape cycle before exiting
+            await asyncio.sleep(16)
 
         finally:
             await db.close()
@@ -1442,13 +1452,18 @@ def drift_report() -> None:
         db = Database()
         await db.connect()
 
+        metrics = get_metrics()
+        metrics.start_server()
+
         try:
             service = DriftService(db, DriftConfig())
             report = await service.run_weekly_report()
             _display_drift_report(report, verbose=True)
 
-            metrics = get_metrics()
             metrics.record_drift_check(report)
+
+            # Allow one Prometheus scrape cycle before exiting
+            await asyncio.sleep(16)
 
         finally:
             await db.close()

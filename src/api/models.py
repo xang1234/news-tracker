@@ -56,6 +56,23 @@ class EmbedResponse(BaseModel):
     )
 
 
+class ComponentHealth(BaseModel):
+    """Health status of a single infrastructure component."""
+
+    status: str = Field(
+        ...,
+        description="Component status: healthy, degraded, or unhealthy",
+    )
+    latency_ms: float | None = Field(
+        default=None,
+        description="Health check latency in milliseconds",
+    )
+    details: dict = Field(
+        default_factory=dict,
+        description="Component-specific health details",
+    )
+
+
 class HealthResponse(BaseModel):
     """Response model for health check."""
 
@@ -78,6 +95,18 @@ class HealthResponse(BaseModel):
     service_stats: dict = Field(
         default_factory=dict,
         description="Embedding service statistics",
+    )
+    components: dict[str, ComponentHealth] = Field(
+        default_factory=dict,
+        description="Health status of individual infrastructure components",
+    )
+    queue_depths: dict[str, int] = Field(
+        default_factory=dict,
+        description="Current depth of processing queues",
+    )
+    version: str = Field(
+        default="0.1.0",
+        description="Service version",
     )
 
 

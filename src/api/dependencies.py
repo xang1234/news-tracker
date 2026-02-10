@@ -50,6 +50,17 @@ _keywords_service: KeywordsService | None = None
 _pattern_extractor: PatternExtractor | None = None
 
 
+async def get_database() -> Database:
+    """Get database instance (singleton)."""
+    global _database
+
+    if _database is None:
+        _database = Database()
+        await _database.connect()
+
+    return _database
+
+
 async def get_redis_client() -> AsyncGenerator[redis.Redis, None]:
     """Get Redis client for caching."""
     global _redis_client

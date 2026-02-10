@@ -3,6 +3,7 @@ FastAPI application factory.
 """
 
 import time
+import uuid
 from contextlib import asynccontextmanager
 
 import structlog
@@ -86,39 +87,56 @@ Requires `X-API-KEY` header for all requests except `/health`.
         allow_headers=["*"],
     )
 
-    # Request logging and tracing middleware
+    # Request logging, correlation ID, and tracing middleware
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
         from src.observability.tracing import get_tracer, is_tracing_enabled
 
+        # Correlation ID: use incoming header or generate a new one
+        request_id = (
+            request.headers.get("X-Request-ID")
+            or request.headers.get("X-Correlation-ID")
+            or str(uuid.uuid4())
+        )
+
+        # Bind to structlog contextvars for automatic log correlation
+        structlog.contextvars.bind_contextvars(request_id=request_id)
+
         start_time = time.perf_counter()
 
-        if is_tracing_enabled():
-            tracer = get_tracer("news-tracker.api")
-            with tracer.start_as_current_span(
-                f"{request.method} {request.url.path}",
-                attributes={
-                    "http.method": request.method,
-                    "http.url": str(request.url),
-                    "http.route": request.url.path,
-                },
-            ) as span:
+        try:
+            if is_tracing_enabled():
+                tracer = get_tracer("news-tracker.api")
+                with tracer.start_as_current_span(
+                    f"{request.method} {request.url.path}",
+                    attributes={
+                        "http.method": request.method,
+                        "http.url": str(request.url),
+                        "http.route": request.url.path,
+                        "http.request_id": request_id,
+                    },
+                ) as span:
+                    response = await call_next(request)
+                    duration = time.perf_counter() - start_time
+                    span.set_attribute("http.status_code", response.status_code)
+                    span.set_attribute("http.duration_ms", round(duration * 1000, 2))
+            else:
                 response = await call_next(request)
                 duration = time.perf_counter() - start_time
-                span.set_attribute("http.status_code", response.status_code)
-                span.set_attribute("http.duration_ms", round(duration * 1000, 2))
-        else:
-            response = await call_next(request)
-            duration = time.perf_counter() - start_time
 
-        logger.info(
-            "HTTP request",
-            method=request.method,
-            path=request.url.path,
-            status_code=response.status_code,
-            duration_ms=round(duration * 1000, 2),
-        )
-        return response
+            # Add correlation ID to response headers
+            response.headers["X-Request-ID"] = request_id
+
+            logger.info(
+                "HTTP request",
+                method=request.method,
+                path=request.url.path,
+                status_code=response.status_code,
+                duration_ms=round(duration * 1000, 2),
+            )
+            return response
+        finally:
+            structlog.contextvars.clear_contextvars()
 
     # Exception handler
     @app.exception_handler(Exception)

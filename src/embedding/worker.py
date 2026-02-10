@@ -288,6 +288,13 @@ class EmbeddingWorker:
             latency=elapsed,
         )
 
+        # Report queue depth after each batch
+        try:
+            depth = await self._queue.get_stream_length()
+            self._metrics.set_embedding_queue_depth(depth)
+        except Exception:
+            pass  # non-critical: queue depth is best-effort
+
         logger.info(
             "Embedding batch processed",
             total=len(batch),

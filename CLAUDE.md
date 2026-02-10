@@ -9,7 +9,7 @@ uv run pytest tests/test_X/test_Y.py -v   # Single test file
 uv run pytest tests/ -v -m "not integration"  # Skip integration tests
 python3 -m py_compile src/module/file.py  # Syntax check
 
-docker compose up -d                      # Start PostgreSQL, Redis, Prometheus, Grafana
+docker compose up -d                      # Start PostgreSQL, Redis, Prometheus, Grafana, Jaeger, AlertManager
 uv run news-tracker health                # Check all dependencies
 uv run news-tracker init-db               # Initialize database schema
 uv run news-tracker run-once --mock       # Single ingestion cycle (mock data)
@@ -106,7 +106,7 @@ Adapters → Redis Streams → Processing → PostgreSQL + pgvector
 | Feedback | `src/feedback/` | `FeedbackRepository` (create, list_by_entity, get_stats), `Feedback` dataclass, `FeedbackConfig` |
 | WS Alerts | `src/alerts/broadcaster.py` + `src/api/routes/ws_alerts.py` | `AlertBroadcaster` (Redis pub/sub fan-out to WebSocket clients), `/ws/alerts` endpoint |
 | Storage | `src/storage/` | `Database` (asyncpg), `DocumentRepository` |
-| API | `src/api/` | FastAPI with `routes/` (embed, sentiment, search, themes, events, alerts, health) |
+| API | `src/api/` | FastAPI with `routes/` (embed, sentiment, search, themes, events, alerts, health), correlation ID middleware (`X-Request-ID`) |
 
 ### Data Schema
 
@@ -184,6 +184,19 @@ class Config: ...  # ❌ Never use this
 - **WS Auth via Query Param**: `?api_key=...` since browsers can't set custom headers on WebSocket upgrade
 - **W3C Traceparent in Redis Streams**: `traceparent` field injected on XADD, extracted on XREADGROUP via `BaseRedisQueue._trace_fields()` — propagates trace context across worker boundaries
 - **SimpleSpanProcessor for Tests**: Custom exporter path uses synchronous export; production uses `BatchSpanProcessor` for efficiency
+- **Correlation ID Middleware**: `X-Request-ID` / `X-Correlation-ID` header → structlog contextvars + OTel span attribute; auto-generated UUID if absent
+- **Health Endpoint Three-Tier Status**: `unhealthy` (DB down) → `degraded` (Redis down) → `healthy` (all green); `ComponentHealth` model per subsystem
+
+## Docker Compose Services
+
+| Service | Port | Purpose |
+|---------|------|---------|
+| PostgreSQL + pgvector | 5432 | Document storage, vector search |
+| Redis | 6379 | Queues, caching, pub/sub |
+| Prometheus | 9090 | Metrics scraping + alert rules |
+| AlertManager | 9093 | Alert routing (webhook placeholder) |
+| Grafana | 3000 | Auto-provisioned dashboards (admin/admin) |
+| Jaeger | 16686 (UI), 4317 (OTLP gRPC) | Distributed tracing |
 
 ## Configuration
 

@@ -1,0 +1,261 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Ingestion Rate by Platform",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "rate(news_tracker_documents_ingested_total[5m])",
+          "legendFormat": "{{ platform }}"
+        }
+      ]
+    },
+    {
+      "title": "Processing Latency P95 by Stage",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(news_tracker_processing_latency_seconds_bucket[5m]))",
+          "legendFormat": "{{ stage }}"
+        }
+      ]
+    },
+    {
+      "title": "Queue Depths",
+      "type": "gauge",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 500 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "news_tracker_embedding_queue_depth",
+          "legendFormat": "Embedding"
+        },
+        {
+          "expr": "news_tracker_sentiment_queue_depth",
+          "legendFormat": "Sentiment"
+        },
+        {
+          "expr": "news_tracker_clustering_queue_depth",
+          "legendFormat": "Clustering"
+        }
+      ]
+    },
+    {
+      "title": "Error Rates",
+      "type": "timeseries",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "rate(news_tracker_adapter_errors_total[5m])",
+          "legendFormat": "adapter/{{ platform }}/{{ error_type }}"
+        },
+        {
+          "expr": "rate(news_tracker_processing_errors_total[5m])",
+          "legendFormat": "processing/{{ stage }}/{{ error_type }}"
+        }
+      ]
+    },
+    {
+      "title": "Drift Detection Gauges",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.05 },
+              { "color": "red", "value": 0.15 }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Fragmentation" },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "yellow", "value": 15 },
+                    { "color": "red", "value": 30 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Sentiment Z" },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "yellow", "value": 1.5 },
+                    { "color": "red", "value": 2.5 }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "news_tracker_embedding_drift_kl",
+          "legendFormat": "KL Divergence"
+        },
+        {
+          "expr": "news_tracker_theme_fragmentation_rate",
+          "legendFormat": "Fragmentation"
+        },
+        {
+          "expr": "news_tracker_sentiment_calibration_zscore",
+          "legendFormat": "Sentiment Z"
+        },
+        {
+          "expr": "news_tracker_centroid_stability_avg",
+          "legendFormat": "Centroid Drift"
+        }
+      ]
+    },
+    {
+      "title": "Embedding Generation Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "rate(news_tracker_embeddings_generated_total[5m])",
+          "legendFormat": "{{ platform }}/{{ model }}"
+        }
+      ]
+    },
+    {
+      "title": "Embedding Cache Hit Ratio",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "rate(news_tracker_embedding_cache_hits_total[5m]) / (rate(news_tracker_embedding_cache_hits_total[5m]) + rate(news_tracker_embedding_cache_misses_total[5m]))",
+          "legendFormat": "Hit Ratio"
+        }
+      ]
+    },
+    {
+      "title": "Sentiment Label Distribution",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "rate(news_tracker_sentiment_analyzed_total[5m])",
+          "legendFormat": "{{ platform }}/{{ label }}"
+        }
+      ]
+    },
+    {
+      "title": "Sentiment Analysis Latency",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(news_tracker_sentiment_latency_seconds_bucket[5m]))",
+          "legendFormat": "p95 {{ operation }}"
+        },
+        {
+          "expr": "histogram_quantile(0.50, rate(news_tracker_sentiment_latency_seconds_bucket[5m]))",
+          "legendFormat": "p50 {{ operation }}"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["news-tracker", "observability"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "News Tracker Overview",
+  "uid": "news-tracker-overview",
+  "version": 1
+}
