@@ -23,6 +23,12 @@ from src.storage.repository import DocumentRepository
 from src.themes.ranking import ThemeRankingService
 from src.themes.repository import ThemeRepository
 from src.vectorstore.manager import VectorStoreManager
+from src.ner.config import NERConfig
+from src.ner.service import NERService
+from src.keywords.config import KeywordsConfig
+from src.keywords.service import KeywordsService
+from src.event_extraction.config import EventExtractionConfig
+from src.event_extraction.patterns import PatternExtractor
 
 # Global service instances (initialized on first request)
 _embedding_service: EmbeddingService | None = None
@@ -39,6 +45,9 @@ _causal_graph: CausalGraph | None = None
 _propagation_service: SentimentPropagation | None = None
 _feedback_repository: FeedbackRepository | None = None
 _alert_broadcaster: AlertBroadcaster | None = None
+_ner_service: NERService | None = None
+_keywords_service: KeywordsService | None = None
+_pattern_extractor: PatternExtractor | None = None
 
 
 async def get_redis_client() -> AsyncGenerator[redis.Redis, None]:
@@ -380,14 +389,48 @@ async def stop_alert_broadcaster() -> None:
         _alert_broadcaster = None
 
 
+def get_ner_service() -> NERService:
+    """Get NER service instance (CPU-only, no Redis needed)."""
+    global _ner_service
+
+    if _ner_service is None:
+        _ner_service = NERService(config=NERConfig())
+
+    return _ner_service
+
+
+def get_keywords_service() -> KeywordsService:
+    """Get keywords service instance (CPU-only, no Redis needed)."""
+    global _keywords_service
+
+    if _keywords_service is None:
+        _keywords_service = KeywordsService(config=KeywordsConfig())
+
+    return _keywords_service
+
+
+def get_pattern_extractor() -> PatternExtractor:
+    """Get pattern extractor instance (CPU-only, no Redis needed)."""
+    global _pattern_extractor
+
+    if _pattern_extractor is None:
+        _pattern_extractor = PatternExtractor(config=EventExtractionConfig())
+
+    return _pattern_extractor
+
+
 async def cleanup_dependencies() -> None:
     """Clean up global dependencies on shutdown."""
     global _embedding_service, _sentiment_service, _redis_client, _vector_store_manager, _database
     global _theme_repository, _document_repository, _sentiment_aggregator, _ranking_service
     global _alert_repository, _feedback_repository, _causal_graph, _propagation_service, _alert_broadcaster
+    global _ner_service, _keywords_service, _pattern_extractor
 
     _vector_store_manager = None
     _theme_repository = None
+    _ner_service = None
+    _keywords_service = None
+    _pattern_extractor = None
     _document_repository = None
     _sentiment_aggregator = None
     _ranking_service = None

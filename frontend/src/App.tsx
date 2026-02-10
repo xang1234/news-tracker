@@ -9,6 +9,9 @@ const DocumentExplorer = lazy(() => import('@/pages/Documents'));
 const DocumentDetail = lazy(() => import('@/pages/DocumentDetail'));
 const EmbedPlayground = lazy(() => import('@/pages/EmbedPlayground'));
 const SentimentPlayground = lazy(() => import('@/pages/SentimentPlayground'));
+const NERPlayground = lazy(() => import('@/pages/NERPlayground'));
+const KeywordsPlayground = lazy(() => import('@/pages/KeywordsPlayground'));
+const EventsPlayground = lazy(() => import('@/pages/EventsPlayground'));
 const MonitoringPage = lazy(() => import('@/pages/Monitoring'));
 const ThemeExplorer = lazy(() => import('@/pages/Themes'));
 const ThemeDetail = lazy(() => import('@/pages/ThemeDetail'));
@@ -73,6 +76,30 @@ const router = createBrowserRouter([
         element: (
           <Suspense fallback={<PageLoader />}>
             <SentimentPlayground />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'playground/ner',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <NERPlayground />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'playground/keywords',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <KeywordsPlayground />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'playground/events',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <EventsPlayground />
           </Suspense>
         ),
       },

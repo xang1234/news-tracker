@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.api.dependencies import cleanup_dependencies, get_alert_broadcaster, stop_alert_broadcaster
-from src.api.routes import alerts, documents, embed, events, feedback, graph, health, search, sentiment, themes
+from src.api.routes import alerts, documents, embed, events, events_extract, feedback, graph, health, keywords_route, ner, search, sentiment, themes
 from src.api.routes import ws_alerts
 from src.api.routes.ws_alerts import set_broadcaster
 from src.config.settings import get_settings
@@ -140,6 +140,9 @@ Requires `X-API-KEY` header for all requests except `/health`.
     app.include_router(feedback.router, tags=["feedback"])
     app.include_router(graph.router, tags=["graph"])
     app.include_router(documents.router, tags=["documents"])
+    app.include_router(ner.router, tags=["ner"])
+    app.include_router(keywords_route.router, tags=["keywords"])
+    app.include_router(events_extract.router, tags=["events-extract"])
     app.include_router(ws_alerts.router, tags=["websocket"])
 
     # Root endpoint

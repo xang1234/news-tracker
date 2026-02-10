@@ -693,3 +693,117 @@ class DocumentStatsResponse(BaseModel):
     earliest_document: str | None = Field(default=None, description="Earliest document timestamp (ISO)")
     latest_document: str | None = Field(default=None, description="Latest document timestamp (ISO)")
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+# ── NER Playground ─────────────────────────────────────
+
+
+class NERRequest(BaseModel):
+    """Request model for batch NER extraction."""
+
+    texts: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=32,
+        description="Texts to extract entities from (1-32)",
+    )
+
+
+class NEREntityItem(BaseModel):
+    """A single extracted entity."""
+
+    text: str = Field(..., description="Original text span")
+    type: str = Field(..., description="Entity type (TICKER, COMPANY, PRODUCT, TECHNOLOGY, METRIC)")
+    normalized: str = Field(..., description="Normalized form")
+    start: int = Field(..., description="Character start offset")
+    end: int = Field(..., description="Character end offset")
+    confidence: float = Field(..., description="Extraction confidence (0-1)")
+    metadata: dict = Field(default_factory=dict, description="Extra metadata")
+
+
+class NERResultItem(BaseModel):
+    """NER results for a single text."""
+
+    entities: list[NEREntityItem] = Field(..., description="Extracted entities")
+    text_length: int = Field(..., description="Input text length in characters")
+
+
+class NERResponse(BaseModel):
+    """Response model for NER extraction."""
+
+    results: list[NERResultItem] = Field(..., description="Results per input text")
+    total: int = Field(..., description="Number of texts processed")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+# ── Keywords Playground ────────────────────────────────
+
+
+class KeywordsRequest(BaseModel):
+    """Request model for batch keyword extraction."""
+
+    texts: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=32,
+        description="Texts to extract keywords from (1-32)",
+    )
+    top_n: int = Field(default=10, ge=1, le=50, description="Max keywords per text")
+
+
+class KeywordItem(BaseModel):
+    """A single extracted keyword."""
+
+    text: str = Field(..., description="Keyword phrase")
+    score: float = Field(..., description="TextRank importance score")
+    rank: int = Field(..., description="1-based rank position")
+    lemma: str = Field(..., description="Lemmatized form")
+    count: int = Field(default=1, description="Frequency in text")
+
+
+class KeywordsResultItem(BaseModel):
+    """Keyword results for a single text."""
+
+    keywords: list[KeywordItem] = Field(..., description="Extracted keywords")
+    text_length: int = Field(..., description="Input text length in characters")
+
+
+class KeywordsResponse(BaseModel):
+    """Response model for keyword extraction."""
+
+    results: list[KeywordsResultItem] = Field(..., description="Results per input text")
+    total: int = Field(..., description="Number of texts processed")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+# ── Events Playground ──────────────────────────────────
+
+
+class EventsExtractRequest(BaseModel):
+    """Request model for event extraction from a single text."""
+
+    text: str = Field(..., min_length=1, max_length=10000, description="Text to extract events from")
+    tickers: list[str] = Field(default_factory=list, description="Optional ticker hints")
+
+
+class ExtractedEventItem(BaseModel):
+    """A single extracted event."""
+
+    event_type: str = Field(..., description="Event category")
+    actor: str | None = Field(default=None, description="Entity performing the action")
+    action: str = Field(..., description="Action phrase")
+    object: str | None = Field(default=None, description="Target of the action")
+    time_ref: str | None = Field(default=None, description="Temporal reference")
+    quantity: str | None = Field(default=None, description="Numeric quantity mentioned")
+    tickers: list[str] = Field(default_factory=list, description="Linked ticker symbols")
+    confidence: float = Field(..., description="Extraction confidence (0-1)")
+    span_start: int = Field(..., description="Character start offset")
+    span_end: int = Field(..., description="Character end offset")
+
+
+class EventsExtractResponse(BaseModel):
+    """Response model for event extraction."""
+
+    events: list[ExtractedEventItem] = Field(..., description="Extracted events")
+    total: int = Field(..., description="Number of events found")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")

@@ -230,6 +230,9 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 |--------|------|-------------|
 | POST | /embed | Auto model selection embedding |
 | POST | /sentiment | Document + optional entity sentiment |
+| POST | /ner | Batch NER entity extraction (feature-gated) |
+| POST | /keywords | Batch keyword extraction via TextRank (feature-gated) |
+| POST | /events/extract | Single-text SVO event extraction (feature-gated) |
 | POST | /search/similar | Semantic search with filters |
 | GET | /themes | List (lifecycle_stage filter, pagination) |
 | GET | /themes/ranked | Ranked by actionability (strategy, max_tier, limit) |
