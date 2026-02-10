@@ -102,6 +102,7 @@ Adapters → Redis Streams → Processing → PostgreSQL + pgvector
 | Visualization | `src/backtest/` | `BacktestVisualizer` (matplotlib charts: cumulative returns, drawdown, scatter, heatmap) |
 | Scoring | `src/scoring/` | `CompellingnessService` (3-tier: rule→GPT→Claude), `LLMClient`, `GenericCircuitBreaker` |
 | Security Master | `src/security_master/` | `SecurityMasterService` (cached DB-backed tickers), `SecurityMasterRepository` (pg_trgm fuzzy search), `Security` dataclass |
+| Sources | `src/sources/` | `SourcesService` (TTL-cached per-platform lookups), `SourcesRepository` (CRUD + `get_active_by_platform()`), `Source` dataclass |
 | Tracing | `src/observability/tracing.py` | `setup_tracing` (OTLP exporter), `traced` (span context manager), `inject_trace_context`/`extract_trace_context` (Redis Streams propagation), `add_trace_context` (structlog processor) |
 | Monitoring | `src/monitoring/` | `DriftService` (4 checks: embedding KL, fragmentation, sentiment z-score, centroid stability), `DriftConfig`, `DriftReport` |
 | Feedback | `src/feedback/` | `FeedbackRepository` (create, list_by_entity, get_stats), `Feedback` dataclass, `FeedbackConfig` |
@@ -227,6 +228,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | Backtest | `backtest_enabled` | `BACKTEST_*` | price cache TTL, forward horizons, yfinance rate limit |
 | Scoring | `scoring_enabled` | `SCORING_*` | LLM API keys, tier thresholds, budget caps, circuit breaker, cache TTL |
 | Security Master | `security_master_enabled` | `SECURITY_MASTER_*` | `cache_ttl_seconds` (300), `fuzzy_threshold` (0.3), `seed_on_init` (True) |
+| Sources | `sources_enabled` | `SOURCES_*` | `cache_ttl_seconds` (300), `seed_on_init` (True) |
 | Feedback | `feedback_enabled` | `FEEDBACK_*` | `max_comment_length` (2000) |
 | Authority | `authority_enabled` | `AUTHORITY_*` | `prior_alpha` (2.0), `prior_beta` (5.0), `decay_lambda` (0.01), `probation_days` (30), tier weights |
 | Drift Detection | `drift_enabled` | `DRIFT_*` | KL thresholds, fragmentation limits, sentiment z-score, stability cosine distance |
@@ -283,6 +285,10 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | POST | /securities | Create a new security |
 | PUT | /securities/{ticker}/{exchange} | Update a security |
 | DELETE | /securities/{ticker}/{exchange} | Deactivate (soft delete) a security |
+| GET | /sources | List sources with filters (feature-gated: `sources_enabled`) |
+| POST | /sources | Create a new source |
+| PUT | /sources/{platform}/{identifier} | Update a source |
+| DELETE | /sources/{platform}/{identifier} | Deactivate (soft delete) a source |
 | GET | /health | Service status |
 
 ## Module Conventions

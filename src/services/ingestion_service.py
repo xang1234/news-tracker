@@ -49,6 +49,9 @@ class IngestionService:
         adapters: dict[Platform, BaseAdapter] | None = None,
         queue: DocumentQueue | None = None,
         use_mock: bool = False,
+        twitter_sources: list[str] | None = None,
+        reddit_sources: list[str] | None = None,
+        substack_sources: list[tuple[str, str, str]] | None = None,
     ):
         """
         Initialize ingestion service.
@@ -57,6 +60,9 @@ class IngestionService:
             adapters: Platform adapters (or auto-create from config)
             queue: Document queue (or create from config)
             use_mock: Use mock adapters instead of real APIs
+            twitter_sources: Override Twitter usernames (from sources DB)
+            reddit_sources: Override subreddit names (from sources DB)
+            substack_sources: Override Substack publications as (slug, name, desc) tuples
         """
         settings = get_settings()
 
@@ -74,7 +80,12 @@ class IngestionService:
         elif use_mock:
             self._adapters = create_mock_adapters()
         else:
-            self._adapters = self._create_adapters(settings)
+            self._adapters = self._create_adapters(
+                settings,
+                twitter_sources=twitter_sources,
+                reddit_sources=reddit_sources,
+                substack_sources=substack_sources,
+            )
 
         logger.info(
             "Ingestion service initialized",
@@ -82,15 +93,27 @@ class IngestionService:
             poll_interval=self._poll_interval,
         )
 
-    def _create_adapters(self, settings) -> dict[Platform, BaseAdapter]:
-        """Create adapters based on available configuration."""
+    def _create_adapters(
+        self,
+        settings,
+        *,
+        twitter_sources: list[str] | None = None,
+        reddit_sources: list[str] | None = None,
+        substack_sources: list[tuple[str, str, str]] | None = None,
+    ) -> dict[Platform, BaseAdapter]:
+        """Create adapters based on available configuration.
+
+        When source lists are provided (from the sources DB), they override
+        the hardcoded defaults. Pass None to use adapter defaults.
+        """
         adapters = {}
 
         # Twitter (API or Sotwe fallback)
         if settings.twitter_configured or settings.sotwe_configured:
-            adapters[Platform.TWITTER] = TwitterAdapter(
-                rate_limit=settings.twitter_rate_limit,
-            )
+            kwargs = {"rate_limit": settings.twitter_rate_limit}
+            if twitter_sources is not None:
+                kwargs["sotwe_usernames"] = twitter_sources
+            adapters[Platform.TWITTER] = TwitterAdapter(**kwargs)
             if settings.twitter_configured:
                 logger.info("Twitter adapter enabled (API)")
             else:
@@ -98,15 +121,17 @@ class IngestionService:
 
         # Reddit
         if settings.reddit_configured:
-            adapters[Platform.REDDIT] = RedditAdapter(
-                rate_limit=settings.reddit_rate_limit,
-            )
+            kwargs = {"rate_limit": settings.reddit_rate_limit}
+            if reddit_sources is not None:
+                kwargs["subreddits"] = reddit_sources
+            adapters[Platform.REDDIT] = RedditAdapter(**kwargs)
             logger.info("Reddit adapter enabled")
 
         # Substack (always available - uses public RSS)
-        adapters[Platform.SUBSTACK] = SubstackAdapter(
-            rate_limit=settings.substack_rate_limit,
-        )
+        kwargs = {"rate_limit": settings.substack_rate_limit}
+        if substack_sources is not None:
+            kwargs["publications"] = substack_sources
+        adapters[Platform.SUBSTACK] = SubstackAdapter(**kwargs)
         logger.info("Substack adapter enabled")
 
         # News APIs

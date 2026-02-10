@@ -57,6 +57,13 @@ export const TRIGGER_TYPE_LABELS: Record<string, string> = {
   cross_theme: 'Cross-Theme',
 };
 
+/** Source platform display names and colors (for source management) */
+export const SOURCE_PLATFORMS: Record<string, { label: string; color: string; placeholder: string }> = {
+  twitter: { label: 'Twitter', color: 'bg-sky-500/20 text-sky-400', placeholder: 'Twitter handle without @' },
+  reddit: { label: 'Reddit', color: 'bg-orange-500/20 text-orange-400', placeholder: 'Subreddit name' },
+  substack: { label: 'Substack', color: 'bg-emerald-500/20 text-emerald-400', placeholder: 'Publication slug' },
+};
+
 /** Similarity score color thresholds */
 export function similarityColor(score: number): string {
   if (score >= 0.9) return 'bg-emerald-500/20 text-emerald-400';

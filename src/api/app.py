@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 
 from src.api.dependencies import cleanup_dependencies, get_alert_broadcaster, stop_alert_broadcaster
 from src.api.middleware.timeout import TimeoutMiddleware
-from src.api.routes import alerts, documents, embed, entities, events, events_extract, feedback, graph, health, keywords_route, ner, search, securities, sentiment, themes
+from src.api.routes import alerts, documents, embed, entities, events, events_extract, feedback, graph, health, keywords_route, ner, search, securities, sentiment, sources, themes
 from src.api.routes import ws_alerts
 from src.api.routes.ws_alerts import set_broadcaster
 from src.config.settings import get_settings
@@ -75,6 +75,7 @@ def create_app() -> FastAPI:
         {"name": "keywords", "description": "Keyword extraction playground"},
         {"name": "entities", "description": "Entity directory and analytics"},
         {"name": "securities", "description": "Security master CRUD"},
+        {"name": "sources", "description": "Ingestion source management"},
         {"name": "websocket", "description": "Real-time WebSocket alerts"},
     ]
 
@@ -203,6 +204,7 @@ Requires `X-API-KEY` header for all requests except `/health`.
     app.include_router(events_extract.router, tags=["events-extract"])
     app.include_router(entities.router, tags=["entities"])
     app.include_router(securities.router, tags=["securities"])
+    app.include_router(sources.router, tags=["sources"])
     app.include_router(ws_alerts.router, tags=["websocket"])
 
     # Root endpoint

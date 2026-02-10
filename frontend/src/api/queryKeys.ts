@@ -43,6 +43,8 @@ export const queryKeys = {
 
   securities: (filters?: Record<string, unknown>) => ['securities', filters] as const,
 
+  sources: (filters?: Record<string, unknown>) => ['sources', filters] as const,
+
   graphNodes: (filters?: Record<string, unknown>) => ['graph', 'nodes', filters] as const,
   graphSubgraph: (nodeId: string, depth?: number) => ['graph', 'subgraph', nodeId, depth] as const,
 

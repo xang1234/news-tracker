@@ -180,6 +180,9 @@ class Settings(BaseSettings):
     # Security Master
     security_master_enabled: bool = Field(default=False, description="Enable database-backed security master for tickers")
 
+    # Sources
+    sources_enabled: bool = Field(default=False, description="Enable database-backed source management")
+
     # Drift Detection
     drift_enabled: bool = Field(default=False, description="Enable drift detection and monitoring")
 
