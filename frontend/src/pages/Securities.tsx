@@ -182,6 +182,7 @@ export default function Securities() {
           isOpen={addOpen}
           onClose={() => setAddOpen(false)}
           mode="create"
+          isPending={createMutation.isPending}
           onSubmit={(vals) => {
             createMutation.mutate(vals, {
               onSuccess: () => setAddOpen(false),
@@ -196,6 +197,7 @@ export default function Securities() {
             onClose={() => setEditItem(null)}
             mode="edit"
             initialValues={editItem}
+            isPending={updateMutation.isPending}
             onSubmit={(vals) => {
               updateMutation.mutate(
                 { ticker: editItem.ticker, exchange: editItem.exchange, ...vals },

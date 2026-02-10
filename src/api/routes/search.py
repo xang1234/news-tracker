@@ -132,8 +132,8 @@ async def search_similar(
         )
 
     except Exception as e:
-        logger.error(f"Search failed: {e}", exc_info=True)
+        logger.error("search_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Search failed: {str(e)}",
+            detail="Search failed",
         )

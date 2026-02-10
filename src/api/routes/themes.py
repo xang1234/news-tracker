@@ -6,6 +6,7 @@ import time
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from starlette.requests import Request
 import structlog
 
 from src.api.auth import verify_api_key
@@ -15,6 +16,8 @@ from src.api.dependencies import (
     get_sentiment_aggregator,
     get_theme_repository,
 )
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     ErrorResponse,
     RankedThemeItem,
@@ -104,10 +107,10 @@ async def list_themes(
         )
 
     except Exception as e:
-        logger.error(f"Failed to list themes: {e}", exc_info=True)
+        logger.error("list_themes_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list themes: {str(e)}",
+            detail="Failed to list themes",
         )
 
 
@@ -191,10 +194,10 @@ async def get_ranked_themes(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to rank themes: {e}", exc_info=True)
+        logger.error("rank_themes_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to rank themes: {str(e)}",
+            detail="Failed to rank themes",
         )
 
 
@@ -244,10 +247,10 @@ async def get_theme(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get theme: {e}", exc_info=True)
+        logger.error("get_theme_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get theme: {str(e)}",
+            detail="Failed to get theme",
         )
 
 
@@ -336,10 +339,10 @@ async def get_theme_documents(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get theme documents: {e}", exc_info=True)
+        logger.error("get_theme_documents_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get theme documents: {str(e)}",
+            detail="Failed to get theme documents",
         )
 
 
@@ -360,7 +363,9 @@ async def get_theme_documents(
     (rate of change) and extreme crowded positions.
     """,
 )
+@limiter.limit(lambda: _get_settings().rate_limit_sentiment)
 async def get_theme_sentiment(
+    request: Request,
     theme_id: str,
     window_days: int = Query(default=7, ge=1, le=90, description="Lookback window in days"),
     api_key: str = Depends(verify_api_key),
@@ -446,10 +451,10 @@ async def get_theme_sentiment(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to aggregate theme sentiment: {e}", exc_info=True)
+        logger.error("aggregate_theme_sentiment_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to aggregate theme sentiment: {str(e)}",
+            detail="Failed to aggregate theme sentiment",
         )
 
 
@@ -531,10 +536,10 @@ async def get_theme_metrics(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get theme metrics: {e}", exc_info=True)
+        logger.error("get_theme_metrics_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get theme metrics: {str(e)}",
+            detail="Failed to get theme metrics",
         )
 
 

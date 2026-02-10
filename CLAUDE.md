@@ -290,4 +290,4 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 - Every service: `config.py`, `service.py`, `__init__.py` with `__all__` exports
 - Tests mirror src: `tests/test_<module>/test_<file>.py`
 - New features: add opt-in flag to `src/config/settings.py`, use `SettingsConfigDict(env_prefix="FEATURE_")`
-- DB migrations: `src/storage/migrations/NNN_description.sql`
+- DB migrations: `migrations/NNN_description.sql`

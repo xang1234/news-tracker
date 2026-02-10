@@ -112,10 +112,10 @@ async def create_feedback(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to create feedback: {e}", exc_info=True)
+        logger.error("create_feedback_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create feedback: {str(e)}",
+            detail="Failed to create feedback",
         )
 
 
@@ -184,8 +184,8 @@ async def get_feedback_stats(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get feedback stats: {e}", exc_info=True)
+        logger.error("get_feedback_stats_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get feedback stats: {str(e)}",
+            detail="Failed to get feedback stats",
         )

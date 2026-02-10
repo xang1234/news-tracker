@@ -115,23 +115,21 @@ async def health_check(
     queue_depths: dict[str, int] = {}
 
     try:
-        # get_redis_client is an async generator, so we need to handle it manually
         import redis.asyncio as aioredis
-        from src.api.dependencies import _redis_client
 
-        redis_client = _redis_client
-        if redis_client is None:
-            redis_client = aioredis.from_url(
-                str(settings.redis_url),
-                encoding="utf-8",
-                decode_responses=True,
-            )
+        redis_client = aioredis.from_url(
+            str(settings.redis_url),
+            encoding="utf-8",
+            decode_responses=True,
+        )
 
         redis_health = await _check_redis(redis_client)
         components["redis"] = redis_health
 
         if redis_health.status == "healthy":
             queue_depths = await _get_queue_depths(redis_client)
+
+        await redis_client.aclose()
     except Exception as e:
         components["redis"] = ComponentHealth(
             status="unhealthy",

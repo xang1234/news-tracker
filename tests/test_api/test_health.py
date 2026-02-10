@@ -37,15 +37,17 @@ def _make_client(db_healthy: bool = True, redis_healthy: bool = True):
     app.dependency_overrides[get_embedding_service] = _mock_embedding_service
     app.dependency_overrides[get_database] = lambda: _mock_db(db_healthy)
 
-    # Patch the _redis_client in dependencies module (where health.py imports it from)
+    # Patch redis.asyncio.from_url in health module to return our mock client
     mock_redis = AsyncMock()
     if redis_healthy:
         mock_redis.ping = AsyncMock(return_value=True)
         mock_redis.xlen = AsyncMock(return_value=42)
+        mock_redis.aclose = AsyncMock()
     else:
         mock_redis.ping = AsyncMock(side_effect=Exception("Connection refused"))
+        mock_redis.aclose = AsyncMock()
 
-    with patch("src.api.dependencies._redis_client", mock_redis):
+    with patch("redis.asyncio.from_url", return_value=mock_redis):
         with TestClient(app) as client:
             yield client
 

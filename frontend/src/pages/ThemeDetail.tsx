@@ -138,11 +138,15 @@ export default function ThemeDetail() {
 
             {/* Tab navigation */}
             <div className="border-b border-border">
-              <div className="flex gap-0">
+              <div className="flex gap-0" role="tablist" aria-label="Theme tabs">
                 {tabs.map((tab) => (
                   <button
                     key={tab.key}
                     type="button"
+                    role="tab"
+                    aria-selected={activeTab === tab.key}
+                    aria-controls={`tabpanel-${tab.key}`}
+                    id={`tab-${tab.key}`}
                     onClick={() => { setActiveTab(tab.key); setDocOffset(0); }}
                     className={cn(
                       'border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
@@ -158,12 +162,17 @@ export default function ThemeDetail() {
             </div>
 
             {/* Tab content */}
-            <div className="mt-6">
+            <div className="mt-6" role="tabpanel" id={`tabpanel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
               {/* Metrics tab */}
               {activeTab === 'metrics' && (
                 <>
                   {metrics.isLoading && (
                     <div className="h-[350px] animate-pulse rounded bg-secondary" />
+                  )}
+                  {metrics.isError && (
+                    <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                      Failed to load metrics
+                    </div>
                   )}
                   {metrics.data && (
                     <ThemeMetricsChart metrics={metrics.data.metrics} />
@@ -180,6 +189,11 @@ export default function ThemeDetail() {
                       <div className="h-24 animate-pulse rounded bg-secondary" />
                     </div>
                   )}
+                  {sentiment.isError && (
+                    <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                      Failed to load sentiment
+                    </div>
+                  )}
                   {sentiment.data && (
                     <ThemeSentimentPanel sentiment={sentiment.data} />
                   )}
@@ -194,6 +208,11 @@ export default function ThemeDetail() {
                       {Array.from({ length: 5 }).map((_, i) => (
                         <div key={i} className="h-20 animate-pulse rounded-lg bg-secondary" />
                       ))}
+                    </div>
+                  )}
+                  {documents.isError && (
+                    <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                      Failed to load documents
                     </div>
                   )}
                   {documents.data && documents.data.documents.length === 0 && (
@@ -278,6 +297,11 @@ export default function ThemeDetail() {
                       {Array.from({ length: 3 }).map((_, i) => (
                         <div key={i} className="h-24 animate-pulse rounded-lg bg-secondary" />
                       ))}
+                    </div>
+                  )}
+                  {events.isError && (
+                    <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                      Failed to load events
                     </div>
                   )}
                   {events.data && events.data.events.length === 0 && (

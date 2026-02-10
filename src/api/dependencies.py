@@ -2,6 +2,7 @@
 Dependency injection for FastAPI endpoints.
 """
 
+import asyncio
 from typing import AsyncGenerator
 
 import redis.asyncio as redis
@@ -32,6 +33,9 @@ from src.event_extraction.config import EventExtractionConfig
 from src.event_extraction.patterns import PatternExtractor
 from src.security_master.repository import SecurityMasterRepository
 
+# Async init lock — prevents duplicate instances under concurrent startup
+_init_lock = asyncio.Lock()
+
 # Global service instances (initialized on first request)
 _embedding_service: EmbeddingService | None = None
 _sentiment_service: SentimentService | None = None
@@ -59,8 +63,10 @@ async def get_database() -> Database:
     global _database
 
     if _database is None:
-        _database = Database()
-        await _database.connect()
+        async with _init_lock:
+            if _database is None:
+                _database = Database()
+                await _database.connect()
 
     return _database
 
@@ -70,12 +76,14 @@ async def get_redis_client() -> AsyncGenerator[redis.Redis, None]:
     global _redis_client
 
     if _redis_client is None:
-        settings = get_settings()
-        _redis_client = redis.from_url(
-            str(settings.redis_url),
-            encoding="utf-8",
-            decode_responses=True,
-        )
+        async with _init_lock:
+            if _redis_client is None:
+                settings = get_settings()
+                _redis_client = redis.from_url(
+                    str(settings.redis_url),
+                    encoding="utf-8",
+                    decode_responses=True,
+                )
 
     yield _redis_client
 
@@ -89,30 +97,30 @@ async def get_embedding_service() -> EmbeddingService:
     global _embedding_service, _redis_client
 
     if _embedding_service is None:
-        settings = get_settings()
+        async with _init_lock:
+            if _embedding_service is None:
+                settings = get_settings()
 
-        # Initialize Redis client if not already done
-        if _redis_client is None:
-            _redis_client = redis.from_url(
-                str(settings.redis_url),
-                encoding="utf-8",
-                decode_responses=True,
-            )
+                if _redis_client is None:
+                    _redis_client = redis.from_url(
+                        str(settings.redis_url),
+                        encoding="utf-8",
+                        decode_responses=True,
+                    )
 
-        # Create embedding config from settings
-        config = EmbeddingConfig(
-            model_name=settings.embedding_model_name,
-            batch_size=settings.embedding_batch_size,
-            use_fp16=settings.embedding_use_fp16,
-            device=settings.embedding_device,
-            cache_enabled=settings.embedding_cache_enabled,
-            cache_ttl_hours=settings.embedding_cache_ttl_hours,
-        )
+                config = EmbeddingConfig(
+                    model_name=settings.embedding_model_name,
+                    batch_size=settings.embedding_batch_size,
+                    use_fp16=settings.embedding_use_fp16,
+                    device=settings.embedding_device,
+                    cache_enabled=settings.embedding_cache_enabled,
+                    cache_ttl_hours=settings.embedding_cache_ttl_hours,
+                )
 
-        _embedding_service = EmbeddingService(
-            config=config,
-            redis_client=_redis_client,
-        )
+                _embedding_service = EmbeddingService(
+                    config=config,
+                    redis_client=_redis_client,
+                )
 
     return _embedding_service
 
@@ -126,33 +134,33 @@ async def get_sentiment_service() -> SentimentService:
     global _sentiment_service, _redis_client
 
     if _sentiment_service is None:
-        settings = get_settings()
+        async with _init_lock:
+            if _sentiment_service is None:
+                settings = get_settings()
 
-        # Initialize Redis client if not already done
-        if _redis_client is None:
-            _redis_client = redis.from_url(
-                str(settings.redis_url),
-                encoding="utf-8",
-                decode_responses=True,
-            )
+                if _redis_client is None:
+                    _redis_client = redis.from_url(
+                        str(settings.redis_url),
+                        encoding="utf-8",
+                        decode_responses=True,
+                    )
 
-        # Create sentiment config from settings
-        config = SentimentConfig(
-            model_name=settings.sentiment_model_name,
-            batch_size=settings.sentiment_batch_size,
-            use_fp16=settings.sentiment_use_fp16,
-            device=settings.sentiment_device,
-            stream_name=settings.sentiment_stream_name,
-            consumer_group=settings.sentiment_consumer_group,
-            cache_enabled=settings.sentiment_cache_enabled,
-            cache_ttl_hours=settings.sentiment_cache_ttl_hours,
-            enable_entity_sentiment=settings.sentiment_enable_entity_sentiment,
-        )
+                config = SentimentConfig(
+                    model_name=settings.sentiment_model_name,
+                    batch_size=settings.sentiment_batch_size,
+                    use_fp16=settings.sentiment_use_fp16,
+                    device=settings.sentiment_device,
+                    stream_name=settings.sentiment_stream_name,
+                    consumer_group=settings.sentiment_consumer_group,
+                    cache_enabled=settings.sentiment_cache_enabled,
+                    cache_ttl_hours=settings.sentiment_cache_ttl_hours,
+                    enable_entity_sentiment=settings.sentiment_enable_entity_sentiment,
+                )
 
-        _sentiment_service = SentimentService(
-            config=config,
-            redis_client=_redis_client,
-        )
+                _sentiment_service = SentimentService(
+                    config=config,
+                    redis_client=_redis_client,
+                )
 
     return _sentiment_service
 
@@ -166,57 +174,56 @@ async def get_vector_store_manager() -> "VectorStoreManager":
     global _vector_store_manager, _database, _embedding_service, _redis_client
 
     if _vector_store_manager is None:
-        from src.storage.repository import DocumentRepository
-        from src.vectorstore.config import VectorStoreConfig
-        from src.vectorstore.pgvector_store import PgVectorStore
+        async with _init_lock:
+            if _vector_store_manager is None:
+                from src.storage.repository import DocumentRepository
+                from src.vectorstore.config import VectorStoreConfig
+                from src.vectorstore.pgvector_store import PgVectorStore
 
-        settings = get_settings()
+                settings = get_settings()
 
-        # Initialize database if needed
-        if _database is None:
-            _database = Database()
-            await _database.connect()
+                if _database is None:
+                    _database = Database()
+                    await _database.connect()
 
-        # Initialize embedding service if needed
-        if _embedding_service is None:
-            if _redis_client is None:
-                _redis_client = redis.from_url(
-                    str(settings.redis_url),
-                    encoding="utf-8",
-                    decode_responses=True,
+                if _embedding_service is None:
+                    if _redis_client is None:
+                        _redis_client = redis.from_url(
+                            str(settings.redis_url),
+                            encoding="utf-8",
+                            decode_responses=True,
+                        )
+
+                    config = EmbeddingConfig(
+                        model_name=settings.embedding_model_name,
+                        batch_size=settings.embedding_batch_size,
+                        use_fp16=settings.embedding_use_fp16,
+                        device=settings.embedding_device,
+                        cache_enabled=settings.embedding_cache_enabled,
+                        cache_ttl_hours=settings.embedding_cache_ttl_hours,
+                    )
+                    _embedding_service = EmbeddingService(
+                        config=config,
+                        redis_client=_redis_client,
+                    )
+
+                repository = DocumentRepository(_database)
+                vector_store_config = VectorStoreConfig(
+                    default_limit=settings.vectorstore_default_limit,
+                    default_threshold=settings.vectorstore_default_threshold,
+                    centroid_default_limit=settings.vectorstore_centroid_limit,
+                    centroid_default_threshold=settings.vectorstore_centroid_threshold,
                 )
-
-            config = EmbeddingConfig(
-                model_name=settings.embedding_model_name,
-                batch_size=settings.embedding_batch_size,
-                use_fp16=settings.embedding_use_fp16,
-                device=settings.embedding_device,
-                cache_enabled=settings.embedding_cache_enabled,
-                cache_ttl_hours=settings.embedding_cache_ttl_hours,
-            )
-            _embedding_service = EmbeddingService(
-                config=config,
-                redis_client=_redis_client,
-            )
-
-        # Create vector store and manager
-        repository = DocumentRepository(_database)
-        vector_store_config = VectorStoreConfig(
-            default_limit=settings.vectorstore_default_limit,
-            default_threshold=settings.vectorstore_default_threshold,
-            centroid_default_limit=settings.vectorstore_centroid_limit,
-            centroid_default_threshold=settings.vectorstore_centroid_threshold,
-        )
-        vector_store = PgVectorStore(
-            database=_database,
-            repository=repository,
-            config=vector_store_config,
-        )
-        _vector_store_manager = VectorStoreManager(
-            vector_store=vector_store,
-            embedding_service=_embedding_service,
-            config=vector_store_config,
-        )
+                vector_store = PgVectorStore(
+                    database=_database,
+                    repository=repository,
+                    config=vector_store_config,
+                )
+                _vector_store_manager = VectorStoreManager(
+                    vector_store=vector_store,
+                    embedding_service=_embedding_service,
+                    config=vector_store_config,
+                )
 
     return _vector_store_manager
 
@@ -230,11 +237,13 @@ async def get_theme_repository() -> ThemeRepository:
     global _theme_repository, _database
 
     if _theme_repository is None:
-        if _database is None:
-            _database = Database()
-            await _database.connect()
+        async with _init_lock:
+            if _theme_repository is None:
+                if _database is None:
+                    _database = Database()
+                    await _database.connect()
 
-        _theme_repository = ThemeRepository(_database)
+                _theme_repository = ThemeRepository(_database)
 
     return _theme_repository
 
@@ -248,11 +257,13 @@ async def get_document_repository() -> DocumentRepository:
     global _document_repository, _database
 
     if _document_repository is None:
-        if _database is None:
-            _database = Database()
-            await _database.connect()
+        async with _init_lock:
+            if _document_repository is None:
+                if _database is None:
+                    _database = Database()
+                    await _database.connect()
 
-        _document_repository = DocumentRepository(_database)
+                _document_repository = DocumentRepository(_database)
 
     return _document_repository
 
@@ -266,13 +277,15 @@ async def get_ranking_service() -> ThemeRankingService:
     global _ranking_service, _theme_repository, _database
 
     if _ranking_service is None:
-        if _theme_repository is None:
-            if _database is None:
-                _database = Database()
-                await _database.connect()
-            _theme_repository = ThemeRepository(_database)
+        async with _init_lock:
+            if _ranking_service is None:
+                if _theme_repository is None:
+                    if _database is None:
+                        _database = Database()
+                        await _database.connect()
+                    _theme_repository = ThemeRepository(_database)
 
-        _ranking_service = ThemeRankingService(theme_repo=_theme_repository)
+                _ranking_service = ThemeRankingService(theme_repo=_theme_repository)
 
     return _ranking_service
 
@@ -286,11 +299,13 @@ async def get_alert_repository() -> AlertRepository:
     global _alert_repository, _database
 
     if _alert_repository is None:
-        if _database is None:
-            _database = Database()
-            await _database.connect()
+        async with _init_lock:
+            if _alert_repository is None:
+                if _database is None:
+                    _database = Database()
+                    await _database.connect()
 
-        _alert_repository = AlertRepository(_database)
+                _alert_repository = AlertRepository(_database)
 
     return _alert_repository
 
@@ -304,11 +319,13 @@ async def get_feedback_repository() -> FeedbackRepository:
     global _feedback_repository, _database
 
     if _feedback_repository is None:
-        if _database is None:
-            _database = Database()
-            await _database.connect()
+        async with _init_lock:
+            if _feedback_repository is None:
+                if _database is None:
+                    _database = Database()
+                    await _database.connect()
 
-        _feedback_repository = FeedbackRepository(_database)
+                _feedback_repository = FeedbackRepository(_database)
 
     return _feedback_repository
 
@@ -332,11 +349,13 @@ async def get_graph_repository() -> GraphRepository:
     global _graph_repository, _database
 
     if _graph_repository is None:
-        if _database is None:
-            _database = Database()
-            await _database.connect()
+        async with _init_lock:
+            if _graph_repository is None:
+                if _database is None:
+                    _database = Database()
+                    await _database.connect()
 
-        _graph_repository = GraphRepository(_database)
+                _graph_repository = GraphRepository(_database)
 
     return _graph_repository
 
@@ -350,11 +369,13 @@ async def get_causal_graph() -> CausalGraph:
     global _causal_graph, _database
 
     if _causal_graph is None:
-        if _database is None:
-            _database = Database()
-            await _database.connect()
+        async with _init_lock:
+            if _causal_graph is None:
+                if _database is None:
+                    _database = Database()
+                    await _database.connect()
 
-        _causal_graph = CausalGraph(_database, config=GraphConfig())
+                _causal_graph = CausalGraph(_database, config=GraphConfig())
 
     return _causal_graph
 
@@ -368,16 +389,18 @@ async def get_propagation_service() -> SentimentPropagation:
     global _propagation_service, _causal_graph, _database
 
     if _propagation_service is None:
-        if _causal_graph is None:
-            if _database is None:
-                _database = Database()
-                await _database.connect()
-            _causal_graph = CausalGraph(_database, config=GraphConfig())
+        async with _init_lock:
+            if _propagation_service is None:
+                if _causal_graph is None:
+                    if _database is None:
+                        _database = Database()
+                        await _database.connect()
+                    _causal_graph = CausalGraph(_database, config=GraphConfig())
 
-        _propagation_service = SentimentPropagation(
-            graph=_causal_graph,
-            config=GraphConfig(),
-        )
+                _propagation_service = SentimentPropagation(
+                    graph=_causal_graph,
+                    config=GraphConfig(),
+                )
 
     return _propagation_service
 
@@ -391,20 +414,22 @@ async def get_alert_broadcaster() -> AlertBroadcaster:
     global _alert_broadcaster, _redis_client
 
     if _alert_broadcaster is None:
-        settings = get_settings()
+        async with _init_lock:
+            if _alert_broadcaster is None:
+                settings = get_settings()
 
-        if _redis_client is None:
-            _redis_client = redis.from_url(
-                str(settings.redis_url),
-                encoding="utf-8",
-                decode_responses=True,
-            )
+                if _redis_client is None:
+                    _redis_client = redis.from_url(
+                        str(settings.redis_url),
+                        encoding="utf-8",
+                        decode_responses=True,
+                    )
 
-        _alert_broadcaster = AlertBroadcaster(
-            max_connections=settings.ws_alerts_max_connections,
-            heartbeat_interval=settings.ws_alerts_heartbeat_seconds,
-        )
-        await _alert_broadcaster.start(_redis_client)
+                _alert_broadcaster = AlertBroadcaster(
+                    max_connections=settings.ws_alerts_max_connections,
+                    heartbeat_interval=settings.ws_alerts_heartbeat_seconds,
+                )
+                await _alert_broadcaster.start(_redis_client)
 
     return _alert_broadcaster
 
@@ -453,11 +478,13 @@ async def get_security_master_repository() -> SecurityMasterRepository:
     global _security_master_repository, _database
 
     if _security_master_repository is None:
-        if _database is None:
-            _database = Database()
-            await _database.connect()
+        async with _init_lock:
+            if _security_master_repository is None:
+                if _database is None:
+                    _database = Database()
+                    await _database.connect()
 
-        _security_master_repository = SecurityMasterRepository(_database)
+                _security_master_repository = SecurityMasterRepository(_database)
 
     return _security_master_repository
 

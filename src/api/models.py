@@ -5,7 +5,7 @@ Request and response models for the embedding API.
 import datetime as dt
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class APIModelType(str, Enum):
@@ -33,6 +33,17 @@ class EmbedRequest(BaseModel):
         default=True,
         description="Whether to use caching",
     )
+
+    @field_validator("texts")
+    @classmethod
+    def validate_text_lengths(cls, v: list[str]) -> list[str]:
+        for i, text in enumerate(v):
+            if len(text) > 10_000:
+                raise ValueError(
+                    f"texts[{i}] exceeds maximum length of 10,000 characters "
+                    f"(got {len(text):,})"
+                )
+        return v
 
 
 class EmbedResponse(BaseModel):

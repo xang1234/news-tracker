@@ -133,10 +133,14 @@ export default function EntityDetail() {
         </div>
 
         {/* Tabs */}
-        <div className="mt-6 flex gap-1 rounded-lg border border-border bg-card p-1">
+        <div className="mt-6 flex gap-1 rounded-lg border border-border bg-card p-1" role="tablist" aria-label="Entity tabs">
           {tabs.map((t) => (
             <button
               key={t.key}
+              role="tab"
+              aria-selected={tab === t.key}
+              aria-controls={`entity-tabpanel-${t.key}`}
+              id={`entity-tab-${t.key}`}
               onClick={() => setTab(t.key)}
               className={cn(
                 'flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
@@ -152,7 +156,7 @@ export default function EntityDetail() {
         </div>
 
         {/* Tab content */}
-        <div className="mt-4">
+        <div className="mt-4" role="tabpanel" id={`entity-tabpanel-${tab}`} aria-labelledby={`entity-tab-${tab}`}>
           {/* Documents tab */}
           {tab === 'documents' && (
             <>
@@ -167,6 +171,11 @@ export default function EntityDetail() {
                   ))}
                 </div>
               )}
+              {docs.isError && (
+                <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  Failed to load documents
+                </div>
+              )}
 
               {docs.data && docs.data.documents.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
@@ -179,10 +188,10 @@ export default function EntityDetail() {
                 <>
                   <div className="space-y-3">
                     {docs.data.documents.map((d) => (
-                      <div
+                      <Link
                         key={d.document_id}
-                        onClick={() => navigate(`/documents/${d.document_id}`)}
-                        className="cursor-pointer rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/30"
+                        to={`/documents/${d.document_id}`}
+                        className="block rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/30"
                       >
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           {d.platform && (
@@ -221,7 +230,7 @@ export default function EntityDetail() {
                             </span>
                           )}
                         </div>
-                      </div>
+                      </Link>
                     ))}
                   </div>
 
@@ -266,6 +275,11 @@ export default function EntityDetail() {
                   ))}
                 </div>
               )}
+              {cooccurrence.isError && (
+                <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  Failed to load co-occurrence data
+                </div>
+              )}
 
               {cooccurrence.data && cooccurrence.data.entities.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
@@ -299,6 +313,11 @@ export default function EntityDetail() {
           {tab === 'sentiment' && (
             <>
               {sentiment.isLoading && <EntitySentimentPanelSkeleton />}
+              {sentiment.isError && (
+                <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  Failed to load sentiment data
+                </div>
+              )}
 
               {sentiment.data && (
                 <EntitySentimentPanel

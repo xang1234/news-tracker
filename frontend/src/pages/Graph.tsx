@@ -50,6 +50,7 @@ export default function Graph() {
           <select
             value={nodeTypeFilter}
             onChange={(e) => { setNodeTypeFilter(e.target.value); setSelectedNodeId(undefined); }}
+            aria-label="Filter by node type"
             className="rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           >
             <option value="">All Types</option>
@@ -85,7 +86,7 @@ export default function Graph() {
         {/* Loading */}
         {isLoading && (
           <div className="flex items-center justify-center py-32 text-muted-foreground">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" role="status" aria-label="Loading" />
           </div>
         )}
 
@@ -102,9 +103,9 @@ export default function Graph() {
 
         {/* Main layout */}
         {allNodes.data && allNodes.data.nodes.length > 0 && (
-          <div className="flex gap-4">
+          <div className="flex flex-col gap-4 lg:flex-row">
             {/* Left: Graph canvas */}
-            <div className={cn('flex-1', selectedNodeId ? 'w-2/3' : 'w-full')}>
+            <div className={cn('flex-1', selectedNodeId ? 'w-full lg:w-2/3' : 'w-full')}>
               <GraphCanvas
                 nodes={displayNodes}
                 edges={displayEdges}
@@ -116,7 +117,7 @@ export default function Graph() {
 
             {/* Right: Detail/Propagation panel */}
             {selectedNodeId && (
-              <div className="w-80 shrink-0">
+              <div className="w-full shrink-0 lg:w-80">
                 {/* Tab toggle */}
                 <div className="mb-3 flex gap-0 border-b border-border">
                   <button
@@ -164,6 +165,11 @@ export default function Graph() {
                 {subgraph.isLoading && (
                   <div className="mt-4 flex items-center justify-center py-8">
                     <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  </div>
+                )}
+                {subgraph.isError && (
+                  <div className="mt-4 rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                    Failed to load subgraph
                   </div>
                 )}
               </div>

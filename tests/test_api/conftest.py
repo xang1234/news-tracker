@@ -11,9 +11,14 @@ from src.api.app import create_app
 from src.api.auth import verify_api_key
 from src.api.dependencies import (
     get_document_repository,
+    get_embedding_service,
+    get_graph_repository,
+    get_propagation_service,
     get_ranking_service,
     get_sentiment_aggregator,
+    get_sentiment_service,
     get_theme_repository,
+    get_vector_store_manager,
 )
 from src.themes.ranking import RankedTheme, ThemeRankingService
 from src.themes.schemas import Theme, ThemeMetrics
@@ -110,18 +115,83 @@ def mock_ranking_service():
 
 
 @pytest.fixture
-def client(mock_theme_repo, mock_doc_repo, mock_aggregator, mock_ranking_service):
+def mock_embedding_service():
+    """Mock EmbeddingService."""
+    service = AsyncMock()
+    service.embed_batch = AsyncMock(return_value=[[0.1] * 768])
+    service.is_model_initialized = MagicMock(return_value=False)
+    service.is_cache_available = AsyncMock(return_value=False)
+    service.get_stats = MagicMock(return_value={})
+    service.close = AsyncMock()
+    return service
+
+
+@pytest.fixture
+def mock_sentiment_service():
+    """Mock SentimentService."""
+    service = AsyncMock()
+    service.analyze_batch = AsyncMock(return_value=[{
+        "label": "positive",
+        "confidence": 0.92,
+        "scores": {"positive": 0.92, "neutral": 0.05, "negative": 0.03},
+        "entity_sentiments": [],
+        "model": "ProsusAI/finbert",
+    }])
+    service.close = AsyncMock()
+    return service
+
+
+@pytest.fixture
+def mock_vector_store_manager():
+    """Mock VectorStoreManager."""
+    manager = AsyncMock()
+    manager.query = AsyncMock(return_value=[])
+    return manager
+
+
+@pytest.fixture
+def mock_graph_repo():
+    """Mock GraphRepository."""
+    repo = AsyncMock()
+    repo.get_all_nodes = AsyncMock(return_value=[])
+    repo.get_node = AsyncMock(return_value=None)
+    repo.get_subgraph = AsyncMock(return_value={"nodes": [], "edges": []})
+    return repo
+
+
+@pytest.fixture
+def mock_propagation_service():
+    """Mock SentimentPropagation."""
+    service = AsyncMock()
+    service.propagate = AsyncMock(return_value={})
+    return service
+
+
+@pytest.fixture
+def client(
+    mock_theme_repo,
+    mock_doc_repo,
+    mock_aggregator,
+    mock_ranking_service,
+    mock_embedding_service,
+    mock_sentiment_service,
+    mock_vector_store_manager,
+    mock_graph_repo,
+    mock_propagation_service,
+):
     """FastAPI TestClient with dependency overrides."""
     app = create_app()
 
-    # Override auth to bypass API key checks
     app.dependency_overrides[verify_api_key] = lambda: "test-key"
-
-    # Override data dependencies with mocks
     app.dependency_overrides[get_theme_repository] = lambda: mock_theme_repo
     app.dependency_overrides[get_document_repository] = lambda: mock_doc_repo
     app.dependency_overrides[get_sentiment_aggregator] = lambda: mock_aggregator
     app.dependency_overrides[get_ranking_service] = lambda: mock_ranking_service
+    app.dependency_overrides[get_embedding_service] = lambda: mock_embedding_service
+    app.dependency_overrides[get_sentiment_service] = lambda: mock_sentiment_service
+    app.dependency_overrides[get_vector_store_manager] = lambda: mock_vector_store_manager
+    app.dependency_overrides[get_graph_repository] = lambda: mock_graph_repo
+    app.dependency_overrides[get_propagation_service] = lambda: mock_propagation_service
 
     with TestClient(app) as c:
         yield c

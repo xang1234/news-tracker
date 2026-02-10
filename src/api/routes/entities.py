@@ -4,10 +4,13 @@ import json
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from starlette.requests import Request
 import structlog
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_document_repository, get_graph_repository
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     CooccurringEntityItem,
     CooccurrenceResponse,
@@ -82,8 +85,8 @@ async def get_entity_stats(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get entity stats: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("get_entity_stats_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get entity stats")
 
 
 @router.get(
@@ -128,8 +131,8 @@ async def get_trending_entities(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get trending entities: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("get_trending_entities_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get trending entities")
 
 
 # ── Parametric entity routes ──────────────────────────
@@ -189,8 +192,8 @@ async def list_entities(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to list entities: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("list_entities_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list entities")
 
 
 @router.get(
@@ -246,8 +249,8 @@ async def get_entity_detail(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get entity detail: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("get_entity_detail_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get entity detail")
 
 
 @router.get(
@@ -311,8 +314,8 @@ async def get_entity_documents(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get entity documents: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("get_entity_documents_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get entity documents")
 
 
 @router.get(
@@ -321,7 +324,9 @@ async def get_entity_documents(
     responses={401: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     summary="Entities co-occurring with target entity",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_entities)
 async def get_entity_cooccurrence(
+    request: Request,
     entity_type: str,
     normalized: str,
     limit: int = Query(default=20, ge=1, le=100),
@@ -358,8 +363,8 @@ async def get_entity_cooccurrence(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get cooccurrence: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("get_cooccurrence_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get entity co-occurrence")
 
 
 @router.get(
@@ -403,8 +408,8 @@ async def get_entity_sentiment(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get entity sentiment: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("get_entity_sentiment_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get entity sentiment")
 
 
 @router.post(
@@ -459,5 +464,5 @@ async def merge_entity(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to merge entity: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("merge_entity_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to merge entity")

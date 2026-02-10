@@ -18,6 +18,7 @@ interface SecurityFormModalProps {
   onSubmit: (data: SecurityFormData) => void;
   initialValues?: SecurityFormData;
   mode: 'create' | 'edit';
+  isPending?: boolean;
 }
 
 const EMPTY_FORM: SecurityFormData = {
@@ -36,6 +37,7 @@ export function SecurityFormModal({
   onSubmit,
   initialValues,
   mode,
+  isPending = false,
 }: SecurityFormModalProps) {
   const [form, setForm] = useState<SecurityFormData>(EMPTY_FORM);
   const [aliasText, setAliasText] = useState('');
@@ -82,12 +84,15 @@ export function SecurityFormModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="security-form-title"
       onClick={handleOverlayClick}
     >
       <div className="w-full max-w-lg rounded-lg border border-border bg-card shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <h2 className="text-lg font-medium text-foreground">{title}</h2>
+          <h2 id="security-form-title" className="text-lg font-medium text-foreground">{title}</h2>
           <button
             type="button"
             onClick={onClose}
@@ -218,9 +223,10 @@ export function SecurityFormModal({
             </button>
             <button
               type="submit"
-              className="rounded bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              disabled={isPending}
+              className="rounded bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              {isEdit ? 'Save Changes' : 'Create Security'}
+              {isPending ? 'Saving...' : isEdit ? 'Save Changes' : 'Create Security'}
             </button>
           </div>
         </form>

@@ -85,8 +85,8 @@ async def list_securities(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to list securities: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("list_securities_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list securities")
 
 
 @router.post(
@@ -118,15 +118,15 @@ async def create_security(
         # Re-fetch to get timestamps
         created = await repo.get_by_ticker(security.ticker, security.exchange)
         if not created:
-            raise HTTPException(status_code=500, detail="Failed to create security")
+            raise HTTPException(status_code=500, detail="Security creation failed")
 
         logger.info("Security created", ticker=security.ticker, exchange=security.exchange)
         return _security_to_item(created)
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to create security: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("create_security_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create security")
 
 
 @router.put(
@@ -175,8 +175,8 @@ async def update_security(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to update security: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("update_security_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to update security")
 
 
 @router.delete(
@@ -209,5 +209,5 @@ async def deactivate_security(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to deactivate security: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("deactivate_security_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to deactivate security")

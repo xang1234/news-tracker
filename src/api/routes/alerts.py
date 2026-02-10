@@ -116,10 +116,10 @@ async def list_alerts(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to list alerts: {e}", exc_info=True)
+        logger.error("list_alerts_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list alerts: {str(e)}",
+            detail="Failed to list alerts",
         )
 
 
@@ -167,8 +167,8 @@ async def acknowledge_alert(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to acknowledge alert: {e}", exc_info=True)
+        logger.error("acknowledge_alert_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to acknowledge alert: {str(e)}",
+            detail="Failed to acknowledge alert",
         )

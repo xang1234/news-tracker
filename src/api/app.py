@@ -59,6 +59,25 @@ def create_app() -> FastAPI:
     """
     settings = get_settings()
 
+    openapi_tags = [
+        {"name": "health", "description": "Service health checks"},
+        {"name": "embeddings", "description": "Batch text embedding with FinBERT/MiniLM"},
+        {"name": "sentiment", "description": "Financial sentiment analysis"},
+        {"name": "search", "description": "Semantic similarity search"},
+        {"name": "themes", "description": "Theme listing, detail, metrics, and sentiment"},
+        {"name": "events", "description": "Theme-linked events"},
+        {"name": "events-extract", "description": "Event extraction playground"},
+        {"name": "alerts", "description": "Alert management"},
+        {"name": "feedback", "description": "User quality feedback"},
+        {"name": "graph", "description": "Causal graph nodes, subgraphs, and propagation"},
+        {"name": "documents", "description": "Document explorer"},
+        {"name": "ner", "description": "Named entity recognition playground"},
+        {"name": "keywords", "description": "Keyword extraction playground"},
+        {"name": "entities", "description": "Entity directory and analytics"},
+        {"name": "securities", "description": "Security master CRUD"},
+        {"name": "websocket", "description": "Real-time WebSocket alerts"},
+    ]
+
     app = FastAPI(
         title="News Tracker Embedding API",
         description="""
@@ -77,6 +96,7 @@ Requires `X-API-KEY` header for all requests except `/health`.
         docs_url="/docs",
         redoc_url="/redoc",
         lifespan=lifespan,
+        openapi_tags=openapi_tags,
     )
 
     # Add CORS middleware (origins from CORS_ORIGINS env var, comma-separated)

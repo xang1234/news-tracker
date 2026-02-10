@@ -297,8 +297,8 @@ export default function DocumentDetail() {
                     </tr>
                   </thead>
                   <tbody>
-                    {doc.entities.map((e, i) => (
-                      <tr key={i} className="border-b border-border/50 last:border-0">
+                    {doc.entities.map((e) => (
+                      <tr key={`${e.type}:${e.name}`} className="border-b border-border/50 last:border-0">
                         <td className="py-1.5 text-xs text-muted-foreground">{e.type}</td>
                         <td className="py-1.5 text-foreground">{e.name}</td>
                       </tr>
@@ -344,8 +344,8 @@ export default function DocumentDetail() {
                       </tr>
                     </thead>
                     <tbody>
-                      {doc.events.map((ev, i) => (
-                        <tr key={i} className="border-b border-border/50 last:border-0">
+                      {doc.events.map((ev) => (
+                        <tr key={`${ev.type}:${ev.actor}:${ev.action}`} className="border-b border-border/50 last:border-0">
                           <td className="py-1.5 pr-4 text-xs text-muted-foreground">{ev.type}</td>
                           <td className="py-1.5 pr-4 text-foreground">{ev.actor}</td>
                           <td className="py-1.5 pr-4 text-foreground">{ev.action}</td>

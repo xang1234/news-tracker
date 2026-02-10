@@ -8,9 +8,12 @@ import time
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from starlette.requests import Request
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_document_repository
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     DocumentDetailResponse,
     DocumentListItem,
@@ -93,7 +96,9 @@ def _record_to_list_item(row) -> DocumentListItem:
     summary="Document statistics",
     description="Aggregate statistics for the document explorer dashboard.",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_search)
 async def get_document_stats(
+    request: Request,
     api_key: str = Depends(verify_api_key),
     repo: DocumentRepository = Depends(get_document_repository),
 ) -> DocumentStatsResponse:

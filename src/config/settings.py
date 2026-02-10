@@ -122,6 +122,8 @@ class Settings(BaseSettings):
     rate_limit_embed: str = Field(default="30/minute", description="Rate limit for /embed endpoint")
     rate_limit_sentiment: str = Field(default="30/minute", description="Rate limit for /sentiment endpoint")
     rate_limit_search: str = Field(default="60/minute", description="Rate limit for /search/similar endpoint")
+    rate_limit_graph: str = Field(default="30/minute", description="Rate limit for graph subgraph endpoint")
+    rate_limit_entities: str = Field(default="60/minute", description="Rate limit for entity endpoints")
 
     # Worker resilience
     worker_max_consecutive_failures: int = Field(default=10, ge=1, le=100, description="Max consecutive worker failures before exit")

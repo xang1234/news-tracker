@@ -227,7 +227,7 @@ class TestCreateSecurity:
             json={"ticker": "NVDA", "exchange": "US", "name": "NVIDIA"},
         )
         assert resp.status_code == 500
-        assert "Failed to create" in resp.json()["detail"]
+        assert "failed" in resp.json()["detail"].lower()
 
 
 # ── PUT /securities/{ticker}/{exchange} ──────────

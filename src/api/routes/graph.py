@@ -4,9 +4,12 @@ import time
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from starlette.requests import Request
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_graph_repository, get_propagation_service
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     ErrorResponse,
     GraphEdgeItem,
@@ -61,10 +64,10 @@ async def list_graph_nodes(
         )
 
     except Exception as e:
-        logger.error(f"Failed to list graph nodes: {e}", exc_info=True)
+        logger.error("list_graph_nodes_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list graph nodes: {str(e)}",
+            detail="Failed to list graph nodes",
         )
 
 
@@ -79,7 +82,9 @@ async def list_graph_nodes(
     summary="Get subgraph around a node",
     description="Extract a local subgraph (nodes + edges) centered on the given node.",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_graph)
 async def get_node_subgraph(
+    request: Request,
     node_id: str,
     depth: int = Query(default=2, ge=1, le=5, description="Traversal depth"),
     api_key: str = Depends(verify_api_key),
@@ -117,10 +122,10 @@ async def get_node_subgraph(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get subgraph: {e}", exc_info=True)
+        logger.error("get_subgraph_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get subgraph: {str(e)}",
+            detail="Failed to get subgraph",
         )
 
 
@@ -186,8 +191,8 @@ async def propagate_sentiment(
         )
 
     except Exception as e:
-        logger.error(f"Failed to propagate sentiment: {e}", exc_info=True)
+        logger.error("propagate_sentiment_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to propagate sentiment: {str(e)}",
+            detail="Failed to propagate sentiment",
         )
