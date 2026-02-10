@@ -4,10 +4,13 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from starlette.requests import Request
 import structlog
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_document_repository, get_theme_repository
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     ErrorResponse,
     ThemeEventItem,
@@ -38,7 +41,9 @@ router = APIRouter()
         "an investment signal derived from event distribution."
     ),
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def get_theme_events(
+    request: Request,
     theme_id: str,
     event_type: str | None = Query(
         default=None,

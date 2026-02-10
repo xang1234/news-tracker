@@ -3,10 +3,13 @@
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from starlette.requests import Request
 import structlog
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_feedback_repository
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     ErrorResponse,
     FeedbackItem,
@@ -40,8 +43,10 @@ _config = FeedbackConfig()
         "The authenticated API key is recorded as user_id."
     ),
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def create_feedback(
-    request: FeedbackRequest,
+    request: Request,
+    body: FeedbackRequest,
     api_key: str = Depends(verify_api_key),
     feedback_repo: FeedbackRepository = Depends(get_feedback_repository),
 ) -> FeedbackResponse:
@@ -49,35 +54,35 @@ async def create_feedback(
 
     try:
         # Validate entity_type
-        if request.entity_type not in VALID_ENTITY_TYPES:
+        if body.entity_type not in VALID_ENTITY_TYPES:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=(
-                    f"Invalid entity_type {request.entity_type!r}. "
+                    f"Invalid entity_type {body.entity_type!r}. "
                     f"Must be one of: {sorted(VALID_ENTITY_TYPES)}"
                 ),
             )
 
         # Validate quality_label if provided
-        if request.quality_label is not None and request.quality_label not in VALID_QUALITY_LABELS:
+        if body.quality_label is not None and body.quality_label not in VALID_QUALITY_LABELS:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=(
-                    f"Invalid quality_label {request.quality_label!r}. "
+                    f"Invalid quality_label {body.quality_label!r}. "
                     f"Must be one of: {sorted(VALID_QUALITY_LABELS)}"
                 ),
             )
 
         # Truncate comment if too long
-        comment = request.comment
+        comment = body.comment
         if comment and len(comment) > _config.max_comment_length:
             comment = comment[: _config.max_comment_length]
 
         feedback = Feedback(
-            entity_type=request.entity_type,
-            entity_id=request.entity_id,
-            rating=request.rating,
-            quality_label=request.quality_label,
+            entity_type=body.entity_type,
+            entity_id=body.entity_id,
+            rating=body.rating,
+            quality_label=body.quality_label,
             comment=comment,
             user_id=api_key,
         )
@@ -133,7 +138,9 @@ async def create_feedback(
         "including average rating and quality label distribution."
     ),
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def get_feedback_stats(
+    request: Request,
     entity_type: str | None = Query(
         default=None,
         description="Filter by entity type: theme, alert, document",

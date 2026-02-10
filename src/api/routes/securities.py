@@ -3,10 +3,13 @@
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from starlette.requests import Request
 import structlog
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_security_master_repository
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     CreateSecurityRequest,
     ErrorResponse,
@@ -14,7 +17,6 @@ from src.api.models import (
     SecurityItem,
     UpdateSecurityRequest,
 )
-from src.config.settings import get_settings
 from src.security_master.repository import SecurityMasterRepository
 from src.security_master.schemas import Security
 
@@ -23,7 +25,7 @@ router = APIRouter()
 
 
 def _require_security_master_enabled() -> None:
-    settings = get_settings()
+    settings = _get_settings()
     if not settings.security_master_enabled:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -52,7 +54,9 @@ def _security_to_item(s: Security) -> SecurityItem:
     responses={401: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     summary="List securities with filters",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def list_securities(
+    request: Request,
     search: str | None = Query(default=None, description="Search ticker/name/aliases"),
     active_only: bool = Query(default=False, description="Only active securities"),
     exchange: str | None = Query(default=None, description="Filter by exchange"),
@@ -96,7 +100,9 @@ async def list_securities(
     responses={401: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     summary="Create a new security",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_admin)
 async def create_security(
+    request: Request,
     body: CreateSecurityRequest,
     api_key: str = Depends(verify_api_key),
     repo: SecurityMasterRepository = Depends(get_security_master_repository),
@@ -139,7 +145,9 @@ async def create_security(
     },
     summary="Update a security",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_admin)
 async def update_security(
+    request: Request,
     ticker: str,
     exchange: str,
     body: UpdateSecurityRequest,
@@ -189,7 +197,9 @@ async def update_security(
     },
     summary="Deactivate a security (soft delete)",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_admin)
 async def deactivate_security(
+    request: Request,
     ticker: str,
     exchange: str,
     api_key: str = Depends(verify_api_key),

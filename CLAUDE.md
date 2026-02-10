@@ -232,7 +232,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | Drift Detection | `drift_enabled` | `DRIFT_*` | KL thresholds, fragmentation limits, sentiment z-score, stability cosine distance |
 | Tracing | `tracing_enabled` | (top-level) | `otel_service_name` (news-tracker), `otel_exporter_otlp_endpoint` (OTLP gRPC endpoint) |
 | WS Alerts | `ws_alerts_enabled` | (top-level) | `ws_alerts_max_connections` (100), `ws_alerts_heartbeat_seconds` (30) |
-| Rate Limiting | `rate_limit_enabled` | (top-level) | `rate_limit_default` (60/minute), `rate_limit_embed` (30/min), `rate_limit_sentiment` (30/min), `rate_limit_search` (60/min) |
+| Rate Limiting | `rate_limit_enabled` | (top-level) | `rate_limit_default` (60/minute), `rate_limit_embed` (30/min), `rate_limit_sentiment` (30/min), `rate_limit_search` (60/min), `rate_limit_graph` (30/min), `rate_limit_entities` (60/min), `rate_limit_admin` (30/min) |
 
 ### Other Config
 - Tickers/companies: `src/config/tickers.py`

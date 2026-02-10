@@ -32,7 +32,7 @@ def client_kw_enabled(mock_keywords_service):
     app.dependency_overrides[verify_api_key] = lambda: "test-key"
     app.dependency_overrides[get_keywords_service] = lambda: mock_keywords_service
 
-    with patch("src.api.routes.keywords_route.get_settings") as mock_settings:
+    with patch("src.api.routes.keywords_route._get_settings") as mock_settings:
         mock_settings.return_value = MagicMock(keywords_enabled=True)
         with TestClient(app) as c:
             yield c
@@ -46,7 +46,7 @@ def client_kw_disabled(mock_keywords_service):
     app.dependency_overrides[verify_api_key] = lambda: "test-key"
     app.dependency_overrides[get_keywords_service] = lambda: mock_keywords_service
 
-    with patch("src.api.routes.keywords_route.get_settings") as mock_settings:
+    with patch("src.api.routes.keywords_route._get_settings") as mock_settings:
         mock_settings.return_value = MagicMock(keywords_enabled=False)
         with TestClient(app) as c:
             yield c

@@ -43,7 +43,7 @@ def client_events_enabled(mock_extractor):
     app.dependency_overrides[verify_api_key] = lambda: "test-key"
     app.dependency_overrides[get_pattern_extractor] = lambda: mock_extractor
 
-    with patch("src.api.routes.events_extract.get_settings") as mock_settings:
+    with patch("src.api.routes.events_extract._get_settings") as mock_settings:
         mock_settings.return_value = MagicMock(events_enabled=True)
         with TestClient(app) as c:
             yield c
@@ -57,7 +57,7 @@ def client_events_disabled(mock_extractor):
     app.dependency_overrides[verify_api_key] = lambda: "test-key"
     app.dependency_overrides[get_pattern_extractor] = lambda: mock_extractor
 
-    with patch("src.api.routes.events_extract.get_settings") as mock_settings:
+    with patch("src.api.routes.events_extract._get_settings") as mock_settings:
         mock_settings.return_value = MagicMock(events_enabled=False)
         with TestClient(app) as c:
             yield c

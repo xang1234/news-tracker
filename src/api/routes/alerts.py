@@ -3,12 +3,15 @@
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from starlette.requests import Request
 import structlog
 
 from src.alerts.repository import AlertRepository
 from src.alerts.schemas import VALID_SEVERITIES, VALID_TRIGGER_TYPES
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_alert_repository
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.api.models import AlertAcknowledgeResponse, AlertItem, AlertsResponse, ErrorResponse
 
 logger = structlog.get_logger(__name__)
@@ -29,7 +32,9 @@ router = APIRouter()
         "theme, and acknowledgement status. Ordered by most recent first."
     ),
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def list_alerts(
+    request: Request,
     severity: str | None = Query(
         default=None,
         description="Filter by severity: critical, warning, info",
@@ -134,7 +139,9 @@ async def list_alerts(
     summary="Acknowledge an alert",
     description="Mark an alert as acknowledged. Idempotent — already-acknowledged alerts return 404.",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def acknowledge_alert(
+    request: Request,
     alert_id: str,
     api_key: str = Depends(verify_api_key),
     alert_repo: AlertRepository = Depends(get_alert_repository),

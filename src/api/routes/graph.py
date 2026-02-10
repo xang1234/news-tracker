@@ -37,7 +37,9 @@ router = APIRouter()
     summary="List graph nodes",
     description="List all causal graph nodes with optional type filter.",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_graph)
 async def list_graph_nodes(
+    request: Request,
     node_type: str | None = Query(default=None, description="Filter by node type (ticker, theme, technology)"),
     limit: int = Query(default=200, ge=1, le=1000, description="Maximum nodes to return"),
     api_key: str = Depends(verify_api_key),
@@ -144,8 +146,10 @@ async def get_node_subgraph(
         "nodes with their computed impact, ordered by absolute impact magnitude."
     ),
 )
+@limiter.limit(lambda: _get_settings().rate_limit_graph)
 async def propagate_sentiment(
-    request: PropagateRequest,
+    request: Request,
+    body: PropagateRequest,
     api_key: str = Depends(verify_api_key),
     propagation: SentimentPropagation = Depends(get_propagation_service),
 ) -> PropagateResponse:
@@ -153,8 +157,8 @@ async def propagate_sentiment(
 
     try:
         impacts = await propagation.propagate(
-            source_node=request.source_node,
-            sentiment_delta=request.sentiment_delta,
+            source_node=body.source_node,
+            sentiment_delta=body.sentiment_delta,
         )
 
         items = sorted(
@@ -176,15 +180,15 @@ async def propagate_sentiment(
 
         logger.info(
             "Sentiment propagation computed",
-            source_node=request.source_node,
-            sentiment_delta=request.sentiment_delta,
+            source_node=body.source_node,
+            sentiment_delta=body.sentiment_delta,
             total_affected=len(items),
             latency_ms=round(latency_ms, 2),
         )
 
         return PropagateResponse(
-            source_node=request.source_node,
-            sentiment_delta=request.sentiment_delta,
+            source_node=body.source_node,
+            sentiment_delta=body.sentiment_delta,
             impacts=items,
             total_affected=len(items),
             latency_ms=round(latency_ms, 2),

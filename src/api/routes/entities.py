@@ -27,7 +27,6 @@ from src.api.models import (
     TrendingEntitiesResponse,
     TrendingEntityItem,
 )
-from src.config.settings import get_settings
 from src.graph.storage import GraphRepository
 from src.storage.repository import DocumentRepository
 
@@ -38,7 +37,7 @@ VALID_ENTITY_TYPES = {"COMPANY", "PRODUCT", "TECHNOLOGY", "TICKER", "METRIC"}
 
 
 def _require_ner_enabled() -> None:
-    settings = get_settings()
+    settings = _get_settings()
     if not settings.ner_enabled:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -55,7 +54,9 @@ def _require_ner_enabled() -> None:
     responses={401: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     summary="Entity statistics",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_entities)
 async def get_entity_stats(
+    request: Request,
     api_key: str = Depends(verify_api_key),
     doc_repo: DocumentRepository = Depends(get_document_repository),
 ) -> EntityStatsResponse:
@@ -95,7 +96,9 @@ async def get_entity_stats(
     responses={401: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     summary="Trending entities with mention spikes",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_entities)
 async def get_trending_entities(
+    request: Request,
     hours_recent: int = Query(default=24, ge=1, le=168),
     hours_baseline: int = Query(default=168, ge=24, le=720),
     limit: int = Query(default=20, ge=1, le=100),
@@ -144,7 +147,9 @@ async def get_trending_entities(
     responses={401: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     summary="List entities with search and filtering",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_entities)
 async def list_entities(
+    request: Request,
     entity_type: str | None = Query(default=None, description="Filter by entity type"),
     search: str | None = Query(default=None, description="Search normalized name"),
     sort: str = Query(default="count", description="Sort by: count or recent"),
@@ -206,7 +211,9 @@ async def list_entities(
     },
     summary="Entity detail with stats and platform breakdown",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_entities)
 async def get_entity_detail(
+    request: Request,
     entity_type: str,
     normalized: str,
     api_key: str = Depends(verify_api_key),
@@ -227,7 +234,7 @@ async def get_entity_detail(
         # Try to find linked graph node
         graph_node_id = None
         try:
-            settings = get_settings()
+            settings = _get_settings()
             if settings.graph_enabled:
                 node = await graph_repo.get_node(normalized.lower().replace(" ", "_"))
                 if node:
@@ -259,7 +266,9 @@ async def get_entity_detail(
     responses={401: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     summary="Documents mentioning an entity",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_entities)
 async def get_entity_documents(
+    request: Request,
     entity_type: str,
     normalized: str,
     platform: str | None = Query(default=None),
@@ -373,7 +382,9 @@ async def get_entity_cooccurrence(
     responses={401: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
     summary="Aggregate sentiment for an entity",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_entities)
 async def get_entity_sentiment(
+    request: Request,
     entity_type: str,
     normalized: str,
     api_key: str = Depends(verify_api_key),
@@ -422,7 +433,9 @@ async def get_entity_sentiment(
     },
     summary="Merge an entity into another",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_admin)
 async def merge_entity(
+    request: Request,
     entity_type: str,
     normalized: str,
     body: EntityMergeRequest,

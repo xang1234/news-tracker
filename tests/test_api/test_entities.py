@@ -58,7 +58,7 @@ def client(mock_doc_repo, mock_graph_repo):
 class TestFeatureGate:
     """Entity endpoints return 404 when ner_enabled=false."""
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_entities_disabled(self, mock_settings, client):
         settings = MagicMock()
         settings.ner_enabled = False
@@ -68,7 +68,7 @@ class TestFeatureGate:
         assert resp.status_code == 404
         assert "ner_enabled" in resp.json()["detail"]
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_stats_disabled(self, mock_settings, client):
         settings = MagicMock()
         settings.ner_enabled = False
@@ -84,7 +84,7 @@ class TestFeatureGate:
 class TestListEntities:
     """Tests for the list entities endpoint."""
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_empty_list(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.list_entities.return_value = ([], 0)
@@ -97,7 +97,7 @@ class TestListEntities:
         assert data["has_more"] is False
         assert "latency_ms" in data
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_returns_entities(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.list_entities.return_value = (
@@ -127,7 +127,7 @@ class TestListEntities:
         assert data["entities"][0]["normalized"] == "NVIDIA"
         assert data["entities"][1]["type"] == "TICKER"
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_entity_type_filter(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.list_entities.return_value = ([], 0)
@@ -142,7 +142,7 @@ class TestListEntities:
             offset=0,
         )
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_invalid_entity_type(self, mock_settings, client):
         mock_settings.return_value = MagicMock(ner_enabled=True)
 
@@ -150,7 +150,7 @@ class TestListEntities:
         assert resp.status_code == 422
         assert "Invalid entity_type" in resp.json()["detail"]
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_search_filter(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.list_entities.return_value = ([], 0)
@@ -165,7 +165,7 @@ class TestListEntities:
             offset=0,
         )
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_pagination(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.list_entities.return_value = ([], 100)
@@ -182,7 +182,7 @@ class TestListEntities:
             offset=20,
         )
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_server_error(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.list_entities.side_effect = RuntimeError("DB down")
@@ -197,7 +197,7 @@ class TestListEntities:
 class TestEntityStats:
     """Tests for the entity stats endpoint."""
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_stats_empty(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.get_entity_counts.return_value = []
@@ -210,7 +210,7 @@ class TestEntityStats:
         assert data["documents_with_entities"] == 0
         assert data["by_type"] == {}
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_stats_populated(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.get_entity_counts.return_value = [
@@ -235,7 +235,7 @@ class TestEntityStats:
 class TestTrendingEntities:
     """Tests for the trending entities endpoint."""
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_empty_trending(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.get_trending_entities.return_value = []
@@ -245,7 +245,7 @@ class TestTrendingEntities:
         data = resp.json()
         assert data["trending"] == []
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_trending_results(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.get_trending_entities.return_value = [
@@ -264,7 +264,7 @@ class TestTrendingEntities:
         assert len(data["trending"]) == 1
         assert data["trending"][0]["spike_ratio"] == 5.0
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_trending_custom_params(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.get_trending_entities.return_value = []
@@ -284,7 +284,7 @@ class TestTrendingEntities:
 class TestEntityDetail:
     """Tests for the entity detail endpoint."""
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_not_found(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True, graph_enabled=False)
         mock_doc_repo.get_entity_detail.return_value = None
@@ -293,7 +293,7 @@ class TestEntityDetail:
         assert resp.status_code == 404
         assert "not found" in resp.json()["detail"]
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_detail_found(self, mock_settings, client, mock_doc_repo, mock_graph_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True, graph_enabled=False)
         mock_doc_repo.get_entity_detail.return_value = {
@@ -313,7 +313,7 @@ class TestEntityDetail:
         assert data["platforms"]["twitter"] == 20
         assert data["graph_node_id"] is None
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_detail_with_graph_node(self, mock_settings, client, mock_doc_repo, mock_graph_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True, graph_enabled=True)
         mock_doc_repo.get_entity_detail.return_value = {
@@ -338,7 +338,7 @@ class TestEntityDetail:
 class TestEntityCooccurrence:
     """Tests for the co-occurrence endpoint."""
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_empty_cooccurrence(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.get_cooccurring_entities.return_value = []
@@ -348,7 +348,7 @@ class TestEntityCooccurrence:
         data = resp.json()
         assert data["entities"] == []
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_cooccurrence_results(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.get_cooccurring_entities.return_value = [
@@ -362,7 +362,7 @@ class TestEntityCooccurrence:
         assert len(data["entities"]) == 2
         assert data["entities"][0]["jaccard"] == 0.75
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_cooccurrence_params(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.get_cooccurring_entities.return_value = []
@@ -383,7 +383,7 @@ class TestEntityCooccurrence:
 class TestEntitySentiment:
     """Tests for the entity sentiment endpoint."""
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_no_sentiment_data(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.get_entity_sentiment.return_value = None
@@ -394,7 +394,7 @@ class TestEntitySentiment:
         assert data["avg_score"] is None
         assert data["trend"] == "stable"
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_sentiment_data(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.get_entity_sentiment.return_value = {
@@ -419,7 +419,7 @@ class TestEntitySentiment:
 class TestMergeEntity:
     """Tests for the entity merge endpoint."""
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_merge_success(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.merge_entity.return_value = 15
@@ -434,7 +434,7 @@ class TestMergeEntity:
         assert data["merged_from"] == "COMPANY:Nvidia Corp"
         assert data["merged_to"] == "COMPANY:NVIDIA"
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_merge_self(self, mock_settings, client):
         mock_settings.return_value = MagicMock(ner_enabled=True)
 
@@ -445,7 +445,7 @@ class TestMergeEntity:
         assert resp.status_code == 422
         assert "Cannot merge entity into itself" in resp.json()["detail"]
 
-    @patch("src.api.routes.entities.get_settings")
+    @patch("src.api.routes.entities._get_settings")
     def test_merge_server_error(self, mock_settings, client, mock_doc_repo):
         mock_settings.return_value = MagicMock(ner_enabled=True)
         mock_doc_repo.merge_entity.side_effect = RuntimeError("DB down")

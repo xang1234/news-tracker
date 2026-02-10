@@ -47,7 +47,7 @@ def client_ner_enabled(mock_ner_service):
     app.dependency_overrides[verify_api_key] = lambda: "test-key"
     app.dependency_overrides[get_ner_service] = lambda: mock_ner_service
 
-    with patch("src.api.routes.ner.get_settings") as mock_settings:
+    with patch("src.api.routes.ner._get_settings") as mock_settings:
         mock_settings.return_value = MagicMock(ner_enabled=True)
         with TestClient(app) as c:
             yield c
@@ -61,7 +61,7 @@ def client_ner_disabled(mock_ner_service):
     app.dependency_overrides[verify_api_key] = lambda: "test-key"
     app.dependency_overrides[get_ner_service] = lambda: mock_ner_service
 
-    with patch("src.api.routes.ner.get_settings") as mock_settings:
+    with patch("src.api.routes.ner._get_settings") as mock_settings:
         mock_settings.return_value = MagicMock(ner_enabled=False)
         with TestClient(app) as c:
             yield c

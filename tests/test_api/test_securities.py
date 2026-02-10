@@ -66,7 +66,7 @@ def client(mock_security_repo):
 class TestFeatureGate:
     """Securities endpoints return 404 when security_master_enabled=false."""
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_list_disabled(self, mock_settings, client):
         settings = MagicMock()
         settings.security_master_enabled = False
@@ -76,7 +76,7 @@ class TestFeatureGate:
         assert resp.status_code == 404
         assert "security_master_enabled" in resp.json()["detail"]
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_create_disabled(self, mock_settings, client):
         settings = MagicMock()
         settings.security_master_enabled = False
@@ -92,7 +92,7 @@ class TestFeatureGate:
 class TestListSecurities:
     """Tests for the list securities endpoint."""
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_empty_list(self, mock_settings, client, mock_security_repo):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
         mock_security_repo.list_securities.return_value = ([], 0)
@@ -105,7 +105,7 @@ class TestListSecurities:
         assert data["has_more"] is False
         assert "latency_ms" in data
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_returns_securities(self, mock_settings, client, mock_security_repo):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
         mock_security_repo.list_securities.return_value = (
@@ -120,7 +120,7 @@ class TestListSecurities:
         assert data["securities"][0]["ticker"] == "NVDA"
         assert data["securities"][1]["ticker"] == "AMD"
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_security_fields(self, mock_settings, client, mock_security_repo):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
         mock_security_repo.list_securities.return_value = ([_make_security()], 1)
@@ -134,7 +134,7 @@ class TestListSecurities:
         assert item["is_active"] is True
         assert "created_at" in item
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_search_filter(self, mock_settings, client, mock_security_repo):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
         mock_security_repo.list_securities.return_value = ([], 0)
@@ -149,7 +149,7 @@ class TestListSecurities:
             offset=0,
         )
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_pagination(self, mock_settings, client, mock_security_repo):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
         mock_security_repo.list_securities.return_value = ([], 100)
@@ -159,7 +159,7 @@ class TestListSecurities:
         data = resp.json()
         assert data["has_more"] is True
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_server_error(self, mock_settings, client, mock_security_repo):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
         mock_security_repo.list_securities.side_effect = RuntimeError("DB down")
@@ -174,7 +174,7 @@ class TestListSecurities:
 class TestCreateSecurity:
     """Tests for the create security endpoint."""
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_create_success(self, mock_settings, client, mock_security_repo):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
         created = _make_security()
@@ -190,7 +190,7 @@ class TestCreateSecurity:
         assert data["name"] == "NVIDIA Corporation"
         mock_security_repo.upsert.assert_called_once()
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_create_with_all_fields(self, mock_settings, client, mock_security_repo):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
         created = _make_security(sector="Tech", country="US", currency="USD")
@@ -210,14 +210,14 @@ class TestCreateSecurity:
         )
         assert resp.status_code == 201
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_create_missing_required_fields(self, mock_settings, client):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
 
         resp = client.post("/securities", json={"ticker": "NVDA"})
         assert resp.status_code == 422
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_create_refetch_fails(self, mock_settings, client, mock_security_repo):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
         mock_security_repo.get_by_ticker.return_value = None
@@ -236,7 +236,7 @@ class TestCreateSecurity:
 class TestUpdateSecurity:
     """Tests for the update security endpoint."""
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_update_success(self, mock_settings, client, mock_security_repo):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
         existing = _make_security()
@@ -251,7 +251,7 @@ class TestUpdateSecurity:
         data = resp.json()
         assert data["name"] == "NVIDIA Corp Updated"
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_update_not_found(self, mock_settings, client, mock_security_repo):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
         mock_security_repo.get_by_ticker.return_value = None
@@ -263,7 +263,7 @@ class TestUpdateSecurity:
         assert resp.status_code == 404
         assert "not found" in resp.json()["detail"]
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_update_partial(self, mock_settings, client, mock_security_repo):
         """Only provided fields should be updated."""
         mock_settings.return_value = MagicMock(security_master_enabled=True)
@@ -288,7 +288,7 @@ class TestUpdateSecurity:
 class TestDeactivateSecurity:
     """Tests for the deactivate security endpoint."""
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_deactivate_success(self, mock_settings, client, mock_security_repo):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
         mock_security_repo.deactivate.return_value = True
@@ -297,7 +297,7 @@ class TestDeactivateSecurity:
         assert resp.status_code == 204
         mock_security_repo.deactivate.assert_called_once_with("NVDA", "US")
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_deactivate_not_found(self, mock_settings, client, mock_security_repo):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
         mock_security_repo.deactivate.return_value = False
@@ -306,7 +306,7 @@ class TestDeactivateSecurity:
         assert resp.status_code == 404
         assert "not found or already inactive" in resp.json()["detail"]
 
-    @patch("src.api.routes.securities.get_settings")
+    @patch("src.api.routes.securities._get_settings")
     def test_deactivate_server_error(self, mock_settings, client, mock_security_repo):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
         mock_security_repo.deactivate.side_effect = RuntimeError("DB down")

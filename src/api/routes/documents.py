@@ -133,7 +133,9 @@ async def get_document_stats(
     summary="Get document detail",
     description="Full document with content, entities, keywords, and events.",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def get_document(
+    request: Request,
     document_id: str,
     api_key: str = Depends(verify_api_key),
     repo: DocumentRepository = Depends(get_document_repository),
@@ -229,7 +231,9 @@ async def get_document(
     summary="List documents",
     description="Browse and filter documents with pagination.",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def list_documents(
+    request: Request,
     platform: str | None = Query(default=None, description="Filter by platform"),
     content_type: str | None = Query(default=None, description="Filter by content type"),
     ticker: str | None = Query(default=None, description="Filter by ticker symbol"),

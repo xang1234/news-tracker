@@ -4,16 +4,18 @@ import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from starlette.requests import Request
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_pattern_extractor
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     ErrorResponse,
     EventsExtractRequest,
     EventsExtractResponse,
     ExtractedEventItem,
 )
-from src.config.settings import get_settings
 from src.event_extraction.patterns import PatternExtractor
 from src.ingestion.schemas import NormalizedDocument, Platform
 
@@ -32,12 +34,14 @@ router = APIRouter()
     summary="Extract events from text",
     description="Extract structured SVO events (capacity, product, price, guidance) from financial text.",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def extract_events(
-    request: EventsExtractRequest,
+    request: Request,
+    body: EventsExtractRequest,
     api_key: str = Depends(verify_api_key),
     extractor: PatternExtractor = Depends(get_pattern_extractor),
 ) -> EventsExtractResponse:
-    settings = get_settings()
+    settings = _get_settings()
     if not settings.events_enabled:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -53,8 +57,8 @@ async def extract_events(
             timestamp=datetime.now(timezone.utc),
             author_id="playground",
             author_name="Playground",
-            content=request.text,
-            tickers_mentioned=request.tickers or [],
+            content=body.text,
+            tickers_mentioned=body.tickers or [],
         )
 
         event_records = extractor.extract(doc)

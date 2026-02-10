@@ -3,9 +3,12 @@
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from starlette.requests import Request
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_ner_service
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     ErrorResponse,
     NEREntityItem,
@@ -13,7 +16,6 @@ from src.api.models import (
     NERResponse,
     NERResultItem,
 )
-from src.config.settings import get_settings
 from src.ner.service import NERService
 
 router = APIRouter()
@@ -31,12 +33,14 @@ router = APIRouter()
     summary="Extract named entities from texts",
     description="Extract financial entities (tickers, companies, products, technologies, metrics) using spaCy NER.",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def extract_entities(
-    request: NERRequest,
+    request: Request,
+    body: NERRequest,
     api_key: str = Depends(verify_api_key),
     service: NERService = Depends(get_ner_service),
 ) -> NERResponse:
-    settings = get_settings()
+    settings = _get_settings()
     if not settings.ner_enabled:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -46,10 +50,10 @@ async def extract_entities(
     start_time = time.perf_counter()
 
     try:
-        batch_results = await service.extract_batch(request.texts)
+        batch_results = await service.extract_batch(body.texts)
 
         results = []
-        for text, entities in zip(request.texts, batch_results):
+        for text, entities in zip(body.texts, batch_results):
             items = [
                 NEREntityItem(
                     text=e.text,

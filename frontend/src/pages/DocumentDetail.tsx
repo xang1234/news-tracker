@@ -289,22 +289,24 @@ export default function DocumentDetail() {
             {doc.entities.length > 0 && (
               <div className="rounded-lg border border-border bg-card p-4">
                 <h3 className="mb-2 text-xs font-medium text-muted-foreground">Entities</h3>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                      <th className="pb-2 font-medium">Type</th>
-                      <th className="pb-2 font-medium">Name</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {doc.entities.map((e) => (
-                      <tr key={`${e.type}:${e.name}`} className="border-b border-border/50 last:border-0">
-                        <td className="py-1.5 text-xs text-muted-foreground">{e.type}</td>
-                        <td className="py-1.5 text-foreground">{e.name}</td>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                        <th className="pb-2 font-medium">Type</th>
+                        <th className="pb-2 font-medium">Name</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {doc.entities.map((e) => (
+                        <tr key={`${e.type}:${e.name}`} className="border-b border-border/50 last:border-0">
+                          <td className="py-1.5 text-xs text-muted-foreground">{e.type}</td>
+                          <td className="py-1.5 text-foreground">{e.name}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 

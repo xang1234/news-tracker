@@ -3,9 +3,12 @@
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from starlette.requests import Request
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_keywords_service
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     ErrorResponse,
     KeywordItem,
@@ -13,7 +16,6 @@ from src.api.models import (
     KeywordsResponse,
     KeywordsResultItem,
 )
-from src.config.settings import get_settings
 from src.keywords.service import KeywordsService
 
 router = APIRouter()
@@ -31,12 +33,14 @@ router = APIRouter()
     summary="Extract keywords from texts",
     description="Extract important keywords using TextRank algorithm via rapid-textrank.",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def extract_keywords(
-    request: KeywordsRequest,
+    request: Request,
+    body: KeywordsRequest,
     api_key: str = Depends(verify_api_key),
     service: KeywordsService = Depends(get_keywords_service),
 ) -> KeywordsResponse:
-    settings = get_settings()
+    settings = _get_settings()
     if not settings.keywords_enabled:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -46,10 +50,10 @@ async def extract_keywords(
     start_time = time.perf_counter()
 
     try:
-        batch_results = await service.extract_batch(request.texts)
+        batch_results = await service.extract_batch(body.texts)
 
         results = []
-        for text, keywords in zip(request.texts, batch_results):
+        for text, keywords in zip(body.texts, batch_results):
             items = [
                 KeywordItem(
                     text=kw.text,
@@ -58,7 +62,7 @@ async def extract_keywords(
                     lemma=kw.lemma,
                     count=kw.count,
                 )
-                for kw in keywords[: request.top_n]
+                for kw in keywords[: body.top_n]
             ]
             results.append(KeywordsResultItem(keywords=items, text_length=len(text)))
 

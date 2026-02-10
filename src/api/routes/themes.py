@@ -69,7 +69,9 @@ def _theme_to_item(theme: Theme, include_centroid: bool = False) -> ThemeItem:
     summary="List themes",
     description="List all themes with optional lifecycle stage filtering and pagination.",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def list_themes(
+    request: Request,
     lifecycle_stage: str | None = Query(
         default=None,
         description="Filter by lifecycle stage: emerging, accelerating, mature, fading",
@@ -135,7 +137,9 @@ async def list_themes(
     - **position**: Emphasizes compellingness (beta=0.6) for longer-term positions
     """,
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def get_ranked_themes(
+    request: Request,
     strategy: str = Query(
         default="swing",
         description="Ranking strategy: swing (volume-biased) or position (compellingness-biased)",
@@ -212,7 +216,9 @@ async def get_ranked_themes(
     summary="Get theme details",
     description="Get detailed information about a specific theme.",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def get_theme(
+    request: Request,
     theme_id: str,
     include_centroid: bool = Query(
         default=False, description="Include 768-dim centroid vector"
@@ -265,7 +271,9 @@ async def get_theme(
     summary="Get theme documents",
     description="Get documents assigned to a theme with optional filtering.",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def get_theme_documents(
+    request: Request,
     theme_id: str,
     limit: int = Query(default=50, ge=1, le=200, description="Maximum documents to return"),
     offset: int = Query(default=0, ge=0, description="Offset for pagination"),
@@ -469,7 +477,9 @@ async def get_theme_sentiment(
     summary="Get theme metrics",
     description="Get daily metrics time series for a theme within a date range.",
 )
+@limiter.limit(lambda: _get_settings().rate_limit_default)
 async def get_theme_metrics(
+    request: Request,
     theme_id: str,
     start_date: date | None = Query(
         default=None, description="Start date (inclusive, default: 30 days ago)"
