@@ -97,7 +97,7 @@ class TwitterAdapter(BaseAdapter):
 
         # Sotwe fallback configuration
         self._sotwe_enabled = settings.sotwe_enabled
-        self._sotwe_usernames = sotwe_usernames or parse_usernames(
+        self._sotwe_usernames = sotwe_usernames if sotwe_usernames is not None else parse_usernames(
             settings.sotwe_usernames
         )
         self._sotwe_rate_limiter = RateLimiter(

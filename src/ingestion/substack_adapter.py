@@ -77,7 +77,7 @@ class SubstackAdapter(BaseAdapter):
         """
         super().__init__(rate_limit=rate_limit)
 
-        self._publications = publications or TRACKED_PUBLICATIONS
+        self._publications = publications if publications is not None else TRACKED_PUBLICATIONS
         self._fetch_full_content = fetch_full_content
 
     @property

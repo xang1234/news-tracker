@@ -237,8 +237,27 @@ async def trigger_ingestion(
         global _ingestion_running
         try:
             from src.services.ingestion_service import IngestionService
+            from src.sources.service import SourcesService
+            from src.api.dependencies import get_database
 
-            service = IngestionService()
+            # Load active sources from DB so ingestion respects the UI
+            twitter_sources = None
+            reddit_sources = None
+            substack_sources = None
+
+            settings = _get_settings()
+            if settings.sources_enabled:
+                db = await get_database()
+                svc = SourcesService(db)
+                twitter_sources = await svc.get_twitter_sources()
+                reddit_sources = await svc.get_reddit_sources()
+                substack_sources = await svc.get_substack_sources()
+
+            service = IngestionService(
+                twitter_sources=twitter_sources,
+                reddit_sources=reddit_sources,
+                substack_sources=substack_sources,
+            )
             results = await service.run_once()
             total = sum(results.values())
             logger.info(

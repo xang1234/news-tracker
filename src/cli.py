@@ -25,6 +25,33 @@ from src.observability.logging import setup_logging
 from src.observability.metrics import get_metrics
 
 
+async def _load_db_sources() -> tuple[
+    list[str] | None, list[str] | None, list[tuple[str, str, str]] | None
+]:
+    """Load active sources from DB if the sources feature is enabled.
+
+    Returns (twitter_sources, reddit_sources, substack_sources).
+    All None when sources_enabled is False (falls back to adapter defaults).
+    """
+    settings = get_settings()
+    if not settings.sources_enabled:
+        return None, None, None
+
+    from src.sources.service import SourcesService
+    from src.storage.database import Database
+
+    db = Database()
+    await db.connect()
+    try:
+        svc = SourcesService(db)
+        twitter = await svc.get_twitter_sources()
+        reddit = await svc.get_reddit_sources()
+        substack = await svc.get_substack_sources()
+        return twitter, reddit, substack
+    finally:
+        await db.close()
+
+
 @click.group()
 @click.option("--debug", is_flag=True, help="Enable debug logging")
 def main(debug: bool) -> None:
@@ -54,7 +81,13 @@ def ingest(mock: bool, metrics: bool) -> None:
     from src.services.ingestion_service import IngestionService
 
     async def run():
-        service = IngestionService(use_mock=mock)
+        twitter_src, reddit_src, substack_src = await _load_db_sources()
+        service = IngestionService(
+            use_mock=mock,
+            twitter_sources=twitter_src,
+            reddit_sources=reddit_src,
+            substack_sources=substack_src,
+        )
 
         if metrics:
             get_metrics().start_server()
@@ -101,7 +134,13 @@ def worker(mock: bool, metrics_port: int) -> None:
     from src.services.processing_service import ProcessingService
 
     async def run():
-        ingestion = IngestionService(use_mock=mock)
+        twitter_src, reddit_src, substack_src = await _load_db_sources()
+        ingestion = IngestionService(
+            use_mock=mock,
+            twitter_sources=twitter_src,
+            reddit_sources=reddit_src,
+            substack_sources=substack_src,
+        )
         processing = ProcessingService()
 
         # Start metrics server
@@ -274,7 +313,13 @@ def run_once(mock: bool, with_embeddings: bool, with_sentiment: bool, verify: bo
         exit_code = 0
 
         # Ingestion
-        ingestion = IngestionService(use_mock=mock)
+        twitter_src, reddit_src, substack_src = await _load_db_sources()
+        ingestion = IngestionService(
+            use_mock=mock,
+            twitter_sources=twitter_src,
+            reddit_sources=reddit_src,
+            substack_sources=substack_src,
+        )
         ingestion_results = await ingestion.run_once()
 
         click.echo("\nIngestion Results:")

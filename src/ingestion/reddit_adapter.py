@@ -88,7 +88,7 @@ class RedditAdapter(BaseAdapter):
         self._client_id = client_id or settings.reddit_client_id
         self._client_secret = client_secret or settings.reddit_client_secret
         self._user_agent = user_agent or settings.reddit_user_agent
-        self._subreddits = subreddits or FINANCIAL_SUBREDDITS
+        self._subreddits = subreddits if subreddits is not None else FINANCIAL_SUBREDDITS
         self._posts_per_subreddit = posts_per_subreddit
 
         self._access_token: str | None = None
