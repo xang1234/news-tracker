@@ -289,13 +289,13 @@ async def get_entity_documents(
 
         # Apply platform filter and offset in Python (containment query doesn't support these)
         if platform:
-            docs = [d for d in docs if d.platform.value == platform]
+            docs = [d for d in docs if d.platform == platform]
         page = docs[offset : offset + limit]
 
         items = [
             ThemeDocumentItem(
                 document_id=d.id,
-                platform=d.platform.value if d.platform else None,
+                platform=d.platform if d.platform else None,
                 title=d.title,
                 content_preview=d.content[:300] if d.content else None,
                 url=d.url,

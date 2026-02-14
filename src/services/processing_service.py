@@ -279,7 +279,7 @@ class ProcessingService:
                 if doc.should_filter:
                     filtered += 1
                     self._metrics.spam_filtered.labels(
-                        platform=doc.platform.value,
+                        platform=doc.platform,
                     ).inc()
                     await self._queue.ack(msg_id)
                     continue
@@ -310,7 +310,7 @@ class ProcessingService:
                 if is_dup:
                     duplicates += 1
                     self._metrics.duplicates_detected.labels(
-                        platform=doc.platform.value,
+                        platform=doc.platform,
                     ).inc()
                     await self._queue.ack(msg_id)
                     continue
@@ -364,7 +364,7 @@ class ProcessingService:
 
                 processed += 1
                 self._metrics.documents_stored.labels(
-                    platform=doc.platform.value,
+                    platform=doc.platform,
                 ).inc()
 
                 # Acknowledge successful processing
