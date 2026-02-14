@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Radio, Plus, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Radio, Plus, Upload, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { MetricCard, MetricCardSkeleton } from '@/components/domain/MetricCard';
 import { SourcesTable, SourcesTableSkeleton } from '@/components/domain/SourcesTable';
@@ -15,10 +15,12 @@ import {
   useCreateSource,
   useUpdateSource,
   useDeactivateSource,
+  useTriggerIngestion,
   type SourceFilters as ApiSourceFilters,
   type SourceItem,
 } from '@/api/hooks/useSources';
 import { latency } from '@/lib/formatters';
+import axios from 'axios';
 
 function buildApiFilters(f: SourcesFilterValues, offset: number): ApiSourceFilters {
   return {
@@ -43,6 +45,15 @@ export default function Settings() {
   const createMutation = useCreateSource();
   const updateMutation = useUpdateSource();
   const deactivateMutation = useDeactivateSource();
+  const triggerMutation = useTriggerIngestion();
+
+  // Auto-dismiss success/error banner after 5s
+  useEffect(() => {
+    if (triggerMutation.isSuccess || triggerMutation.isError) {
+      const timer = setTimeout(() => triggerMutation.reset(), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [triggerMutation.isSuccess, triggerMutation.isError]);
 
   function handleFilterChange(next: SourcesFilterValues) {
     setFilters(next);
@@ -88,6 +99,14 @@ export default function Settings() {
           <div />
           <div className="flex items-center gap-2">
             <button
+              onClick={() => triggerMutation.mutate()}
+              disabled={triggerMutation.isPending}
+              className="flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${triggerMutation.isPending ? 'animate-spin' : ''}`} />
+              {triggerMutation.isPending ? 'Polling...' : 'Poll Now'}
+            </button>
+            <button
               onClick={() => setBulkOpen(true)}
               className="flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
             >
@@ -103,6 +122,20 @@ export default function Settings() {
             </button>
           </div>
         </div>
+
+        {/* Ingestion feedback */}
+        {triggerMutation.isSuccess && (
+          <div className="mt-3 rounded border border-green-500/30 bg-green-500/10 px-4 py-2 text-sm text-green-400">
+            {triggerMutation.data.message}
+          </div>
+        )}
+        {triggerMutation.isError && (
+          <div className="mt-3 rounded border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+            {axios.isAxiosError(triggerMutation.error)
+              ? triggerMutation.error.response?.data?.detail ?? triggerMutation.error.message
+              : 'Failed to trigger ingestion'}
+          </div>
+        )}
 
         {/* Stats */}
         <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">

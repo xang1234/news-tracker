@@ -88,7 +88,7 @@ class Settings(BaseSettings):
     # Processing thresholds
     spam_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     duplicate_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
-    poll_interval_seconds: int = 60
+    poll_interval_seconds: int = 3600
 
     # HTTP retry configuration
     max_http_retries: int = Field(default=3, ge=0, le=10)

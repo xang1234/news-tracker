@@ -727,6 +727,7 @@ class DocumentDetailResponse(BaseModel):
     author_name: str | None = Field(default=None, description="Author display name")
     author_verified: bool = Field(default=False, description="Whether author is verified")
     author_followers: int | None = Field(default=None, description="Author follower count")
+    source_name: str | None = Field(default=None, description="Source name (subreddit, publication, handle)")
     tickers: list[str] = Field(default_factory=list, description="Ticker symbols mentioned")
     spam_score: float | None = Field(default=None, description="Spam detection score (0-1)")
     bot_probability: float | None = Field(default=None, description="Bot detection probability (0-1)")
@@ -1125,6 +1126,13 @@ class BulkCreateSourcesResponse(BaseModel):
     skipped: int = Field(..., description="Number of identifiers that already existed")
     total: int = Field(..., description="Total identifiers submitted")
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
+class TriggerIngestionResponse(BaseModel):
+    """Response model for triggering manual ingestion."""
+
+    status: str = Field(..., description="Trigger status: started or already_running")
+    message: str = Field(..., description="Human-readable status message")
 
 
 class UpdateSourceRequest(BaseModel):

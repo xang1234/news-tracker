@@ -1,5 +1,6 @@
 """Sources Admin endpoints — CRUD for the sources table."""
 
+import asyncio
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -17,6 +18,7 @@ from src.api.models import (
     ErrorResponse,
     SourceItem,
     SourcesListResponse,
+    TriggerIngestionResponse,
     UpdateSourceRequest,
 )
 from src.sources.repository import SourcesRepository
@@ -24,6 +26,10 @@ from src.sources.schemas import Source
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
+
+# In-memory flag + task set for manual ingestion
+_ingestion_running = False
+_background_tasks: set[asyncio.Task] = set()  # prevent GC of fire-and-forget tasks
 
 
 def _require_sources_enabled() -> None:
@@ -198,6 +204,62 @@ async def bulk_create_sources(
     except Exception as e:
         logger.error("bulk_create_sources_failed", error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to bulk create sources")
+
+
+@router.post(
+    "/sources/trigger-ingestion",
+    response_model=TriggerIngestionResponse,
+    responses={
+        401: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+    },
+    summary="Trigger a manual ingestion cycle",
+)
+@limiter.limit(lambda: _get_settings().rate_limit_admin)
+async def trigger_ingestion(
+    request: Request,
+    api_key: str = Depends(verify_api_key),
+) -> TriggerIngestionResponse:
+    _require_sources_enabled()
+
+    global _ingestion_running
+    if _ingestion_running:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ingestion is already running",
+        )
+
+    # Set flag synchronously (before any await) to prevent TOCTOU race
+    _ingestion_running = True
+
+    async def _run_ingestion() -> None:
+        global _ingestion_running
+        try:
+            from src.services.ingestion_service import IngestionService
+
+            service = IngestionService()
+            results = await service.run_once()
+            total = sum(results.values())
+            logger.info(
+                "Manual ingestion completed",
+                results={p.value: c for p, c in results.items()},
+                total=total,
+            )
+        except Exception as e:
+            logger.error("Manual ingestion failed", error=str(e), exc_info=True)
+        finally:
+            _ingestion_running = False
+
+    # Save reference to prevent GC of fire-and-forget task
+    task = asyncio.create_task(_run_ingestion())
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+    return TriggerIngestionResponse(
+        status="started",
+        message="Ingestion cycle started in background",
+    )
 
 
 @router.put(

@@ -127,6 +127,27 @@ export function useBulkCreateSources() {
   });
 }
 
+export interface TriggerIngestionResponse {
+  status: string;
+  message: string;
+}
+
+export function useTriggerIngestion() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (): Promise<TriggerIngestionResponse> => {
+      const { data } = await api.post<TriggerIngestionResponse>('/sources/trigger-ingestion');
+      return data;
+    },
+    onSuccess: () => {
+      // Invalidate documents/stats so the dashboard refreshes after ingestion
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+    },
+  });
+}
+
 export function useDeactivateSource() {
   const queryClient = useQueryClient();
 
