@@ -1,5 +1,6 @@
 """Database repository for the sources table."""
 
+import json
 import logging
 
 from src.sources.schemas import Source
@@ -61,7 +62,7 @@ def _record_to_source(record) -> Source:
         display_name=record["display_name"],
         description=record["description"],
         is_active=record["is_active"],
-        metadata=dict(record["metadata"]) if record["metadata"] else {},
+        metadata=json.loads(record["metadata"]) if record["metadata"] and isinstance(record["metadata"], str) else (record["metadata"] or {}),
         created_at=record["created_at"],
         updated_at=record["updated_at"],
     )
