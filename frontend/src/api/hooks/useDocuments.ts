@@ -13,6 +13,7 @@ export interface DocumentFilters {
   until?: string;
   max_spam?: number;
   min_authority?: number;
+  active_sources_only?: boolean;
   sort?: string;
   order?: string;
   limit?: number;
@@ -64,6 +65,7 @@ export interface DocumentDetail {
   author_name: string | null;
   author_verified: boolean;
   author_followers: number | null;
+  source_name: string | null;
   tickers: string[];
   spam_score: number | null;
   bot_probability: number | null;
@@ -75,7 +77,7 @@ export interface DocumentDetail {
   keywords: { word: string; score: number }[];
   events: { type: string; actor: string; action: string; object: string; time_ref: string }[];
   urls_mentioned: string[];
-  engagement: Record<string, number>;
+  engagement: Record<string, number | null>;
   theme_ids: string[];
   has_embedding: boolean;
   has_embedding_minilm: boolean;
@@ -111,6 +113,7 @@ export function useDocuments(filters?: DocumentFilters) {
         if (filters.until) params.until = filters.until;
         if (filters.max_spam != null) params.max_spam = filters.max_spam;
         if (filters.min_authority != null) params.min_authority = filters.min_authority;
+        if (filters.active_sources_only != null) params.active_sources_only = filters.active_sources_only;
         if (filters.sort) params.sort = filters.sort;
         if (filters.order) params.order = filters.order;
         if (filters.limit != null) params.limit = filters.limit;

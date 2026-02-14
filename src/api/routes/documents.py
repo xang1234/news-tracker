@@ -183,11 +183,25 @@ async def get_document(
         for ev in (doc.events_extracted or [])
     ]
 
+    # Extract platform-specific source name from raw_data
+    source_name = None
+    raw = doc.raw_data or {}
+    platform_val = doc.platform.value if hasattr(doc.platform, "value") else doc.platform
+    if platform_val == "reddit" and raw.get("subreddit"):
+        source_name = f"r/{raw['subreddit']}"
+    elif platform_val == "substack" and raw.get("publication"):
+        source_name = raw["publication"]
+    elif platform_val == "twitter":
+        # Twitter API stores username in author_name, Sotwe stores it in author_id
+        handle = doc.author_id if raw.get("source") == "sotwe" else doc.author_name
+        if handle and handle != "unknown":
+            source_name = f"@{handle}" if not handle.startswith("@") else handle
+
     logger.info("document_detail", document_id=document_id, latency_ms=round(latency, 2))
 
     return DocumentDetailResponse(
         document_id=doc.id,
-        platform=doc.platform.value if hasattr(doc.platform, "value") else doc.platform,
+        platform=platform_val,
         content_type=doc.content_type,
         title=doc.title,
         content_preview=doc.content[:300] if doc.content else None,
@@ -197,6 +211,7 @@ async def get_document(
         author_name=doc.author_name,
         author_verified=doc.author_verified,
         author_followers=doc.author_followers,
+        source_name=source_name,
         tickers=doc.tickers_mentioned,
         spam_score=doc.spam_score,
         bot_probability=doc.bot_probability,
@@ -244,6 +259,10 @@ async def list_documents(
     max_spam: float | None = Query(default=None, ge=0.0, le=1.0, description="Maximum spam score"),
     min_authority: float | None = Query(
         default=None, ge=0.0, le=1.0, description="Minimum authority score"
+    ),
+    active_sources_only: bool = Query(
+        default=True,
+        description="Exclude documents from deactivated sources",
     ),
     sort: str = Query(default="timestamp", description="Sort field"),
     order: str = Query(default="desc", description="Sort order: asc or desc"),
@@ -311,6 +330,7 @@ async def list_documents(
         until=until_dt,
         max_spam=max_spam,
         min_authority=min_authority,
+        active_sources_only=active_sources_only,
     )
 
     start = time.perf_counter()

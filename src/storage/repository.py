@@ -1379,6 +1379,7 @@ class DocumentRepository:
         until: datetime | None = None,
         max_spam: float | None = None,
         min_authority: float | None = None,
+        active_sources_only: bool = False,
         param_idx: int = 1,
     ) -> tuple[str, list[Any], int]:
         """
@@ -1432,6 +1433,16 @@ class DocumentRepository:
             params.append(min_authority)
             param_idx += 1
 
+        if active_sources_only:
+            conditions.append(
+                "NOT EXISTS ("
+                "SELECT 1 FROM sources s "
+                "WHERE s.platform = documents.platform "
+                "AND s.identifier = documents.author_id "
+                "AND s.is_active = FALSE"
+                ")"
+            )
+
         where_clause = " AND ".join(conditions) if conditions else "TRUE"
         return where_clause, params, param_idx
 
@@ -1446,6 +1457,7 @@ class DocumentRepository:
         until: datetime | None = None,
         max_spam: float | None = None,
         min_authority: float | None = None,
+        active_sources_only: bool = False,
         sort: str = "timestamp",
         order: str = "desc",
         limit: int = 50,
@@ -1466,6 +1478,7 @@ class DocumentRepository:
             until=until,
             max_spam=max_spam,
             min_authority=min_authority,
+            active_sources_only=active_sources_only,
         )
 
         sql = f"""
@@ -1492,6 +1505,7 @@ class DocumentRepository:
         until: datetime | None = None,
         max_spam: float | None = None,
         min_authority: float | None = None,
+        active_sources_only: bool = False,
     ) -> int:
         """Count documents matching the same filters as list_documents."""
         where_clause, params, _idx = self._build_document_filters(
@@ -1503,6 +1517,7 @@ class DocumentRepository:
             until=until,
             max_spam=max_spam,
             min_authority=min_authority,
+            active_sources_only=active_sources_only,
         )
         sql = f"SELECT COUNT(*) FROM documents WHERE {where_clause}"
         return await self._db.fetchval(sql, *params)

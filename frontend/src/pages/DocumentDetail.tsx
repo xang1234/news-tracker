@@ -118,6 +118,11 @@ export default function DocumentDetail() {
                     {platform.label}
                   </span>
                 )}
+                {doc.source_name && (
+                  <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-sky-400">
+                    {doc.source_name}
+                  </span>
+                )}
                 {doc.content_type && (
                   <span className="rounded-full bg-secondary px-2 py-0.5 text-muted-foreground">
                     {doc.content_type}
@@ -163,10 +168,12 @@ export default function DocumentDetail() {
               <div className="rounded-lg border border-border bg-card p-4">
                 <h3 className="mb-2 text-xs font-medium text-muted-foreground">Engagement</h3>
                 <div className="flex flex-wrap gap-4 text-sm">
-                  {Object.entries(doc.engagement).map(([key, val]) => (
+                  {Object.entries(doc.engagement)
+                    .filter(([, val]) => val != null)
+                    .map(([key, val]) => (
                     <div key={key} className="text-center">
                       <div className="text-lg font-semibold text-foreground">
-                        {val.toLocaleString()}
+                        {typeof val === 'number' ? val.toLocaleString() : String(val)}
                       </div>
                       <div className="text-xs text-muted-foreground">{key}</div>
                     </div>

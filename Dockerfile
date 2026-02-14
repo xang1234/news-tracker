@@ -3,7 +3,7 @@ FROM python:3.11-slim AS builder
 
 # Build tools for packages with C/Cython extensions (hdbscan, etc.)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc g++ build-essential && \
+    apt-get install -y --no-install-recommends build-essential && \
     rm -rf /var/lib/apt/lists/*
 
 # Install uv for fast dependency resolution

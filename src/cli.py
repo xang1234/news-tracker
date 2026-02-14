@@ -128,6 +128,7 @@ def worker(mock: bool, metrics_port: int) -> None:
 @main.command("init-db")
 def init_db() -> None:
     """Initialize the database schema."""
+    import pathlib
     from src.storage.database import Database
     from src.storage.repository import DocumentRepository
 
@@ -138,15 +139,20 @@ def init_db() -> None:
         repo = DocumentRepository(db)
         await repo.create_tables()
 
-        # Also create sources table if feature is enabled
+        # Apply all migration files in order
+        migrations_dir = pathlib.Path(__file__).resolve().parent.parent / "migrations"
+        if migrations_dir.is_dir():
+            for sql_file in sorted(migrations_dir.glob("*.sql")):
+                sql = sql_file.read_text()
+                await db.execute(sql)
+                click.echo(f"Applied migration: {sql_file.name}")
+
+        # Also seed sources if feature is enabled
         from src.config.settings import get_settings
         settings = get_settings()
         if settings.sources_enabled:
-            from src.sources.repository import SourcesRepository
             from src.sources.service import SourcesService
 
-            sources_repo = SourcesRepository(db)
-            await sources_repo.create_table()
             svc = SourcesService(db)
             await svc.ensure_seeded()
             click.echo("Sources table initialized and seeded")
