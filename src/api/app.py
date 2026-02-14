@@ -43,6 +43,20 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to start WebSocket alert broadcaster: %s", e)
 
+    # Initialize sources table and seed data when enabled
+    if settings.sources_enabled:
+        try:
+            from src.api.dependencies import get_sources_repository
+            from src.sources.service import SourcesService
+
+            repo = await get_sources_repository()
+            await repo.create_table()
+            svc = SourcesService(repo._db)
+            await svc.ensure_seeded()
+            logger.info("Sources table initialized and seeded")
+        except Exception as e:
+            logger.warning("Failed to initialize sources: %s", e)
+
     yield
 
     logger.info("Embedding API shutting down")

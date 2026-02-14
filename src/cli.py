@@ -138,6 +138,19 @@ def init_db() -> None:
         repo = DocumentRepository(db)
         await repo.create_tables()
 
+        # Also create sources table if feature is enabled
+        from src.config.settings import get_settings
+        settings = get_settings()
+        if settings.sources_enabled:
+            from src.sources.repository import SourcesRepository
+            from src.sources.service import SourcesService
+
+            sources_repo = SourcesRepository(db)
+            await sources_repo.create_table()
+            svc = SourcesService(db)
+            await svc.ensure_seeded()
+            click.echo("Sources table initialized and seeded")
+
         click.echo("Database initialized successfully")
 
         await db.close()
