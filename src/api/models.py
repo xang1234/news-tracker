@@ -1084,6 +1084,49 @@ class CreateSourceRequest(BaseModel):
         return v.lower()
 
 
+class BulkCreateSourcesRequest(BaseModel):
+    """Request to bulk-create sources for a single platform."""
+
+    platform: str = Field(..., description="Platform: twitter, reddit, substack")
+    identifiers: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="List of identifiers to add (max 500)",
+    )
+
+    @field_validator("platform")
+    @classmethod
+    def validate_platform(cls, v: str) -> str:
+        allowed = {"twitter", "reddit", "substack"}
+        if v.lower() not in allowed:
+            raise ValueError(f"platform must be one of: {', '.join(sorted(allowed))}")
+        return v.lower()
+
+    @field_validator("identifiers")
+    @classmethod
+    def clean_identifiers(cls, v: list[str]) -> list[str]:
+        # Strip whitespace, remove empty strings
+        cleaned = [s.strip() for s in v if s.strip()]
+        if not cleaned:
+            raise ValueError("identifiers must contain at least one non-empty value")
+        for i, ident in enumerate(cleaned):
+            if len(ident) > 200:
+                raise ValueError(
+                    f"identifiers[{i}] exceeds maximum length of 200 characters"
+                )
+        return cleaned
+
+
+class BulkCreateSourcesResponse(BaseModel):
+    """Response for bulk source creation."""
+
+    created: int = Field(..., description="Number of new sources created")
+    skipped: int = Field(..., description="Number of identifiers that already existed")
+    total: int = Field(..., description="Total identifiers submitted")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
 class UpdateSourceRequest(BaseModel):
     """Request to update a source."""
 

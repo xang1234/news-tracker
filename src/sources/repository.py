@@ -53,6 +53,23 @@ ON CONFLICT (platform, identifier) DO UPDATE SET
     updated_at = NOW()
 """
 
+_BULK_CREATE_SQL = """
+WITH input_rows AS (
+    SELECT * FROM unnest(
+        $1::text[], $2::text[], $3::text[], $4::text[], $5::boolean[], $6::jsonb[]
+    ) AS t(platform, identifier, display_name, description, is_active, metadata)
+),
+inserted AS (
+    INSERT INTO sources (platform, identifier, display_name, description, is_active, metadata)
+    SELECT * FROM input_rows
+    ON CONFLICT (platform, identifier) DO NOTHING
+    RETURNING platform, identifier
+)
+SELECT
+    (SELECT COUNT(*) FROM inserted) AS created,
+    (SELECT COUNT(*) FROM input_rows) AS total
+"""
+
 
 def _record_to_source(record) -> Source:
     """Convert an asyncpg Record to a Source dataclass."""
@@ -116,6 +133,33 @@ class SourcesRepository:
         )
         logger.info("Bulk upserted %d sources", len(sources))
         return len(sources)
+
+    async def bulk_create(self, sources: list[Source]) -> tuple[int, int]:
+        """Insert new sources, skipping any that already exist.
+
+        Uses ON CONFLICT DO NOTHING so existing sources are never overwritten.
+        Returns (created_count, total_requested).
+        """
+        if not sources:
+            return 0, 0
+
+        import json
+
+        platforms = [s.platform for s in sources]
+        identifiers = [s.identifier for s in sources]
+        display_names = [s.display_name for s in sources]
+        descriptions = [s.description for s in sources]
+        actives = [s.is_active for s in sources]
+        metadatas = [json.dumps(s.metadata) for s in sources]
+
+        row = await self._db.fetchrow(
+            _BULK_CREATE_SQL,
+            platforms, identifiers, display_names, descriptions, actives, metadatas,
+        )
+        created = row["created"] if row else 0
+        total = row["total"] if row else len(sources)
+        logger.info("Bulk created %d/%d sources", created, total)
+        return int(created), int(total)
 
     async def get_by_key(
         self, platform: str, identifier: str

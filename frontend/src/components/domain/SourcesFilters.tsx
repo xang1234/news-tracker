@@ -11,7 +11,7 @@ export interface SourcesFilterValues {
 export const DEFAULT_SOURCES_FILTERS: SourcesFilterValues = {
   search: '',
   platform: '',
-  activeOnly: false,
+  activeOnly: true,
   limit: 50,
 };
 

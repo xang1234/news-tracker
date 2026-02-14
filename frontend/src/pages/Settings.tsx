@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Radio, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Radio, Plus, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { MetricCard, MetricCardSkeleton } from '@/components/domain/MetricCard';
 import { SourcesTable, SourcesTableSkeleton } from '@/components/domain/SourcesTable';
@@ -9,6 +9,7 @@ import {
   type SourcesFilterValues,
 } from '@/components/domain/SourcesFilters';
 import { SourceFormModal, type SourceFormData } from '@/components/domain/SourceFormModal';
+import { BulkAddSourcesModal } from '@/components/domain/BulkAddSourcesModal';
 import {
   useSources,
   useCreateSource,
@@ -34,6 +35,7 @@ export default function Settings() {
   const [filters, setFilters] = useState<SourcesFilterValues>(DEFAULT_SOURCES_FILTERS);
   const [offset, setOffset] = useState(0);
   const [addOpen, setAddOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [editItem, setEditItem] = useState<SourceItem | null>(null);
 
   const apiFilters = buildApiFilters(filters, offset);
@@ -84,13 +86,22 @@ export default function Settings() {
         {/* Header row */}
         <div className="mt-4 flex items-center justify-between">
           <div />
-          <button
-            onClick={() => setAddOpen(true)}
-            className="flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add Source
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setBulkOpen(true)}
+              className="flex items-center gap-1.5 rounded border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              Bulk Add
+            </button>
+            <button
+              onClick={() => setAddOpen(true)}
+              className="flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Source
+            </button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -201,6 +212,9 @@ export default function Settings() {
             });
           }}
         />
+
+        {/* Bulk add modal */}
+        <BulkAddSourcesModal isOpen={bulkOpen} onClose={() => setBulkOpen(false)} />
 
         {/* Edit modal */}
         {editItem && (

@@ -47,6 +47,18 @@ export interface UpdateSourcePayload {
   metadata?: Record<string, unknown>;
 }
 
+export interface BulkCreateSourcesPayload {
+  platform: string;
+  identifiers: string[];
+}
+
+export interface BulkCreateSourcesResponse {
+  created: number;
+  skipped: number;
+  total: number;
+  latency_ms: number;
+}
+
 // ── Hooks ──
 
 export function useSources(filters?: SourceFilters) {
@@ -93,6 +105,20 @@ export function useUpdateSource() {
         `/sources/${encodeURIComponent(platform)}/${encodeURIComponent(identifier)}`,
         body,
       );
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sources'] });
+    },
+  });
+}
+
+export function useBulkCreateSources() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: BulkCreateSourcesPayload): Promise<BulkCreateSourcesResponse> => {
+      const { data } = await api.post<BulkCreateSourcesResponse>('/sources/bulk', payload);
       return data;
     },
     onSuccess: () => {

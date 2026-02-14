@@ -11,6 +11,8 @@ from src.api.dependencies import get_sources_repository
 from src.api.rate_limit import limiter
 from src.config.settings import get_settings as _get_settings
 from src.api.models import (
+    BulkCreateSourcesRequest,
+    BulkCreateSourcesResponse,
     CreateSourceRequest,
     ErrorResponse,
     SourceItem,
@@ -140,6 +142,62 @@ async def create_source(
     except Exception as e:
         logger.error("create_source_failed", error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to create source")
+
+
+@router.post(
+    "/sources/bulk",
+    response_model=BulkCreateSourcesResponse,
+    status_code=status.HTTP_200_OK,
+    responses={401: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    summary="Bulk-create sources for a single platform",
+)
+@limiter.limit(lambda: _get_settings().rate_limit_admin)
+async def bulk_create_sources(
+    request: Request,
+    body: BulkCreateSourcesRequest,
+    api_key: str = Depends(verify_api_key),
+    repo: SourcesRepository = Depends(get_sources_repository),
+) -> BulkCreateSourcesResponse:
+    _require_sources_enabled()
+    start = time.perf_counter()
+
+    try:
+        # Normalize & deduplicate identifiers
+        seen: set[str] = set()
+        unique_ids: list[str] = []
+        for raw_id in body.identifiers:
+            normalized = _normalize_identifier(body.platform, raw_id)
+            if normalized not in seen:
+                seen.add(normalized)
+                unique_ids.append(normalized)
+
+        sources = [
+            Source(platform=body.platform, identifier=ident)
+            for ident in unique_ids
+        ]
+
+        created, total = await repo.bulk_create(sources)
+        skipped = total - created
+
+        latency_ms = (time.perf_counter() - start) * 1000
+        logger.info(
+            "Bulk created sources",
+            platform=body.platform,
+            created=created,
+            skipped=skipped,
+            total=total,
+        )
+        return BulkCreateSourcesResponse(
+            created=created,
+            skipped=skipped,
+            total=total,
+            latency_ms=round(latency_ms, 2),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("bulk_create_sources_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to bulk create sources")
 
 
 @router.put(

@@ -287,6 +287,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | DELETE | /securities/{ticker}/{exchange} | Deactivate (soft delete) a security |
 | GET | /sources | List sources with filters (feature-gated: `sources_enabled`) |
 | POST | /sources | Create a new source |
+| POST | /sources/bulk | Bulk-create sources for a single platform (max 500) |
 | PUT | /sources/{platform}/{identifier} | Update a source |
 | DELETE | /sources/{platform}/{identifier} | Deactivate (soft delete) a source |
 | GET | /health | Service status |
