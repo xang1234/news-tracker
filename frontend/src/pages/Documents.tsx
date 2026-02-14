@@ -101,7 +101,7 @@ export default function Documents() {
               />
               <MetricCard
                 label="Latest Ingestion"
-                value={timeAgo(stats.latest_document)}
+                value={timeAgo(stats.latest_fetched_at ?? stats.latest_document)}
                 icon={Clock}
               />
             </>

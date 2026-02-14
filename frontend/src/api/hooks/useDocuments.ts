@@ -92,6 +92,7 @@ export interface DocumentStats {
   sentiment_coverage: number;
   earliest_document: string | null;
   latest_document: string | null;
+  latest_fetched_at: string | null;
 }
 
 // ── Hooks ──
@@ -135,7 +136,7 @@ export function useDocument(id: string | undefined) {
   });
 }
 
-export function useDocumentStats() {
+export function useDocumentStats(opts?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: queryKeys.stats(),
     queryFn: async (): Promise<DocumentStats> => {
@@ -143,5 +144,6 @@ export function useDocumentStats() {
       return data;
     },
     staleTime: 120_000,
+    refetchInterval: opts?.refetchInterval,
   });
 }

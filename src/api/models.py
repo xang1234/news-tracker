@@ -770,6 +770,7 @@ class DocumentStatsResponse(BaseModel):
     sentiment_coverage: float = Field(..., description="Fraction of docs with sentiment")
     earliest_document: str | None = Field(default=None, description="Earliest document timestamp (ISO)")
     latest_document: str | None = Field(default=None, description="Latest document timestamp (ISO)")
+    latest_fetched_at: str | None = Field(default=None, description="Latest ingestion time (ISO)")
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
 
 

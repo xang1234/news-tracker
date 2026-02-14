@@ -1521,7 +1521,8 @@ class DocumentRepository:
                 COUNT(embedding_minilm)::float / GREATEST(COUNT(*), 1) AS minilm_pct,
                 COUNT(sentiment)::float / GREATEST(COUNT(*), 1) AS sentiment_pct,
                 MIN(timestamp) AS earliest,
-                MAX(timestamp) AS latest
+                MAX(timestamp) AS latest,
+                MAX(fetched_at) AS latest_fetched
             FROM documents
         """
         platform_sql = """
@@ -1549,6 +1550,11 @@ class DocumentRepository:
             ),
             "latest_document": (
                 summary_row["latest"].isoformat() if summary_row["latest"] else None
+            ),
+            "latest_fetched_at": (
+                summary_row["latest_fetched"].isoformat()
+                if summary_row["latest_fetched"]
+                else None
             ),
         }
 

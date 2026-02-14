@@ -8,6 +8,7 @@ export interface HealthData {
   cache_available: boolean;
   gpu_available: boolean;
   service_stats: Record<string, unknown>;
+  queue_depths: Record<string, number>;
 }
 
 export function useHealth() {

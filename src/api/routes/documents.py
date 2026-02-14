@@ -115,6 +115,7 @@ async def get_document_stats(
         sentiment_coverage=stats["sentiment_coverage"],
         earliest_document=stats["earliest_document"],
         latest_document=stats["latest_document"],
+        latest_fetched_at=stats.get("latest_fetched_at"),
         latency_ms=round(latency, 2),
     )
 

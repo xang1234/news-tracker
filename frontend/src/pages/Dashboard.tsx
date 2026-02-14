@@ -1,10 +1,23 @@
 import { Header } from '@/components/layout/Header';
 import { MetricCard, MetricCardSkeleton } from '@/components/domain/MetricCard';
 import { useHealth } from '@/api/hooks/useHealth';
-import { Wifi, WifiOff, Cpu, HardDrive } from 'lucide-react';
+import { useDocumentStats } from '@/api/hooks/useDocuments';
+import { timeAgo, pct } from '@/lib/formatters';
+import { Wifi, WifiOff, Cpu, HardDrive, Database, BarChart3, Clock, Layers } from 'lucide-react';
+
+const QUEUE_LABELS: Record<string, string> = {
+  embedding_queue: 'Embedding',
+  sentiment_queue: 'Sentiment',
+  clustering_queue: 'Clustering',
+};
 
 export default function Dashboard() {
-  const { data, isLoading, isError, error } = useHealth();
+  const { data: health, isLoading: healthLoading, isError: healthError, error: healthErr } = useHealth();
+  const { data: stats, isLoading: statsLoading } = useDocumentStats({ refetchInterval: 30_000 });
+
+  const topPlatform = stats?.platform_counts?.length
+    ? stats.platform_counts.reduce((a, b) => (b.count > a.count ? b : a))
+    : null;
 
   return (
     <>
@@ -17,67 +30,137 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {isError && (
+        {healthError && (
           <div className="mb-4 rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             Failed to fetch health data
-            {error instanceof Error && `: ${error.message}`}
+            {healthErr instanceof Error && `: ${healthErr.message}`}
           </div>
         )}
 
         {/* Health metric cards */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {isLoading ? (
+          {healthLoading ? (
             <>
               <MetricCardSkeleton />
               <MetricCardSkeleton />
               <MetricCardSkeleton />
               <MetricCardSkeleton />
             </>
-          ) : data ? (
+          ) : health ? (
             <>
               <MetricCard
                 label="Service Status"
-                value={data.status}
-                icon={data.status === 'healthy' ? Wifi : WifiOff}
-                trend={data.status === 'healthy' ? 'up' : 'down'}
-                trendLabel={data.status === 'healthy' ? 'All systems operational' : 'Degraded'}
+                value={health.status}
+                icon={health.status === 'healthy' ? Wifi : WifiOff}
+                trend={health.status === 'healthy' ? 'up' : 'down'}
+                trendLabel={health.status === 'healthy' ? 'All systems operational' : 'Degraded'}
               />
               <MetricCard
                 label="Models Loaded"
-                value={Object.values(data.models_loaded).filter(Boolean).length}
+                value={Object.values(health.models_loaded).filter(Boolean).length}
                 icon={Cpu}
-                subtitle={`of ${Object.keys(data.models_loaded).length} available`}
+                subtitle={`of ${Object.keys(health.models_loaded).length} available`}
               />
               <MetricCard
                 label="Cache"
-                value={data.cache_available ? 'Connected' : 'Unavailable'}
+                value={health.cache_available ? 'Connected' : 'Unavailable'}
                 icon={HardDrive}
-                trend={data.cache_available ? 'up' : 'down'}
+                trend={health.cache_available ? 'up' : 'down'}
               />
               <MetricCard
                 label="GPU"
-                value={data.gpu_available ? 'Available' : 'CPU Only'}
+                value={health.gpu_available ? 'Available' : 'CPU Only'}
                 icon={Cpu}
-                trend={data.gpu_available ? 'up' : 'neutral'}
+                trend={health.gpu_available ? 'up' : 'neutral'}
               />
             </>
           ) : null}
         </div>
 
-        {/* Placeholder sections for future content */}
+        {/* Data Overview + Queue Depths */}
         <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Data Overview */}
           <div className="rounded-lg border border-border bg-card p-6">
             <h3 className="text-sm font-medium text-muted-foreground">Data Overview</h3>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Document counts and processing coverage will appear here once the /stats/overview
-              endpoint is available.
-            </p>
+            {statsLoading ? (
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <MetricCardSkeleton />
+                <MetricCardSkeleton />
+                <MetricCardSkeleton />
+                <MetricCardSkeleton />
+              </div>
+            ) : stats ? (
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <MetricCard
+                  label="Total Documents"
+                  value={stats.total_count.toLocaleString()}
+                  icon={Database}
+                />
+                <MetricCard
+                  label="Top Platform"
+                  value={topPlatform?.platform ?? '—'}
+                  subtitle={topPlatform ? `${topPlatform.count.toLocaleString()} docs` : undefined}
+                  icon={BarChart3}
+                />
+                <MetricCard
+                  label="Embedding Coverage"
+                  value={pct(stats.embedding_coverage.finbert_pct)}
+                  subtitle={`MiniLM: ${pct(stats.embedding_coverage.minilm_pct)}`}
+                  icon={Cpu}
+                />
+                <MetricCard
+                  label="Latest Ingestion"
+                  value={timeAgo(stats.latest_fetched_at ?? stats.latest_document)}
+                  icon={Clock}
+                />
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                No data available — check that the API is running.
+              </p>
+            )}
           </div>
+
+          {/* Queue Depths */}
           <div className="rounded-lg border border-border bg-card p-6">
             <h3 className="text-sm font-medium text-muted-foreground">Queue Depths</h3>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Redis stream queue depths will appear here once the /ops/queues endpoint is available.
-            </p>
+            {healthLoading ? (
+              <div className="mt-4 space-y-3">
+                <MetricCardSkeleton />
+                <MetricCardSkeleton />
+                <MetricCardSkeleton />
+              </div>
+            ) : health?.queue_depths ? (
+              <div className="mt-4 space-y-3">
+                {Object.entries(QUEUE_LABELS).map(([key, label]) => {
+                  const depth = health.queue_depths[key] ?? 0;
+                  return (
+                    <div
+                      key={key}
+                      className="flex items-center justify-between rounded-md border border-border bg-secondary/30 px-4 py-3"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Layers className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm text-foreground">{label}</span>
+                      </div>
+                      <span
+                        className={
+                          depth > 100
+                            ? 'text-lg font-semibold text-amber-400'
+                            : 'text-lg font-semibold text-foreground'
+                        }
+                      >
+                        {depth.toLocaleString()}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-muted-foreground">
+                No queue data available — check that Redis is running.
+              </p>
+            )}
           </div>
         </div>
       </div>

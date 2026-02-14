@@ -132,6 +132,30 @@ services:
       start_period: 60s
       retries: 3
 
+  # Ingestion + processing worker (continuous polling)
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-tracker-worker
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: '1.0'
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/news_tracker
+      REDIS_URL: redis://redis:6379/0
+    command: ["worker"]
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      news-tracker-api:
+        condition: service_healthy
+
   # Frontend (Vite dev server)
   frontend:
     build:
