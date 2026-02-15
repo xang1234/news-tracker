@@ -221,7 +221,7 @@ class NERService:
         """
         Resolve coreferences in text by replacing pronouns with antecedents.
 
-        Uses fastcoref's get_resolved_text() to produce text where references
+        Uses fastcoref's cluster predictions to produce text where references
         like "the company", "it", "the chipmaker" are replaced by their referent
         entity names. This resolved text is then passed to NER for better
         entity extraction coverage.
@@ -239,13 +239,56 @@ class NERService:
             preds = self._coref_model.predict(texts=[text])
             if not preds or not preds[0]:
                 return text
-            resolved = preds[0].get_resolved_text()
-            if resolved:
-                return resolved
-            return text
+            return self._apply_coref_clusters(text, preds[0])
         except Exception as e:
             logger.warning(f"Coreference text resolution failed: {e}")
             return text
+
+    @staticmethod
+    def _apply_coref_clusters(text: str, prediction) -> str:
+        """Build resolved text from fastcoref cluster predictions.
+
+        For each coreference cluster, the first mention by text position
+        (the antecedent) is the canonical form. All subsequent mentions
+        are replaced with the canonical text.
+        Replacements are applied right-to-left to preserve character offsets.
+        """
+        clusters = prediction.clusters
+        char_map = prediction.char_map
+        if not clusters or not char_map:
+            return text
+
+        # Collect (char_start, char_end, replacement) for each non-canonical mention
+        replacements: list[tuple[int, int, str]] = []
+        for cluster in clusters:
+            # Resolve char spans, sorted by position in text
+            spans: list[tuple[int, int, str]] = []
+            for token_span in cluster:
+                mapped = char_map.get(token_span)
+                if mapped is None:
+                    continue
+                _idx, (char_start, char_end) = mapped
+                spans.append((char_start, char_end, text[char_start:char_end]))
+
+            if len(spans) < 2:
+                continue
+
+            # Sort by position — first mention is the antecedent (canonical)
+            spans.sort(key=lambda s: s[0])
+            canonical = spans[0][2]
+            for char_start, char_end, mention_text in spans[1:]:
+                replacements.append((char_start, char_end, canonical))
+
+        if not replacements:
+            return text
+
+        # Apply right-to-left so earlier offsets stay valid
+        replacements.sort(key=lambda r: r[0], reverse=True)
+        resolved = text
+        for char_start, char_end, replacement in replacements:
+            resolved = resolved[:char_start] + replacement + resolved[char_end:]
+
+        return resolved
 
     def extract_sync(self, text: str) -> list[FinancialEntity]:
         """

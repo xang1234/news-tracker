@@ -186,53 +186,76 @@ def mock_spacy_nlp():
 
 
 class MockCorefPrediction:
-    """Mock fastcoref prediction result."""
+    """Mock fastcoref CorefResult matching the real API.
 
-    def __init__(self, resolved_text: str):
-        self._resolved_text = resolved_text
+    Real CorefResult exposes:
+      - clusters: list of clusters, each a list of (token_start, token_end) tuples
+      - char_map: dict mapping (token_start, token_end) -> (mention_idx, (char_start, char_end))
+    """
 
-    def get_resolved_text(self) -> str:
-        return self._resolved_text
+    def __init__(self, text: str, cluster_spans: list[list[tuple[int, int]]]):
+        """
+        Args:
+            text: Original input text.
+            cluster_spans: List of clusters. Each cluster is a list of
+                (char_start, char_end) spans referring to the same entity.
+                First span in each cluster should be the antecedent.
+        """
+        self.text = text
+        self.clusters: list[list[tuple[int, int]]] = []
+        self.char_map: dict[tuple[int, int], tuple[int, tuple[int, int]]] = {}
+        tok_idx = 0
+        for spans in cluster_spans:
+            cluster: list[tuple[int, int]] = []
+            for char_start, char_end in spans:
+                token = (tok_idx, tok_idx)
+                cluster.append(token)
+                self.char_map[token] = (tok_idx, (char_start, char_end))
+                tok_idx += 1
+            self.clusters.append(cluster)
 
 
 class MockCorefModel:
     """Mock fastcoref FCoref model."""
 
-    def __init__(self, resolutions: dict[str, str] | None = None):
+    def __init__(self, cluster_specs: dict[str, list[list[tuple[int, int]]]] | None = None):
         """
         Args:
-            resolutions: Mapping from input text to resolved text.
+            cluster_specs: Mapping from input text to cluster span lists.
+                Each value is a list of clusters, where each cluster is a list of
+                (char_start, char_end) tuples. First span = antecedent.
         """
-        self._resolutions = resolutions or {}
+        self._cluster_specs = cluster_specs or {}
 
     def predict(self, texts: list[str]) -> list[MockCorefPrediction]:
         results = []
         for text in texts:
-            resolved = self._resolutions.get(text, text)
-            results.append(MockCorefPrediction(resolved))
+            spans = self._cluster_specs.get(text, [])
+            results.append(MockCorefPrediction(text, spans))
         return results
 
 
 @pytest.fixture
 def mock_coref_model():
-    """Create a mock coreference model with semiconductor resolutions."""
-    resolutions = {
+    """Create a mock coreference model with semiconductor resolutions.
+
+    Cluster spans use (char_start, char_end) with first span = antecedent.
+    """
+    cluster_specs = {
+        # "Samsung" (0:7) is antecedent for "The Korean chipmaker" (36:56)
         (
             "Samsung announced new HBM capacity. "
             "The Korean chipmaker expects strong demand."
-        ): (
-            "Samsung announced new HBM capacity. "
-            "Samsung expects strong demand."
-        ),
+        ): [[(0, 7), (36, 56)]],
+        # Two clusters:
+        #   "Nvidia" (0:6) is antecedent for "The company" (44:55)
+        #   "Blackwell" (20:29) is antecedent for "it" (63:65)
         (
             "Nvidia unveiled the Blackwell architecture. "
             "The company claims it delivers 4x the performance of Hopper."
-        ): (
-            "Nvidia unveiled the Blackwell architecture. "
-            "Nvidia claims Blackwell delivers 4x the performance of Hopper."
-        ),
+        ): [[(0, 6), (44, 55)], [(20, 29), (63, 65)]],
     }
-    return MockCorefModel(resolutions)
+    return MockCorefModel(cluster_specs)
 
 
 @pytest.fixture

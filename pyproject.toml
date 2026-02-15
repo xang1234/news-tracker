@@ -37,6 +37,7 @@ dependencies = [
 
     # NER
     "spacy>=3.7.0",
+    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
     "fastcoref>=2.1.0",
 
     # Keywords extraction
@@ -90,8 +91,6 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.8.0",
     "types-redis>=4.6.0",
-    # spaCy model for NER and Keywords tests
-    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
     # Price data for backtesting
     "yfinance>=0.2.36",
     # Visualization for backtest results

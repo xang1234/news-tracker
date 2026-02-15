@@ -2342,6 +2342,7 @@ dependencies = [
     { name = "click" },
     { name = "curl-cffi" },
     { name = "datasketch" },
+    { name = "en-core-web-sm" },
     { name = "fastapi" },
     { name = "fastcoref" },
     { name = "feedparser" },
@@ -2381,7 +2382,6 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
-    { name = "en-core-web-sm" },
     { name = "matplotlib" },
     { name = "mypy" },
     { name = "pytest" },
@@ -2403,7 +2403,7 @@ requires-dist = [
     { name = "click", specifier = ">=8.1.0" },
     { name = "curl-cffi", specifier = ">=0.6.0" },
     { name = "datasketch", specifier = ">=1.6.0" },
-    { name = "en-core-web-sm", marker = "extra == 'dev'", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" },
+    { name = "en-core-web-sm", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" },
     { name = "fastapi", specifier = ">=0.109.0" },
     { name = "fastcoref", specifier = ">=2.1.0" },
     { name = "feedparser", specifier = ">=6.0.0" },
