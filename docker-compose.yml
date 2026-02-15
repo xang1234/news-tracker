@@ -156,6 +156,72 @@ services:
       news-tracker-api:
         condition: service_healthy
 
+  # Embedding worker (FinBERT/MiniLM → pgvector, forwards to clustering queue)
+  embedding-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-tracker-embedding-worker
+    restart: unless-stopped
+    mem_limit: 2g
+    cpus: '2.0'
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/news_tracker
+      REDIS_URL: redis://redis:6379/0
+    command: ["embedding-worker"]
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Sentiment worker (ProsusAI/finbert sentiment analysis)
+  sentiment-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-tracker-sentiment-worker
+    restart: unless-stopped
+    mem_limit: 2g
+    cpus: '2.0'
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/news_tracker
+      REDIS_URL: redis://redis:6379/0
+    command: ["sentiment-worker"]
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Clustering worker (real-time theme assignment via pgvector HNSW)
+  clustering-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-tracker-clustering-worker
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: '1.0'
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/news_tracker
+      REDIS_URL: redis://redis:6379/0
+    command: ["clustering-worker"]
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   # Frontend (Vite dev server)
   frontend:
     build:

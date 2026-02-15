@@ -2,13 +2,18 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/http';
 import { queryKeys } from '@/api/queryKeys';
 
+export interface QueueMetrics {
+  pending: number;
+  processed: number;
+}
+
 export interface HealthData {
   status: string;
   models_loaded: Record<string, boolean>;
   cache_available: boolean;
   gpu_available: boolean;
   service_stats: Record<string, unknown>;
-  queue_depths: Record<string, number>;
+  queue_depths: Record<string, QueueMetrics>;
 }
 
 export function useHealth() {

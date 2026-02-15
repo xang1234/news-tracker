@@ -41,7 +41,17 @@ def _make_client(db_healthy: bool = True, redis_healthy: bool = True):
     mock_redis = AsyncMock()
     if redis_healthy:
         mock_redis.ping = AsyncMock(return_value=True)
-        mock_redis.xlen = AsyncMock(return_value=42)
+        mock_redis.xlen = AsyncMock(return_value=100)
+
+        def _fake_xinfo_groups(stream):
+            groups_by_stream = {
+                "embedding_queue": [{"name": "embedding_workers", "consumers": 1, "pel-count": 2, "entries-read": 98, "lag": 0}],
+                "sentiment_queue": [{"name": "sentiment_workers", "consumers": 1, "pel-count": 0, "entries-read": 100, "lag": 0}],
+                "clustering_queue": [{"name": "clustering_workers", "consumers": 1, "pel-count": 5, "entries-read": 50, "lag": 10}],
+            }
+            return groups_by_stream.get(stream, [])
+
+        mock_redis.xinfo_groups = AsyncMock(side_effect=_fake_xinfo_groups)
         mock_redis.aclose = AsyncMock()
     else:
         mock_redis.ping = AsyncMock(side_effect=Exception("Connection refused"))
@@ -71,6 +81,17 @@ class TestHealthEndpoint:
             assert "redis" in data["components"]
             assert data["components"]["redis"]["status"] == "healthy"
             assert "embedding_queue" in data["queue_depths"]
+            eq = data["queue_depths"]["embedding_queue"]
+            assert eq["pending"] == 2  # lag(0) + pel-count(2)
+            assert eq["processed"] == 96  # entries-read(98) - pel-count(2)
+
+            sq = data["queue_depths"]["sentiment_queue"]
+            assert sq["pending"] == 0  # lag(0) + pel-count(0)
+            assert sq["processed"] == 100  # entries-read(100) - pel-count(0)
+
+            cq = data["queue_depths"]["clustering_queue"]
+            assert cq["pending"] == 15  # lag(10) + pel-count(5)
+            assert cq["processed"] == 45  # entries-read(50) - pel-count(5)
 
     def test_db_unhealthy(self):
         """DB fails -> status=unhealthy."""

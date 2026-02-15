@@ -9,12 +9,13 @@ uv run pytest tests/test_X/test_Y.py -v   # Single test file
 uv run pytest tests/ -v -m "not integration"  # Skip integration tests
 python3 -m py_compile src/module/file.py  # Syntax check
 
-docker compose up -d                      # Start PostgreSQL, Redis, Prometheus, Grafana, Jaeger, AlertManager + API
+docker compose up -d                      # Start all services (infra + API + workers + frontend)
 docker build -t news-tracker .            # Build Docker image
 uv run news-tracker health                # Check all dependencies
 uv run news-tracker init-db               # Initialize database schema
 uv run news-tracker run-once --mock       # Single ingestion cycle (mock data)
 uv run news-tracker serve                 # Start FastAPI server
+uv run news-tracker embedding-worker      # Embedding generation worker
 uv run news-tracker daily-clustering --date 2026-02-05  # Batch clustering
 uv run news-tracker graph seed            # Seed causal graph
 uv run news-tracker vector-search "query" --limit 10    # Semantic search
@@ -203,6 +204,11 @@ class Config: ...  # ❌ Never use this
 | Grafana | 3000 | Auto-provisioned dashboards (admin/admin) |
 | Jaeger | 16686 (UI), 4317 (OTLP gRPC) | Distributed tracing |
 | news-tracker-api | 8001 | Application API (built from Dockerfile) |
+| worker | — | Ingestion + processing (continuous polling) |
+| embedding-worker | — | FinBERT/MiniLM embedding generation → clustering queue |
+| sentiment-worker | — | ProsusAI/finbert sentiment analysis |
+| clustering-worker | — | Real-time theme assignment via pgvector HNSW |
+| frontend | 5151 | React UI (Vite dev server) |
 
 ## Configuration
 

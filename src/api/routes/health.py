@@ -9,16 +9,13 @@ import torch
 from fastapi import APIRouter, Depends
 
 from src.api.dependencies import get_database, get_embedding_service, get_redis_client
-from src.api.models import ComponentHealth, HealthResponse
+from src.api.models import ComponentHealth, HealthResponse, QueueMetrics
 from src.config.settings import get_settings
 from src.embedding.service import EmbeddingService, ModelType
 from src.storage.database import Database
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
-
-# Stream names used by the pipeline
-_QUEUE_STREAMS = ["embedding_queue", "sentiment_queue", "clustering_queue"]
 
 
 async def _check_database(db: Database) -> ComponentHealth:
@@ -59,15 +56,56 @@ async def _check_redis(redis_client) -> ComponentHealth:
         )
 
 
-async def _get_queue_depths(redis_client) -> dict[str, int]:
-    """Get current depth of each processing queue."""
-    depths: dict[str, int] = {}
-    for stream in _QUEUE_STREAMS:
+async def _get_queue_depths(redis_client) -> dict[str, QueueMetrics]:
+    """Get pending backlog and processed count for each processing queue."""
+    settings = get_settings()
+    stream_groups = {
+        settings.embedding_stream_name: settings.embedding_consumer_group,
+        settings.sentiment_stream_name: settings.sentiment_consumer_group,
+        settings.clustering_stream_name: settings.clustering_consumer_group,
+    }
+
+    depths: dict[str, QueueMetrics] = {}
+    for stream, group_name in stream_groups.items():
         try:
-            length = await redis_client.xlen(stream)
-            depths[stream] = length
+            stream_len = await redis_client.xlen(stream)
+            try:
+                groups = await redis_client.xinfo_groups(stream)
+            except Exception:
+                # Stream exists (xlen succeeded) but has no groups,
+                # or stream doesn't exist yet — entire stream is backlog
+                depths[stream] = QueueMetrics(pending=stream_len, processed=0)
+                continue
+
+            group_info = None
+            for g in groups:
+                if g.get("name") == group_name:
+                    group_info = g
+                    break
+
+            if group_info is None:
+                # Group hasn't been created yet — entire stream is backlog
+                depths[stream] = QueueMetrics(pending=stream_len, processed=0)
+                continue
+
+            in_flight = group_info.get("pel-count", 0) or 0
+            lag = group_info.get("lag")
+            entries_read = group_info.get("entries-read")
+
+            if lag is not None:
+                pending = lag + in_flight
+            else:
+                # Redis < 7.0 fallback: estimate from stream length
+                pending = stream_len
+
+            if entries_read is not None:
+                processed = max(0, entries_read - in_flight)
+            else:
+                processed = 0
+
+            depths[stream] = QueueMetrics(pending=pending, processed=processed)
         except Exception:
-            depths[stream] = -1
+            depths[stream] = QueueMetrics(pending=-1, processed=-1)
     return depths
 
 
@@ -112,7 +150,7 @@ async def health_check(
 
     # Redis check + queue depths
     redis_health = ComponentHealth(status="unhealthy")
-    queue_depths: dict[str, int] = {}
+    queue_depths: dict[str, QueueMetrics] = {}
 
     try:
         import redis.asyncio as aioredis

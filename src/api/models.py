@@ -84,6 +84,13 @@ class ComponentHealth(BaseModel):
     )
 
 
+class QueueMetrics(BaseModel):
+    """Metrics for a single processing queue."""
+
+    pending: int = Field(description="Actual backlog (undelivered + in-flight)")
+    processed: int = Field(description="Successfully consumed messages")
+
+
 class HealthResponse(BaseModel):
     """Response model for health check."""
 
@@ -111,7 +118,7 @@ class HealthResponse(BaseModel):
         default_factory=dict,
         description="Health status of individual infrastructure components",
     )
-    queue_depths: dict[str, int] = Field(
+    queue_depths: dict[str, QueueMetrics] = Field(
         default_factory=dict,
         description="Current depth of processing queues",
     )

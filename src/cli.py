@@ -510,6 +510,39 @@ def cleanup(days: int, dry_run: bool) -> None:
     asyncio.run(run())
 
 
+@main.command("embedding-worker")
+@click.option("--batch-size", default=None, type=int, help="Jobs to process per batch")
+@click.option("--metrics/--no-metrics", default=True, help="Enable metrics server")
+@click.option("--metrics-port", default=8003, help="Metrics server port")
+def embedding_worker(batch_size: int | None, metrics: bool, metrics_port: int) -> None:
+    """Run the embedding generation worker.
+
+    Consumes document IDs from Redis Streams embedding queue,
+    generates FinBERT/MiniLM embeddings, and updates the database.
+    Also forwards to clustering queue when clustering is enabled.
+
+    Example:
+        news-tracker embedding-worker
+        news-tracker embedding-worker --batch-size 16
+    """
+    from src.embedding.worker import EmbeddingWorker
+
+    async def run():
+        worker = EmbeddingWorker(batch_size=batch_size)
+
+        if metrics:
+            get_metrics().start_server(port=metrics_port)
+
+        # Handle shutdown signals
+        loop = asyncio.get_event_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, lambda: asyncio.create_task(worker.stop()))
+
+        await worker.start()
+
+    asyncio.run(run())
+
+
 @main.command("sentiment-worker")
 @click.option("--batch-size", default=None, type=int, help="Jobs to process per batch")
 @click.option("--metrics/--no-metrics", default=True, help="Enable metrics server")

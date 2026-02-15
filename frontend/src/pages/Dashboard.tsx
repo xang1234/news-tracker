@@ -3,7 +3,7 @@ import { MetricCard, MetricCardSkeleton } from '@/components/domain/MetricCard';
 import { useHealth } from '@/api/hooks/useHealth';
 import { useDocumentStats } from '@/api/hooks/useDocuments';
 import { timeAgo, pct } from '@/lib/formatters';
-import { Wifi, WifiOff, Cpu, HardDrive, Database, BarChart3, Clock, Layers } from 'lucide-react';
+import { Wifi, WifiOff, Cpu, HardDrive, Database, BarChart3, Clock, Layers, CheckCircle2 } from 'lucide-react';
 
 const QUEUE_LABELS: Record<string, string> = {
   embedding_queue: 'Embedding',
@@ -123,7 +123,7 @@ export default function Dashboard() {
 
           {/* Queue Depths */}
           <div className="rounded-lg border border-border bg-card p-6">
-            <h3 className="text-sm font-medium text-muted-foreground">Queue Depths</h3>
+            <h3 className="text-sm font-medium text-muted-foreground">Queue Status</h3>
             {healthLoading ? (
               <div className="mt-4 space-y-3">
                 <MetricCardSkeleton />
@@ -133,7 +133,9 @@ export default function Dashboard() {
             ) : health?.queue_depths ? (
               <div className="mt-4 space-y-3">
                 {Object.entries(QUEUE_LABELS).map(([key, label]) => {
-                  const depth = health.queue_depths[key] ?? 0;
+                  const metrics = health.queue_depths[key];
+                  const pending = metrics?.pending ?? 0;
+                  const processed = metrics?.processed ?? 0;
                   return (
                     <div
                       key={key}
@@ -143,15 +145,22 @@ export default function Dashboard() {
                         <Layers className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm text-foreground">{label}</span>
                       </div>
-                      <span
-                        className={
-                          depth > 100
-                            ? 'text-lg font-semibold text-amber-400'
-                            : 'text-lg font-semibold text-foreground'
-                        }
-                      >
-                        {depth.toLocaleString()}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={
+                            pending > 100
+                              ? 'text-sm font-semibold text-amber-400'
+                              : 'text-sm font-semibold text-foreground'
+                          }
+                        >
+                          {pending.toLocaleString()} pending
+                        </span>
+                        <span className="text-muted-foreground">|</span>
+                        <span className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          {processed.toLocaleString()} done
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
