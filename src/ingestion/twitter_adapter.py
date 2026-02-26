@@ -104,6 +104,7 @@ class TwitterAdapter(BaseAdapter):
             rate=sotwe_rate_limit or settings.sotwe_rate_limit
         )
         self._sotwe_client: SotweClient | None = None
+        self._twitter_api_unavailable = False
 
         # Track seen tweet IDs to avoid duplicates
         self._seen_tweet_ids: set[str] = set()
@@ -155,11 +156,18 @@ class TwitterAdapter(BaseAdapter):
         """
         # Clear seen IDs for this fetch cycle
         self._seen_tweet_ids.clear()
+        self._twitter_api_unavailable = False
 
         if self._bearer_token:
             # Use Twitter API (primary)
             async for item in self._fetch_twitter_api():
                 yield item
+            if self._twitter_api_unavailable and self._sotwe_enabled:
+                logger.warning(
+                    "Twitter API unavailable (401/403). Falling back to Sotwe."
+                )
+                async for item in self._fetch_sotwe():
+                    yield item
         elif self._sotwe_enabled:
             # Use Sotwe fallback
             async for item in self._fetch_sotwe():
@@ -227,9 +235,13 @@ class TwitterAdapter(BaseAdapter):
                         data = response.json()
 
                     except httpx.HTTPStatusError as e:
-                        logger.error(f"Twitter API error: {e.response.status_code}")
-                        if e.response.status_code == 401:
-                            logger.error("Twitter authentication failed")
+                        status_code = e.response.status_code
+                        logger.error(f"Twitter API error: {status_code}")
+                        if status_code in (401, 403):
+                            logger.error(
+                                "Twitter API authorization failed; marking API unavailable"
+                            )
+                            self._twitter_api_unavailable = True
                             return
                         continue
 

@@ -8,6 +8,8 @@ Tests are split into:
 
 import pytest
 from datetime import datetime, timezone
+import sys
+import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.config.twitter_accounts import (
@@ -274,6 +276,53 @@ class TestSotweClient:
         tweets = client._find_tweets_in_data(data)
         assert len(tweets) == 2
 
+    async def test_fetch_page_retries_with_www_host_on_403(self):
+        """_fetch_page should retry against www host when primary returns 403."""
+        client = SotweClient()
+        calls: list[str] = []
+
+        class _Response:
+            def __init__(self, status_code: int, text: str = ""):
+                self.status_code = status_code
+                self.text = text
+
+        class _Session:
+            def __init__(self):
+                self._responses = [
+                    _Response(403, ""),
+                    _Response(200, "<html><div class='tweet-card'></div></html>"),
+                ]
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+            async def get(self, url, **kwargs):
+                calls.append(url)
+                return self._responses[len(calls) - 1]
+
+        fake_pkg = types.ModuleType("curl_cffi")
+        fake_requests_mod = types.ModuleType("curl_cffi.requests")
+        fake_requests_mod.AsyncSession = _Session
+        fake_pkg.requests = fake_requests_mod
+
+        with patch.dict(
+            sys.modules,
+            {
+                "curl_cffi": fake_pkg,
+                "curl_cffi.requests": fake_requests_mod,
+            },
+        ):
+            html = await client._fetch_page("nvidia")
+
+        assert "tweet-card" in html
+        assert calls == [
+            "https://sotwe.com/nvidia",
+            "https://www.sotwe.com/nvidia",
+        ]
+
 
 class TestTwitterAdapterSotweFallback:
     """Tests for TwitterAdapter with Sotwe fallback."""
@@ -432,6 +481,32 @@ class TestTwitterAdapterSotweFallback:
 
             result = await adapter.health_check()
             assert result is False
+
+    async def test_adapter_falls_back_to_sotwe_when_api_unavailable(self):
+        """_fetch_raw should fail over to Sotwe after Twitter API 403/401 conditions."""
+        with patch("src.ingestion.twitter_adapter.get_settings") as mock_settings:
+            mock_settings.return_value = MagicMock(
+                twitter_bearer_token="test_token",
+                sotwe_enabled=True,
+                sotwe_usernames="nvidia",
+                sotwe_rate_limit=10,
+            )
+            adapter = TwitterAdapter(bearer_token="test_token")
+
+            async def _fake_api():
+                adapter._twitter_api_unavailable = True
+                if False:
+                    yield {}
+
+            async def _fake_sotwe():
+                yield {"source": "sotwe", "username": "nvidia", "tweet": MagicMock()}
+
+            adapter._fetch_twitter_api = _fake_api
+            adapter._fetch_sotwe = _fake_sotwe
+
+            items = [item async for item in adapter._fetch_raw()]
+            assert len(items) == 1
+            assert items[0]["source"] == "sotwe"
 
 
 @pytest.mark.integration

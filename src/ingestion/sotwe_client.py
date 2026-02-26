@@ -27,8 +27,11 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-# Sotwe URL pattern
-SOTWE_USER_URL = "https://sotwe.com/{username}"
+# Sotwe URL patterns (try primary first, then www fallback)
+SOTWE_USER_URLS = (
+    "https://sotwe.com/{username}",
+    "https://www.sotwe.com/{username}",
+)
 
 
 @dataclass
@@ -157,21 +160,35 @@ class SotweClient:
         """
         from curl_cffi.requests import AsyncSession
 
-        url = SOTWE_USER_URL.format(username=username)
+        urls = [pattern.format(username=username) for pattern in SOTWE_USER_URLS]
+        headers = {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+            "Referer": "https://sotwe.com/",
+        }
 
         async with AsyncSession() as session:
-            response = await session.get(
-                url,
-                impersonate="chrome",
-                timeout=self._timeout,
-            )
-
-            if response.status_code != 200:
-                raise SotweClientError(
-                    f"HTTP {response.status_code} for @{username}"
+            last_error: str | None = None
+            for url in urls:
+                response = await session.get(
+                    url,
+                    impersonate="chrome",
+                    headers=headers,
+                    timeout=self._timeout,
                 )
 
-            return response.text
+                if response.status_code == 200:
+                    return response.text
+
+                last_error = f"HTTP {response.status_code} for @{username} ({url})"
+                if response.status_code in (403, 429, 503):
+                    logger.warning(f"Sotwe request blocked, trying fallback host: {url}")
+                    continue
+                raise SotweClientError(last_error)
+
+            raise SotweClientError(last_error or f"Failed to fetch @{username}")
 
     def _parse_tweets_from_html(
         self,
