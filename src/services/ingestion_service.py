@@ -12,7 +12,6 @@ Features:
 """
 
 import asyncio
-import logging
 import time
 from typing import Any
 
@@ -20,7 +19,7 @@ import structlog
 
 from src.config.settings import get_settings
 from src.ingestion.base_adapter import BaseAdapter
-from src.ingestion.mock_adapter import MockAdapter, create_mock_adapters
+from src.ingestion.mock_adapter import create_mock_adapters
 from src.ingestion.news_adapter import NewsAdapter
 from src.ingestion.queue import DocumentQueue
 from src.ingestion.reddit_adapter import RedditAdapter
@@ -108,16 +107,16 @@ class IngestionService:
         """
         adapters = {}
 
-        # Twitter (API or Sotwe fallback)
-        if settings.twitter_configured or settings.sotwe_configured:
+        # Twitter (xui primary with API backup)
+        if settings.twitter_configured or settings.xui_configured:
             kwargs = {"rate_limit": settings.twitter_rate_limit}
             if twitter_sources is not None:
-                kwargs["sotwe_usernames"] = twitter_sources
+                kwargs["xui_usernames"] = twitter_sources
             adapters[Platform.TWITTER] = TwitterAdapter(**kwargs)
             if settings.twitter_configured:
-                logger.info("Twitter adapter enabled (API)")
+                logger.info("Twitter adapter enabled (xui primary, API backup)")
             else:
-                logger.info("Twitter adapter enabled (Sotwe fallback)")
+                logger.info("Twitter adapter enabled (xui only)")
 
         # Reddit
         if settings.reddit_configured:
@@ -228,7 +227,7 @@ class IngestionService:
                         "Adapter health check failed",
                         platform=platform.value,
                     )
-                    await asyncio.sleep(self._poll_interval)
+                    await asyncio.sleep(self._resolve_adapter_poll_interval(adapter))
                     continue
 
                 # Fetch documents
@@ -263,9 +262,35 @@ class IngestionService:
                 self._metrics.record_error(platform, type(e).__name__)
 
             # Wait before next poll
-            await asyncio.sleep(self._poll_interval)
+            await asyncio.sleep(self._resolve_adapter_poll_interval(adapter))
 
         logger.info("Adapter stopped", platform=platform.value)
+
+    def _resolve_adapter_poll_interval(self, adapter: BaseAdapter) -> float:
+        """
+        Resolve dynamic poll interval for an adapter.
+
+        Adapters may expose `next_poll_delay_seconds(default_interval)` to
+        implement per-platform jitter/backoff without affecting global polling.
+        """
+        default_interval = float(self._poll_interval)
+        resolver = getattr(adapter, "next_poll_delay_seconds", None)
+        if not callable(resolver):
+            return default_interval
+
+        try:
+            resolved = float(resolver(default_interval))
+        except Exception as exc:
+            logger.warning(
+                "Adapter poll delay resolver failed; using default",
+                adapter=getattr(adapter, "name", adapter.__class__.__name__),
+                error=str(exc),
+            )
+            return default_interval
+
+        if resolved <= 0:
+            return default_interval
+        return resolved
 
     async def run_once(self) -> dict[Platform, int]:
         """

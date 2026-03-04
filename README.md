@@ -191,6 +191,67 @@ cd frontend && npm install && npx vite
 | Workers | — | Ingestion, embedding, sentiment, clustering |
 | Frontend | 5151 | React dev server (Vite) |
 
+### XUI Twitter Setup (No Bearer Token)
+
+If you are using xui instead of `TWITTER_BEARER_TOKEN`, do this once on the host:
+
+```bash
+mkdir -p runtime/xui
+
+uvx --from 'git+https://github.com/xang1234/xui.git' \
+  --with 'rich>=13.0' --with 'typer>=0.12' \
+  xui config init --path runtime/xui/config.toml
+
+uvx --from 'git+https://github.com/xang1234/xui.git' \
+  --with 'rich>=13.0' --with 'typer>=0.12' \
+  xui profiles create default --path runtime/xui/config.toml
+
+uvx --from 'git+https://github.com/xang1234/xui.git' \
+  --with 'rich>=13.0' --with 'typer>=0.12' \
+  xui auth login --profile default --path runtime/xui/config.toml
+```
+
+`docker-compose.yml` mounts `./runtime/xui` into backend containers at
+`/home/appuser/.config/xui-reader`, so worker ingestion reuses your authenticated session state.
+For private repos, store PAT in a local secret file (not `.env`) so it is not passed into
+runtime container environment:
+
+```bash
+mkdir -p .secrets
+printf '%s' 'github_pat_xxx' > .secrets/xui_github_token
+chmod 600 .secrets/xui_github_token
+```
+
+Compose passes this file as a BuildKit secret during image build, so the token value is not
+expanded into Docker build command logs.
+
+If Google shows "This browser or app may not be secure" during `xui auth login`, use a real
+local Google Chrome instance via CDP for auth capture:
+
+```bash
+# macOS: start real Google Chrome with DevTools endpoint
+/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/.xui-chrome-profile" \
+  --no-first-run --no-default-browser-check
+
+# in another terminal, run auth using a temporary auth-only config
+./scripts/xui-auth-login.sh default
+```
+
+To reuse an existing Chrome profile/session, quit all Chrome windows first, then launch with your
+normal Chrome user data dir and (optionally) profile directory:
+
+```bash
+/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/Library/Application Support/Google/Chrome" \
+  --profile-directory="Default"
+```
+
+This helper uses `runtime/xui/config.auth.toml` for login only (with `cdp_url` and headful mode),
+while ingestion keeps using `runtime/xui/config.toml` in Docker.
+
 ## CLI
 
 All commands are available via the `news-tracker` entry point.
@@ -264,6 +325,12 @@ API_KEYS=key1,key2               # Comma-separated; empty = dev mode (no auth)
 
 # Data sources (each adapter has its own credentials)
 TWITTER_BEARER_TOKEN=...
+TWITTER_XUI_ENABLED=true
+TWITTER_XUI_COMMAND=xui
+TWITTER_XUI_CONFIG_PATH=/home/appuser/.config/xui-reader/config.toml
+TWITTER_XUI_PROFILE=default
+TWITTER_XUI_USERNAMES=nvidia,amd,tsla
+TWITTER_XUI_TIMEOUT_MS=90000
 REDDIT_CLIENT_ID=... REDDIT_CLIENT_SECRET=...
 NEWSFILTER_API_KEYS=k1,k2,k3    # Comma-separated for key rotation
 MARKETAUX_API_KEYS=...

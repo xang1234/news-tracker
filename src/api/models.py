@@ -735,6 +735,10 @@ class DocumentDetailResponse(BaseModel):
     author_verified: bool = Field(default=False, description="Whether author is verified")
     author_followers: int | None = Field(default=None, description="Author follower count")
     source_name: str | None = Field(default=None, description="Source name (subreddit, publication, handle)")
+    ingestion_method: str | None = Field(
+        default=None,
+        description="Ingestion path used (for example: api, xui)",
+    )
     tickers: list[str] = Field(default_factory=list, description="Ticker symbols mentioned")
     spam_score: float | None = Field(default=None, description="Spam detection score (0-1)")
     bot_probability: float | None = Field(default=None, description="Bot detection probability (0-1)")

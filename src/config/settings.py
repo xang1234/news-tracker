@@ -63,21 +63,54 @@ class Settings(BaseSettings):
     # Substack
     substack_cookie: str | None = None
 
-    # Sotwe fallback (Twitter alternative when no API key)
-    sotwe_enabled: bool = Field(
+    # XUI (Twitter browser ingestion with adaptive guardrails)
+    twitter_xui_enabled: bool = Field(
         default=True,
-        description="Enable Sotwe.com fallback when Twitter API unavailable"
+        description="Enable xui browser ingestion for Twitter data",
     )
-    sotwe_usernames: str | None = Field(
+    twitter_xui_command: str = Field(
+        default="xui",
+        description="Command used to invoke xui CLI (for example: 'xui' or 'uv run --extra cli xui')",
+    )
+    twitter_xui_config_path: str | None = Field(
         default=None,
-        description="Comma-separated Twitter usernames to track via Sotwe (overrides defaults)"
+        description="Optional xui config.toml path (defaults to xui CLI standard location)",
     )
-    sotwe_rate_limit: int = Field(
-        default=10,
-        ge=1,
-        le=30,
-        description="Requests per minute for Sotwe scraping (conservative)"
+    twitter_xui_profile: str = Field(
+        default="default",
+        description="xui profile name used for authenticated storage state",
     )
+    twitter_xui_profile_dir: str | None = Field(
+        default=None,
+        description="Optional profile directory hint for operators; used for runbook visibility",
+    )
+    twitter_xui_usernames: str | None = Field(
+        default=None,
+        description="Comma-separated X usernames to track with xui (overrides defaults)",
+    )
+
+    # XUI polling + anti-automation cadence
+    twitter_xui_poll_min_seconds: int = Field(default=120, ge=30, le=86_400)
+    twitter_xui_poll_max_seconds: int = Field(default=300, ge=30, le=86_400)
+    twitter_xui_cycle_jitter_ratio: float = Field(default=0.25, ge=0.0, le=1.0)
+    twitter_xui_shuffle_sources: bool = Field(default=True)
+    twitter_xui_source_cooldown_cycles: int = Field(default=2, ge=0, le=20)
+
+    # XUI collection guardrails
+    twitter_xui_limit_per_source: int = Field(default=50, ge=1, le=200)
+    twitter_xui_scroll_pause_min_ms: int = Field(default=1400, ge=250, le=60_000)
+    twitter_xui_scroll_pause_max_ms: int = Field(default=3200, ge=250, le=60_000)
+    twitter_xui_max_scroll_rounds: int = Field(default=4, ge=1, le=200)
+    twitter_xui_max_page_loads: int = Field(default=2, ge=1, le=200)
+    twitter_xui_timeout_ms: int = Field(default=90_000, ge=10_000, le=600_000)
+    twitter_xui_source_pause_min_seconds: float = Field(default=0.8, ge=0.0, le=60.0)
+    twitter_xui_source_pause_max_seconds: float = Field(default=2.5, ge=0.0, le=60.0)
+
+    # XUI block/challenge resilience
+    twitter_xui_block_backoff_initial_seconds: int = Field(default=300, ge=30, le=86_400)
+    twitter_xui_block_backoff_max_seconds: int = Field(default=3600, ge=60, le=86_400)
+    twitter_xui_block_circuit_threshold: int = Field(default=3, ge=1, le=50)
+    twitter_xui_block_circuit_open_seconds: int = Field(default=7200, ge=60, le=604_800)
 
     # Rate limits (requests per minute)
     twitter_rate_limit: int = 30
@@ -241,9 +274,9 @@ class Settings(BaseSettings):
         return self.twitter_bearer_token is not None
 
     @property
-    def sotwe_configured(self) -> bool:
-        """Check if Sotwe fallback is enabled and available."""
-        return self.sotwe_enabled
+    def xui_configured(self) -> bool:
+        """Check if xui ingestion is enabled."""
+        return self.twitter_xui_enabled
 
     @property
     def reddit_configured(self) -> bool:

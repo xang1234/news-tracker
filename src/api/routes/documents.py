@@ -186,14 +186,25 @@ async def get_document(
     # Extract platform-specific source name from raw_data
     source_name = None
     raw = doc.raw_data or {}
+    raw_source = raw.get("source")
+    ingestion_method = raw.get("ingestion_method")
+    if ingestion_method is None and isinstance(raw_source, str):
+        if raw_source == "xui":
+            ingestion_method = "xui"
+        elif raw_source == "sotwe":
+            ingestion_method = "sotwe"
+        elif raw_source == "twitter_api":
+            ingestion_method = "api"
     platform_val = doc.platform.value if hasattr(doc.platform, "value") else doc.platform
     if platform_val == "reddit" and raw.get("subreddit"):
         source_name = f"r/{raw['subreddit']}"
     elif platform_val == "substack" and raw.get("publication"):
         source_name = raw["publication"]
     elif platform_val == "twitter":
-        # Twitter API stores username in author_name, Sotwe stores it in author_id
-        handle = doc.author_id if raw.get("source") == "sotwe" else doc.author_name
+        # xui and historical Sotwe records use author_id as handle.
+        handle = doc.author_name
+        if ingestion_method in {"xui", "sotwe"}:
+            handle = doc.author_id or doc.author_name
         if handle and handle != "unknown":
             source_name = f"@{handle}" if not handle.startswith("@") else handle
 
@@ -212,6 +223,7 @@ async def get_document(
         author_verified=doc.author_verified,
         author_followers=doc.author_followers,
         source_name=source_name,
+        ingestion_method=ingestion_method,
         tickers=doc.tickers_mentioned,
         spam_score=doc.spam_score,
         bot_probability=doc.bot_probability,

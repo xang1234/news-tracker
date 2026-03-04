@@ -202,6 +202,45 @@ class TestGetDocument:
         assert data["bot_probability"] == 0.01
         assert "latency_ms" in data
 
+    def test_twitter_detail_exposes_xui_ingestion_method(self, client, mock_doc_repo):
+        doc = _make_doc(
+            author_id="SemiAnalysis",
+            author_name="Semi Analysis",
+            raw_data={"source": "xui", "ingestion_method": "xui"},
+        )
+        mock_doc_repo.get_by_id.return_value = doc
+
+        resp = client.get("/documents/doc_001")
+        data = resp.json()
+        assert data["source_name"] == "@SemiAnalysis"
+        assert data["ingestion_method"] == "xui"
+
+    def test_twitter_detail_exposes_api_ingestion_method(self, client, mock_doc_repo):
+        doc = _make_doc(
+            author_id="12345",
+            author_name="ChipAnalyst",
+            raw_data={"source": "twitter_api", "ingestion_method": "api"},
+        )
+        mock_doc_repo.get_by_id.return_value = doc
+
+        resp = client.get("/documents/doc_001")
+        data = resp.json()
+        assert data["source_name"] == "@ChipAnalyst"
+        assert data["ingestion_method"] == "api"
+
+    def test_twitter_detail_legacy_sotwe_uses_author_id_handle(self, client, mock_doc_repo):
+        doc = _make_doc(
+            author_id="nvidia",
+            author_name="NVIDIA Corporation",
+            raw_data={"source": "sotwe"},
+        )
+        mock_doc_repo.get_by_id.return_value = doc
+
+        resp = client.get("/documents/doc_001")
+        data = resp.json()
+        assert data["source_name"] == "@nvidia"
+        assert data["ingestion_method"] == "sotwe"
+
     def test_embedding_flags(self, client, mock_doc_repo):
         """has_embedding/has_embedding_minilm reflect actual presence."""
         doc = _make_doc(embedding=[0.1] * 768, embedding_minilm=None)

@@ -236,7 +236,7 @@ def health() -> None:
 
         # Check adapters
         settings = get_settings()
-        results["twitter_configured"] = settings.twitter_configured
+        results["twitter_configured"] = settings.twitter_configured or settings.xui_configured
         results["reddit_configured"] = settings.reddit_configured
         results["news_api_configured"] = settings.news_api_configured
 

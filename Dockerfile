@@ -1,10 +1,14 @@
+# syntax=docker/dockerfile:1.6
 # ── Stage 1: Builder ──────────────────────────────────────────────
 FROM python:3.11-slim AS builder
 
 # Build tools for packages with C/Cython extensions (hdbscan, etc.)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends build-essential && \
+    apt-get install -y --no-install-recommends build-essential git && \
     rm -rf /var/lib/apt/lists/*
+
+ARG XUI_INSTALL=true
+ARG XUI_PIP_SPEC=git+https://github.com/xang1234/xui.git@main
 
 # Install uv for fast dependency resolution
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -21,16 +25,61 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY src/ src/
 RUN uv sync --frozen --no-dev
 
+# Install xui CLI from git (private/public) when enabled.
+# Private token is passed as a BuildKit secret (id=xui_github_token) to avoid leaking in logs.
+RUN --mount=type=secret,id=xui_github_token \
+    if [ "$XUI_INSTALL" = "true" ]; then \
+      spec="$XUI_PIP_SPEC"; \
+      token_file="/run/secrets/xui_github_token"; \
+      token=""; \
+      if [ -f "$token_file" ]; then \
+        token="$(tr -d '\r\n' < "$token_file")"; \
+      fi; \
+      if [ -n "$token" ] && echo "$spec" | grep -q '^git+https://github.com/'; then \
+        spec="$(echo "$spec" | sed "s#^git+https://github.com/#git+https://${token}@github.com/#")"; \
+      fi; \
+      uv pip install -p /app/.venv/bin/python -n "xui-reader[cli] @ ${spec}"; \
+    fi
+
 # ── Stage 2: Runtime ─────────────────────────────────────────────
 FROM python:3.11-slim
 
 # Runtime system deps:
-#   libpq5   - asyncpg PostgreSQL driver
-#   libgomp1 - OpenMP for torch/numpy
-#   curl     - healthcheck
+#   libpq5/libgomp1/curl - app runtime and healthcheck
+#   Playwright Chromium deps for xui browser automation
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libpq5 libgomp1 curl && \
+    apt-get install -y --no-install-recommends \
+      libpq5 \
+      libgomp1 \
+      curl \
+      ca-certificates \
+      fonts-liberation \
+      libasound2 \
+      libatk-bridge2.0-0 \
+      libatk1.0-0 \
+      libcairo2 \
+      libcups2 \
+      libdbus-1-3 \
+      libdrm2 \
+      libgbm1 \
+      libglib2.0-0 \
+      libgtk-3-0 \
+      libnspr4 \
+      libnss3 \
+      libpango-1.0-0 \
+      libx11-6 \
+      libx11-xcb1 \
+      libxcb1 \
+      libxcomposite1 \
+      libxdamage1 \
+      libxext6 \
+      libxfixes3 \
+      libxkbcommon0 \
+      libxrandr2 && \
     rm -rf /var/lib/apt/lists/*
+
+ARG XUI_INSTALL=true
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # Non-root user for security
 RUN useradd --create-home --shell /bin/bash appuser
@@ -39,6 +88,11 @@ WORKDIR /app
 
 # Copy virtual env from builder
 COPY --from=builder /app/.venv /app/.venv
+
+# Install Playwright Chromium browser for xui runs.
+RUN if [ "$XUI_INSTALL" = "true" ]; then \
+      /app/.venv/bin/python -m playwright install chromium; \
+    fi
 
 # Copy application code and config
 COPY src/ src/

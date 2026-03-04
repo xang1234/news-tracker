@@ -1,3 +1,15 @@
+x-backend-build: &backend-build
+    context: .
+    dockerfile: Dockerfile
+    args:
+      XUI_INSTALL: ${XUI_INSTALL:-true}
+      XUI_PIP_SPEC: ${XUI_PIP_SPEC:-git+https://github.com/xang1234/xui.git@main}
+    secrets:
+      - xui_github_token
+
+x-xui-state: &xui-state
+    - ./runtime/xui:/home/appuser/.config/xui-reader
+
 services:
   # PostgreSQL with pgvector extension
   postgres:
@@ -108,8 +120,7 @@ services:
   # News Tracker API
   news-tracker-api:
     build:
-      context: .
-      dockerfile: Dockerfile
+      <<: *backend-build
     container_name: news-tracker-api
     restart: unless-stopped
     mem_limit: 2g
@@ -120,6 +131,8 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/news_tracker
       REDIS_URL: redis://redis:6379/0
+      TWITTER_XUI_CONFIG_PATH: /home/appuser/.config/xui-reader/config.toml
+    volumes: *xui-state
     depends_on:
       postgres:
         condition: service_healthy
@@ -135,8 +148,7 @@ services:
   # Ingestion + processing worker (continuous polling)
   worker:
     build:
-      context: .
-      dockerfile: Dockerfile
+      <<: *backend-build
     container_name: news-tracker-worker
     restart: unless-stopped
     mem_limit: 1g
@@ -145,7 +157,9 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/news_tracker
       REDIS_URL: redis://redis:6379/0
+      TWITTER_XUI_CONFIG_PATH: /home/appuser/.config/xui-reader/config.toml
     command: ["worker"]
+    volumes: *xui-state
     healthcheck:
       disable: true
     depends_on:
@@ -159,8 +173,7 @@ services:
   # Embedding worker (FinBERT/MiniLM → pgvector, forwards to clustering queue)
   embedding-worker:
     build:
-      context: .
-      dockerfile: Dockerfile
+      <<: *backend-build
     container_name: news-tracker-embedding-worker
     restart: unless-stopped
     mem_limit: 2g
@@ -181,8 +194,7 @@ services:
   # Sentiment worker (ProsusAI/finbert sentiment analysis)
   sentiment-worker:
     build:
-      context: .
-      dockerfile: Dockerfile
+      <<: *backend-build
     container_name: news-tracker-sentiment-worker
     restart: unless-stopped
     mem_limit: 2g
@@ -203,8 +215,7 @@ services:
   # Clustering worker (real-time theme assignment via pgvector HNSW)
   clustering-worker:
     build:
-      context: .
-      dockerfile: Dockerfile
+      <<: *backend-build
     container_name: news-tracker-clustering-worker
     restart: unless-stopped
     mem_limit: 1g
@@ -250,3 +261,7 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+
+secrets:
+  xui_github_token:
+    file: ${XUI_GITHUB_TOKEN_FILE:-./.secrets/xui_github_token}

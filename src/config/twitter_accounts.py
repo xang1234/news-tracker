@@ -1,8 +1,8 @@
 """
-Curated list of semiconductor-focused Twitter accounts for Sotwe fallback.
+Curated list of semiconductor-focused X/Twitter accounts for browser ingestion.
 
-These accounts are tracked when no Twitter API key is configured.
-Override via SOTWE_USERNAMES environment variable (comma-separated).
+These accounts are tracked by the Twitter adapter xui path when no explicit source
+override is provided.
 """
 
 # Semiconductor analysts and researchers
@@ -39,7 +39,7 @@ DEFAULT_USERNAMES = ANALYST_ACCOUNTS + COMPANY_ACCOUNTS + MARKET_ACCOUNTS
 
 def get_default_usernames() -> list[str]:
     """
-    Get the default list of Twitter usernames to track via Sotwe.
+    Get the default list of Twitter usernames to track via xui.
 
     Returns:
         List of Twitter usernames (without @ prefix)
