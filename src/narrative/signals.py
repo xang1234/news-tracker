@@ -187,13 +187,14 @@ def evaluate_cross_platform_breakout(
     )
     recent_cutoff = _now() - timedelta(hours=2)
     recent = [b for b in buckets if b.bucket_start >= recent_cutoff]
-    recent_docs = sum(b.doc_count for b in recent)
-    recent_avg_authority = (
-        sum(b.authority_sum for b in recent) / recent_docs
-        if recent_docs > 0
-        else 0.0
+    recent_high_authority_docs = sum(
+        b.high_authority_doc_count for b in recent
     )
-    severity = "critical" if run.platform_count >= 4 or recent_avg_authority >= config.high_authority_threshold else "warning"
+    severity = (
+        "critical"
+        if run.platform_count >= 4 or recent_high_authority_docs > 0
+        else "warning"
+    )
     return SignalEvaluation(
         trigger_type="cross_platform_breakout",
         metric_value=float(run.platform_count),
@@ -209,7 +210,7 @@ def evaluate_cross_platform_breakout(
         trigger_data={
             "platform_count": run.platform_count,
             "spread_hours": round(spread_hours, 3),
-            "recent_avg_authority": round(recent_avg_authority, 3),
+            "recent_high_authority_docs": recent_high_authority_docs,
             "platform_first_seen": run.platform_first_seen,
         },
     )

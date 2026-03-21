@@ -28,6 +28,7 @@ class NarrativeConfig(BaseSettings):
 
     similarity_threshold: float = Field(default=0.82, ge=0.0, le=1.0)
     merge_threshold: float = Field(default=0.90, ge=0.0, le=1.0)
+    merge_runs_enabled: bool = Field(default=False)
     candidate_limit: int = Field(default=5, ge=1, le=20)
     bucket_minutes: int = Field(default=5, ge=1, le=60)
     cooling_hours: int = Field(default=2, ge=1, le=168)

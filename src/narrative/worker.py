@@ -177,10 +177,30 @@ class NarrativeWorker:
         document: Any,
         theme_id: str,
         theme_similarity: float,
+        publish_alerts: bool = True,
     ) -> NarrativeRun | None:
         embedding = np.array(document.embedding, dtype=np.float32)
         async with self._database.transaction() as conn:
             await conn.execute("SELECT pg_advisory_xact_lock(hashtext($1))", theme_id)
+            existing_run_id = await conn.fetchval(
+                """
+                SELECT run_id
+                FROM narrative_run_documents
+                WHERE theme_id = $1
+                  AND document_id = $2
+                LIMIT 1
+                """,
+                theme_id,
+                document.id,
+            )
+            if existing_run_id is not None:
+                logger.debug(
+                    "Narrative assignment already exists; skipping duplicate doc=%s theme=%s run=%s",
+                    document.id,
+                    theme_id,
+                    existing_run_id,
+                )
+                return None
             rows = await conn.fetch(
                 """
                 SELECT * FROM narrative_runs
@@ -216,7 +236,8 @@ class NarrativeWorker:
         refreshed = await self._narrative_repo.get_by_id(run.run_id)
         if refreshed is None:
             return None
-        await self._evaluate_and_publish_alerts(refreshed, buckets, document)
+        if publish_alerts:
+            await self._evaluate_and_publish_alerts(refreshed, buckets, document)
         return refreshed
 
     def _select_run(
@@ -564,36 +585,10 @@ class NarrativeWorker:
             close_cutoff,
             now,
         )
-        # Same-theme merge decisions stay in maintenance only. For now this is
-        # conservative: only merge if both runs are still open and very similar.
-        rows = await self._database.fetch(
-            """
-            SELECT * FROM narrative_runs
-            WHERE status IN ('active', 'cooling')
-            ORDER BY theme_id, last_document_at DESC
-            """
-        )
-        by_theme: dict[str, list[NarrativeRun]] = {}
-        for row in rows:
-            run = _row_to_run(row)
-            by_theme.setdefault(run.theme_id, []).append(run)
-        for theme_runs in by_theme.values():
-            for index, left in enumerate(theme_runs):
-                for right in theme_runs[index + 1:]:
-                    if self._cosine_similarity(left.centroid, right.centroid) < self._config.merge_threshold:
-                        continue
-                    await self._database.execute(
-                        """
-                        UPDATE narrative_runs
-                        SET status = 'closed',
-                            closed_at = COALESCE(closed_at, $2),
-                            metadata = metadata || $3::jsonb
-                        WHERE run_id = $1
-                        """,
-                        right.run_id,
-                        now,
-                        json.dumps({"merged_into": left.run_id}),
-                    )
+        # Real merges must rewrite memberships and bucket state together. Until
+        # that exists, keep maintenance limited to cooling/closing transitions.
+        if self._config.merge_runs_enabled:
+            logger.warning("Narrative run merges are enabled without a transactional implementation")
 
     @staticmethod
     def _bucket_start(ts: datetime, bucket_minutes: int = 5) -> datetime:

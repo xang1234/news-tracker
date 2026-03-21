@@ -111,7 +111,8 @@ def test_cross_platform_breakout_escalates_with_recent_authority(monkeypatch):
         _bucket(
             now - timedelta(minutes=30),
             doc_count=3,
-            authority_sum=2.4,
+            authority_sum=0.9,
+            high_authority_doc_count=1,
         )
     ]
 

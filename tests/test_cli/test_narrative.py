@@ -1,5 +1,6 @@
 """Tests for the narrative CLI command group."""
 
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -48,6 +49,39 @@ class TestNarrativeBackfill:
 
         assert result.exit_code == 0
         assert "start date must be before end date" in result.output
+
+    def test_backfill_rebuilds_without_publishing_alerts(self, runner):
+        mock_db = _mock_db()
+        mock_db.fetch.return_value = [
+            {
+                "id": "doc_1",
+                "theme_ids": ["theme_1"],
+                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+            }
+        ]
+        mock_db.fetchval.return_value = 1
+
+        document = MagicMock(id="doc_1")
+        worker = MagicMock()
+        worker._doc_repo = MagicMock()
+        worker._doc_repo.get_by_id = AsyncMock(return_value=document)
+        worker.process_document_for_theme = AsyncMock(return_value=MagicMock(run_id="run_1"))
+
+        with patch("src.storage.database.Database", return_value=mock_db), \
+             patch("src.cli._build_narrative_worker_for_cli", new=AsyncMock(return_value=worker)):
+            result = runner.invoke(
+                main,
+                ["narrative", "backfill", "--start", "2026-02-05", "--end", "2026-02-05"],
+            )
+
+        assert result.exit_code == 0
+        worker.process_document_for_theme.assert_awaited_once_with(
+            document,
+            theme_id="theme_1",
+            theme_similarity=1.0,
+            publish_alerts=False,
+        )
+        assert "Theme assignments:    1" in result.output
 
 
 class TestNarrativeReplay:

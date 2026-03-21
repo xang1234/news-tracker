@@ -1363,12 +1363,14 @@ def narrative_backfill(start_date: Any, end_date: Any, reset: bool) -> None:
 
                 processed_docs += 1
                 for theme_id in row["theme_ids"]:
-                    await worker.process_document_for_theme(
+                    run = await worker.process_document_for_theme(
                         doc,
                         theme_id=theme_id,
                         theme_similarity=1.0,
+                        publish_alerts=False,
                     )
-                    processed_assignments += 1
+                    if run is not None:
+                        processed_assignments += 1
 
                 if processed_docs % 250 == 0:
                     click.echo(f"  Processed {processed_docs} documents...")
