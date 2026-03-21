@@ -286,6 +286,24 @@ class MetricsCollector:
             buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
         )
 
+        # Narrative metrics
+        self.narrative_queue_depth = Gauge(
+            "news_tracker_narrative_queue_depth",
+            "Number of jobs in narrative queue",
+        )
+
+        self.narrative_batch_size = Histogram(
+            "news_tracker_narrative_batch_size",
+            "Narrative batch sizes",
+            buckets=(1, 5, 10, 20, 32, 50, 100),
+        )
+
+        self.narrative_alerts_generated = Counter(
+            "news_tracker_narrative_alerts_generated_total",
+            "Total narrative alerts generated",
+            ["trigger_type", "severity"],
+        )
+
         # Drift detection gauges
         self.embedding_drift_kl = Gauge(
             "news_tracker_embedding_drift_kl",
@@ -491,6 +509,28 @@ class MetricsCollector:
             depth: Number of jobs in queue
         """
         self.embedding_queue_depth.set(depth)
+
+    def set_narrative_queue_depth(self, depth: int) -> None:
+        """Set narrative queue depth metric."""
+        self.narrative_queue_depth.set(depth)
+
+    def record_narrative_batch(
+        self,
+        processed: int,
+        skipped: int,
+        errors: int,
+    ) -> None:
+        """Record a narrative worker batch size."""
+        total = processed + skipped + errors
+        if total > 0:
+            self.narrative_batch_size.observe(total)
+
+    def record_narrative_alert(self, trigger_type: str, severity: str) -> None:
+        """Record a narrative alert."""
+        self.narrative_alerts_generated.labels(
+            trigger_type=trigger_type,
+            severity=severity,
+        ).inc()
 
     def record_embedding_batch(
         self,

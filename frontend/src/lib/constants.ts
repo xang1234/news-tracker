@@ -49,12 +49,16 @@ export const RELATION_COLORS: Record<string, string> = {
 
 /** Alert trigger type display labels */
 export const TRIGGER_TYPE_LABELS: Record<string, string> = {
-  volume_spike: 'Volume Spike',
-  sentiment_shift: 'Sentiment Shift',
+  volume_surge: 'Volume Surge',
+  sentiment_velocity: 'Sentiment Velocity',
+  lifecycle_change: 'Lifecycle Change',
   new_theme: 'New Theme',
-  theme_acceleration: 'Theme Acceleration',
   extreme_sentiment: 'Extreme Sentiment',
-  cross_theme: 'Cross-Theme',
+  propagated_impact: 'Propagated Impact',
+  narrative_surge: 'Narrative Surge',
+  cross_platform_breakout: 'Cross-Platform Breakout',
+  authority_divergence: 'Authority Divergence',
+  sentiment_regime_shift: 'Sentiment Regime Shift',
 };
 
 /** Source platform display names and colors (for source management) */

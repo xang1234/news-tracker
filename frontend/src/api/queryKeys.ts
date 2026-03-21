@@ -14,6 +14,12 @@ export const queryKeys = {
   rankedThemes: (strategy?: string, maxTier?: number) =>
     ['themes', 'ranked', strategy, maxTier] as const,
   themeDetail: (id: string) => ['themes', id] as const,
+  themeMomentum: () => ['themes', 'momentum'] as const,
+  themeNarratives: (id: string) => ['themes', id, 'narratives'] as const,
+  themeNarrative: (themeId: string, runId: string) =>
+    ['themes', themeId, 'narratives', runId] as const,
+  themeNarrativeDocuments: (themeId: string, runId: string) =>
+    ['themes', themeId, 'narratives', runId, 'documents'] as const,
   themeMetrics: (id: string) => ['themes', id, 'metrics'] as const,
   themeSentiment: (id: string) => ['themes', id, 'sentiment'] as const,
   themeDocuments: (id: string, filters?: Record<string, unknown>) =>

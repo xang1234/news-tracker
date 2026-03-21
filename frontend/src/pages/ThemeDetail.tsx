@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, FileText, Tag, Activity } from 'lucide-react';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, FileText, Tag, Activity, Radar } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { cn } from '@/lib/utils';
 import { LIFECYCLE_COLORS, SENTIMENT_COLORS } from '@/lib/constants';
@@ -13,14 +13,19 @@ import {
   useThemeSentiment,
   useThemeDocuments,
   useThemeEvents,
+  useThemeNarratives,
+  useThemeNarrativeDetail,
 } from '@/api/hooks/useThemes';
 
-type Tab = 'metrics' | 'sentiment' | 'documents' | 'events';
+type Tab = 'metrics' | 'sentiment' | 'documents' | 'events' | 'narratives';
 
 export default function ThemeDetail() {
   const { themeId } = useParams();
-  const [activeTab, setActiveTab] = useState<Tab>('metrics');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'narratives' ? 'narratives' : 'metrics';
+  const [manualTab, setManualTab] = useState<Tab>(initialTab);
   const [docOffset, setDocOffset] = useState(0);
+  const [manualSelectedRunId, setManualSelectedRunId] = useState<string | null>(searchParams.get('run'));
 
   const { data: detail, isLoading, isError } = useThemeDetail(themeId);
   const metrics = useThemeMetrics(activeTab === 'metrics' ? themeId : undefined);
@@ -30,14 +35,51 @@ export default function ThemeDetail() {
     { limit: 20, offset: docOffset },
   );
   const events = useThemeEvents(activeTab === 'events' ? themeId : undefined);
+  const narratives = useThemeNarratives(themeId);
+  const activeTab: Tab = searchParams.get('tab') === 'narratives' ? 'narratives' : manualTab;
+  const selectedRunId =
+    searchParams.get('run')
+    ?? manualSelectedRunId
+    ?? narratives.data?.runs[0]?.run_id
+    ?? null;
+  const narrativeDetail = useThemeNarrativeDetail(themeId, selectedRunId ?? undefined);
 
   const theme = detail?.theme;
+
+  function updateNarrativeSearch(runId: string | null) {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'narratives');
+    if (runId) {
+      next.set('run', runId);
+    } else {
+      next.delete('run');
+    }
+    setSearchParams(next, { replace: true });
+  }
+
+  function handleTabChange(tab: Tab) {
+    setManualTab(tab);
+    setDocOffset(0);
+
+    const next = new URLSearchParams(searchParams);
+    if (tab === 'narratives') {
+      next.set('tab', 'narratives');
+      if (selectedRunId) {
+        next.set('run', selectedRunId);
+      }
+    } else {
+      next.delete('tab');
+      next.delete('run');
+    }
+    setSearchParams(next, { replace: true });
+  }
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'metrics', label: 'Metrics' },
     { key: 'sentiment', label: 'Sentiment' },
     { key: 'documents', label: 'Documents' },
     { key: 'events', label: 'Events' },
+    { key: 'narratives', label: 'Narratives' },
   ];
 
   return (
@@ -147,7 +189,7 @@ export default function ThemeDetail() {
                     aria-selected={activeTab === tab.key}
                     aria-controls={`tabpanel-${tab.key}`}
                     id={`tab-${tab.key}`}
-                    onClick={() => { setActiveTab(tab.key); setDocOffset(0); }}
+                    onClick={() => { handleTabChange(tab.key); }}
                     className={cn(
                       'border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
                       activeTab === tab.key
@@ -283,6 +325,263 @@ export default function ThemeDetail() {
                             Next
                           </button>
                         </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Narrative tab */}
+              {activeTab === 'narratives' && (
+                <>
+                  {narratives.isLoading && (
+                    <div className="grid gap-4 lg:grid-cols-[320px,1fr]">
+                      <div className="space-y-3">
+                        {Array.from({ length: 4 }).map((_, i) => (
+                          <div key={i} className="h-24 animate-pulse rounded-lg bg-secondary" />
+                        ))}
+                      </div>
+                      <div className="h-[420px] animate-pulse rounded-lg bg-secondary" />
+                    </div>
+                  )}
+                  {narratives.isError && (
+                    <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                      Failed to load narrative runs
+                    </div>
+                  )}
+                  {narratives.data && narratives.data.runs.length === 0 && (
+                    <div className="flex flex-col items-center py-12 text-muted-foreground">
+                      <Radar className="h-10 w-10" />
+                      <p className="mt-2 text-sm">No narrative runs under this theme yet</p>
+                    </div>
+                  )}
+                  {narratives.data && narratives.data.runs.length > 0 && (
+                    <div className="grid gap-4 lg:grid-cols-[320px,1fr]">
+                      <div className="space-y-3">
+                        {narratives.data.runs.map((run) => (
+                          <button
+                            key={run.run_id}
+                            type="button"
+                            onClick={() => {
+                              setManualSelectedRunId(run.run_id);
+                              updateNarrativeSearch(run.run_id);
+                            }}
+                            className={cn(
+                              'w-full rounded-lg border p-4 text-left transition-colors',
+                              selectedRunId === run.run_id
+                                ? 'border-primary bg-primary/8'
+                                : 'border-border bg-card hover:border-border/80',
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-medium text-foreground">{run.label}</div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  {run.status} · {timeAgo(run.last_document_at)}
+                                </div>
+                              </div>
+                              <div className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] text-primary">
+                                {Math.round(run.conviction_score)}
+                              </div>
+                            </div>
+                            <div className="mt-3 grid grid-cols-3 gap-2 text-[11px] text-muted-foreground">
+                              <div className="rounded border border-border bg-background/60 px-2 py-2">
+                                <div>Rate</div>
+                                <div className="mt-1 text-sm font-medium text-foreground">
+                                  {run.current_rate_per_hour.toFixed(1)}
+                                </div>
+                              </div>
+                              <div className="rounded border border-border bg-background/60 px-2 py-2">
+                                <div>Accel</div>
+                                <div className="mt-1 text-sm font-medium text-foreground">
+                                  {run.current_acceleration > 0 ? '+' : ''}{run.current_acceleration.toFixed(1)}
+                                </div>
+                              </div>
+                              <div className="rounded border border-border bg-background/60 px-2 py-2">
+                                <div>Platforms</div>
+                                <div className="mt-1 text-sm font-medium text-foreground">{run.platform_count}</div>
+                              </div>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {run.top_tickers.slice(0, 3).map((tickerCount) => (
+                                <span
+                                  key={tickerCount.ticker}
+                                  className="rounded bg-secondary px-2 py-0.5 font-mono text-[10px] text-foreground"
+                                >
+                                  ${tickerCount.ticker} · {tickerCount.count}
+                                </span>
+                              ))}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="rounded-lg border border-border bg-card p-5">
+                        {narrativeDetail.isLoading && (
+                          <div className="space-y-4">
+                            <div className="h-6 w-1/3 animate-pulse rounded bg-secondary" />
+                            <div className="h-24 animate-pulse rounded bg-secondary" />
+                            <div className="h-48 animate-pulse rounded bg-secondary" />
+                          </div>
+                        )}
+                        {narrativeDetail.isError && (
+                          <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                            Failed to load narrative run detail
+                          </div>
+                        )}
+                        {narrativeDetail.data && (
+                          <>
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <h3 className="text-lg font-semibold text-foreground">
+                                  {narrativeDetail.data.run.label}
+                                </h3>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                  Started {timeAgo(narrativeDetail.data.run.started_at)} · last update {timeAgo(narrativeDetail.data.run.last_document_at)}
+                                </p>
+                              </div>
+                              <div className="rounded-full bg-primary/15 px-3 py-1 text-sm text-primary">
+                                {Math.round(narrativeDetail.data.run.conviction_score)} conviction
+                              </div>
+                            </div>
+
+                            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                              <div className="rounded-lg border border-border bg-secondary/20 p-3">
+                                <div className="text-xs text-muted-foreground">Current Rate</div>
+                                <div className="mt-1 text-lg font-semibold text-foreground">
+                                  {narrativeDetail.data.run.current_rate_per_hour.toFixed(1)}/hr
+                                </div>
+                              </div>
+                              <div className="rounded-lg border border-border bg-secondary/20 p-3">
+                                <div className="text-xs text-muted-foreground">Acceleration</div>
+                                <div className="mt-1 text-lg font-semibold text-foreground">
+                                  {narrativeDetail.data.run.current_acceleration > 0 ? '+' : ''}
+                                  {narrativeDetail.data.run.current_acceleration.toFixed(1)}
+                                </div>
+                              </div>
+                              <div className="rounded-lg border border-border bg-secondary/20 p-3">
+                                <div className="text-xs text-muted-foreground">Platforms</div>
+                                <div className="mt-1 text-lg font-semibold text-foreground">
+                                  {narrativeDetail.data.run.platform_count}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-5">
+                              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                Platform Sequence
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {Object.entries(narrativeDetail.data.platform_timeline).map(([platform, firstSeen]) => (
+                                  <span
+                                    key={platform}
+                                    className="rounded-full border border-border px-3 py-1 text-xs text-foreground"
+                                  >
+                                    {platform} · {timeAgo(firstSeen)}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="mt-5">
+                              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                Ticker Concentration
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {Object.entries(narrativeDetail.data.ticker_counts)
+                                  .sort((a, b) => b[1] - a[1])
+                                  .slice(0, 6)
+                                  .map(([ticker, count]) => (
+                                    <span
+                                      key={ticker}
+                                      className="rounded bg-secondary px-2 py-1 font-mono text-xs text-foreground"
+                                    >
+                                      ${ticker} · {count}
+                                    </span>
+                                  ))}
+                              </div>
+                            </div>
+
+                            <div className="mt-5">
+                              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                Recent Alerts
+                              </div>
+                              {narrativeDetail.data.run.recent_alerts.length === 0 ? (
+                                <p className="mt-2 text-sm text-muted-foreground">No active narrative alerts.</p>
+                              ) : (
+                                <div className="mt-2 space-y-2">
+                                  {narrativeDetail.data.run.recent_alerts.map((alert) => (
+                                    <div
+                                      key={alert.alert_id}
+                                      className="rounded-lg border border-border bg-background/50 px-3 py-2"
+                                    >
+                                      <div className="flex items-center gap-2 text-xs">
+                                        <span className="rounded-full bg-secondary px-2 py-0.5 text-muted-foreground">
+                                          {alert.trigger_type.replaceAll('_', ' ')}
+                                        </span>
+                                        <span className="rounded-full bg-primary/15 px-2 py-0.5 text-primary">
+                                          {alert.severity}
+                                        </span>
+                                        <span className="ml-auto text-muted-foreground">
+                                          {timeAgo(alert.created_at)}
+                                        </span>
+                                      </div>
+                                      <div className="mt-1 text-sm text-foreground">{alert.title}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="mt-5">
+                              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                Top Documents
+                              </div>
+                              {narrativeDetail.data.documents.length === 0 ? (
+                                <p className="mt-2 text-sm text-muted-foreground">No documents assigned yet.</p>
+                              ) : (
+                                <div className="mt-2 space-y-2">
+                                  {narrativeDetail.data.documents.slice(0, 8).map((doc) => (
+                                    <Link
+                                      key={doc.document_id}
+                                      to={`/documents/${doc.document_id}`}
+                                      className="block rounded-lg border border-border bg-background/50 p-3 transition-colors hover:border-border/80"
+                                    >
+                                      <div className="flex items-center gap-2 text-xs">
+                                        {doc.platform && (
+                                          <span className="rounded-full bg-secondary px-2 py-0.5 text-muted-foreground">
+                                            {doc.platform}
+                                          </span>
+                                        )}
+                                        {doc.sentiment_label && (
+                                          <span className={cn(
+                                            'rounded-full px-2 py-0.5',
+                                            SENTIMENT_COLORS[doc.sentiment_label] ?? 'bg-slate-500/20 text-slate-400',
+                                          )}>
+                                            {doc.sentiment_label}
+                                          </span>
+                                        )}
+                                        <span className="ml-auto text-muted-foreground">
+                                          {doc.timestamp ? timeAgo(doc.timestamp) : 'Unknown time'}
+                                        </span>
+                                      </div>
+                                      {doc.title && (
+                                        <div className="mt-1 text-sm font-medium text-foreground">
+                                          {truncate(doc.title, 110)}
+                                        </div>
+                                      )}
+                                      {doc.content_preview && (
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                          {truncate(doc.content_preview, 180)}
+                                        </p>
+                                      )}
+                                    </Link>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}

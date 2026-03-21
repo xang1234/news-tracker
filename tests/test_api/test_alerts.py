@@ -98,6 +98,8 @@ class TestListAlerts:
         item = resp.json()["alerts"][0]
         assert item["alert_id"] == "alert_001"
         assert item["theme_id"] == "theme_abc123"
+        assert item["subject_type"] == "theme"
+        assert item["subject_id"] == "theme_abc123"
         assert item["trigger_type"] == "volume_surge"
         assert item["severity"] == "warning"
         assert item["title"] == "Volume surge detected"
@@ -114,6 +116,7 @@ class TestListAlerts:
             severity="critical",
             trigger_type=None,
             theme_id=None,
+            subject_type=None,
             acknowledged=None,
             limit=50,
             offset=0,
@@ -128,6 +131,7 @@ class TestListAlerts:
             severity=None,
             trigger_type="sentiment_velocity",
             theme_id=None,
+            subject_type=None,
             acknowledged=None,
             limit=50,
             offset=0,
@@ -142,6 +146,7 @@ class TestListAlerts:
             severity=None,
             trigger_type=None,
             theme_id="theme_xyz",
+            subject_type=None,
             acknowledged=None,
             limit=50,
             offset=0,
@@ -156,6 +161,7 @@ class TestListAlerts:
             severity=None,
             trigger_type=None,
             theme_id=None,
+            subject_type=None,
             acknowledged=True,
             limit=50,
             offset=0,
@@ -170,6 +176,7 @@ class TestListAlerts:
             severity="warning",
             trigger_type="volume_surge",
             theme_id="t1",
+            subject_type=None,
             acknowledged=None,
             limit=50,
             offset=0,
@@ -184,9 +191,25 @@ class TestListAlerts:
             severity=None,
             trigger_type=None,
             theme_id=None,
+            subject_type=None,
             acknowledged=None,
             limit=10,
             offset=20,
+        )
+
+    def test_subject_type_filter(self, client, mock_alert_repo):
+        mock_alert_repo.get_recent.return_value = []
+
+        resp = client.get("/alerts?subject_type=narrative_run")
+        assert resp.status_code == 200
+        mock_alert_repo.get_recent.assert_called_once_with(
+            severity=None,
+            trigger_type=None,
+            theme_id=None,
+            subject_type="narrative_run",
+            acknowledged=None,
+            limit=50,
+            offset=0,
         )
 
     def test_invalid_severity(self, client, mock_alert_repo):

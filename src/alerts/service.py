@@ -41,7 +41,12 @@ class AlertService:
         self._redis = redis_client
         self._dispatcher = dispatcher
 
-    async def _is_duplicate(self, theme_id: str, trigger_type: str) -> bool:
+    async def _is_duplicate(
+        self,
+        subject_type: str,
+        subject_id: str,
+        trigger_type: str,
+    ) -> bool:
         """Check Redis SET NX for recent duplicate alerts.
 
         Key format: ``alert:dedup:{theme_id}:{trigger_type}``
@@ -60,7 +65,7 @@ class AlertService:
         if self._redis is None:
             return False
 
-        key = f"alert:dedup:{theme_id}:{trigger_type}"
+        key = f"alert:dedup:{subject_type}:{subject_id}:{trigger_type}"
         ttl_seconds = self._config.dedup_ttl_hours * 3600
 
         try:
@@ -110,9 +115,14 @@ class AlertService:
         Returns:
             True if the alert should be persisted (passed all filters).
         """
-        if await self._is_duplicate(alert.theme_id, alert.trigger_type):
+        subject_id = alert.subject_id or alert.theme_id
+
+        if await self._is_duplicate(alert.subject_type, subject_id, alert.trigger_type):
             logger.debug(
-                "Alert deduplicated: %s/%s", alert.theme_id, alert.trigger_type,
+                "Alert deduplicated: %s/%s/%s",
+                alert.subject_type,
+                subject_id,
+                alert.trigger_type,
             )
             return False
 
@@ -215,3 +225,32 @@ class AlertService:
             "Alert generation: %d candidates, all filtered out", len(candidates),
         )
         return []
+
+    async def publish_alerts(self, alerts: list[Alert]) -> list[Alert]:
+        """Persist and dispatch arbitrary alerts through the shared pipeline."""
+        filtered: list[Alert] = []
+        for alert in alerts:
+            if await self._filter_alert(alert):
+                filtered.append(alert)
+
+        if not filtered:
+            return []
+
+        persisted = await self._alert_repo.create_batch(filtered)
+
+        if self._dispatcher is not None and persisted:
+            try:
+                await self._dispatcher.dispatch_batch(persisted)
+            except Exception as e:
+                logger.error("Notification dispatch failed: %s", e)
+
+        if self._redis is not None and persisted:
+            from src.alerts.broadcaster import AlertBroadcaster
+
+            for alert in persisted:
+                try:
+                    await AlertBroadcaster.publish(self._redis, alert)
+                except Exception as e:
+                    logger.warning("WS broadcast failed for %s: %s", alert.alert_id, e)
+
+        return persisted

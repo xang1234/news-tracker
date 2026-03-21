@@ -506,13 +506,114 @@ class AlertItem(BaseModel):
 
     alert_id: str = Field(..., description="Unique alert identifier")
     theme_id: str = Field(..., description="Theme that triggered the alert")
+    subject_type: str = Field(default="theme", description="Alert subject domain type")
+    subject_id: str = Field(..., description="Alert subject identifier")
     trigger_type: str = Field(..., description="Alert trigger type")
     severity: str = Field(..., description="Severity level: critical, warning, info")
+    conviction_score: float | None = Field(default=None, description="Optional 0-100 conviction score")
     title: str = Field(..., description="Short human-readable summary")
     message: str = Field(..., description="Detailed alert description")
     trigger_data: dict = Field(default_factory=dict, description="Trigger-specific context")
     acknowledged: bool = Field(default=False, description="Whether the alert has been reviewed")
     created_at: str = Field(..., description="Alert creation timestamp (ISO format)")
+
+
+class NarrativeBucketPoint(BaseModel):
+    """Single bucket point for a narrative sparkline."""
+
+    bucket_start: str = Field(..., description="Bucket start timestamp")
+    doc_count: int = Field(..., description="Documents in the bucket")
+
+
+class NarrativeTickerCount(BaseModel):
+    """Ticker count summary for a narrative run."""
+
+    ticker: str = Field(..., description="Ticker symbol")
+    count: int = Field(..., description="Documents mentioning the ticker")
+
+
+class NarrativeAlertSummary(BaseModel):
+    """Compact alert summary for narrative endpoints."""
+
+    alert_id: str = Field(..., description="Alert identifier")
+    trigger_type: str = Field(..., description="Trigger type")
+    severity: str = Field(..., description="Alert severity")
+    conviction_score: float | None = Field(default=None, description="Optional conviction score")
+    title: str = Field(..., description="Alert title")
+    created_at: str = Field(..., description="Alert timestamp")
+
+
+class NarrativeDocumentItem(BaseModel):
+    """Document in a narrative run."""
+
+    document_id: str = Field(..., description="Document identifier")
+    platform: str | None = Field(default=None, description="Document platform")
+    title: str | None = Field(default=None, description="Document title")
+    content_preview: str | None = Field(default=None, description="Document preview")
+    url: str | None = Field(default=None, description="Document URL")
+    author_name: str | None = Field(default=None, description="Document author")
+    tickers: list[str] = Field(default_factory=list, description="Mentioned tickers")
+    authority_score: float | None = Field(default=None, description="Authority score")
+    sentiment_label: str | None = Field(default=None, description="Sentiment label")
+    sentiment_confidence: float | None = Field(default=None, description="Sentiment confidence")
+    similarity: float = Field(..., description="Run similarity at assignment")
+    timestamp: str | None = Field(default=None, description="Document timestamp")
+
+
+class NarrativeRunItem(BaseModel):
+    """Narrative run summary."""
+
+    run_id: str = Field(..., description="Narrative run identifier")
+    theme_id: str = Field(..., description="Parent theme identifier")
+    theme_name: str | None = Field(default=None, description="Parent theme name")
+    status: str = Field(..., description="Run status")
+    label: str = Field(..., description="Human-readable run label")
+    conviction_score: float = Field(..., description="Current conviction score")
+    current_rate_per_hour: float = Field(..., description="Current document rate per hour")
+    current_acceleration: float = Field(..., description="Current acceleration")
+    platform_count: int = Field(..., description="Distinct platform count")
+    top_tickers: list[NarrativeTickerCount] = Field(..., description="Top ticker counts")
+    last_document_at: str = Field(..., description="Last document timestamp")
+    started_at: str = Field(..., description="Run start timestamp")
+    recent_alerts: list[NarrativeAlertSummary] = Field(default_factory=list, description="Recent alerts")
+    sparkline: list[NarrativeBucketPoint] = Field(default_factory=list, description="Recent bucket sparkline")
+
+
+class NarrativeMomentumResponse(BaseModel):
+    """Global narrative momentum feed."""
+
+    runs: list[NarrativeRunItem] = Field(..., description="Narrative run list")
+    total: int = Field(..., description="Number of runs returned")
+    latency_ms: float = Field(..., description="Response latency")
+
+
+class ThemeNarrativesResponse(BaseModel):
+    """Theme-scoped narrative list."""
+
+    theme_id: str = Field(..., description="Theme identifier")
+    runs: list[NarrativeRunItem] = Field(..., description="Narrative runs for the theme")
+    total: int = Field(..., description="Number of runs returned")
+    latency_ms: float = Field(..., description="Response latency")
+
+
+class NarrativeRunDetailResponse(BaseModel):
+    """Narrative run detail payload."""
+
+    run: NarrativeRunItem = Field(..., description="Narrative run summary")
+    platform_timeline: dict[str, str] = Field(default_factory=dict, description="Platform first-seen timestamps")
+    ticker_counts: dict[str, int] = Field(default_factory=dict, description="Ticker count map")
+    documents: list[NarrativeDocumentItem] = Field(default_factory=list, description="Recent documents")
+    latency_ms: float = Field(..., description="Response latency")
+
+
+class NarrativeRunDocumentsResponse(BaseModel):
+    """Theme-scoped narrative run documents payload."""
+
+    theme_id: str = Field(..., description="Theme identifier")
+    run_id: str = Field(..., description="Narrative run identifier")
+    documents: list[NarrativeDocumentItem] = Field(default_factory=list, description="Run documents")
+    total: int = Field(..., description="Number of documents returned")
+    latency_ms: float = Field(..., description="Response latency")
 
 
 class AlertsResponse(BaseModel):

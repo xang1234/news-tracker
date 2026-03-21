@@ -13,6 +13,7 @@ from src.api.dependencies import (
     get_document_repository,
     get_embedding_service,
     get_graph_repository,
+    get_narrative_repository,
     get_propagation_service,
     get_ranking_service,
     get_sentiment_aggregator,
@@ -115,6 +116,19 @@ def mock_ranking_service():
 
 
 @pytest.fixture
+def mock_narrative_repo():
+    """Mock NarrativeRepository."""
+    repo = AsyncMock()
+    repo.list_global_momentum = AsyncMock(return_value=[])
+    repo.list_theme_runs = AsyncMock(return_value=[])
+    repo.get_by_id = AsyncMock(return_value=None)
+    repo.get_run_documents = AsyncMock(return_value=[])
+    repo.get_recent_alerts = AsyncMock(return_value=[])
+    repo.get_recent_buckets = AsyncMock(return_value=[])
+    return repo
+
+
+@pytest.fixture
 def mock_embedding_service():
     """Mock EmbeddingService."""
     service = AsyncMock()
@@ -173,6 +187,7 @@ def client(
     mock_doc_repo,
     mock_aggregator,
     mock_ranking_service,
+    mock_narrative_repo,
     mock_embedding_service,
     mock_sentiment_service,
     mock_vector_store_manager,
@@ -187,6 +202,7 @@ def client(
     app.dependency_overrides[get_document_repository] = lambda: mock_doc_repo
     app.dependency_overrides[get_sentiment_aggregator] = lambda: mock_aggregator
     app.dependency_overrides[get_ranking_service] = lambda: mock_ranking_service
+    app.dependency_overrides[get_narrative_repository] = lambda: mock_narrative_repo
     app.dependency_overrides[get_embedding_service] = lambda: mock_embedding_service
     app.dependency_overrides[get_sentiment_service] = lambda: mock_sentiment_service
     app.dependency_overrides[get_vector_store_manager] = lambda: mock_vector_store_manager

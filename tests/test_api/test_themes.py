@@ -7,8 +7,45 @@ import numpy as np
 import pytest
 
 from src.ingestion.schemas import EngagementMetrics, NormalizedDocument, Platform
+from src.narrative.schemas import NarrativeRun, NarrativeRunBucket
 from src.sentiment.aggregation import AggregatedSentiment
 from tests.test_api.conftest import _make_metrics, _make_theme
+
+
+def _make_narrative_run(run_id: str = "run_abc123", theme_id: str = "theme_abc123") -> NarrativeRun:
+    return NarrativeRun(
+        run_id=run_id,
+        theme_id=theme_id,
+        status="active",
+        centroid=np.ones(768, dtype=np.float32),
+        label="NVDA / AMD",
+        started_at=datetime(2026, 2, 5, 8, 0, 0, tzinfo=timezone.utc),
+        last_document_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+        doc_count=12,
+        platform_first_seen={
+            "news": "2026-02-05T08:00:00+00:00",
+            "twitter": "2026-02-05T08:30:00+00:00",
+            "reddit": "2026-02-05T09:15:00+00:00",
+        },
+        ticker_counts={"NVDA": 8, "AMD": 4},
+        avg_sentiment=0.35,
+        avg_authority=0.72,
+        platform_count=3,
+        current_rate_per_hour=8.5,
+        current_acceleration=2.5,
+        conviction_score=78.0,
+        metadata={},
+        created_at=datetime(2026, 2, 5, 8, 0, 0, tzinfo=timezone.utc),
+        updated_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+    )
+
+
+def _make_narrative_bucket(run_id: str = "run_abc123") -> NarrativeRunBucket:
+    return NarrativeRunBucket(
+        run_id=run_id,
+        bucket_start=datetime(2026, 2, 5, 9, 30, 0, tzinfo=timezone.utc),
+        doc_count=4,
+    )
 
 
 # ── GET /themes ─────────────────────────────────────────
@@ -126,6 +163,98 @@ class TestGetTheme:
         resp = client.get("/themes/theme_abc123?include_centroid=true")
         assert resp.json()["theme"]["centroid"] is not None
         assert len(resp.json()["theme"]["centroid"]) == 768
+
+
+class TestNarrativeEndpoints:
+    """Tests for narrative momentum theme endpoints."""
+
+    def test_get_momentum(self, client, mock_narrative_repo):
+        run = _make_narrative_run()
+        mock_narrative_repo.list_global_momentum.return_value = [
+            {"run": run, "theme_name": "gpu_nvidia_hbm"},
+        ]
+        mock_narrative_repo.get_recent_alerts.return_value = []
+        mock_narrative_repo.get_recent_buckets.return_value = [_make_narrative_bucket(run.run_id)]
+
+        resp = client.get("/themes/momentum")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 1
+        assert data["runs"][0]["run_id"] == run.run_id
+        assert data["runs"][0]["theme_name"] == "gpu_nvidia_hbm"
+        assert data["runs"][0]["top_tickers"][0] == {"ticker": "NVDA", "count": 8}
+
+    def test_get_theme_narratives(self, client, mock_theme_repo, mock_narrative_repo):
+        mock_theme_repo.get_by_id.return_value = _make_theme()
+        run = _make_narrative_run()
+        mock_narrative_repo.list_theme_runs.return_value = [run]
+        mock_narrative_repo.get_recent_alerts.return_value = []
+        mock_narrative_repo.get_recent_buckets.return_value = [_make_narrative_bucket(run.run_id)]
+
+        resp = client.get("/themes/theme_abc123/narratives")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["theme_id"] == "theme_abc123"
+        assert data["total"] == 1
+        assert data["runs"][0]["run_id"] == run.run_id
+
+    def test_get_theme_narrative_detail(self, client, mock_theme_repo, mock_narrative_repo):
+        run = _make_narrative_run()
+        mock_theme_repo.get_by_id.return_value = _make_theme()
+        mock_narrative_repo.get_by_id.return_value = run
+        mock_narrative_repo.get_recent_alerts.return_value = []
+        mock_narrative_repo.get_recent_buckets.return_value = [_make_narrative_bucket(run.run_id)]
+        mock_narrative_repo.get_run_documents.return_value = [
+            {
+                "document_id": "doc_1",
+                "platform": "news",
+                "title": "NVIDIA momentum keeps building",
+                "content_preview": "Strong AI demand keeps lifting GPU narrative.",
+                "url": "https://example.com/doc",
+                "author_name": "Jane Doe",
+                "tickers": ["NVDA"],
+                "authority_score": 0.8,
+                "sentiment": {"label": "positive", "confidence": 0.9},
+                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+                "similarity": 0.91,
+                "assigned_at": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+            }
+        ]
+
+        resp = client.get("/themes/theme_abc123/narratives/run_abc123")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["run"]["run_id"] == run.run_id
+        assert data["documents"][0]["document_id"] == "doc_1"
+        assert data["documents"][0]["sentiment_label"] == "positive"
+
+    def test_get_theme_narrative_documents(self, client, mock_theme_repo, mock_narrative_repo):
+        run = _make_narrative_run()
+        mock_theme_repo.get_by_id.return_value = _make_theme()
+        mock_narrative_repo.get_by_id.return_value = run
+        mock_narrative_repo.get_run_documents.return_value = [
+            {
+                "document_id": "doc_1",
+                "platform": "news",
+                "title": "NVIDIA momentum keeps building",
+                "content_preview": "Strong AI demand keeps lifting GPU narrative.",
+                "url": "https://example.com/doc",
+                "author_name": "Jane Doe",
+                "tickers": ["NVDA"],
+                "authority_score": 0.8,
+                "sentiment": {"label": "positive", "confidence": 0.9},
+                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+                "similarity": 0.91,
+                "assigned_at": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+            }
+        ]
+
+        resp = client.get("/themes/theme_abc123/narratives/run_abc123/documents")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["theme_id"] == "theme_abc123"
+        assert data["run_id"] == "run_abc123"
+        assert data["total"] == 1
 
 
 # ── GET /themes/{theme_id}/documents ─────────────────────

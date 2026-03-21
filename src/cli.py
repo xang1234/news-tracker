@@ -1223,6 +1223,391 @@ def cluster_recompute_centroids() -> None:
 
 
 @main.group()
+def narrative() -> None:
+    """Narrative momentum commands."""
+
+
+async def _build_narrative_worker_for_cli(db: Any) -> Any:
+    """Create a narrative worker with only the dependencies needed for CLI jobs."""
+    from src.alerts.config import AlertConfig
+    from src.alerts.repository import AlertRepository
+    from src.alerts.service import AlertService
+    from src.narrative.config import NarrativeConfig
+    from src.narrative.repository import NarrativeRepository
+    from src.narrative.worker import NarrativeWorker
+    from src.storage.repository import DocumentRepository
+
+    worker = NarrativeWorker(database=db, config=NarrativeConfig())
+    worker._doc_repo = DocumentRepository(db)
+    worker._narrative_repo = NarrativeRepository(db)
+    worker._alert_repo = AlertRepository(db)
+    worker._alert_service = AlertService(
+        config=AlertConfig(),
+        alert_repo=worker._alert_repo,
+        redis_client=None,
+        dispatcher=None,
+    )
+    return worker
+
+
+def _extract_narrative_tickers(trigger_data: dict[str, Any]) -> list[str]:
+    """Normalize ticker payloads stored in narrative trigger data."""
+    raw = trigger_data.get("top_tickers") or []
+    tickers: list[str] = []
+
+    for item in raw:
+        if isinstance(item, str) and item:
+            tickers.append(item.upper())
+        elif isinstance(item, dict):
+            ticker = item.get("ticker")
+            if ticker:
+                tickers.append(str(ticker).upper())
+            elif item:
+                first_key = next(iter(item))
+                tickers.append(str(first_key).upper())
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for ticker in tickers:
+        if ticker not in seen:
+            seen.add(ticker)
+            deduped.append(ticker)
+    return deduped
+
+
+@narrative.command("worker")
+@click.option("--batch-size", default=None, type=int, help="Jobs to process per batch")
+@click.option("--metrics/--no-metrics", default=True, help="Enable metrics server")
+@click.option("--metrics-port", default=8003, help="Metrics server port")
+def narrative_worker(batch_size: int | None, metrics: bool, metrics_port: int) -> None:
+    """Run the narrative worker for real-time run assignment and alerting."""
+    from src.narrative.worker import NarrativeWorker
+
+    async def run():
+        worker = NarrativeWorker(batch_size=batch_size)
+
+        if metrics:
+            get_metrics().start_server(port=metrics_port)
+
+        loop = asyncio.get_event_loop()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, lambda: asyncio.create_task(worker.stop()))
+
+        await worker.start()
+
+    asyncio.run(run())
+
+
+@narrative.command("backfill")
+@click.option("--start", "start_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
+              help="Start date (inclusive)")
+@click.option("--end", "end_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
+              help="End date (inclusive)")
+@click.option("--reset/--no-reset", default=True,
+              help="Truncate narrative tables before rebuilding")
+def narrative_backfill(start_date: Any, end_date: Any, reset: bool) -> None:
+    """Rebuild narrative runs from theme-assigned documents in a date range."""
+    from datetime import timedelta, timezone as tz
+
+    from src.storage.database import Database
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            start = start_date.date()
+            end = end_date.date()
+            if start > end:
+                click.echo(click.style("Error: start date must be before end date", fg="red"))
+                return
+
+            if reset:
+                await db.execute(
+                    """
+                    TRUNCATE TABLE
+                        narrative_signal_state,
+                        narrative_run_documents,
+                        narrative_run_buckets,
+                        narrative_runs
+                    """
+                )
+
+            worker = await _build_narrative_worker_for_cli(db)
+            start_ts = datetime(start.year, start.month, start.day, tzinfo=tz.utc)
+            end_ts = datetime(end.year, end.month, end.day, tzinfo=tz.utc) + timedelta(days=1)
+            rows = await db.fetch(
+                """
+                SELECT id, theme_ids, timestamp
+                FROM documents
+                WHERE embedding IS NOT NULL
+                  AND cardinality(theme_ids) > 0
+                  AND timestamp >= $1
+                  AND timestamp < $2
+                ORDER BY timestamp ASC
+                """,
+                start_ts,
+                end_ts,
+            )
+
+            click.echo(f"Backfilling narrative runs for {start} to {end}")
+            click.echo(f"  Documents queued: {len(rows)}")
+            click.echo(f"  Reset state: {'yes' if reset else 'no'}")
+
+            processed_docs = 0
+            processed_assignments = 0
+            for row in rows:
+                doc = await worker._doc_repo.get_by_id(row["id"])
+                if doc is None:
+                    continue
+
+                processed_docs += 1
+                for theme_id in row["theme_ids"]:
+                    await worker.process_document_for_theme(
+                        doc,
+                        theme_id=theme_id,
+                        theme_similarity=1.0,
+                    )
+                    processed_assignments += 1
+
+                if processed_docs % 250 == 0:
+                    click.echo(f"  Processed {processed_docs} documents...")
+
+            total_runs = await db.fetchval("SELECT COUNT(*) FROM narrative_runs")
+            click.echo("")
+            click.echo(f"Documents processed:  {processed_docs}")
+            click.echo(f"Theme assignments:    {processed_assignments}")
+            click.echo(f"Narrative runs built: {total_runs}")
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
+@narrative.command("replay")
+@click.option("--publish/--dry-run", default=False,
+              help="Persist alerts while replaying instead of reporting only")
+@click.option("--status", "run_status", default=None,
+              type=click.Choice(["active", "cooling", "closed"]),
+              help="Optional run status filter")
+@click.option("--limit", default=None, type=int, help="Maximum runs to replay")
+def narrative_replay(publish: bool, run_status: str | None, limit: int | None) -> None:
+    """Re-run signal evaluation from existing narrative runs and buckets."""
+    from types import SimpleNamespace
+
+    from src.narrative.config import NarrativeConfig
+    from src.narrative.signals import evaluate_all_signals
+    from src.storage.database import Database
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            worker = await _build_narrative_worker_for_cli(db)
+            repo = worker._narrative_repo
+            config = NarrativeConfig()
+            params: list[Any] = []
+            where_clause = ""
+            if run_status:
+                where_clause = "WHERE status = $1"
+                params.append(run_status)
+            limit_clause = ""
+            if limit is not None:
+                limit_clause = f" LIMIT ${len(params) + 1}"
+                params.append(limit)
+
+            rows = await db.fetch(
+                f"""
+                SELECT run_id
+                FROM narrative_runs
+                {where_clause}
+                ORDER BY updated_at DESC
+                {limit_clause}
+                """,
+                *params,
+            )
+
+            replayed = 0
+            triggered_counts: dict[str, int] = {}
+            published_alerts = 0
+
+            for row in rows:
+                run = await repo.get_by_id(row["run_id"])
+                if run is None:
+                    continue
+                buckets = await repo.get_recent_buckets(run.run_id, limit=288)
+                evaluations = evaluate_all_signals(run, buckets, config)
+                replayed += 1
+
+                for evaluation in evaluations:
+                    if evaluation.triggered:
+                        triggered_counts[evaluation.trigger_type] = (
+                            triggered_counts.get(evaluation.trigger_type, 0) + 1
+                        )
+
+                if publish:
+                    docs = await repo.get_run_documents(run.run_id, limit=1)
+                    latest_doc_id = docs[0]["document_id"] if docs else run.run_id
+                    before_count = await db.fetchval(
+                        "SELECT COUNT(*) FROM alerts WHERE subject_type = 'narrative_run'"
+                    )
+                    await worker._evaluate_and_publish_alerts(
+                        run,
+                        buckets,
+                        SimpleNamespace(id=latest_doc_id),
+                    )
+                    after_count = await db.fetchval(
+                        "SELECT COUNT(*) FROM alerts WHERE subject_type = 'narrative_run'"
+                    )
+                    published_alerts += max(0, int(after_count or 0) - int(before_count or 0))
+
+            click.echo(f"Runs replayed: {replayed}")
+            for trigger_type, count in sorted(triggered_counts.items()):
+                click.echo(f"  {trigger_type:26s} {count}")
+            if publish:
+                click.echo(f"Alerts published: {published_alerts}")
+            else:
+                click.echo("Dry run only; no alerts persisted.")
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
+@narrative.command("evaluate")
+@click.option("--start", "start_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
+              help="Start date (inclusive)")
+@click.option("--end", "end_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
+              help="End date (inclusive)")
+@click.option("--horizon", default=5, type=int, help="Forward return horizon in trading days")
+def narrative_evaluate(start_date: Any, end_date: Any, horizon: int) -> None:
+    """Score historical narrative alerts using cached forward returns."""
+    from collections import defaultdict
+    from datetime import timedelta, timezone as tz
+    import json
+
+    from src.backtest.config import BacktestConfig
+    from src.backtest.data_feeds import PriceDataFeed
+    from src.storage.database import Database
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            start = start_date.date()
+            end = end_date.date()
+            if start > end:
+                click.echo(click.style("Error: start date must be before end date", fg="red"))
+                return
+
+            start_ts = datetime(start.year, start.month, start.day, tzinfo=tz.utc)
+            end_ts = datetime(end.year, end.month, end.day, tzinfo=tz.utc) + timedelta(days=1)
+            rows = await db.fetch(
+                """
+                SELECT trigger_type, created_at, conviction_score, trigger_data
+                FROM alerts
+                WHERE subject_type = 'narrative_run'
+                  AND created_at >= $1
+                  AND created_at < $2
+                ORDER BY created_at ASC
+                """,
+                start_ts,
+                end_ts,
+            )
+
+            if not rows:
+                click.echo("No narrative alerts found in the requested range.")
+                return
+
+            feed = PriceDataFeed(
+                db,
+                BacktestConfig(
+                    price_cache_enabled=False,
+                    default_forward_horizons=[horizon],
+                ),
+            )
+            by_trigger: dict[str, list[dict[str, float]]] = defaultdict(list)
+            scored_records: list[dict[str, float]] = []
+
+            for row in rows:
+                trigger_data = row["trigger_data"]
+                if isinstance(trigger_data, str):
+                    trigger_data = json.loads(trigger_data)
+
+                tickers = _extract_narrative_tickers(trigger_data)
+                if not tickers:
+                    continue
+
+                returns = await feed.get_forward_returns(
+                    tickers=tickers,
+                    as_of=row["created_at"].date(),
+                    horizons=[horizon],
+                )
+                realized = [
+                    horizon_returns.get(horizon)
+                    for horizon_returns in returns.values()
+                    if horizon_returns.get(horizon) is not None
+                ]
+                if not realized:
+                    continue
+
+                avg_return = sum(realized) / len(realized)
+                record = {
+                    "avg_return": avg_return,
+                    "score": float(row["conviction_score"] or 0.0),
+                }
+                by_trigger[row["trigger_type"]].append(record)
+                scored_records.append(record)
+
+            if not by_trigger:
+                click.echo("No cached forward returns available for the requested alerts.")
+                return
+
+            click.echo(f"Narrative signal evaluation ({start} to {end}, {horizon}d horizon)")
+            click.echo("=" * 72)
+            click.echo(f"{'Trigger':26s} {'Count':>6} {'Hit Rate':>10} {'Mean Return':>14}")
+            click.echo("-" * 72)
+
+            for trigger_type, records in sorted(by_trigger.items()):
+                count = len(records)
+                hit_rate = sum(1 for r in records if r["avg_return"] > 0) / count
+                mean_return = sum(r["avg_return"] for r in records) / count
+                click.echo(
+                    f"{trigger_type:26s} {count:>6d} {hit_rate:>9.1%} {mean_return:>13.2%}"
+                )
+
+            scored_records.sort(key=lambda item: item["score"])
+            if scored_records:
+                click.echo("")
+                click.echo("Conviction calibration")
+                click.echo("-" * 72)
+                buckets = [("low", 0.0, 0.33), ("mid", 0.33, 0.67), ("high", 0.67, 1.01)]
+                total = len(scored_records)
+                for label, lower, upper in buckets:
+                    start_idx = int(total * lower)
+                    end_idx = int(total * upper)
+                    bucket = scored_records[start_idx:end_idx]
+                    if not bucket:
+                        continue
+                    hit_rate = sum(1 for r in bucket if r["avg_return"] > 0) / len(bucket)
+                    mean_return = sum(r["avg_return"] for r in bucket) / len(bucket)
+                    avg_score = sum(r["score"] for r in bucket) / len(bucket)
+                    click.echo(
+                        f"{label:>4s}  count={len(bucket):>4d}  avg_score={avg_score:>6.1f}  "
+                        f"hit_rate={hit_rate:>6.1%}  mean_return={mean_return:>7.2%}"
+                    )
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
+@main.group()
 def backtest() -> None:
     """Backtest commands."""
 

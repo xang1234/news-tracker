@@ -1,19 +1,12 @@
 import { SlidersHorizontal, ChevronDown, ChevronUp } from 'lucide-react';
 import { TRIGGER_TYPE_LABELS } from '@/lib/constants';
-
-export interface AlertFilterValues {
-  severity: string;
-  triggerType: string;
-  acknowledged: string;
-  limit: number;
-}
-
-export const DEFAULT_ALERT_FILTERS: AlertFilterValues = {
-  severity: '',
-  triggerType: '',
-  acknowledged: '',
-  limit: 25,
-};
+import {
+  LIMIT_OPTIONS,
+  SEVERITIES,
+  SUBJECT_TYPES,
+  TRIGGER_KEYS,
+  type AlertFilterValues,
+} from '@/components/domain/alertFilterState';
 
 interface AlertFiltersProps {
   isOpen: boolean;
@@ -21,10 +14,6 @@ interface AlertFiltersProps {
   filters: AlertFilterValues;
   onChange: (filters: AlertFilterValues) => void;
 }
-
-const SEVERITIES = ['critical', 'warning', 'info'];
-const TRIGGER_KEYS = Object.keys(TRIGGER_TYPE_LABELS);
-const LIMIT_OPTIONS = [25, 50, 100];
 
 export function AlertFilters({
   isOpen,
@@ -47,7 +36,7 @@ export function AlertFilters({
       </button>
 
       {isOpen && (
-        <div className="grid grid-cols-1 gap-4 border-t border-border px-4 py-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 border-t border-border px-4 py-4 sm:grid-cols-2 lg:grid-cols-5">
           {/* Severity */}
           <div>
             <label className="mb-2 block text-xs font-medium text-muted-foreground">
@@ -81,6 +70,25 @@ export function AlertFilters({
               {TRIGGER_KEYS.map((key) => (
                 <option key={key} value={key}>
                   {TRIGGER_TYPE_LABELS[key]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Acknowledged */}
+          <div>
+            <label className="mb-2 block text-xs font-medium text-muted-foreground">
+              Subject
+            </label>
+            <select
+              value={filters.subjectType}
+              onChange={(e) => onChange({ ...filters, subjectType: e.target.value })}
+              className="w-full rounded border border-border bg-background px-3 py-1.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            >
+              <option value="">All Subjects</option>
+              {SUBJECT_TYPES.map((subjectType) => (
+                <option key={subjectType.value} value={subjectType.value}>
+                  {subjectType.label}
                 </option>
               ))}
             </select>

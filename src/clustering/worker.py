@@ -24,6 +24,7 @@ import structlog
 from src.clustering.config import ClusteringConfig
 from src.clustering.queue import ClusteringJob, ClusteringQueue
 from src.config.settings import get_settings
+from src.narrative.queue import NarrativeQueue
 from src.observability.metrics import get_metrics
 from src.queues.backoff import ExponentialBackoff
 from src.storage.database import Database
@@ -83,6 +84,7 @@ class ClusteringWorker:
         self._doc_repo: DocumentRepository | None = None
         self._theme_repo: ThemeRepository | None = None
         self._redis: redis.Redis | None = None
+        self._narrative_queue: NarrativeQueue | None = None
         self._running = False
 
         logger.info(
@@ -106,6 +108,9 @@ class ClusteringWorker:
         # Create repositories
         self._doc_repo = DocumentRepository(self._database)
         self._theme_repo = ThemeRepository(self._database)
+        if settings.narrative_enabled:
+            self._narrative_queue = NarrativeQueue()
+            await self._narrative_queue.connect()
 
     async def start(self) -> None:
         """
@@ -165,6 +170,9 @@ class ClusteringWorker:
         await self._database.close()
         if self._redis:
             await self._redis.close()
+        if self._narrative_queue:
+            await self._narrative_queue.close()
+            self._narrative_queue = None
         logger.info("Clustering worker cleaned up")
 
     async def _process_loop(self) -> None:
@@ -328,6 +336,20 @@ class ClusteringWorker:
                     theme_id=theme.theme_id,
                     similarity=round(similarity, 4),
                 )
+
+                if self._narrative_queue is not None:
+                    try:
+                        await self._narrative_queue.publish(
+                            document_id=job.document_id,
+                            theme_id=theme.theme_id,
+                            theme_similarity=similarity,
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Failed to enqueue narrative job",
+                            document_id=job.document_id,
+                            theme_id=theme.theme_id,
+                        )
 
                 await self._queue.ack(job.message_id)
 

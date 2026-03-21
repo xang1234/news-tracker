@@ -14,6 +14,16 @@ interface AlertCardProps {
 export function AlertCard({ alert, onAcknowledge, isAcknowledging }: AlertCardProps) {
   const severityColor = SEVERITY_COLORS[alert.severity] ?? 'bg-slate-500/20 text-slate-400';
   const triggerLabel = TRIGGER_TYPE_LABELS[alert.trigger_type] ?? alert.trigger_type;
+  const subjectLabel = {
+    theme: 'Theme',
+    narrative_run: 'Narrative Run',
+    graph_node: 'Graph Node',
+  }[alert.subject_type] ?? alert.subject_type;
+  const destination =
+    alert.subject_type === 'narrative_run'
+      ? `/themes/${alert.theme_id}?tab=narratives&run=${alert.subject_id}`
+      : `/themes/${alert.theme_id}`;
+  const destinationLabel = alert.subject_type === 'narrative_run' ? 'View Run' : 'View Theme';
 
   return (
     <div
@@ -30,6 +40,14 @@ export function AlertCard({ alert, onAcknowledge, isAcknowledging }: AlertCardPr
         <span className="rounded-full bg-secondary px-2 py-0.5 text-muted-foreground">
           {triggerLabel}
         </span>
+        <span className="rounded-full border border-border px-2 py-0.5 text-muted-foreground">
+          {subjectLabel}
+        </span>
+        {alert.conviction_score != null && (
+          <span className="rounded-full bg-primary/15 px-2 py-0.5 text-primary">
+            {Math.round(alert.conviction_score)} conviction
+          </span>
+        )}
         {alert.acknowledged && (
           <span className="flex items-center gap-1 text-emerald-400">
             <CheckCircle className="h-3 w-3" />
@@ -52,11 +70,11 @@ export function AlertCard({ alert, onAcknowledge, isAcknowledging }: AlertCardPr
       {/* Bottom row: theme link + acknowledge button */}
       <div className="mt-3 flex items-center gap-2 text-xs">
         <Link
-          to={`/themes/${alert.theme_id}`}
+          to={destination}
           className="flex items-center gap-1 text-primary hover:underline"
           onClick={(e) => e.stopPropagation()}
         >
-          View Theme
+          {destinationLabel}
         </Link>
         {!alert.acknowledged && onAcknowledge && (
           <button

@@ -5,9 +5,11 @@ import { MetricCard, MetricCardSkeleton } from '@/components/domain/MetricCard';
 import { AlertCard, AlertCardSkeleton } from '@/components/domain/AlertCard';
 import {
   AlertFilters,
+} from '@/components/domain/AlertFilters';
+import {
   DEFAULT_ALERT_FILTERS,
   type AlertFilterValues,
-} from '@/components/domain/AlertFilters';
+} from '@/components/domain/alertFilterState';
 import {
   useAlerts,
   useAcknowledgeAlert,
@@ -19,6 +21,7 @@ function buildApiFilters(f: AlertFilterValues, offset: number): ApiAlertFilters 
   return {
     severity: f.severity || undefined,
     trigger_type: f.triggerType || undefined,
+    subject_type: f.subjectType || undefined,
     acknowledged: f.acknowledged === '' ? undefined : f.acknowledged === 'true',
     limit: f.limit,
     offset,
@@ -54,6 +57,7 @@ export default function Alerts() {
   const activeFilterCount = [
     filters.severity,
     filters.triggerType,
+    filters.subjectType,
     filters.acknowledged,
   ].filter(Boolean).length;
 

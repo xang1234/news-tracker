@@ -12,6 +12,7 @@ import structlog
 from src.api.auth import verify_api_key
 from src.api.dependencies import (
     get_document_repository,
+    get_narrative_repository,
     get_ranking_service,
     get_sentiment_aggregator,
     get_theme_repository,
@@ -20,6 +21,14 @@ from src.api.rate_limit import limiter
 from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     ErrorResponse,
+    NarrativeAlertSummary,
+    NarrativeBucketPoint,
+    NarrativeDocumentItem,
+    NarrativeMomentumResponse,
+    NarrativeRunDocumentsResponse,
+    NarrativeRunDetailResponse,
+    NarrativeRunItem,
+    NarrativeTickerCount,
     RankedThemeItem,
     RankedThemesResponse,
     ThemeDetailResponse,
@@ -30,7 +39,9 @@ from src.api.models import (
     ThemeMetricsItem,
     ThemeMetricsResponse,
     ThemeSentimentResponse,
+    ThemeNarrativesResponse,
 )
+from src.narrative.repository import NarrativeRepository
 from src.sentiment.aggregation import DocumentSentiment, SentimentAggregator
 from src.storage.repository import DocumentRepository
 from src.themes.ranking import ThemeRankingService
@@ -56,6 +67,72 @@ def _theme_to_item(theme: Theme, include_centroid: bool = False) -> ThemeItem:
         updated_at=theme.updated_at.isoformat(),
         metadata=theme.metadata,
         centroid=theme.centroid.tolist() if include_centroid else None,
+    )
+
+
+async def _run_to_item(
+    narrative_repo: NarrativeRepository,
+    run,
+    theme_name: str | None = None,
+) -> NarrativeRunItem:
+    recent_alerts = await narrative_repo.get_recent_alerts(run.run_id, limit=3)
+    buckets = await narrative_repo.get_recent_buckets(run.run_id, limit=12)
+    ordered_tickers = sorted(
+        run.ticker_counts.items(),
+        key=lambda item: (-item[1], item[0]),
+    )
+    return NarrativeRunItem(
+        run_id=run.run_id,
+        theme_id=run.theme_id,
+        theme_name=theme_name,
+        status=run.status,
+        label=run.label,
+        conviction_score=round(run.conviction_score, 2),
+        current_rate_per_hour=round(run.current_rate_per_hour, 3),
+        current_acceleration=round(run.current_acceleration, 3),
+        platform_count=run.platform_count,
+        top_tickers=[
+            NarrativeTickerCount(ticker=ticker, count=count)
+            for ticker, count in ordered_tickers[:5]
+        ],
+        last_document_at=run.last_document_at.isoformat(),
+        started_at=run.started_at.isoformat(),
+        recent_alerts=[
+            NarrativeAlertSummary(
+                alert_id=alert["alert_id"],
+                trigger_type=alert["trigger_type"],
+                severity=alert["severity"],
+                conviction_score=alert.get("conviction_score"),
+                title=alert["title"],
+                created_at=alert["created_at"].isoformat(),
+            )
+            for alert in recent_alerts
+        ],
+        sparkline=[
+            NarrativeBucketPoint(
+                bucket_start=bucket.bucket_start.isoformat(),
+                doc_count=bucket.doc_count,
+            )
+            for bucket in buckets
+        ],
+    )
+
+
+def _narrative_document_item(doc: dict) -> NarrativeDocumentItem:
+    sentiment = doc.get("sentiment") or {}
+    return NarrativeDocumentItem(
+        document_id=doc["document_id"],
+        platform=doc.get("platform"),
+        title=doc.get("title"),
+        content_preview=doc.get("content_preview"),
+        url=doc.get("url"),
+        author_name=doc.get("author_name"),
+        tickers=doc.get("tickers") or [],
+        authority_score=doc.get("authority_score"),
+        sentiment_label=sentiment.get("label"),
+        sentiment_confidence=sentiment.get("confidence"),
+        similarity=round(float(doc.get("similarity") or 0.0), 4),
+        timestamp=doc["timestamp"].isoformat() if doc.get("timestamp") else None,
     )
 
 
@@ -206,6 +283,34 @@ async def get_ranked_themes(
 
 
 @router.get(
+    "/themes/momentum",
+    response_model=NarrativeMomentumResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Invalid API key"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
+    summary="Get global narrative momentum feed",
+    description="List the hottest narrative runs across all themes.",
+)
+@limiter.limit(lambda: _get_settings().rate_limit_default)
+async def get_theme_momentum(
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=100, description="Maximum runs to return"),
+    api_key: str = Depends(verify_api_key),
+    narrative_repo: NarrativeRepository = Depends(get_narrative_repository),
+) -> NarrativeMomentumResponse:
+    start_time = time.perf_counter()
+    rows = await narrative_repo.list_global_momentum(limit=limit)
+    items = [await _run_to_item(narrative_repo, row["run"], row["theme_name"]) for row in rows]
+    latency_ms = (time.perf_counter() - start_time) * 1000
+    return NarrativeMomentumResponse(
+        runs=items,
+        total=len(items),
+        latency_ms=round(latency_ms, 2),
+    )
+
+
+@router.get(
     "/themes/{theme_id}",
     response_model=ThemeDetailResponse,
     responses={
@@ -258,6 +363,147 @@ async def get_theme(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get theme",
         )
+
+
+@router.get(
+    "/themes/{theme_id}/narratives",
+    response_model=ThemeNarrativesResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Invalid API key"},
+        404: {"model": ErrorResponse, "description": "Theme not found"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
+    summary="Get narrative runs for a theme",
+    description="List narrative momentum runs under a theme.",
+)
+@limiter.limit(lambda: _get_settings().rate_limit_default)
+async def get_theme_narratives(
+    request: Request,
+    theme_id: str,
+    run_status: str | None = Query(default=None, description="Optional run status filter"),
+    limit: int = Query(default=20, ge=1, le=100, description="Maximum runs to return"),
+    api_key: str = Depends(verify_api_key),
+    theme_repo: ThemeRepository = Depends(get_theme_repository),
+    narrative_repo: NarrativeRepository = Depends(get_narrative_repository),
+) -> ThemeNarrativesResponse:
+    start_time = time.perf_counter()
+
+    theme = await theme_repo.get_by_id(theme_id)
+    if theme is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Theme {theme_id!r} not found",
+        )
+
+    runs = await narrative_repo.list_theme_runs(theme_id=theme_id, status=run_status, limit=limit)
+    items = [await _run_to_item(narrative_repo, run, theme.name) for run in runs]
+    latency_ms = (time.perf_counter() - start_time) * 1000
+    return ThemeNarrativesResponse(
+        theme_id=theme_id,
+        runs=items,
+        total=len(items),
+        latency_ms=round(latency_ms, 2),
+    )
+
+
+@router.get(
+    "/themes/{theme_id}/narratives/{run_id}",
+    response_model=NarrativeRunDetailResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Invalid API key"},
+        404: {"model": ErrorResponse, "description": "Theme or run not found"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
+    summary="Get narrative run detail",
+    description="Get a narrative run, its timeline, and recent documents.",
+)
+@limiter.limit(lambda: _get_settings().rate_limit_default)
+async def get_theme_narrative_detail(
+    request: Request,
+    theme_id: str,
+    run_id: str,
+    limit: int = Query(default=20, ge=1, le=100, description="Maximum documents to return"),
+    api_key: str = Depends(verify_api_key),
+    theme_repo: ThemeRepository = Depends(get_theme_repository),
+    narrative_repo: NarrativeRepository = Depends(get_narrative_repository),
+) -> NarrativeRunDetailResponse:
+    start_time = time.perf_counter()
+
+    theme = await theme_repo.get_by_id(theme_id)
+    if theme is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Theme {theme_id!r} not found",
+        )
+
+    run = await narrative_repo.get_by_id(run_id)
+    if run is None or run.theme_id != theme_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Narrative run {run_id!r} not found for theme {theme_id!r}",
+        )
+
+    run_item = await _run_to_item(narrative_repo, run, theme.name)
+    docs = await narrative_repo.get_run_documents(run_id, limit=limit)
+    items = [_narrative_document_item(doc) for doc in docs]
+
+    latency_ms = (time.perf_counter() - start_time) * 1000
+    return NarrativeRunDetailResponse(
+        run=run_item,
+        platform_timeline=run.platform_first_seen,
+        ticker_counts=run.ticker_counts,
+        documents=items,
+        latency_ms=round(latency_ms, 2),
+    )
+
+
+@router.get(
+    "/themes/{theme_id}/narratives/{run_id}/documents",
+    response_model=NarrativeRunDocumentsResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Invalid API key"},
+        404: {"model": ErrorResponse, "description": "Theme or run not found"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
+    summary="Get documents for a narrative run",
+    description="List recent documents assigned to a narrative run.",
+)
+@limiter.limit(lambda: _get_settings().rate_limit_default)
+async def get_theme_narrative_documents(
+    request: Request,
+    theme_id: str,
+    run_id: str,
+    limit: int = Query(default=50, ge=1, le=200, description="Maximum documents to return"),
+    api_key: str = Depends(verify_api_key),
+    theme_repo: ThemeRepository = Depends(get_theme_repository),
+    narrative_repo: NarrativeRepository = Depends(get_narrative_repository),
+) -> NarrativeRunDocumentsResponse:
+    start_time = time.perf_counter()
+
+    theme = await theme_repo.get_by_id(theme_id)
+    if theme is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Theme {theme_id!r} not found",
+        )
+
+    run = await narrative_repo.get_by_id(run_id)
+    if run is None or run.theme_id != theme_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Narrative run {run_id!r} not found for theme {theme_id!r}",
+        )
+
+    docs = await narrative_repo.get_run_documents(run_id, limit=limit)
+    items = [_narrative_document_item(doc) for doc in docs]
+    latency_ms = (time.perf_counter() - start_time) * 1000
+    return NarrativeRunDocumentsResponse(
+        theme_id=theme_id,
+        run_id=run_id,
+        documents=items,
+        total=len(items),
+        latency_ms=round(latency_ms, 2),
+    )
 
 
 @router.get(
@@ -551,5 +797,3 @@ async def get_theme_metrics(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get theme metrics",
         )
-
-

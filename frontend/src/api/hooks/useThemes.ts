@@ -38,6 +38,86 @@ export interface ThemeDetailResponse {
   latency_ms: number;
 }
 
+export interface NarrativeAlertSummary {
+  alert_id: string;
+  trigger_type: string;
+  severity: string;
+  conviction_score: number | null;
+  title: string;
+  created_at: string;
+}
+
+export interface NarrativeBucketPoint {
+  bucket_start: string;
+  doc_count: number;
+}
+
+export interface NarrativeTickerCount {
+  ticker: string;
+  count: number;
+}
+
+export interface NarrativeDocumentItem {
+  document_id: string;
+  platform: string | null;
+  title: string | null;
+  content_preview: string | null;
+  url: string | null;
+  author_name: string | null;
+  tickers: string[];
+  authority_score: number | null;
+  sentiment_label: string | null;
+  sentiment_confidence: number | null;
+  similarity: number;
+  timestamp: string | null;
+}
+
+export interface NarrativeRunItem {
+  run_id: string;
+  theme_id: string;
+  theme_name: string | null;
+  status: string;
+  label: string;
+  conviction_score: number;
+  current_rate_per_hour: number;
+  current_acceleration: number;
+  platform_count: number;
+  top_tickers: NarrativeTickerCount[];
+  last_document_at: string;
+  started_at: string;
+  recent_alerts: NarrativeAlertSummary[];
+  sparkline: NarrativeBucketPoint[];
+}
+
+export interface NarrativeMomentumResponse {
+  runs: NarrativeRunItem[];
+  total: number;
+  latency_ms: number;
+}
+
+export interface ThemeNarrativesResponse {
+  theme_id: string;
+  runs: NarrativeRunItem[];
+  total: number;
+  latency_ms: number;
+}
+
+export interface NarrativeRunDetailResponse {
+  run: NarrativeRunItem;
+  platform_timeline: Record<string, string>;
+  ticker_counts: Record<string, number>;
+  documents: NarrativeDocumentItem[];
+  latency_ms: number;
+}
+
+export interface NarrativeRunDocumentsResponse {
+  theme_id: string;
+  run_id: string;
+  documents: NarrativeDocumentItem[];
+  total: number;
+  latency_ms: number;
+}
+
 // ── Ranked themes ──
 
 export interface RankedThemeItem {
@@ -185,6 +265,62 @@ export function useThemeDetail(id: string | undefined) {
     },
     enabled: !!id,
     staleTime: 60_000,
+  });
+}
+
+export function useThemeMomentum() {
+  return useQuery({
+    queryKey: queryKeys.themeMomentum(),
+    queryFn: async (): Promise<NarrativeMomentumResponse> => {
+      const { data } = await api.get<NarrativeMomentumResponse>('/themes/momentum');
+      return data;
+    },
+    staleTime: 15_000,
+    retry: 1,
+  });
+}
+
+export function useThemeNarratives(id: string | undefined, runStatus?: string) {
+  return useQuery({
+    queryKey: queryKeys.themeNarratives(id ?? ''),
+    queryFn: async (): Promise<ThemeNarrativesResponse> => {
+      const params: Record<string, unknown> = {};
+      if (runStatus) params.run_status = runStatus;
+      const { data } = await api.get<ThemeNarrativesResponse>(`/themes/${id}/narratives`, { params });
+      return data;
+    },
+    enabled: !!id,
+    staleTime: 20_000,
+    retry: 1,
+  });
+}
+
+export function useThemeNarrativeDetail(themeId: string | undefined, runId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.themeNarrative(themeId ?? '', runId ?? ''),
+    queryFn: async (): Promise<NarrativeRunDetailResponse> => {
+      const { data } = await api.get<NarrativeRunDetailResponse>(`/themes/${themeId}/narratives/${runId}`);
+      return data;
+    },
+    enabled: !!themeId && !!runId,
+    staleTime: 20_000,
+    retry: 1,
+  });
+}
+
+export function useThemeNarrativeDocuments(themeId: string | undefined, runId: string | undefined, limit = 20) {
+  return useQuery({
+    queryKey: queryKeys.themeNarrativeDocuments(themeId ?? '', runId ?? ''),
+    queryFn: async (): Promise<NarrativeRunDocumentsResponse> => {
+      const { data } = await api.get<NarrativeRunDocumentsResponse>(
+        `/themes/${themeId}/narratives/${runId}/documents`,
+        { params: { limit } },
+      );
+      return data;
+    },
+    enabled: !!themeId && !!runId,
+    staleTime: 20_000,
+    retry: 1,
   });
 }
 

@@ -238,6 +238,9 @@ class Settings(BaseSettings):
     clustering_stream_name: str = Field(default="clustering_queue", description="Redis stream for clustering jobs")
     clustering_consumer_group: str = Field(default="clustering_workers", description="Consumer group for clustering workers")
 
+    # Narrative momentum
+    narrative_enabled: bool = Field(default=False, description="Enable narrative momentum processing")
+
     # Sentiment Analysis
     sentiment_model_name: str = Field(default="ProsusAI/finbert", description="Model for sentiment analysis")
     sentiment_batch_size: int = Field(default=16, ge=1, le=64, description="Batch size for sentiment analysis")

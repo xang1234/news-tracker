@@ -12,6 +12,7 @@ from src.api.dependencies import get_database, get_embedding_service, get_redis_
 from src.api.models import ComponentHealth, HealthResponse, QueueMetrics
 from src.config.settings import get_settings
 from src.embedding.service import EmbeddingService, ModelType
+from src.narrative.config import NarrativeConfig
 from src.storage.database import Database
 
 router = APIRouter()
@@ -64,6 +65,9 @@ async def _get_queue_depths(redis_client) -> dict[str, QueueMetrics]:
         settings.sentiment_stream_name: settings.sentiment_consumer_group,
         settings.clustering_stream_name: settings.clustering_consumer_group,
     }
+    if settings.narrative_enabled:
+        narrative_config = NarrativeConfig()
+        stream_groups[narrative_config.stream_name] = narrative_config.consumer_group
 
     depths: dict[str, QueueMetrics] = {}
     for stream, group_name in stream_groups.items():

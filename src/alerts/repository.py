@@ -36,17 +36,20 @@ class AlertRepository:
         """
         sql = """
             INSERT INTO alerts (
-                alert_id, theme_id, trigger_type, severity,
-                title, message, trigger_data, acknowledged, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                alert_id, theme_id, subject_type, subject_id, trigger_type, severity,
+                conviction_score, title, message, trigger_data, acknowledged, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             RETURNING *
         """
         row = await self._db.fetchrow(
             sql,
             alert.alert_id,
             alert.theme_id,
+            alert.subject_type,
+            alert.subject_id or alert.theme_id,
             alert.trigger_type,
             alert.severity,
+            alert.conviction_score,
             alert.title,
             alert.message,
             json.dumps(alert.trigger_data),
@@ -96,6 +99,7 @@ class AlertRepository:
         severity: str | None = None,
         trigger_type: str | None = None,
         theme_id: str | None = None,
+        subject_type: str | None = None,
         acknowledged: bool | None = None,
         limit: int = 50,
         offset: int = 0,
@@ -133,6 +137,11 @@ class AlertRepository:
         if theme_id is not None:
             conditions.append(f"theme_id = ${param_idx}")
             params.append(theme_id)
+            param_idx += 1
+
+        if subject_type is not None:
+            conditions.append(f"subject_type = ${param_idx}")
+            params.append(subject_type)
             param_idx += 1
 
         if acknowledged is not None:
@@ -203,8 +212,11 @@ def _row_to_alert(row: Any) -> Alert:
     return Alert(
         alert_id=row["alert_id"],
         theme_id=row["theme_id"],
+        subject_type=row.get("subject_type", "theme"),
+        subject_id=row.get("subject_id"),
         trigger_type=row["trigger_type"],
         severity=row["severity"],
+        conviction_score=row.get("conviction_score"),
         title=row["title"],
         message=row["message"],
         trigger_data=trigger_data,

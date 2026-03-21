@@ -15,6 +15,7 @@ from src.graph.causal_graph import CausalGraph
 from src.graph.config import GraphConfig
 from src.graph.propagation import SentimentPropagation
 from src.graph.storage import GraphRepository
+from src.narrative.repository import NarrativeRepository
 from src.embedding.config import EmbeddingConfig
 from src.embedding.service import EmbeddingService
 from src.sentiment.aggregation import SentimentAggregator
@@ -48,6 +49,7 @@ _document_repository: DocumentRepository | None = None
 _sentiment_aggregator: SentimentAggregator | None = None
 _ranking_service: ThemeRankingService | None = None
 _alert_repository: AlertRepository | None = None
+_narrative_repository: NarrativeRepository | None = None
 _causal_graph: CausalGraph | None = None
 _propagation_service: SentimentPropagation | None = None
 _feedback_repository: FeedbackRepository | None = None
@@ -310,6 +312,22 @@ async def get_alert_repository() -> AlertRepository:
                 _alert_repository = AlertRepository(_database)
 
     return _alert_repository
+
+
+async def get_narrative_repository() -> NarrativeRepository:
+    """Get narrative repository instance."""
+    global _narrative_repository, _database
+
+    if _narrative_repository is None:
+        async with _init_lock:
+            if _narrative_repository is None:
+                if _database is None:
+                    _database = Database()
+                    await _database.connect()
+
+                _narrative_repository = NarrativeRepository(_database)
+
+    return _narrative_repository
 
 
 async def get_feedback_repository() -> FeedbackRepository:

@@ -21,6 +21,10 @@ AlertTriggerType = Literal[
     "propagated_impact",
     "embedding_drift",
     "cluster_instability",
+    "narrative_surge",
+    "cross_platform_breakout",
+    "authority_divergence",
+    "sentiment_regime_shift",
 ]
 
 VALID_TRIGGER_TYPES: frozenset[str] = frozenset({
@@ -32,6 +36,10 @@ VALID_TRIGGER_TYPES: frozenset[str] = frozenset({
     "propagated_impact",
     "embedding_drift",
     "cluster_instability",
+    "narrative_surge",
+    "cross_platform_breakout",
+    "authority_divergence",
+    "sentiment_regime_shift",
 })
 
 AlertSeverity = Literal["critical", "warning", "info"]
@@ -49,9 +57,12 @@ class Alert:
 
     Attributes:
         alert_id: UUID4 identifier.
-        theme_id: Theme that triggered the alert.
+        theme_id: Parent theme that triggered the alert.
+        subject_type: Domain entity type for the alert subject.
+        subject_id: Domain entity identifier for the alert subject.
         trigger_type: What condition was detected.
         severity: Urgency level (critical, warning, info).
+        conviction_score: Optional 0-100 narrative conviction score.
         title: Short human-readable summary.
         message: Detailed description of the condition.
         trigger_data: JSONB payload with trigger-specific context.
@@ -65,6 +76,9 @@ class Alert:
     title: str
     message: str
     alert_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    subject_type: str = "theme"
+    subject_id: str | None = None
+    conviction_score: float | None = None
     trigger_data: dict[str, Any] = field(default_factory=dict)
     acknowledged: bool = False
     created_at: datetime = field(
@@ -88,8 +102,11 @@ class Alert:
         return {
             "alert_id": self.alert_id,
             "theme_id": self.theme_id,
+            "subject_type": self.subject_type,
+            "subject_id": self.subject_id or self.theme_id,
             "trigger_type": self.trigger_type,
             "severity": self.severity,
+            "conviction_score": self.conviction_score,
             "title": self.title,
             "message": self.message,
             "trigger_data": self.trigger_data,
@@ -120,8 +137,11 @@ class Alert:
         return cls(
             alert_id=data.get("alert_id", str(uuid.uuid4())),
             theme_id=data["theme_id"],
+            subject_type=data.get("subject_type", "theme"),
+            subject_id=data.get("subject_id"),
             trigger_type=data["trigger_type"],
             severity=data["severity"],
+            conviction_score=data.get("conviction_score"),
             title=data["title"],
             message=data["message"],
             trigger_data=trigger_data,

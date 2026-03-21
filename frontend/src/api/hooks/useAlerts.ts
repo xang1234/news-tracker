@@ -8,6 +8,7 @@ export interface AlertFilters {
   severity?: string;
   trigger_type?: string;
   theme_id?: string;
+  subject_type?: string;
   acknowledged?: boolean;
   limit?: number;
   offset?: number;
@@ -18,8 +19,11 @@ export interface AlertFilters {
 export interface AlertItem {
   alert_id: string;
   theme_id: string;
+  subject_type: string;
+  subject_id: string;
   trigger_type: string;
   severity: string;
+  conviction_score: number | null;
   title: string;
   message: string;
   trigger_data: Record<string, unknown>;
@@ -50,6 +54,7 @@ export function useAlerts(filters?: AlertFilters) {
         if (filters.severity) params.severity = filters.severity;
         if (filters.trigger_type) params.trigger_type = filters.trigger_type;
         if (filters.theme_id) params.theme_id = filters.theme_id;
+        if (filters.subject_type) params.subject_type = filters.subject_type;
         if (filters.acknowledged != null) params.acknowledged = filters.acknowledged;
         if (filters.limit != null) params.limit = filters.limit;
         if (filters.offset != null) params.offset = filters.offset;

@@ -47,6 +47,10 @@ async def list_alerts(
         default=None,
         description="Filter by theme identifier",
     ),
+    subject_type: str | None = Query(
+        default=None,
+        description="Filter by alert subject type: theme, narrative_run, graph_node",
+    ),
     acknowledged: bool | None = Query(
         default=None,
         description="Filter by acknowledgement status",
@@ -82,6 +86,7 @@ async def list_alerts(
             severity=severity,
             trigger_type=trigger_type,
             theme_id=theme_id,
+            subject_type=subject_type,
             acknowledged=acknowledged,
             limit=limit,
             offset=offset,
@@ -91,8 +96,11 @@ async def list_alerts(
             AlertItem(
                 alert_id=a.alert_id,
                 theme_id=a.theme_id,
+                subject_type=a.subject_type,
+                subject_id=a.subject_id or a.theme_id,
                 trigger_type=a.trigger_type,
                 severity=a.severity,
+                conviction_score=a.conviction_score,
                 title=a.title,
                 message=a.message,
                 trigger_data=a.trigger_data,
