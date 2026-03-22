@@ -1,7 +1,7 @@
 """Tests for EmbeddingService."""
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import numpy as np
 import pytest
@@ -30,6 +30,7 @@ class TestEmbeddingServiceInitialization:
         assert config.embedding_dim == 768
         assert config.max_sequence_length == 512
         assert config.batch_size == 32
+        assert config.backend == "auto"
 
     def test_device_detection_cpu(self, embedding_config):
         """Should detect CPU when no GPU available."""
@@ -90,6 +91,40 @@ class TestEmbeddingGeneration:
         assert len(embeddings) == 3
         for emb in embeddings:
             assert len(emb) == 768
+
+    @pytest.mark.asyncio
+    async def test_embed_batch_uses_true_model_batching(
+        self,
+        embedding_config,
+        mock_tokenizer,
+        mock_model,
+    ):
+        """Single-chunk texts should be inferred in one model call per batch slice."""
+        service = EmbeddingService(config=embedding_config)
+        service._tokenizers = {
+            ModelType.FINBERT: mock_tokenizer,
+            ModelType.MINILM: mock_tokenizer,
+        }
+        service._models = {
+            ModelType.FINBERT: mock_model,
+            ModelType.MINILM: mock_model,
+        }
+        service._device = torch.device("cpu")
+        service._runtime = service._resolve_runtime()
+        service._initialized = {
+            ModelType.FINBERT: True,
+            ModelType.MINILM: True,
+        }
+
+        texts = [
+            "NVIDIA reports strong Q4 earnings",
+            "AMD launches new MI300X accelerator",
+            "Intel restructures datacenter business",
+        ]
+        embeddings = await service.embed_batch(texts)
+
+        assert len(embeddings) == 3
+        assert mock_model.call_count == 1
 
     @pytest.mark.asyncio
     async def test_embed_batch_empty(self, mock_embedding_service):
@@ -259,13 +294,16 @@ class TestServiceStats:
         assert stats["initialized"] == {ModelType.FINBERT: False, ModelType.MINILM: False}
         assert stats["finbert_model"] == "ProsusAI/finbert"
         assert stats["device"] == "not initialized"
+        assert stats["backend"] == "torch"
 
     def test_get_stats_initialized(self, mock_embedding_service):
         """Should return stats for initialized service."""
+        mock_embedding_service._runtime = mock_embedding_service._resolve_runtime()
         stats = mock_embedding_service.get_stats()
 
         assert stats["initialized"][ModelType.FINBERT] is True
         assert stats["finbert_dim"] == 768
+        assert stats["backend"] == "torch"
 
     @pytest.mark.asyncio
     async def test_close_service(self, mock_embedding_service):

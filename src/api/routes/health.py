@@ -5,13 +5,13 @@ Health check endpoint with comprehensive infrastructure checks.
 import time
 
 import structlog
-import torch
 from fastapi import APIRouter, Depends
 
-from src.api.dependencies import get_database, get_embedding_service, get_redis_client
+from src.api.dependencies import get_database, get_embedding_service
 from src.api.models import ComponentHealth, HealthResponse, QueueMetrics
 from src.config.settings import get_settings
 from src.embedding.service import EmbeddingService, ModelType
+from src.inference.runtime import gpu_available
 from src.narrative.config import NarrativeConfig
 from src.storage.database import Database
 
@@ -96,16 +96,10 @@ async def _get_queue_depths(redis_client) -> dict[str, QueueMetrics]:
             lag = group_info.get("lag")
             entries_read = group_info.get("entries-read")
 
-            if lag is not None:
-                pending = lag + in_flight
-            else:
-                # Redis < 7.0 fallback: estimate from stream length
-                pending = stream_len
-
-            if entries_read is not None:
-                processed = max(0, entries_read - in_flight)
-            else:
-                processed = 0
+            pending = lag + in_flight if lag is not None else stream_len
+            processed = (
+                max(0, entries_read - in_flight) if entries_read is not None else 0
+            )
 
             depths[stream] = QueueMetrics(pending=pending, processed=processed)
         except Exception:
@@ -190,7 +184,7 @@ async def health_check(
         status=status,
         models_loaded=models_loaded,
         cache_available=cache_available,
-        gpu_available=torch.cuda.is_available(),
+        gpu_available=gpu_available(),
         service_stats=service_stats,
         components=components,
         queue_depths=queue_depths,

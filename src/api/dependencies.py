@@ -3,37 +3,37 @@ Dependency injection for FastAPI endpoints.
 """
 
 import asyncio
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import redis.asyncio as redis
 
 from src.alerts.broadcaster import AlertBroadcaster
 from src.alerts.repository import AlertRepository
-from src.feedback.repository import FeedbackRepository
 from src.config.settings import get_settings
+from src.embedding.config import EmbeddingConfig
+from src.embedding.service import EmbeddingService
+from src.event_extraction.config import EventExtractionConfig
+from src.event_extraction.patterns import PatternExtractor
+from src.feedback.repository import FeedbackRepository
 from src.graph.causal_graph import CausalGraph
 from src.graph.config import GraphConfig
 from src.graph.propagation import SentimentPropagation
 from src.graph.storage import GraphRepository
+from src.keywords.config import KeywordsConfig
+from src.keywords.service import KeywordsService
 from src.narrative.repository import NarrativeRepository
-from src.embedding.config import EmbeddingConfig
-from src.embedding.service import EmbeddingService
+from src.ner.config import NERConfig
+from src.ner.service import NERService
+from src.security_master.repository import SecurityMasterRepository
 from src.sentiment.aggregation import SentimentAggregator
 from src.sentiment.config import SentimentConfig
 from src.sentiment.service import SentimentService
+from src.sources.repository import SourcesRepository
 from src.storage.database import Database
 from src.storage.repository import DocumentRepository
 from src.themes.ranking import ThemeRankingService
 from src.themes.repository import ThemeRepository
 from src.vectorstore.manager import VectorStoreManager
-from src.ner.config import NERConfig
-from src.ner.service import NERService
-from src.keywords.config import KeywordsConfig
-from src.keywords.service import KeywordsService
-from src.event_extraction.config import EventExtractionConfig
-from src.event_extraction.patterns import PatternExtractor
-from src.security_master.repository import SecurityMasterRepository
-from src.sources.repository import SourcesRepository
 
 # Async init lock — prevents duplicate instances under concurrent startup
 _init_lock = asyncio.Lock()
@@ -116,7 +116,11 @@ async def get_embedding_service() -> EmbeddingService:
                     model_name=settings.embedding_model_name,
                     batch_size=settings.embedding_batch_size,
                     use_fp16=settings.embedding_use_fp16,
+                    backend=settings.embedding_backend,
                     device=settings.embedding_device,
+                    execution_provider=settings.embedding_execution_provider,
+                    onnx_model_path=settings.embedding_onnx_model_path,
+                    onnx_minilm_model_path=settings.embedding_minilm_onnx_model_path,
                     cache_enabled=settings.embedding_cache_enabled,
                     cache_ttl_hours=settings.embedding_cache_ttl_hours,
                 )
@@ -153,7 +157,10 @@ async def get_sentiment_service() -> SentimentService:
                     model_name=settings.sentiment_model_name,
                     batch_size=settings.sentiment_batch_size,
                     use_fp16=settings.sentiment_use_fp16,
+                    backend=settings.sentiment_backend,
                     device=settings.sentiment_device,
+                    execution_provider=settings.sentiment_execution_provider,
+                    onnx_model_path=settings.sentiment_onnx_model_path,
                     stream_name=settings.sentiment_stream_name,
                     consumer_group=settings.sentiment_consumer_group,
                     cache_enabled=settings.sentiment_cache_enabled,
@@ -202,7 +209,11 @@ async def get_vector_store_manager() -> "VectorStoreManager":
                         model_name=settings.embedding_model_name,
                         batch_size=settings.embedding_batch_size,
                         use_fp16=settings.embedding_use_fp16,
+                        backend=settings.embedding_backend,
                         device=settings.embedding_device,
+                        execution_provider=settings.embedding_execution_provider,
+                        onnx_model_path=settings.embedding_onnx_model_path,
+                        onnx_minilm_model_path=settings.embedding_minilm_onnx_model_path,
                         cache_enabled=settings.embedding_cache_enabled,
                         cache_ttl_hours=settings.embedding_cache_ttl_hours,
                     )

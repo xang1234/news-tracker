@@ -731,7 +731,11 @@ def vector_search(
             embedding_config = EmbeddingConfig(
                 model_name=settings.embedding_model_name,
                 batch_size=settings.embedding_batch_size,
+                backend=settings.embedding_backend,
                 device=settings.embedding_device,
+                execution_provider=settings.embedding_execution_provider,
+                onnx_model_path=settings.embedding_onnx_model_path,
+                onnx_minilm_model_path=settings.embedding_minilm_onnx_model_path,
                 cache_enabled=settings.embedding_cache_enabled,
             )
             embedding_service = EmbeddingService(

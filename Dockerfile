@@ -9,6 +9,8 @@ RUN apt-get update && \
 
 ARG XUI_INSTALL=true
 ARG XUI_PIP_SPEC=git+https://github.com/xang1234/xui.git@main
+ARG EXPORT_ONNX_MODELS=true
+ARG CPU_RUNTIME_OPTIMIZED=true
 
 # Install uv for fast dependency resolution
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -24,6 +26,15 @@ RUN uv sync --frozen --no-dev --no-install-project
 # Copy source and install the project itself
 COPY src/ src/
 RUN uv sync --frozen --no-dev
+
+# Install ONNX tooling in the builder and export CPU-optimized model artifacts.
+RUN if [ "$EXPORT_ONNX_MODELS" = "true" ]; then \
+      uv pip install -p /app/.venv/bin/python "onnx>=1.16.0" "onnxruntime>=1.20.0" "optimum>=1.23.3"; \
+      mkdir -p /app/models/embedding-finbert /app/models/embedding-minilm /app/models/sentiment-finbert; \
+      /app/.venv/bin/optimum-cli export onnx --model ProsusAI/finbert --task feature-extraction /app/models/embedding-finbert; \
+      /app/.venv/bin/optimum-cli export onnx --model sentence-transformers/all-MiniLM-L6-v2 --task feature-extraction /app/models/embedding-minilm; \
+      /app/.venv/bin/optimum-cli export onnx --model ProsusAI/finbert --task text-classification /app/models/sentiment-finbert; \
+    fi
 
 # Install xui CLI from git (private/public) when enabled.
 # Private token is passed as a BuildKit secret (id=xui_github_token) to avoid leaking in logs.
@@ -79,7 +90,11 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 ARG XUI_INSTALL=true
+ARG CPU_RUNTIME_OPTIMIZED=true
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV EMBEDDING_ONNX_MODEL_PATH=/app/models/embedding-finbert
+ENV EMBEDDING_MINILM_ONNX_MODEL_PATH=/app/models/embedding-minilm
+ENV SENTIMENT_ONNX_MODEL_PATH=/app/models/sentiment-finbert
 
 # Non-root user for security
 RUN useradd --create-home --shell /bin/bash appuser
@@ -88,6 +103,12 @@ WORKDIR /app
 
 # Copy virtual env from builder
 COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/models /app/models
+
+# Prune build-only ML packages from CPU-optimized runtime images.
+RUN if [ "$CPU_RUNTIME_OPTIMIZED" = "true" ]; then \
+      /app/.venv/bin/python -m pip uninstall -y torch optimum onnx; \
+    fi
 
 # Install Playwright Chromium browser for xui runs.
 RUN if [ "$XUI_INSTALL" = "true" ]; then \

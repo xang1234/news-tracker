@@ -1,14 +1,11 @@
-"""
-Sentiment analysis service configuration.
-
-Provides Pydantic settings for the FinBERT sentiment analysis service including
-model configuration, batching, caching, and Redis stream settings.
-"""
+"""Sentiment analysis service configuration."""
 
 from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from src.inference.runtime import ExecutionProvider, InferenceBackend
 
 
 class SentimentConfig(BaseSettings):
@@ -57,6 +54,18 @@ class SentimentConfig(BaseSettings):
     device: Literal["auto", "cpu", "cuda", "mps"] = Field(
         default="auto",
         description="Device for model inference (auto detects best available)",
+    )
+    backend: InferenceBackend = Field(
+        default="auto",
+        description="Inference backend to use (auto prefers ONNX on CPU, torch on CUDA/MPS)",
+    )
+    execution_provider: ExecutionProvider = Field(
+        default="auto",
+        description="ONNX execution provider override (auto, cpu, cuda, coreml)",
+    )
+    onnx_model_path: str | None = Field(
+        default=None,
+        description="Path to exported ONNX sentiment model directory",
     )
 
     # Entity-level sentiment configuration

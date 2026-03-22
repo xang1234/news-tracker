@@ -1,6 +1,6 @@
 """Pytest fixtures for embedding tests."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
@@ -19,6 +19,7 @@ def embedding_config() -> EmbeddingConfig:
         embedding_dim=768,
         batch_size=4,
         use_fp16=False,
+        backend="torch",
         device="cpu",
         cache_enabled=False,
     )
@@ -104,7 +105,7 @@ def mock_model():
     model = MagicMock()
 
     def forward_side_effect(*args, **kwargs):
-        input_ids = kwargs.get("input_ids", None)
+        input_ids = kwargs.get("input_ids")
         if input_ids is None and args:
             input_ids = args[0]
         if input_ids is None:

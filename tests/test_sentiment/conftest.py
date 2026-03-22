@@ -1,8 +1,7 @@
 """Test fixtures for sentiment analysis service."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-import numpy as np
 import pytest
 import torch
 
@@ -17,6 +16,7 @@ def sentiment_config() -> SentimentConfig:
         model_name="ProsusAI/finbert",
         batch_size=4,
         use_fp16=False,
+        backend="torch",
         device="cpu",
         cache_enabled=False,
         enable_entity_sentiment=True,
@@ -28,10 +28,18 @@ def sentiment_config() -> SentimentConfig:
 def mock_tokenizer():
     """Create mock tokenizer."""
     tokenizer = MagicMock()
-    tokenizer.return_value = {
-        "input_ids": torch.tensor([[101, 1000, 2000, 102]]),
-        "attention_mask": torch.tensor([[1, 1, 1, 1]]),
-    }
+
+    def tokenizer_call(text, **kwargs):
+        batch_size = 1 if isinstance(text, str) else len(text)
+        input_ids = torch.tensor([[101, 1000, 2000, 102]] * batch_size)
+        attention_mask = torch.tensor([[1, 1, 1, 1]] * batch_size)
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+        }
+
+    tokenizer.side_effect = tokenizer_call
+    tokenizer.return_value = tokenizer_call("test")
     return tokenizer
 
 
@@ -39,10 +47,17 @@ def mock_tokenizer():
 def mock_model():
     """Create mock sentiment model."""
     model = MagicMock()
-    # Return logits that give positive sentiment
-    # For ProsusAI/finbert: 0=positive, 1=negative, 2=neutral
-    logits = torch.tensor([[2.5, -1.0, 0.5]])  # Strong positive
-    model.return_value = MagicMock(logits=logits)
+
+    def model_call(*args, **kwargs):
+        input_ids = kwargs.get("input_ids")
+        if input_ids is None and args:
+            input_ids = args[0]
+        batch_size = 1 if input_ids is None else input_ids.shape[0]
+        logits = torch.tensor([[2.5, -1.0, 0.5]] * batch_size)  # Strong positive
+        return MagicMock(logits=logits)
+
+    model.side_effect = model_call
+    model.return_value = model_call()
     return model
 
 

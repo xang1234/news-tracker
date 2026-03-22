@@ -204,7 +204,7 @@ class TestVectorStoreManagerIntegration:
         store = PgVectorStore(database=integration_db, repository=repo)
 
         # Use CPU for tests
-        config = EmbeddingConfig(device="cpu", cache_enabled=False)
+        config = EmbeddingConfig(device="cpu", backend="torch", cache_enabled=False)
         embedding_service = EmbeddingService(config=config)
 
         try:

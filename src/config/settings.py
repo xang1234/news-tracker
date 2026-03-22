@@ -131,7 +131,11 @@ class Settings(BaseSettings):
     embedding_model_name: str = "ProsusAI/finbert"
     embedding_batch_size: int = 32
     embedding_use_fp16: bool = True
+    embedding_backend: str = "auto"
     embedding_device: str = "auto"  # auto, cpu, cuda, mps
+    embedding_execution_provider: str = "auto"
+    embedding_onnx_model_path: str | None = None
+    embedding_minilm_onnx_model_path: str | None = None
     embedding_stream_name: str = "embedding_queue"
     embedding_consumer_group: str = "embedding_workers"
     embedding_cache_enabled: bool = True
@@ -245,7 +249,10 @@ class Settings(BaseSettings):
     sentiment_model_name: str = Field(default="ProsusAI/finbert", description="Model for sentiment analysis")
     sentiment_batch_size: int = Field(default=16, ge=1, le=64, description="Batch size for sentiment analysis")
     sentiment_use_fp16: bool = Field(default=True, description="Use FP16 for GPU acceleration")
+    sentiment_backend: str = Field(default="auto", description="Inference backend (auto, torch, onnx)")
     sentiment_device: str = Field(default="auto", description="Device for inference (auto, cpu, cuda, mps)")
+    sentiment_execution_provider: str = Field(default="auto", description="ONNX execution provider override (auto, cpu, cuda, coreml)")
+    sentiment_onnx_model_path: str | None = Field(default=None, description="Path to exported ONNX sentiment model directory")
     sentiment_stream_name: str = Field(default="sentiment_queue", description="Redis stream for sentiment jobs")
     sentiment_consumer_group: str = Field(default="sentiment_workers", description="Consumer group for sentiment workers")
     sentiment_cache_enabled: bool = Field(default=True, description="Enable Redis caching for sentiment")

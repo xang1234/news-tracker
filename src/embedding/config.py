@@ -1,14 +1,11 @@
-"""
-Embedding service configuration.
-
-Provides Pydantic settings for the FinBERT embedding service including
-model configuration, batching, caching, and Redis stream settings.
-"""
+"""Embedding service configuration."""
 
 from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from src.inference.runtime import ExecutionProvider, InferenceBackend
 
 
 class EmbeddingConfig(BaseSettings):
@@ -64,6 +61,22 @@ class EmbeddingConfig(BaseSettings):
     device: Literal["auto", "cpu", "cuda", "mps"] = Field(
         default="auto",
         description="Device for model inference (auto detects best available)",
+    )
+    backend: InferenceBackend = Field(
+        default="auto",
+        description="Inference backend to use (auto prefers ONNX on CPU, torch on CUDA/MPS)",
+    )
+    execution_provider: ExecutionProvider = Field(
+        default="auto",
+        description="ONNX execution provider override (auto, cpu, cuda, coreml)",
+    )
+    onnx_model_path: str | None = Field(
+        default=None,
+        description="Path to exported ONNX FinBERT embedding model directory",
+    )
+    onnx_minilm_model_path: str | None = Field(
+        default=None,
+        description="Path to exported ONNX MiniLM embedding model directory",
     )
 
     # Chunking configuration for long documents

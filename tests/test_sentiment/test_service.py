@@ -1,12 +1,12 @@
 """Tests for sentiment analysis service."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-import torch
 import json
+from unittest.mock import AsyncMock
+
+import pytest
 
 from src.sentiment.config import SentimentConfig
-from src.sentiment.service import SentimentService, LABEL_MAPPING
+from src.sentiment.service import LABEL_MAPPING, SentimentService
 
 
 class TestSentimentConfig:
@@ -19,6 +19,7 @@ class TestSentimentConfig:
         assert config.model_name == "ProsusAI/finbert"
         assert config.batch_size == 16
         assert config.use_fp16 is True
+        assert config.backend == "auto"
         assert config.device == "auto"
         assert config.cache_enabled is True
         assert config.cache_ttl_hours == 168
@@ -59,7 +60,7 @@ class TestSentimentServiceInitialization:
 
     def test_device_detection_cpu(self, sentiment_config):
         """Test CPU device detection."""
-        config = SentimentConfig(device="cpu")
+        config = SentimentConfig(device="cpu", backend="torch")
         service = SentimentService(config=config)
 
         device = service.device
@@ -186,6 +187,19 @@ class TestBatchAnalysis:
             assert "confidence" in result
 
     @pytest.mark.asyncio
+    async def test_analyze_batch_uses_single_model_call(self, mock_sentiment_service):
+        """Uncached batch analysis should classify the batch in one model call."""
+        texts = [
+            "Great earnings report from NVIDIA.",
+            "AMD stock declined today.",
+            "Intel announced new chips.",
+        ]
+
+        await mock_sentiment_service.analyze_batch(texts)
+
+        assert mock_sentiment_service._model.call_count == 1
+
+    @pytest.mark.asyncio
     async def test_analyze_batch_empty_list(self, mock_sentiment_service):
         """Test batch analysis with empty list."""
         results = await mock_sentiment_service.analyze_batch([])
@@ -258,7 +272,7 @@ class TestCaching:
     @pytest.mark.asyncio
     async def test_cache_disabled(self, sentiment_config):
         """Test caching is skipped when disabled."""
-        config = SentimentConfig(cache_enabled=False)
+        config = SentimentConfig(cache_enabled=False, backend="torch")
         service = SentimentService(config=config)
 
         result = await service._get_cached_result("test text")
@@ -292,14 +306,17 @@ class TestServiceStats:
 
         assert stats["initialized"] is False
         assert stats["device"] == "not initialized"
+        assert stats["backend"] == "torch"
 
     def test_get_stats_after_init(self, mock_sentiment_service):
         """Test stats after model initialization."""
+        mock_sentiment_service._runtime = mock_sentiment_service._resolve_runtime()
         stats = mock_sentiment_service.get_stats()
 
         assert stats["initialized"] is True
         assert "model" in stats
         assert "cache_enabled" in stats
+        assert stats["backend"] == "torch"
 
 
 class TestTextCleaning:
@@ -323,4 +340,4 @@ class TestTextCleaning:
 
         # Multiple spaces should be collapsed
         assert "    " not in cleaned
-        assert "NVIDIA stock surged" == cleaned
+        assert cleaned == "NVIDIA stock surged"
