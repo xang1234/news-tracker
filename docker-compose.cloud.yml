@@ -1,0 +1,118 @@
+# Cloud deployment compose — runs on Oracle Cloud Always Free ARM VM.
+# PostgreSQL hosted on Neon (external), frontend on Vercel (external).
+# Only Redis + backend services run here.
+#
+# Usage:
+#   cp .env.cloud.example .env
+#   # Edit .env with your Neon DATABASE_URL, API keys, etc.
+#   docker compose -f docker-compose.cloud.yml up -d --build
+
+x-backend-build: &backend-build
+    context: .
+    dockerfile: Dockerfile
+    args:
+      XUI_INSTALL: ${XUI_INSTALL:-false}
+
+x-backend-env: &backend-env
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      EMBEDDING_DEVICE: cpu
+      EMBEDDING_USE_FP16: "false"
+      SENTIMENT_DEVICE: cpu
+      SENTIMENT_USE_FP16: "false"
+
+services:
+  # Redis for message queues + caching (runs locally on the VM)
+  redis:
+    image: redis:7-alpine
+    container_name: news-tracker-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # News Tracker API
+  news-tracker-api:
+    build:
+      <<: *backend-build
+    container_name: news-tracker-api
+    restart: unless-stopped
+    <<: *backend-env
+    ports:
+      - "8001:8001"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3
+
+  # Ingestion + processing worker
+  worker:
+    build:
+      <<: *backend-build
+    container_name: news-tracker-worker
+    restart: unless-stopped
+    <<: *backend-env
+    command: ["worker"]
+    healthcheck:
+      disable: true
+    depends_on:
+      redis:
+        condition: service_healthy
+      news-tracker-api:
+        condition: service_healthy
+
+  # Embedding worker (FinBERT + MiniLM, CPU inference on ARM)
+  embedding-worker:
+    build:
+      <<: *backend-build
+    container_name: news-tracker-embedding-worker
+    restart: unless-stopped
+    <<: *backend-env
+    command: ["embedding-worker"]
+    healthcheck:
+      disable: true
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # Sentiment worker (ProsusAI/finbert, CPU inference on ARM)
+  sentiment-worker:
+    build:
+      <<: *backend-build
+    container_name: news-tracker-sentiment-worker
+    restart: unless-stopped
+    <<: *backend-env
+    command: ["sentiment-worker"]
+    healthcheck:
+      disable: true
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # Clustering worker (pgvector HNSW theme assignment)
+  clustering-worker:
+    build:
+      <<: *backend-build
+    container_name: news-tracker-clustering-worker
+    restart: unless-stopped
+    <<: *backend-env
+    command: ["clustering-worker"]
+    healthcheck:
+      disable: true
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis_data:
