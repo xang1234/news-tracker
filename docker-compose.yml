@@ -4,6 +4,8 @@ x-backend-build: &backend-build
     args:
       XUI_INSTALL: ${XUI_INSTALL:-true}
       XUI_PIP_SPEC: ${XUI_PIP_SPEC:-git+https://github.com/xang1234/xui.git@main}
+      EXPORT_ONNX_MODELS: ${EXPORT_ONNX_MODELS:-true}
+      CPU_RUNTIME_OPTIMIZED: ${CPU_RUNTIME_OPTIMIZED:-false}
     secrets:
       - xui_github_token
 

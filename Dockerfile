@@ -26,14 +26,21 @@ RUN uv sync --frozen --no-dev --no-install-project
 # Copy source and install the project itself
 COPY src/ src/
 RUN uv sync --frozen --no-dev
+RUN mkdir -p /app/models
 
 # Install ONNX tooling in the builder and export CPU-optimized model artifacts.
 RUN if [ "$EXPORT_ONNX_MODELS" = "true" ]; then \
-      uv pip install -p /app/.venv/bin/python "onnx>=1.16.0" "onnxruntime>=1.20.0" "optimum>=1.23.3"; \
+      set -eux; \
+      uv venv /tmp/onnx-export; \
+      uv pip install -p /tmp/onnx-export/bin/python \
+        "torch>=2.4.0" \
+        "transformers>=4.47.1" \
+        "optimum-onnx[onnxruntime]>=0.0.3"; \
       mkdir -p /app/models/embedding-finbert /app/models/embedding-minilm /app/models/sentiment-finbert; \
-      /app/.venv/bin/optimum-cli export onnx --model ProsusAI/finbert --task feature-extraction /app/models/embedding-finbert; \
-      /app/.venv/bin/optimum-cli export onnx --model sentence-transformers/all-MiniLM-L6-v2 --task feature-extraction /app/models/embedding-minilm; \
-      /app/.venv/bin/optimum-cli export onnx --model ProsusAI/finbert --task text-classification /app/models/sentiment-finbert; \
+      /tmp/onnx-export/bin/optimum-cli export onnx --model ProsusAI/finbert --task feature-extraction /app/models/embedding-finbert; \
+      /tmp/onnx-export/bin/optimum-cli export onnx --model sentence-transformers/all-MiniLM-L6-v2 --task feature-extraction /app/models/embedding-minilm; \
+      /tmp/onnx-export/bin/optimum-cli export onnx --model ProsusAI/finbert --task text-classification /app/models/sentiment-finbert; \
+      rm -rf /tmp/onnx-export; \
     fi
 
 # Install xui CLI from git (private/public) when enabled.
@@ -108,7 +115,7 @@ COPY --from=builder /app/models /app/models
 # Prune Torch from dedicated CPU-only images only. The shared runtime image
 # still supports optional Torch-backed features like fastcoref and spaCy trf.
 RUN if [ "$CPU_RUNTIME_OPTIMIZED" = "true" ]; then \
-      /app/.venv/bin/python -m pip uninstall -y torch optimum onnx; \
+      uv pip uninstall -p /app/.venv/bin/python torch optimum optimum-onnx onnx; \
     fi
 
 # Install Playwright Chromium browser for xui runs.
