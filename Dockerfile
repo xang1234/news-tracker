@@ -10,7 +10,7 @@ RUN apt-get update && \
 ARG XUI_INSTALL=true
 ARG XUI_PIP_SPEC=git+https://github.com/xang1234/xui.git@main
 ARG EXPORT_ONNX_MODELS=true
-ARG CPU_RUNTIME_OPTIMIZED=true
+ARG CPU_RUNTIME_OPTIMIZED=false
 
 # Install uv for fast dependency resolution
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -90,10 +90,10 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 ARG XUI_INSTALL=true
-ARG CPU_RUNTIME_OPTIMIZED=true
+ARG CPU_RUNTIME_OPTIMIZED=false
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV EMBEDDING_ONNX_MODEL_PATH=/app/models/embedding-finbert
-ENV EMBEDDING_MINILM_ONNX_MODEL_PATH=/app/models/embedding-minilm
+ENV EMBEDDING_ONNX_MINILM_MODEL_PATH=/app/models/embedding-minilm
 ENV SENTIMENT_ONNX_MODEL_PATH=/app/models/sentiment-finbert
 
 # Non-root user for security
@@ -105,7 +105,8 @@ WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/models /app/models
 
-# Prune build-only ML packages from CPU-optimized runtime images.
+# Prune Torch from dedicated CPU-only images only. The shared runtime image
+# still supports optional Torch-backed features like fastcoref and spaCy trf.
 RUN if [ "$CPU_RUNTIME_OPTIMIZED" = "true" ]; then \
       /app/.venv/bin/python -m pip uninstall -y torch optimum onnx; \
     fi

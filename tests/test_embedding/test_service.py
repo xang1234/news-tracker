@@ -32,6 +32,16 @@ class TestEmbeddingServiceInitialization:
         assert config.batch_size == 32
         assert config.backend == "auto"
 
+    def test_config_from_env_for_onnx_paths(self, monkeypatch):
+        """Embedding ONNX env vars should map to the configured fields."""
+        monkeypatch.setenv("EMBEDDING_ONNX_MODEL_PATH", "/tmp/finbert")
+        monkeypatch.setenv("EMBEDDING_ONNX_MINILM_MODEL_PATH", "/tmp/minilm")
+
+        config = EmbeddingConfig()
+
+        assert config.onnx_model_path == "/tmp/finbert"
+        assert config.onnx_minilm_model_path == "/tmp/minilm"
+
     def test_device_detection_cpu(self, embedding_config):
         """Should detect CPU when no GPU available."""
         embedding_config.device = "cpu"
