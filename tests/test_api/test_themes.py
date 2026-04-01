@@ -1,13 +1,11 @@
 """Tests for theme REST API endpoints."""
 
 from datetime import date, datetime, timedelta, timezone
-from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
-from src.graph.propagation import PropagationImpact
 from src.ingestion.schemas import EngagementMetrics, NormalizedDocument, Platform
 from src.narrative.schemas import NarrativeRun, NarrativeRunBucket
 from src.sentiment.aggregation import AggregatedSentiment
@@ -257,126 +255,6 @@ class TestNarrativeEndpoints:
         assert data["theme_id"] == "theme_abc123"
         assert data["run_id"] == "run_abc123"
         assert data["total"] == 1
-
-
-class TestMarketCatalysts:
-    """Tests for the market catalyst radar endpoint."""
-
-    def test_get_market_catalysts(self, client, mock_theme_repo, mock_doc_repo, mock_narrative_repo, mock_graph_repo, mock_propagation_service):
-        run = _make_narrative_run()
-        metric = _make_metrics()
-        metric.volume_zscore = 2.4
-        metric.avg_authority = 0.78
-
-        mock_narrative_repo.list_global_momentum.return_value = [
-            {"run": run, "theme_name": "ai_training_demand"},
-        ]
-        mock_theme_repo.get_by_id.return_value = _make_theme(
-            name="ai_training_demand",
-            lifecycle_stage="accelerating",
-            top_tickers=["NVDA", "AMD"],
-        )
-        mock_theme_repo.get_metrics_range.return_value = [metric]
-        mock_narrative_repo.get_run_documents.return_value = [
-            {
-                "document_id": "doc_1",
-                "platform": "news_api",
-                "title": "Cloud buyers keep chasing NVIDIA AI capacity",
-                "url": "https://example.com/doc-1",
-                "author_name": "Analyst One",
-                "authority_score": 0.92,
-                "sentiment": {"label": "positive", "confidence": 0.95},
-                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
-            },
-            {
-                "document_id": "doc_2",
-                "platform": "twitter",
-                "title": "AMD also benefits from the same demand pulse",
-                "url": "https://example.com/doc-2",
-                "author_name": "Analyst Two",
-                "authority_score": 0.61,
-                "sentiment": {"label": "positive", "confidence": 0.8},
-                "timestamp": datetime(2026, 2, 5, 9, 45, 0, tzinfo=timezone.utc),
-            },
-        ]
-        mock_doc_repo.get_events_by_tickers.return_value = [
-            {
-                "event_id": "evt_1",
-                "doc_id": "doc_1",
-                "event_type": "product_launch",
-                "actor": "NVIDIA",
-                "action": "launched",
-                "object": "new AI GPU",
-                "time_ref": "Q1 2026",
-                "tickers": ["NVDA"],
-                "confidence": 0.84,
-                "created_at": datetime(2026, 2, 5, 8, 30, 0, tzinfo=timezone.utc),
-            },
-        ]
-        mock_graph_repo.get_all_nodes.return_value = [
-            SimpleNamespace(node_id="NVDA"),
-            SimpleNamespace(node_id="AMD"),
-            SimpleNamespace(node_id="AVGO"),
-            SimpleNamespace(node_id="MRVL"),
-        ]
-
-        def propagate_side_effect(source_node: str, sentiment_delta: float):
-            if source_node == "NVDA":
-                return {
-                    "AVGO": PropagationImpact(
-                        node_id="AVGO",
-                        impact=0.18,
-                        depth=1,
-                        path_relation="drives",
-                        edge_confidence=0.75,
-                    ),
-                    "HBM3E": PropagationImpact(
-                        node_id="HBM3E",
-                        impact=0.21,
-                        depth=1,
-                        path_relation="drives",
-                        edge_confidence=0.8,
-                    ),
-                }
-            if source_node == "AMD":
-                return {
-                    "MRVL": PropagationImpact(
-                        node_id="MRVL",
-                        impact=0.12,
-                        depth=2,
-                        path_relation="supplies_to",
-                        edge_confidence=0.72,
-                    ),
-                }
-            return {}
-
-        mock_propagation_service.propagate.side_effect = propagate_side_effect
-
-        resp = client.get("/themes/catalysts?limit=5&days=7")
-        assert resp.status_code == 200
-        data = resp.json()
-
-        assert data["total"] == 1
-        catalyst = data["catalysts"][0]
-        assert catalyst["theme_id"] == "theme_abc123"
-        assert catalyst["bias"] == "bullish"
-        assert catalyst["investment_signal"] == "product_momentum"
-        assert catalyst["market_impact_score"] > 0
-        assert catalyst["primary_tickers"][0] == {"ticker": "NVDA", "mention_count": 8}
-        assert catalyst["related_tickers"][0]["ticker"] == "AVGO"
-        assert catalyst["related_tickers"][1]["ticker"] == "MRVL"
-        assert catalyst["dominant_event_types"] == ["product_launch"]
-        assert catalyst["evidence"][0]["document_id"] == "doc_1"
-        assert "Bullish setup" in catalyst["summary"]
-
-    def test_get_market_catalysts_empty(self, client, mock_narrative_repo):
-        mock_narrative_repo.list_global_momentum.return_value = []
-
-        resp = client.get("/themes/catalysts")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["catalysts"] == []
-        assert data["total"] == 0
 
 
 # ── GET /themes/{theme_id}/documents ─────────────────────
