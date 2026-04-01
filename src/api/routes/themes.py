@@ -2,6 +2,7 @@
 Theme endpoints for dashboard, trading system, and alert consumption.
 """
 
+import asyncio
 import time
 from datetime import date, datetime, timedelta, timezone
 
@@ -12,7 +13,9 @@ import structlog
 from src.api.auth import verify_api_key
 from src.api.dependencies import (
     get_document_repository,
+    get_graph_repository,
     get_narrative_repository,
+    get_propagation_service,
     get_ranking_service,
     get_sentiment_aggregator,
     get_theme_repository,
@@ -21,6 +24,11 @@ from src.api.rate_limit import limiter
 from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     ErrorResponse,
+    MarketCatalystEvidenceItem,
+    MarketCatalystItem,
+    MarketCatalystRelatedTickerItem,
+    MarketCatalystsResponse,
+    MarketCatalystTickerItem,
     NarrativeAlertSummary,
     NarrativeBucketPoint,
     NarrativeDocumentItem,
@@ -41,9 +49,20 @@ from src.api.models import (
     ThemeSentimentResponse,
     ThemeNarrativesResponse,
 )
+from src.event_extraction.theme_integration import EventThemeLinker, ThemeWithEvents
+from src.graph.propagation import SentimentPropagation
+from src.graph.storage import GraphRepository
 from src.narrative.repository import NarrativeRepository
 from src.sentiment.aggregation import DocumentSentiment, SentimentAggregator
 from src.storage.repository import DocumentRepository
+from src.themes.catalysts import (
+    compute_market_impact_score,
+    dominant_event_types,
+    humanize_identifier,
+    infer_market_bias,
+    propagation_delta,
+    summarize_market_catalyst,
+)
 from src.themes.ranking import ThemeRankingService
 from src.themes.repository import ThemeRepository
 from src.themes.schemas import Theme
@@ -133,6 +152,192 @@ def _narrative_document_item(doc: dict) -> NarrativeDocumentItem:
         sentiment_confidence=sentiment.get("confidence"),
         similarity=round(float(doc.get("similarity") or 0.0), 4),
         timestamp=doc["timestamp"].isoformat() if doc.get("timestamp") else None,
+    )
+
+
+def _catalyst_evidence_item(doc: dict) -> MarketCatalystEvidenceItem:
+    sentiment = doc.get("sentiment") or {}
+    return MarketCatalystEvidenceItem(
+        document_id=doc["document_id"],
+        platform=doc.get("platform"),
+        title=doc.get("title"),
+        url=doc.get("url"),
+        author_name=doc.get("author_name"),
+        authority_score=doc.get("authority_score"),
+        sentiment_label=sentiment.get("label"),
+        sentiment_confidence=sentiment.get("confidence"),
+        timestamp=doc["timestamp"].isoformat() if doc.get("timestamp") else None,
+    )
+
+
+def _graph_node_id(node: object) -> str | None:
+    if isinstance(node, dict):
+        value = node.get("node_id")
+    else:
+        value = getattr(node, "node_id", None)
+    return value if isinstance(value, str) else None
+
+
+async def _build_market_catalyst(
+    *,
+    run,
+    theme_name: str | None,
+    days: int,
+    narrative_repo: NarrativeRepository,
+    theme_repo: ThemeRepository,
+    doc_repo: DocumentRepository,
+    propagation: SentimentPropagation,
+    ticker_node_ids: set[str],
+) -> MarketCatalystItem | None:
+    theme = await theme_repo.get_by_id(run.theme_id)
+    if theme is None:
+        return None
+
+    metrics = await theme_repo.get_metrics_range(
+        run.theme_id,
+        start=date.today() - timedelta(days=1),
+        end=date.today(),
+    )
+    latest_metric = metrics[-1] if metrics else None
+
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(days=days)
+
+    run_documents = await narrative_repo.get_run_documents(run.run_id, limit=8)
+    raw_events = await doc_repo.get_events_by_tickers(
+        tickers=theme.top_tickers,
+        since=since,
+        until=now,
+        limit=60,
+    )
+
+    linked_events = EventThemeLinker.link_events_to_theme(raw_events, theme)
+    deduped_events = EventThemeLinker.deduplicate_events(linked_events)
+    event_summary = ThemeWithEvents.from_events(theme.theme_id, deduped_events)
+    investment_signal = event_summary.investment_signal()
+    bias = infer_market_bias(run.avg_sentiment, investment_signal)
+
+    ordered_tickers = sorted(
+        run.ticker_counts.items(),
+        key=lambda item: (-item[1], item[0]),
+    )
+    primary_tickers = [
+        MarketCatalystTickerItem(ticker=ticker, mention_count=count)
+        for ticker, count in ordered_tickers[:3]
+    ]
+    primary_ticker_ids = {item.ticker for item in primary_tickers}
+
+    related_tickers: list[MarketCatalystRelatedTickerItem] = []
+    delta = propagation_delta(run.avg_sentiment, bias)
+    if delta != 0.0 and ticker_node_ids and primary_tickers:
+        propagation_results = await asyncio.gather(
+            *[
+                propagation.propagate(source_node=item.ticker, sentiment_delta=delta)
+                for item in primary_tickers
+            ],
+            return_exceptions=True,
+        )
+        best_impacts: dict[str, MarketCatalystRelatedTickerItem] = {}
+        for source_item, result in zip(primary_tickers, propagation_results):
+            if isinstance(result, Exception):
+                logger.warning(
+                    "catalyst_propagation_failed",
+                    run_id=run.run_id,
+                    source_ticker=source_item.ticker,
+                    error=str(result),
+                )
+                continue
+
+            impacts = sorted(
+                result.values(),
+                key=lambda impact: abs(impact.impact),
+                reverse=True,
+            )
+            for impact in impacts:
+                if impact.node_id not in ticker_node_ids:
+                    continue
+                if impact.node_id == source_item.ticker or impact.node_id in primary_ticker_ids:
+                    continue
+
+                candidate = MarketCatalystRelatedTickerItem(
+                    ticker=impact.node_id,
+                    source_ticker=source_item.ticker,
+                    impact=round(impact.impact, 4),
+                    depth=impact.depth,
+                    relation=impact.path_relation,
+                )
+                existing = best_impacts.get(candidate.ticker)
+                if existing is None or abs(candidate.impact) > abs(existing.impact):
+                    best_impacts[candidate.ticker] = candidate
+
+        related_tickers = sorted(
+            best_impacts.values(),
+            key=lambda item: abs(item.impact),
+            reverse=True,
+        )[:5]
+
+    dominant_events = dominant_event_types(event_summary.event_counts)
+    impact_score = compute_market_impact_score(
+        conviction_score=run.conviction_score,
+        volume_zscore=latest_metric.volume_zscore if latest_metric else None,
+        acceleration=run.current_acceleration,
+        platform_count=run.platform_count,
+        avg_authority=latest_metric.avg_authority if latest_metric else run.avg_authority,
+        event_count=sum(event_summary.event_counts.values()),
+    )
+
+    supporting_docs = sorted(
+        run_documents,
+        key=lambda doc: (
+            0 if doc.get("title") else 1,
+            -(doc.get("authority_score") or 0.0),
+            doc.get("timestamp") or datetime.min.replace(tzinfo=timezone.utc),
+        ),
+    )
+    evidence = [_catalyst_evidence_item(doc) for doc in supporting_docs[:3]]
+
+    display_theme_name = humanize_identifier(theme_name or theme.name)
+    summary = summarize_market_catalyst(
+        theme_name=display_theme_name,
+        bias=bias,
+        primary_tickers=[item.ticker for item in primary_tickers],
+        investment_signal=investment_signal,
+        dominant_events=dominant_events,
+        platform_count=run.platform_count,
+        volume_zscore=latest_metric.volume_zscore if latest_metric else None,
+        conviction_score=run.conviction_score,
+        related_tickers=[item.ticker for item in related_tickers],
+    )
+
+    return MarketCatalystItem(
+        run_id=run.run_id,
+        theme_id=run.theme_id,
+        theme_name=display_theme_name,
+        lifecycle_stage=theme.lifecycle_stage,
+        bias=bias,
+        summary=summary,
+        market_impact_score=impact_score,
+        conviction_score=round(run.conviction_score, 2),
+        current_rate_per_hour=round(run.current_rate_per_hour, 3),
+        current_acceleration=round(run.current_acceleration, 3),
+        platform_count=run.platform_count,
+        avg_sentiment=round(run.avg_sentiment, 4),
+        avg_authority=round(
+            latest_metric.avg_authority if latest_metric and latest_metric.avg_authority is not None else run.avg_authority,
+            4,
+        ),
+        volume_zscore=(
+            round(latest_metric.volume_zscore, 4)
+            if latest_metric and latest_metric.volume_zscore is not None
+            else None
+        ),
+        investment_signal=investment_signal,
+        dominant_event_types=dominant_events,
+        primary_tickers=primary_tickers,
+        related_tickers=related_tickers,
+        evidence=evidence,
+        started_at=run.started_at.isoformat(),
+        last_document_at=run.last_document_at.isoformat(),
     )
 
 
@@ -305,6 +510,84 @@ async def get_theme_momentum(
     latency_ms = (time.perf_counter() - start_time) * 1000
     return NarrativeMomentumResponse(
         runs=items,
+        total=len(items),
+        latency_ms=round(latency_ms, 2),
+    )
+
+
+@router.get(
+    "/themes/catalysts",
+    response_model=MarketCatalystsResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Invalid API key"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
+    summary="Get stock-market catalyst radar",
+    description=(
+        "Translate live narratives into tradable stock-market catalysts. "
+        "Each item combines conviction, event corroboration, supporting "
+        "evidence, and graph-based follow-on tickers."
+    ),
+)
+@limiter.limit(lambda: _get_settings().rate_limit_default)
+async def get_market_catalysts(
+    request: Request,
+    limit: int = Query(default=10, ge=1, le=50, description="Maximum catalysts to return"),
+    days: int = Query(default=7, ge=1, le=30, description="Lookback window for event corroboration"),
+    api_key: str = Depends(verify_api_key),
+    narrative_repo: NarrativeRepository = Depends(get_narrative_repository),
+    theme_repo: ThemeRepository = Depends(get_theme_repository),
+    doc_repo: DocumentRepository = Depends(get_document_repository),
+    graph_repo: GraphRepository = Depends(get_graph_repository),
+    propagation: SentimentPropagation = Depends(get_propagation_service),
+) -> MarketCatalystsResponse:
+    start_time = time.perf_counter()
+
+    fetch_limit = min(max(limit * 3, 20), 100)
+    rows = await narrative_repo.list_global_momentum(limit=fetch_limit)
+
+    ticker_node_ids: set[str] = set()
+    try:
+        graph_nodes = await graph_repo.get_all_nodes(node_type="ticker", limit=1000)
+        ticker_node_ids = {
+            node_id
+            for node in graph_nodes
+            if (node_id := _graph_node_id(node)) is not None
+        }
+    except Exception as exc:
+        logger.warning("catalyst_graph_nodes_unavailable", error=str(exc))
+
+    catalysts = await asyncio.gather(
+        *[
+            _build_market_catalyst(
+                run=row["run"],
+                theme_name=row.get("theme_name"),
+                days=days,
+                narrative_repo=narrative_repo,
+                theme_repo=theme_repo,
+                doc_repo=doc_repo,
+                propagation=propagation,
+                ticker_node_ids=ticker_node_ids,
+            )
+            for row in rows
+        ],
+        return_exceptions=True,
+    )
+
+    items: list[MarketCatalystItem] = []
+    for result in catalysts:
+        if isinstance(result, Exception):
+            logger.warning("build_market_catalyst_failed", error=str(result))
+            continue
+        if result is not None:
+            items.append(result)
+
+    items.sort(key=lambda item: item.market_impact_score, reverse=True)
+    items = items[:limit]
+
+    latency_ms = (time.perf_counter() - start_time) * 1000
+    return MarketCatalystsResponse(
+        catalysts=items,
         total=len(items),
         latency_ms=round(latency_ms, 2),
     )

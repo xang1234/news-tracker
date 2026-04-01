@@ -14,6 +14,7 @@ import {
   Fingerprint,
   Shield,
   Settings,
+  Target,
   ChevronLeft,
   ChevronRight,
   Cpu,
@@ -23,6 +24,7 @@ import { useUIStore } from '@/stores/uiStore';
 
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/catalysts', icon: Target, label: 'Catalysts' },
   { to: '/search', icon: Search, label: 'Search' },
   { to: '/documents', icon: FileText, label: 'Documents' },
   { to: '/playground/embed', icon: FlaskConical, label: 'Embed' },

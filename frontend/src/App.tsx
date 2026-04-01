@@ -5,6 +5,7 @@ import { DashboardShell } from '@/components/layout/DashboardShell';
 // Lazy-loaded pages — each becomes a separate chunk
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const SearchPage = lazy(() => import('@/pages/Search'));
+const CatalystsPage = lazy(() => import('@/pages/Catalysts'));
 const DocumentExplorer = lazy(() => import('@/pages/Documents'));
 const DocumentDetail = lazy(() => import('@/pages/DocumentDetail'));
 const EmbedPlayground = lazy(() => import('@/pages/EmbedPlayground'));
@@ -39,6 +40,14 @@ const router = createBrowserRouter([
         element: (
           <Suspense fallback={<PageLoader />}>
             <Dashboard />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'catalysts',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <CatalystsPage />
           </Suspense>
         ),
       },

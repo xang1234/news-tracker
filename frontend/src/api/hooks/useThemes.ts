@@ -220,6 +220,61 @@ export interface ThemeEventsResponse {
   latency_ms: number;
 }
 
+export interface MarketCatalystTickerItem {
+  ticker: string;
+  mention_count: number;
+}
+
+export interface MarketCatalystRelatedTickerItem {
+  ticker: string;
+  source_ticker: string;
+  impact: number;
+  depth: number;
+  relation: string;
+}
+
+export interface MarketCatalystEvidenceItem {
+  document_id: string;
+  platform: string | null;
+  title: string | null;
+  url: string | null;
+  author_name: string | null;
+  authority_score: number | null;
+  sentiment_label: string | null;
+  sentiment_confidence: number | null;
+  timestamp: string | null;
+}
+
+export interface MarketCatalystItem {
+  run_id: string;
+  theme_id: string;
+  theme_name: string;
+  lifecycle_stage: string;
+  bias: string;
+  summary: string;
+  market_impact_score: number;
+  conviction_score: number;
+  current_rate_per_hour: number;
+  current_acceleration: number;
+  platform_count: number;
+  avg_sentiment: number | null;
+  avg_authority: number | null;
+  volume_zscore: number | null;
+  investment_signal: string | null;
+  dominant_event_types: string[];
+  primary_tickers: MarketCatalystTickerItem[];
+  related_tickers: MarketCatalystRelatedTickerItem[];
+  evidence: MarketCatalystEvidenceItem[];
+  started_at: string;
+  last_document_at: string;
+}
+
+export interface MarketCatalystsResponse {
+  catalysts: MarketCatalystItem[];
+  total: number;
+  latency_ms: number;
+}
+
 // ── Hooks ──
 
 export function useThemes(filters?: ThemeFilters) {
@@ -273,6 +328,20 @@ export function useThemeMomentum() {
     queryKey: queryKeys.themeMomentum(),
     queryFn: async (): Promise<NarrativeMomentumResponse> => {
       const { data } = await api.get<NarrativeMomentumResponse>('/themes/momentum');
+      return data;
+    },
+    staleTime: 15_000,
+    retry: 1,
+  });
+}
+
+export function useThemeCatalysts(limit = 10, days = 7) {
+  return useQuery({
+    queryKey: queryKeys.themeCatalysts(limit, days),
+    queryFn: async (): Promise<MarketCatalystsResponse> => {
+      const { data } = await api.get<MarketCatalystsResponse>('/themes/catalysts', {
+        params: { limit, days },
+      });
       return data;
     },
     staleTime: 15_000,
