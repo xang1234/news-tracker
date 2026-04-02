@@ -319,12 +319,11 @@ class TestMarketCatalysts:
                 "created_at": datetime(2026, 2, 5, 8, 30, 0, tzinfo=UTC),
             },
         ]
-        mock_graph_repo.get_all_nodes.return_value = [
-            SimpleNamespace(node_id="NVDA"),
-            SimpleNamespace(node_id="AMD"),
-            SimpleNamespace(node_id="AVGO"),
-            SimpleNamespace(node_id="MRVL"),
-        ]
+        graph_nodes = {
+            "AVGO": SimpleNamespace(node_id="AVGO", node_type="ticker"),
+            "MRVL": SimpleNamespace(node_id="MRVL", node_type="ticker"),
+        }
+        mock_graph_repo.get_node.side_effect = lambda node_id: graph_nodes.get(node_id)
 
         def propagate_side_effect(source_node: str, sentiment_delta: float):
             if source_node == "NVDA":
@@ -376,6 +375,7 @@ class TestMarketCatalysts:
         assert catalyst["dominant_event_types"] == ["product_launch"]
         assert catalyst["evidence"][0]["document_id"] == "doc_1"
         assert "Bullish setup" in catalyst["summary"]
+        mock_graph_repo.get_all_nodes.assert_not_called()
 
     def test_get_market_catalysts_empty(self, client, mock_narrative_repo):
         mock_narrative_repo.list_global_momentum.return_value = []

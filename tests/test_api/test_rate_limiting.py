@@ -1,11 +1,9 @@
 """Tests for API rate limiting configuration."""
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
-import pytest
-from starlette.testclient import TestClient
-
-from src.api.rate_limit import _get_rate_limit_key
+from src.api.rate_limit import _get_rate_limit_key, create_limiter
 
 
 class TestRateLimitKeyExtraction:
@@ -14,7 +12,6 @@ class TestRateLimitKeyExtraction:
     def test_uses_api_key_when_present(self):
         """Should use X-API-KEY header as rate limit key."""
         from starlette.requests import Request
-        from starlette.datastructures import Headers
 
         scope = {
             "type": "http",
@@ -40,3 +37,19 @@ class TestRateLimitKeyExtraction:
         request = Request(scope)
         key = _get_rate_limit_key(request)
         assert key == "192.168.1.100"
+
+
+class TestLimiterConfiguration:
+    """Tests for limiter construction."""
+
+    def test_create_limiter_disables_slowapi_checks_when_feature_is_off(self):
+        settings = SimpleNamespace(
+            rate_limit_enabled=False,
+            rate_limit_default="60/minute",
+            redis_url="redis://localhost:6379/0",
+        )
+
+        with patch("src.api.rate_limit.get_settings", return_value=settings):
+            limiter = create_limiter()
+
+        assert limiter.enabled is False

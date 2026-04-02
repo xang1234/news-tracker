@@ -4,6 +4,7 @@ Theme endpoints for dashboard, trading system, and alert consumption.
 
 import asyncio
 import time
+from collections.abc import Iterable
 from datetime import UTC, date, datetime, timedelta
 
 import structlog
@@ -71,7 +72,6 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 CATALYST_BUILD_CONCURRENCY = 10
-TICKER_NODE_PAGE_SIZE = 1000
 
 
 def _theme_to_item(theme: Theme, include_centroid: bool = False) -> ThemeItem:
@@ -178,6 +178,11 @@ def _graph_node_id(node: object) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _graph_node_type(node: object) -> str | None:
+    value = node.get("node_type") if isinstance(node, dict) else getattr(node, "node_type", None)
+    return value if isinstance(value, str) else None
+
+
 def _descending_timestamp_sort_key(timestamp: datetime | None) -> float:
     """Return a sort key that prefers newer timestamps and pushes missing values last."""
     if timestamp is None:
@@ -185,31 +190,31 @@ def _descending_timestamp_sort_key(timestamp: datetime | None) -> float:
     return -timestamp.timestamp()
 
 
-async def _load_ticker_node_ids(graph_repo: GraphRepository) -> set[str]:
-    """Load the full set of ticker node ids without imposing a hidden cap."""
-    ticker_node_ids: set[str] = set()
-    offset = 0
+class _TickerNodeLookup:
+    """Resolve candidate ticker nodes on demand and cache the results for the request."""
 
-    while True:
-        graph_nodes = await graph_repo.get_all_nodes(
-            node_type="ticker",
-            limit=TICKER_NODE_PAGE_SIZE,
-            offset=offset,
-        )
-        if not graph_nodes:
-            break
+    def __init__(self, graph_repo: GraphRepository) -> None:
+        self._graph_repo = graph_repo
+        self._cache: dict[str, bool] = {}
+        self._logged_error = False
 
-        ticker_node_ids.update(
-            node_id
-            for node in graph_nodes
-            if (node_id := _graph_node_id(node)) is not None
-        )
-
-        if len(graph_nodes) < TICKER_NODE_PAGE_SIZE:
-            break
-        offset += TICKER_NODE_PAGE_SIZE
-
-    return ticker_node_ids
+    async def filter_tickers(self, node_ids: Iterable[str]) -> set[str]:
+        candidate_ids = {node_id for node_id in node_ids if node_id}
+        unresolved = sorted(node_id for node_id in candidate_ids if node_id not in self._cache)
+        if unresolved:
+            results = await asyncio.gather(
+                *[self._graph_repo.get_node(node_id) for node_id in unresolved],
+                return_exceptions=True,
+            )
+            for node_id, result in zip(unresolved, results, strict=True):
+                if isinstance(result, Exception):
+                    self._cache[node_id] = False
+                    if not self._logged_error:
+                        logger.warning("catalyst_graph_nodes_unavailable", error=str(result))
+                        self._logged_error = True
+                    continue
+                self._cache[node_id] = _graph_node_type(result) == "ticker"
+        return {node_id for node_id in candidate_ids if self._cache.get(node_id, False)}
 
 
 async def _build_market_catalyst_bounded(
@@ -230,20 +235,21 @@ async def _build_market_catalyst(
     theme_repo: ThemeRepository,
     doc_repo: DocumentRepository,
     propagation: SentimentPropagation,
-    ticker_node_ids: set[str],
+    ticker_node_lookup: _TickerNodeLookup,
 ) -> MarketCatalystItem | None:
     theme = await theme_repo.get_by_id(run.theme_id)
     if theme is None:
         return None
 
+    now = datetime.now(UTC)
+    today = now.date()
     metrics = await theme_repo.get_metrics_range(
         run.theme_id,
-        start=date.today() - timedelta(days=days),
-        end=date.today(),
+        start=today - timedelta(days=days),
+        end=today,
     )
     latest_metric = metrics[-1] if metrics else None
 
-    now = datetime.now(UTC)
     since = now - timedelta(days=days)
 
     run_documents = await narrative_repo.get_run_documents(run.run_id, limit=8)
@@ -272,7 +278,7 @@ async def _build_market_catalyst(
 
     related_tickers: list[MarketCatalystRelatedTickerItem] = []
     delta = propagation_delta(run.avg_sentiment, bias)
-    if delta != 0.0 and ticker_node_ids and primary_tickers:
+    if delta != 0.0 and primary_tickers:
         propagation_results = await asyncio.gather(
             *[
                 propagation.propagate(source_node=item.ticker, sentiment_delta=delta)
@@ -280,6 +286,13 @@ async def _build_market_catalyst(
             ],
             return_exceptions=True,
         )
+        candidate_node_ids = {
+            impact.node_id
+            for result in propagation_results
+            if not isinstance(result, Exception)
+            for impact in result.values()
+        }
+        ticker_node_ids = await ticker_node_lookup.filter_tickers(candidate_node_ids)
         best_impacts: dict[str, MarketCatalystRelatedTickerItem] = {}
         for source_item, result in zip(primary_tickers, propagation_results, strict=True):
             if isinstance(result, Exception):
@@ -595,12 +608,7 @@ async def get_market_catalysts(
 
     fetch_limit = min(max(limit * 3, 20), 100)
     rows = await narrative_repo.list_global_momentum(limit=fetch_limit)
-
-    ticker_node_ids: set[str] = set()
-    try:
-        ticker_node_ids = await _load_ticker_node_ids(graph_repo)
-    except Exception as exc:
-        logger.warning("catalyst_graph_nodes_unavailable", error=str(exc))
+    ticker_node_lookup = _TickerNodeLookup(graph_repo)
 
     semaphore = asyncio.Semaphore(min(CATALYST_BUILD_CONCURRENCY, max(len(rows), 1)))
     catalysts = await asyncio.gather(
@@ -614,7 +622,7 @@ async def get_market_catalysts(
                 theme_repo=theme_repo,
                 doc_repo=doc_repo,
                 propagation=propagation,
-                ticker_node_ids=ticker_node_ids,
+                ticker_node_lookup=ticker_node_lookup,
             )
             for row in rows
         ],

@@ -156,7 +156,7 @@ def summarize_market_catalyst(
     else:
         parts[-1] += f" around {event_text}"
 
-    if volume_zscore is not None:
+    if volume_zscore is not None and volume_zscore > 0:
         parts[-1] += f", backed by volume z-score {volume_zscore:.1f}"
 
     parts[-1] += f" and conviction {round(conviction_score)}."
