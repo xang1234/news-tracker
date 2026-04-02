@@ -241,7 +241,7 @@ async def _build_market_catalyst(
 
     metrics = await theme_repo.get_metrics_range(
         run.theme_id,
-        start=date.today() - timedelta(days=1),
+        start=date.today() - timedelta(days=days),
         end=date.today(),
     )
     latest_metric = metrics[-1] if metrics else None
@@ -354,6 +354,11 @@ async def _build_market_catalyst(
         conviction_score=run.conviction_score,
         related_tickers=[item.ticker for item in related_tickers],
     )
+    avg_authority_value = (
+        latest_metric.avg_authority
+        if latest_metric and latest_metric.avg_authority is not None
+        else run.avg_authority
+    )
 
     return MarketCatalystItem(
         run_id=run.run_id,
@@ -367,11 +372,8 @@ async def _build_market_catalyst(
         current_rate_per_hour=round(run.current_rate_per_hour, 3),
         current_acceleration=round(run.current_acceleration, 3),
         platform_count=run.platform_count,
-        avg_sentiment=round(run.avg_sentiment, 4),
-        avg_authority=round(
-            latest_metric.avg_authority if latest_metric and latest_metric.avg_authority is not None else run.avg_authority,
-            4,
-        ),
+        avg_sentiment=round(run.avg_sentiment, 4) if run.avg_sentiment is not None else None,
+        avg_authority=round(avg_authority_value, 4) if avg_authority_value is not None else None,
         volume_zscore=(
             round(latest_metric.volume_zscore, 4)
             if latest_metric and latest_metric.volume_zscore is not None

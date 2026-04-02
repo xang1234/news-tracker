@@ -2,10 +2,8 @@
 
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 import numpy as np
-import pytest
 
 from src.graph.propagation import PropagationImpact
 from src.ingestion.schemas import EngagementMetrics, NormalizedDocument, Platform

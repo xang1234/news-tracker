@@ -373,14 +373,14 @@ class GraphRepository:
         """
         if node_type:
             rows = await self._db.fetch(
-                "SELECT * FROM causal_nodes WHERE node_type = $1 ORDER BY name LIMIT $2 OFFSET $3",
+                "SELECT * FROM causal_nodes WHERE node_type = $1 ORDER BY name, node_id LIMIT $2 OFFSET $3",
                 node_type,
                 limit,
                 offset,
             )
         else:
             rows = await self._db.fetch(
-                "SELECT * FROM causal_nodes ORDER BY name LIMIT $1 OFFSET $2",
+                "SELECT * FROM causal_nodes ORDER BY name, node_id LIMIT $1 OFFSET $2",
                 limit,
                 offset,
             )

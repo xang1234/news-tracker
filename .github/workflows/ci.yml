@@ -44,16 +44,21 @@ jobs:
       - name: Compile changed Python files
         if: steps.python_changes.outputs.python_count != '0'
         run: |
-          mapfile -t files <<'EOF'
-          ${{ steps.python_changes.outputs.python_files }}
-          EOF
+          mapfile -t files <<< "${{ steps.python_changes.outputs.python_files }}"
           uv run python -m py_compile "${files[@]}"
-      - name: Run changed Python tests
-        if: steps.python_changes.outputs.test_count != '0'
+      - name: Lint changed Python files
+        if: steps.python_changes.outputs.python_count != '0'
         run: |
-          mapfile -t files <<'EOF'
-          ${{ steps.python_changes.outputs.test_files }}
-          EOF
+          mapfile -t files <<< "${{ steps.python_changes.outputs.python_files }}"
+          uv run ruff check --select F,E9 "${files[@]}"
+      - name: Run Python tests
+        if: steps.python_changes.outputs.python_count != '0'
+        run: |
+          if [[ "${{ steps.python_changes.outputs.test_count }}" != '0' ]]; then
+            mapfile -t files <<< "${{ steps.python_changes.outputs.test_files }}"
+          else
+            files=(tests/test_api/test_health.py)
+          fi
           uv run pytest -v -m "not integration" "${files[@]}"
 
   frontend:
@@ -101,8 +106,6 @@ jobs:
       - name: Lint changed frontend files
         if: steps.frontend_changes.outputs.lint_count != '0'
         run: |
-          mapfile -t files <<'EOF'
-          ${{ steps.frontend_changes.outputs.lint_files }}
-          EOF
+          mapfile -t files <<< "${{ steps.frontend_changes.outputs.lint_files }}"
           npx eslint "${files[@]}"
       - run: npx vite build
