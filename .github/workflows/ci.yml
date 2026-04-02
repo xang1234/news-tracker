@@ -44,18 +44,27 @@ jobs:
       - name: Compile changed Python files
         if: steps.python_changes.outputs.python_count != '0'
         run: |
-          mapfile -t files <<< "${{ steps.python_changes.outputs.python_files }}"
+          files=()
+          while IFS= read -r file; do
+            [[ -n "$file" ]] && files+=("$file")
+          done <<< "${{ steps.python_changes.outputs.python_files }}"
           uv run python -m py_compile "${files[@]}"
       - name: Lint changed Python files
         if: steps.python_changes.outputs.python_count != '0'
         run: |
-          mapfile -t files <<< "${{ steps.python_changes.outputs.python_files }}"
+          files=()
+          while IFS= read -r file; do
+            [[ -n "$file" ]] && files+=("$file")
+          done <<< "${{ steps.python_changes.outputs.python_files }}"
           uv run ruff check "${files[@]}"
       - name: Run Python tests
         if: steps.python_changes.outputs.python_count != '0'
         run: |
           if [[ "${{ steps.python_changes.outputs.test_count }}" != '0' ]]; then
-            mapfile -t files <<< "${{ steps.python_changes.outputs.test_files }}"
+            files=()
+            while IFS= read -r file; do
+              [[ -n "$file" ]] && files+=("$file")
+            done <<< "${{ steps.python_changes.outputs.test_files }}"
           else
             files=(tests/test_api/test_health.py)
           fi
@@ -106,6 +115,9 @@ jobs:
       - name: Lint changed frontend files
         if: steps.frontend_changes.outputs.lint_count != '0'
         run: |
-          mapfile -t files <<< "${{ steps.frontend_changes.outputs.lint_files }}"
+          files=()
+          while IFS= read -r file; do
+            [[ -n "$file" ]] && files+=("$file")
+          done <<< "${{ steps.frontend_changes.outputs.lint_files }}"
           npx eslint "${files[@]}"
       - run: npx vite build
