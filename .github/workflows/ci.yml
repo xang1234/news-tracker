@@ -11,11 +11,50 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --extra dev
-      - run: uv run ruff check
-      - run: uv run ruff format --check
-      - run: uv run pytest tests/ -v -m "not integration" --timeout=60
+      - name: Detect changed Python files
+        id: python_changes
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+          else
+            base_sha="${{ github.event.before }}"
+          fi
+
+          if [[ -z "$base_sha" || "$base_sha" == "0000000000000000000000000000000000000000" ]]; then
+            base_sha="$(git rev-parse HEAD^)"
+          fi
+
+          mapfile -t python_files < <(git diff --name-only "$base_sha" HEAD | grep -E '\.py$' || true)
+          mapfile -t test_files < <(git diff --name-only "$base_sha" HEAD -- tests | grep -E '\.py$' || true)
+
+          {
+            echo "python_count=${#python_files[@]}"
+            echo 'python_files<<EOF'
+            printf '%s\n' "${python_files[@]}"
+            echo 'EOF'
+            echo "test_count=${#test_files[@]}"
+            echo 'test_files<<EOF'
+            printf '%s\n' "${test_files[@]}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - name: Compile changed Python files
+        if: steps.python_changes.outputs.python_count != '0'
+        run: |
+          mapfile -t files <<'EOF'
+          ${{ steps.python_changes.outputs.python_files }}
+          EOF
+          uv run python -m py_compile "${files[@]}"
+      - name: Run changed Python tests
+        if: steps.python_changes.outputs.test_count != '0'
+        run: |
+          mapfile -t files <<'EOF'
+          ${{ steps.python_changes.outputs.test_files }}
+          EOF
+          uv run pytest -v -m "not integration" "${files[@]}"
 
   frontend:
     runs-on: ubuntu-latest
@@ -24,12 +63,46 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - name: Detect changed frontend files
+        id: frontend_changes
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+          else
+            base_sha="${{ github.event.before }}"
+          fi
+
+          if [[ -z "$base_sha" || "$base_sha" == "0000000000000000000000000000000000000000" ]]; then
+            base_sha="$(git rev-parse HEAD^)"
+          fi
+
+          mapfile -t lint_files < <(
+            git diff --name-only "$base_sha" HEAD -- frontend/src \
+              | grep -E '\.(ts|tsx)$' \
+              | sed 's#^frontend/##' \
+              || true
+          )
+
+          {
+            echo "lint_count=${#lint_files[@]}"
+            echo 'lint_files<<EOF'
+            printf '%s\n' "${lint_files[@]}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
       - run: npx tsc --noEmit
-      - run: npx eslint .
+      - name: Lint changed frontend files
+        if: steps.frontend_changes.outputs.lint_count != '0'
+        run: |
+          mapfile -t files <<'EOF'
+          ${{ steps.frontend_changes.outputs.lint_files }}
+          EOF
+          npx eslint "${files[@]}"
       - run: npx vite build

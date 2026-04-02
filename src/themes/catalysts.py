@@ -95,10 +95,13 @@ def compute_market_impact_score(
     event_count: int,
 ) -> float:
     """Blend corroboration and urgency into a 0-100 impact score."""
+    positive_volume = max(volume_zscore or 0.0, 0.0)
+    positive_acceleration = max(acceleration, 0.0)
+
     score = 0.0
     score += min(max(conviction_score, 0.0) * 0.55, 55.0)
-    score += min(abs(volume_zscore or 0.0) * 12.0, 18.0)
-    score += min(abs(acceleration) * 4.0, 12.0)
+    score += min(positive_volume * 12.0, 18.0)
+    score += min(positive_acceleration * 4.0, 12.0)
     score += min(platform_count * 3.0, 9.0)
     score += min(max(avg_authority or 0.0, 0.0) * 15.0, 12.0)
     score += min(max(event_count, 0) * 2.0, 8.0)

@@ -359,26 +359,30 @@ class GraphRepository:
         self,
         node_type: str | None = None,
         limit: int = 200,
+        offset: int = 0,
     ) -> list[CausalNode]:
         """List all graph nodes with optional type filter.
 
         Args:
             node_type: Optional filter to a specific node type (ticker, theme, technology).
             limit: Maximum number of nodes to return.
+            offset: Row offset for pagination.
 
         Returns:
             List of CausalNode objects.
         """
         if node_type:
             rows = await self._db.fetch(
-                "SELECT * FROM causal_nodes WHERE node_type = $1 ORDER BY name LIMIT $2",
+                "SELECT * FROM causal_nodes WHERE node_type = $1 ORDER BY name LIMIT $2 OFFSET $3",
                 node_type,
                 limit,
+                offset,
             )
         else:
             rows = await self._db.fetch(
-                "SELECT * FROM causal_nodes ORDER BY name LIMIT $1",
+                "SELECT * FROM causal_nodes ORDER BY name LIMIT $1 OFFSET $2",
                 limit,
+                offset,
             )
         return [_row_to_node(r) for r in rows]
 

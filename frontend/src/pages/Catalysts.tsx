@@ -6,7 +6,10 @@ import { useThemeCatalysts } from '@/api/hooks/useThemes';
 import { latency } from '@/lib/formatters';
 
 export default function Catalysts() {
-  const { data, isLoading, isError, error } = useThemeCatalysts(12, 7);
+  const limit = 12;
+  const days = 7;
+  const { data, isLoading, isError, error } = useThemeCatalysts(limit, days);
+  const showMetricSkeletons = isLoading || !data || isError;
 
   const bullishCount = data?.catalysts.filter((item) => item.bias === 'bullish').length ?? 0;
   const bearishCount = data?.catalysts.filter((item) => item.bias === 'bearish').length ?? 0;
@@ -29,12 +32,12 @@ export default function Catalysts() {
             </p>
           </div>
           <div className="hidden rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-xs text-primary lg:block">
-            7-day event corroboration window
+            {days}-day event corroboration window
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          {isLoading ? (
+          {showMetricSkeletons ? (
             <>
               <MetricCardSkeleton />
               <MetricCardSkeleton />

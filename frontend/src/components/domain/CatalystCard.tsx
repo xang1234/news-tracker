@@ -192,6 +192,7 @@ export function CatalystCard({ catalyst }: { catalyst: MarketCatalystItem }) {
                         href={doc.url}
                         target="_blank"
                         rel="noreferrer"
+                        aria-label={`Open source for ${doc.title ?? doc.url}`}
                         className="text-muted-foreground hover:text-foreground"
                       >
                         <ExternalLink className="h-4 w-4" />

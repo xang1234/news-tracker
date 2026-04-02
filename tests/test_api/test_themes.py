@@ -365,6 +365,8 @@ class TestMarketCatalysts:
         assert catalyst["primary_tickers"][0] == {"ticker": "NVDA", "mention_count": 8}
         assert catalyst["related_tickers"][0]["ticker"] == "AVGO"
         assert catalyst["related_tickers"][1]["ticker"] == "MRVL"
+        assert len(catalyst["related_tickers"]) == 2
+        assert "HBM3E" not in {item["ticker"] for item in catalyst["related_tickers"]}
         assert catalyst["dominant_event_types"] == ["product_launch"]
         assert catalyst["evidence"][0]["document_id"] == "doc_1"
         assert "Bullish setup" in catalyst["summary"]

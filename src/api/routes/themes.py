@@ -70,6 +70,9 @@ from src.themes.schemas import Theme
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
+CATALYST_BUILD_CONCURRENCY = 10
+TICKER_NODE_PAGE_SIZE = 1000
+
 
 def _theme_to_item(theme: Theme, include_centroid: bool = False) -> ThemeItem:
     """Convert a Theme dataclass to a ThemeItem response model."""
@@ -176,6 +179,49 @@ def _graph_node_id(node: object) -> str | None:
     else:
         value = getattr(node, "node_id", None)
     return value if isinstance(value, str) else None
+
+
+def _descending_timestamp_sort_key(timestamp: datetime | None) -> float:
+    """Return a sort key that prefers newer timestamps and pushes missing values last."""
+    if timestamp is None:
+        return float("inf")
+    return -timestamp.timestamp()
+
+
+async def _load_ticker_node_ids(graph_repo: GraphRepository) -> set[str]:
+    """Load the full set of ticker node ids without imposing a hidden cap."""
+    ticker_node_ids: set[str] = set()
+    offset = 0
+
+    while True:
+        graph_nodes = await graph_repo.get_all_nodes(
+            node_type="ticker",
+            limit=TICKER_NODE_PAGE_SIZE,
+            offset=offset,
+        )
+        if not graph_nodes:
+            break
+
+        ticker_node_ids.update(
+            node_id
+            for node in graph_nodes
+            if (node_id := _graph_node_id(node)) is not None
+        )
+
+        if len(graph_nodes) < TICKER_NODE_PAGE_SIZE:
+            break
+        offset += TICKER_NODE_PAGE_SIZE
+
+    return ticker_node_ids
+
+
+async def _build_market_catalyst_bounded(
+    semaphore: asyncio.Semaphore,
+    **kwargs,
+) -> MarketCatalystItem | None:
+    """Build a catalyst while respecting the route-level concurrency ceiling."""
+    async with semaphore:
+        return await _build_market_catalyst(**kwargs)
 
 
 async def _build_market_catalyst(
@@ -291,7 +337,7 @@ async def _build_market_catalyst(
         key=lambda doc: (
             0 if doc.get("title") else 1,
             -(doc.get("authority_score") or 0.0),
-            doc.get("timestamp") or datetime.min.replace(tzinfo=timezone.utc),
+            _descending_timestamp_sort_key(doc.get("timestamp")),
         ),
     )
     evidence = [_catalyst_evidence_item(doc) for doc in supporting_docs[:3]]
@@ -548,18 +594,15 @@ async def get_market_catalysts(
 
     ticker_node_ids: set[str] = set()
     try:
-        graph_nodes = await graph_repo.get_all_nodes(node_type="ticker", limit=1000)
-        ticker_node_ids = {
-            node_id
-            for node in graph_nodes
-            if (node_id := _graph_node_id(node)) is not None
-        }
+        ticker_node_ids = await _load_ticker_node_ids(graph_repo)
     except Exception as exc:
         logger.warning("catalyst_graph_nodes_unavailable", error=str(exc))
 
+    semaphore = asyncio.Semaphore(min(CATALYST_BUILD_CONCURRENCY, max(len(rows), 1)))
     catalysts = await asyncio.gather(
         *[
-            _build_market_catalyst(
+            _build_market_catalyst_bounded(
+                semaphore=semaphore,
                 run=row["run"],
                 theme_name=row.get("theme_name"),
                 days=days,
