@@ -97,7 +97,8 @@ class TestListThemes:
         resp = client.get("/themes?lifecycle_stage=accelerating")
         assert resp.status_code == 200
         mock_theme_repo.get_all.assert_called_once_with(
-            lifecycle_stages=["accelerating"], limit=50 + 0,
+            lifecycle_stages=["accelerating"],
+            limit=50 + 0,
         )
 
     def test_pagination(self, client, mock_theme_repo):
@@ -404,8 +405,7 @@ class TestGetThemeDocuments:
             author_id="author1",
             author_name="Jane Doe",
             content=(
-                "NVIDIA announced new HBM3E support for H200 GPUs with "
-                "improved memory bandwidth."
+                "NVIDIA announced new HBM3E support for H200 GPUs with improved memory bandwidth."
             ),
             content_type="article",
             title="NVIDIA HBM3E Announcement",
@@ -631,9 +631,8 @@ class TestGetThemeSentiment:
 
         # Verify only 1 valid DocumentSentiment was passed to aggregator
         call_args = mock_aggregator.aggregate_theme_sentiment.call_args
-        doc_sentiments = (
-            call_args.kwargs.get("document_sentiments")
-            or call_args[1].get("document_sentiments")
+        doc_sentiments = call_args.kwargs.get("document_sentiments") or call_args[1].get(
+            "document_sentiments"
         )
         if doc_sentiments is None:
             # positional arg
@@ -784,7 +783,8 @@ class TestRankedThemes:
         data = resp.json()
         assert data["strategy"] == "position"
         mock_ranking_service.get_actionable.assert_called_once_with(
-            strategy="position", max_tier=3,
+            strategy="position",
+            max_tier=3,
         )
 
     def test_max_tier_param(self, client, mock_ranking_service):
@@ -793,7 +793,8 @@ class TestRankedThemes:
         resp = client.get("/themes/ranked?max_tier=1")
         assert resp.status_code == 200
         mock_ranking_service.get_actionable.assert_called_once_with(
-            strategy="swing", max_tier=1,
+            strategy="swing",
+            max_tier=1,
         )
 
     def test_limit_param(self, client, mock_ranking_service):

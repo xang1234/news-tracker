@@ -164,9 +164,7 @@ def summarize_market_catalyst(
     related = list(related_tickers)
     if related:
         parts.append(
-            "Watch follow-through in "
-            + ", ".join(f"${ticker}" for ticker in related[:2])
-            + "."
+            "Watch follow-through in " + ", ".join(f"${ticker}" for ticker in related[:2]) + "."
         )
 
     return " ".join(parts)

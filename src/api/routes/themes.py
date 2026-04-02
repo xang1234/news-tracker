@@ -663,9 +663,7 @@ async def get_market_catalysts(
 async def get_theme(
     request: Request,
     theme_id: str,
-    include_centroid: bool = Query(
-        default=False, description="Include 768-dim centroid vector"
-    ),
+    include_centroid: bool = Query(default=False, description="Include 768-dim centroid vector"),
     api_key: str = Depends(verify_api_key),
     repo: ThemeRepository = Depends(get_theme_repository),
 ) -> ThemeDetailResponse:
@@ -1068,9 +1066,7 @@ async def get_theme_metrics(
     start_date: date | None = Query(
         default=None, description="Start date (inclusive, default: 30 days ago)"
     ),
-    end_date: date | None = Query(
-        default=None, description="End date (inclusive, default: today)"
-    ),
+    end_date: date | None = Query(default=None, description="End date (inclusive, default: today)"),
     api_key: str = Depends(verify_api_key),
     theme_repo: ThemeRepository = Depends(get_theme_repository),
 ) -> ThemeMetricsResponse:
