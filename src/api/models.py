@@ -40,8 +40,7 @@ class EmbedRequest(BaseModel):
         for i, text in enumerate(v):
             if len(text) > 10_000:
                 raise ValueError(
-                    f"texts[{i}] exceeds maximum length of 10,000 characters "
-                    f"(got {len(text):,})"
+                    f"texts[{i}] exceeds maximum length of 10,000 characters (got {len(text):,})"
                 )
         return v
 
@@ -339,7 +338,9 @@ class ThemeItem(BaseModel):
     theme_id: str = Field(..., description="Deterministic theme identifier")
     name: str = Field(..., description="Human-readable theme name")
     top_keywords: list[str] = Field(default_factory=list, description="Ranked topic keywords")
-    top_tickers: list[str] = Field(default_factory=list, description="Most-mentioned ticker symbols")
+    top_tickers: list[str] = Field(
+        default_factory=list, description="Most-mentioned ticker symbols"
+    )
     top_entities: list[dict] = Field(default_factory=list, description="Entity objects with scores")
     lifecycle_stage: str = Field(..., description="One of: emerging, accelerating, mature, fading")
     document_count: int = Field(..., description="Number of documents assigned to this theme")
@@ -378,10 +379,16 @@ class ThemeDocumentItem(BaseModel):
     url: str | None = Field(default=None, description="Original document URL")
     author_name: str | None = Field(default=None, description="Author display name")
     tickers: list[str] = Field(default_factory=list, description="Ticker symbols mentioned")
-    authority_score: float | None = Field(default=None, description="Document authority score (0.0-1.0)")
+    authority_score: float | None = Field(
+        default=None, description="Document authority score (0.0-1.0)"
+    )
     sentiment_label: str | None = Field(default=None, description="Sentiment label if available")
-    sentiment_confidence: float | None = Field(default=None, description="Sentiment confidence if available")
-    timestamp: str | None = Field(default=None, description="Document creation timestamp (ISO format)")
+    sentiment_confidence: float | None = Field(
+        default=None, description="Sentiment confidence if available"
+    )
+    timestamp: str | None = Field(
+        default=None, description="Document creation timestamp (ISO format)"
+    )
 
 
 class ThemeDocumentsResponse(BaseModel):
@@ -401,7 +408,9 @@ class ThemeSentimentResponse(BaseModel):
     bearish_ratio: float = Field(..., description="Proportion of negative sentiment (0-1)")
     neutral_ratio: float = Field(..., description="Proportion of neutral sentiment (0-1)")
     avg_confidence: float = Field(..., description="Average sentiment confidence")
-    avg_authority: float | None = Field(default=None, description="Average authority score of documents")
+    avg_authority: float | None = Field(
+        default=None, description="Average authority score of documents"
+    )
     sentiment_velocity: float | None = Field(
         default=None, description="Rate of sentiment change (positive = more bullish)"
     )
@@ -419,12 +428,20 @@ class ThemeMetricsItem(BaseModel):
 
     date: dt.date = Field(..., description="Calendar date for this metrics snapshot")
     document_count: int = Field(..., description="Number of documents on this date")
-    sentiment_score: float | None = Field(default=None, description="Aggregate sentiment (-1.0 to 1.0)")
-    volume_zscore: float | None = Field(default=None, description="Standard deviations from mean volume")
+    sentiment_score: float | None = Field(
+        default=None, description="Aggregate sentiment (-1.0 to 1.0)"
+    )
+    volume_zscore: float | None = Field(
+        default=None, description="Standard deviations from mean volume"
+    )
     velocity: float | None = Field(default=None, description="Rate of volume change")
     acceleration: float | None = Field(default=None, description="Rate of velocity change")
-    avg_authority: float | None = Field(default=None, description="Mean authority score of documents")
-    bullish_ratio: float | None = Field(default=None, description="Fraction of positive sentiment documents")
+    avg_authority: float | None = Field(
+        default=None, description="Mean authority score of documents"
+    )
+    bullish_ratio: float | None = Field(
+        default=None, description="Fraction of positive sentiment documents"
+    )
 
 
 class ThemeMetricsResponse(BaseModel):
@@ -450,12 +467,16 @@ class ThemeEventItem(BaseModel):
     object: str | None = Field(default=None, description="Target of the action")
     time_ref: str | None = Field(default=None, description="Temporal reference (e.g., Q3 2026)")
     quantity: str | None = Field(default=None, description="Numeric quantity mentioned")
-    tickers: list[str] = Field(default_factory=list, description="Ticker symbols linked to this event")
+    tickers: list[str] = Field(
+        default_factory=list, description="Ticker symbols linked to this event"
+    )
     confidence: float = Field(..., ge=0.0, le=1.0, description="Extraction confidence score")
     source_doc_ids: list[str] = Field(
         default_factory=list, description="Document IDs confirming this event (after dedup)"
     )
-    created_at: str | None = Field(default=None, description="Event extraction timestamp (ISO format)")
+    created_at: str | None = Field(
+        default=None, description="Event extraction timestamp (ISO format)"
+    )
 
 
 class ThemeEventsResponse(BaseModel):
@@ -464,9 +485,7 @@ class ThemeEventsResponse(BaseModel):
     events: list[ThemeEventItem] = Field(..., description="Events linked to this theme")
     total: int = Field(..., description="Number of events returned")
     theme_id: str = Field(..., description="Theme identifier")
-    event_counts: dict[str, int] = Field(
-        default_factory=dict, description="Event counts by type"
-    )
+    event_counts: dict[str, int] = Field(default_factory=dict, description="Event counts by type")
     investment_signal: str | None = Field(
         default=None,
         description="Derived investment signal: supply_increasing, supply_decreasing, product_momentum, product_risk, or null",
@@ -517,7 +536,9 @@ class MarketCatalystItem(BaseModel):
     lifecycle_stage: str = Field(..., description="Current theme lifecycle stage")
     bias: str = Field(..., description="Directional market bias: bullish, bearish, or mixed")
     summary: str = Field(..., description="Plain-language market summary")
-    market_impact_score: float = Field(..., description="0-100 blended urgency and corroboration score")
+    market_impact_score: float = Field(
+        ..., description="0-100 blended urgency and corroboration score"
+    )
     conviction_score: float = Field(..., description="Narrative conviction score")
     current_rate_per_hour: float = Field(..., description="Current document rate per hour")
     current_acceleration: float = Field(..., description="Current acceleration")
@@ -525,8 +546,12 @@ class MarketCatalystItem(BaseModel):
     avg_sentiment: float | None = Field(default=None, description="Average narrative sentiment")
     avg_authority: float | None = Field(default=None, description="Average document authority")
     volume_zscore: float | None = Field(default=None, description="Latest theme volume z-score")
-    investment_signal: str | None = Field(default=None, description="Derived event-side investment signal")
-    dominant_event_types: list[str] = Field(default_factory=list, description="Top corroborating event types")
+    investment_signal: str | None = Field(
+        default=None, description="Derived event-side investment signal"
+    )
+    dominant_event_types: list[str] = Field(
+        default_factory=list, description="Top corroborating event types"
+    )
     primary_tickers: list[MarketCatalystTickerItem] = Field(
         default_factory=list, description="Directly involved tickers"
     )
@@ -584,7 +609,9 @@ class AlertItem(BaseModel):
     subject_id: str = Field(..., description="Alert subject identifier")
     trigger_type: str = Field(..., description="Alert trigger type")
     severity: str = Field(..., description="Severity level: critical, warning, info")
-    conviction_score: float | None = Field(default=None, description="Optional 0-100 conviction score")
+    conviction_score: float | None = Field(
+        default=None, description="Optional 0-100 conviction score"
+    )
     title: str = Field(..., description="Short human-readable summary")
     message: str = Field(..., description="Detailed alert description")
     trigger_data: dict = Field(default_factory=dict, description="Trigger-specific context")
@@ -649,8 +676,12 @@ class NarrativeRunItem(BaseModel):
     top_tickers: list[NarrativeTickerCount] = Field(..., description="Top ticker counts")
     last_document_at: str = Field(..., description="Last document timestamp")
     started_at: str = Field(..., description="Run start timestamp")
-    recent_alerts: list[NarrativeAlertSummary] = Field(default_factory=list, description="Recent alerts")
-    sparkline: list[NarrativeBucketPoint] = Field(default_factory=list, description="Recent bucket sparkline")
+    recent_alerts: list[NarrativeAlertSummary] = Field(
+        default_factory=list, description="Recent alerts"
+    )
+    sparkline: list[NarrativeBucketPoint] = Field(
+        default_factory=list, description="Recent bucket sparkline"
+    )
 
 
 class NarrativeMomentumResponse(BaseModel):
@@ -674,9 +705,13 @@ class NarrativeRunDetailResponse(BaseModel):
     """Narrative run detail payload."""
 
     run: NarrativeRunItem = Field(..., description="Narrative run summary")
-    platform_timeline: dict[str, str] = Field(default_factory=dict, description="Platform first-seen timestamps")
+    platform_timeline: dict[str, str] = Field(
+        default_factory=dict, description="Platform first-seen timestamps"
+    )
     ticker_counts: dict[str, int] = Field(default_factory=dict, description="Ticker count map")
-    documents: list[NarrativeDocumentItem] = Field(default_factory=list, description="Recent documents")
+    documents: list[NarrativeDocumentItem] = Field(
+        default_factory=list, description="Recent documents"
+    )
     latency_ms: float = Field(..., description="Response latency")
 
 
@@ -685,7 +720,9 @@ class NarrativeRunDocumentsResponse(BaseModel):
 
     theme_id: str = Field(..., description="Theme identifier")
     run_id: str = Field(..., description="Narrative run identifier")
-    documents: list[NarrativeDocumentItem] = Field(default_factory=list, description="Run documents")
+    documents: list[NarrativeDocumentItem] = Field(
+        default_factory=list, description="Run documents"
+    )
     total: int = Field(..., description="Number of documents returned")
     latency_ms: float = Field(..., description="Response latency")
 
@@ -876,12 +913,18 @@ class DocumentListItem(BaseModel):
     author_followers: int | None = Field(default=None, description="Author follower count")
     tickers: list[str] = Field(default_factory=list, description="Ticker symbols mentioned")
     spam_score: float | None = Field(default=None, description="Spam detection score (0-1)")
-    authority_score: float | None = Field(default=None, description="Document authority score (0-1)")
+    authority_score: float | None = Field(
+        default=None, description="Document authority score (0-1)"
+    )
     sentiment_label: str | None = Field(default=None, description="Sentiment label if available")
-    sentiment_confidence: float | None = Field(default=None, description="Sentiment confidence if available")
+    sentiment_confidence: float | None = Field(
+        default=None, description="Sentiment confidence if available"
+    )
     engagement: dict = Field(default_factory=dict, description="Engagement metrics")
     theme_ids: list[str] = Field(default_factory=list, description="Assigned theme IDs")
-    timestamp: str | None = Field(default=None, description="Document creation timestamp (ISO format)")
+    timestamp: str | None = Field(
+        default=None, description="Document creation timestamp (ISO format)"
+    )
     fetched_at: str | None = Field(default=None, description="Ingestion timestamp (ISO format)")
 
 
@@ -909,17 +952,25 @@ class DocumentDetailResponse(BaseModel):
     author_name: str | None = Field(default=None, description="Author display name")
     author_verified: bool = Field(default=False, description="Whether author is verified")
     author_followers: int | None = Field(default=None, description="Author follower count")
-    source_name: str | None = Field(default=None, description="Source name (subreddit, publication, handle)")
+    source_name: str | None = Field(
+        default=None, description="Source name (subreddit, publication, handle)"
+    )
     ingestion_method: str | None = Field(
         default=None,
         description="Ingestion path used (for example: api, xui)",
     )
     tickers: list[str] = Field(default_factory=list, description="Ticker symbols mentioned")
     spam_score: float | None = Field(default=None, description="Spam detection score (0-1)")
-    bot_probability: float | None = Field(default=None, description="Bot detection probability (0-1)")
-    authority_score: float | None = Field(default=None, description="Document authority score (0-1)")
+    bot_probability: float | None = Field(
+        default=None, description="Bot detection probability (0-1)"
+    )
+    authority_score: float | None = Field(
+        default=None, description="Document authority score (0-1)"
+    )
     sentiment_label: str | None = Field(default=None, description="Sentiment label if available")
-    sentiment_confidence: float | None = Field(default=None, description="Sentiment confidence if available")
+    sentiment_confidence: float | None = Field(
+        default=None, description="Sentiment confidence if available"
+    )
     sentiment: dict | None = Field(default=None, description="Full sentiment analysis object")
     engagement: dict = Field(default_factory=dict, description="Engagement metrics")
     entities: list[dict] = Field(default_factory=list, description="Extracted entities")
@@ -929,7 +980,9 @@ class DocumentDetailResponse(BaseModel):
     theme_ids: list[str] = Field(default_factory=list, description="Assigned theme IDs")
     has_embedding: bool = Field(default=False, description="Whether FinBERT embedding exists")
     has_embedding_minilm: bool = Field(default=False, description="Whether MiniLM embedding exists")
-    timestamp: str | None = Field(default=None, description="Document creation timestamp (ISO format)")
+    timestamp: str | None = Field(
+        default=None, description="Document creation timestamp (ISO format)"
+    )
     fetched_at: str | None = Field(default=None, description="Ingestion timestamp (ISO format)")
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
 
@@ -955,7 +1008,9 @@ class DocumentStatsResponse(BaseModel):
     platform_counts: list[PlatformCount] = Field(..., description="Document counts by platform")
     embedding_coverage: EmbeddingCoverage = Field(..., description="Embedding coverage stats")
     sentiment_coverage: float = Field(..., description="Fraction of docs with sentiment")
-    earliest_document: str | None = Field(default=None, description="Earliest document timestamp (ISO)")
+    earliest_document: str | None = Field(
+        default=None, description="Earliest document timestamp (ISO)"
+    )
     latest_document: str | None = Field(default=None, description="Latest document timestamp (ISO)")
     latest_fetched_at: str | None = Field(default=None, description="Latest ingestion time (ISO)")
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
@@ -1048,7 +1103,9 @@ class KeywordsResponse(BaseModel):
 class EventsExtractRequest(BaseModel):
     """Request model for event extraction from a single text."""
 
-    text: str = Field(..., min_length=1, max_length=10000, description="Text to extract events from")
+    text: str = Field(
+        ..., min_length=1, max_length=10000, description="Text to extract events from"
+    )
     tickers: list[str] = Field(default_factory=list, description="Optional ticker hints")
 
 
@@ -1131,7 +1188,9 @@ class EntityDetailResponse(BaseModel):
     mention_count: int = Field(..., description="Total document mentions")
     first_seen: str | None = Field(default=None, description="First mention timestamp (ISO)")
     last_seen: str | None = Field(default=None, description="Most recent mention timestamp (ISO)")
-    platforms: dict[str, int] = Field(default_factory=dict, description="Mention counts by platform")
+    platforms: dict[str, int] = Field(
+        default_factory=dict, description="Mention counts by platform"
+    )
     graph_node_id: str | None = Field(default=None, description="Graph node ID if linked")
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
 
@@ -1257,7 +1316,9 @@ class CreateSourceRequest(BaseModel):
     """Request to create a new source."""
 
     platform: str = Field(..., description="Platform: twitter, reddit, substack")
-    identifier: str = Field(..., min_length=1, max_length=200, description="Handle, subreddit name, or slug")
+    identifier: str = Field(
+        ..., min_length=1, max_length=200, description="Handle, subreddit name, or slug"
+    )
     display_name: str = Field(default="", max_length=200, description="Human-readable name")
     description: str = Field(default="", max_length=500, description="Short description")
     metadata: dict = Field(default_factory=dict, description="Platform-specific metadata")
@@ -1299,9 +1360,7 @@ class BulkCreateSourcesRequest(BaseModel):
             raise ValueError("identifiers must contain at least one non-empty value")
         for i, ident in enumerate(cleaned):
             if len(ident) > 200:
-                raise ValueError(
-                    f"identifiers[{i}] exceeds maximum length of 200 characters"
-                )
+                raise ValueError(f"identifiers[{i}] exceeds maximum length of 200 characters")
         return cleaned
 
 
@@ -1324,7 +1383,9 @@ class TriggerIngestionResponse(BaseModel):
 class UpdateSourceRequest(BaseModel):
     """Request to update a source."""
 
-    display_name: str | None = Field(default=None, max_length=200, description="Human-readable name")
+    display_name: str | None = Field(
+        default=None, max_length=200, description="Human-readable name"
+    )
     description: str | None = Field(default=None, max_length=500, description="Short description")
     is_active: bool | None = Field(default=None, description="Whether source is active")
     metadata: dict | None = Field(default=None, description="Platform-specific metadata")

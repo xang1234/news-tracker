@@ -132,9 +132,7 @@ class GraphRepository:
             json.dumps(metadata or {}),
         )
 
-    async def remove_edge(
-        self, source: str, target: str, relation: str
-    ) -> bool:
+    async def remove_edge(self, source: str, target: str, relation: str) -> bool:
         """Remove an edge. Returns True if an edge was actually deleted."""
         result = await self._db.execute(
             """
@@ -147,9 +145,7 @@ class GraphRepository:
         )
         return result == "DELETE 1"
 
-    async def get_edge(
-        self, source: str, target: str, relation: str
-    ) -> CausalEdge | None:
+    async def get_edge(self, source: str, target: str, relation: str) -> CausalEdge | None:
         """Get a specific edge, or None if not found."""
         row = await self._db.fetchrow(
             """
@@ -207,9 +203,7 @@ class GraphRepository:
             for row in rows
         ]
 
-    async def get_downstream(
-        self, node_id: str, max_depth: int = 2
-    ) -> list[tuple[str, int]]:
+    async def get_downstream(self, node_id: str, max_depth: int = 2) -> list[tuple[str, int]]:
         """Get all nodes reachable by following outgoing edges.
 
         Uses a recursive CTE with cycle detection via path tracking.
@@ -241,9 +235,7 @@ class GraphRepository:
         )
         return [(row["node_id"], row["depth"]) for row in rows]
 
-    async def get_upstream(
-        self, node_id: str, max_depth: int = 2
-    ) -> list[tuple[str, int]]:
+    async def get_upstream(self, node_id: str, max_depth: int = 2) -> list[tuple[str, int]]:
         """Get all nodes that can reach this node via outgoing edges.
 
         Follows edges in reverse direction (target→source).
@@ -314,9 +306,7 @@ class GraphRepository:
             )
         return [(row["neighbor"], row["relation"]) for row in rows]
 
-    async def find_path(
-        self, source: str, target: str, max_depth: int = 5
-    ) -> list[str] | None:
+    async def find_path(self, source: str, target: str, max_depth: int = 5) -> list[str] | None:
         """Find shortest path between two nodes (BFS via recursive CTE).
 
         Returns:
@@ -389,9 +379,7 @@ class GraphRepository:
             )
         return [_row_to_node(r) for r in rows]
 
-    async def get_subgraph(
-        self, node_id: str, depth: int = 2
-    ) -> dict[str, Any]:
+    async def get_subgraph(self, node_id: str, depth: int = 2) -> dict[str, Any]:
         """Extract a local subgraph around a node.
 
         Returns:
