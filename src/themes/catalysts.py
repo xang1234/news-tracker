@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable
 
 _SIGNAL_TO_BIAS = {
     "supply_increasing": "bullish",
@@ -142,7 +142,10 @@ def summarize_market_catalyst(
     ticker_list = list(primary_tickers)
     ticker_text = ", ".join(f"${ticker}" for ticker in ticker_list[:3]) or "linked equities"
     signal_text = signal_label(investment_signal)
-    event_text = ", ".join(event_label(evt) for evt in dominant_events[:2]) or "cross-platform narrative momentum"
+    event_text = (
+        ", ".join(event_label(evt) for evt in dominant_events[:2])
+        or "cross-platform narrative momentum"
+    )
 
     parts = [
         f"{lead} for {ticker_text}.",

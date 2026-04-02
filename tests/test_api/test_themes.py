@@ -1,6 +1,6 @@
 """Tests for theme REST API endpoints."""
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 import numpy as np
@@ -19,8 +19,8 @@ def _make_narrative_run(run_id: str = "run_abc123", theme_id: str = "theme_abc12
         status="active",
         centroid=np.ones(768, dtype=np.float32),
         label="NVDA / AMD",
-        started_at=datetime(2026, 2, 5, 8, 0, 0, tzinfo=timezone.utc),
-        last_document_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+        started_at=datetime(2026, 2, 5, 8, 0, 0, tzinfo=UTC),
+        last_document_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
         doc_count=12,
         platform_first_seen={
             "news": "2026-02-05T08:00:00+00:00",
@@ -35,15 +35,15 @@ def _make_narrative_run(run_id: str = "run_abc123", theme_id: str = "theme_abc12
         current_acceleration=2.5,
         conviction_score=78.0,
         metadata={},
-        created_at=datetime(2026, 2, 5, 8, 0, 0, tzinfo=timezone.utc),
-        updated_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+        created_at=datetime(2026, 2, 5, 8, 0, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
     )
 
 
 def _make_narrative_bucket(run_id: str = "run_abc123") -> NarrativeRunBucket:
     return NarrativeRunBucket(
         run_id=run_id,
-        bucket_start=datetime(2026, 2, 5, 9, 30, 0, tzinfo=timezone.utc),
+        bucket_start=datetime(2026, 2, 5, 9, 30, 0, tzinfo=UTC),
         doc_count=4,
     )
 
@@ -215,9 +215,9 @@ class TestNarrativeEndpoints:
                 "tickers": ["NVDA"],
                 "authority_score": 0.8,
                 "sentiment": {"label": "positive", "confidence": 0.9},
-                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
                 "similarity": 0.91,
-                "assigned_at": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+                "assigned_at": datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
             }
         ]
 
@@ -243,9 +243,9 @@ class TestNarrativeEndpoints:
                 "tickers": ["NVDA"],
                 "authority_score": 0.8,
                 "sentiment": {"label": "positive", "confidence": 0.9},
-                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
                 "similarity": 0.91,
-                "assigned_at": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+                "assigned_at": datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
             }
         ]
 
@@ -260,7 +260,15 @@ class TestNarrativeEndpoints:
 class TestMarketCatalysts:
     """Tests for the market catalyst radar endpoint."""
 
-    def test_get_market_catalysts(self, client, mock_theme_repo, mock_doc_repo, mock_narrative_repo, mock_graph_repo, mock_propagation_service):
+    def test_get_market_catalysts(
+        self,
+        client,
+        mock_theme_repo,
+        mock_doc_repo,
+        mock_narrative_repo,
+        mock_graph_repo,
+        mock_propagation_service,
+    ):
         run = _make_narrative_run()
         metric = _make_metrics()
         metric.volume_zscore = 2.4
@@ -284,7 +292,7 @@ class TestMarketCatalysts:
                 "author_name": "Analyst One",
                 "authority_score": 0.92,
                 "sentiment": {"label": "positive", "confidence": 0.95},
-                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
             },
             {
                 "document_id": "doc_2",
@@ -294,7 +302,7 @@ class TestMarketCatalysts:
                 "author_name": "Analyst Two",
                 "authority_score": 0.61,
                 "sentiment": {"label": "positive", "confidence": 0.8},
-                "timestamp": datetime(2026, 2, 5, 9, 45, 0, tzinfo=timezone.utc),
+                "timestamp": datetime(2026, 2, 5, 9, 45, 0, tzinfo=UTC),
             },
         ]
         mock_doc_repo.get_events_by_tickers.return_value = [
@@ -308,7 +316,7 @@ class TestMarketCatalysts:
                 "time_ref": "Q1 2026",
                 "tickers": ["NVDA"],
                 "confidence": 0.84,
-                "created_at": datetime(2026, 2, 5, 8, 30, 0, tzinfo=timezone.utc),
+                "created_at": datetime(2026, 2, 5, 8, 30, 0, tzinfo=UTC),
             },
         ]
         mock_graph_repo.get_all_nodes.return_value = [
@@ -391,17 +399,24 @@ class TestGetThemeDocuments:
             id=doc_id,
             platform=Platform.NEWS,
             url="https://example.com/article",
-            timestamp=datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
-            fetched_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+            timestamp=datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
+            fetched_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
             author_id="author1",
             author_name="Jane Doe",
-            content="NVIDIA announced new HBM3E support for H200 GPUs with improved memory bandwidth.",
+            content=(
+                "NVIDIA announced new HBM3E support for H200 GPUs with "
+                "improved memory bandwidth."
+            ),
             content_type="article",
             title="NVIDIA HBM3E Announcement",
             engagement=EngagementMetrics(likes=100, shares=50, comments=20),
             tickers_mentioned=["NVDA"],
             authority_score=0.85,
-            sentiment={"label": "positive", "confidence": 0.92, "scores": {"positive": 0.92, "negative": 0.03, "neutral": 0.05}},
+            sentiment={
+                "label": "positive",
+                "confidence": 0.92,
+                "scores": {"positive": 0.92, "negative": 0.03, "neutral": 0.05},
+            },
             theme_ids=["theme_abc123"],
         )
 
@@ -503,7 +518,7 @@ class TestGetThemeSentiment:
         mock_theme_repo.get_by_id.return_value = _make_theme()
 
         # Return some sentiment rows
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mock_doc_repo.get_sentiments_for_theme.return_value = [
             {
                 "document_id": "d1",
@@ -563,11 +578,17 @@ class TestGetThemeSentiment:
         resp = client.get("/themes/nonexistent/sentiment")
         assert resp.status_code == 404
 
-    def test_skips_invalid_sentiment_rows(self, client, mock_theme_repo, mock_doc_repo, mock_aggregator):
+    def test_skips_invalid_sentiment_rows(
+        self,
+        client,
+        mock_theme_repo,
+        mock_doc_repo,
+        mock_aggregator,
+    ):
         mock_theme_repo.get_by_id.return_value = _make_theme()
 
         # Mix of valid and invalid rows
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mock_doc_repo.get_sentiments_for_theme.return_value = [
             {
                 "document_id": "d1",
@@ -610,7 +631,10 @@ class TestGetThemeSentiment:
 
         # Verify only 1 valid DocumentSentiment was passed to aggregator
         call_args = mock_aggregator.aggregate_theme_sentiment.call_args
-        doc_sentiments = call_args.kwargs.get("document_sentiments") or call_args[1].get("document_sentiments")
+        doc_sentiments = (
+            call_args.kwargs.get("document_sentiments")
+            or call_args[1].get("document_sentiments")
+        )
         if doc_sentiments is None:
             # positional arg
             doc_sentiments = call_args[0][2]
@@ -621,7 +645,7 @@ class TestGetThemeSentiment:
         mock_theme_repo.get_by_id.return_value = _make_theme()
         mock_doc_repo.get_sentiments_for_theme.return_value = []
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mock_aggregator.aggregate_theme_sentiment.return_value = AggregatedSentiment(
             theme_id="theme_abc123",
             ticker=None,

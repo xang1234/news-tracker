@@ -4,11 +4,11 @@ Theme endpoints for dashboard, trading system, and alert consumption.
 
 import asyncio
 import time
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from starlette.requests import Request
-import structlog
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import (
@@ -20,8 +20,6 @@ from src.api.dependencies import (
     get_sentiment_aggregator,
     get_theme_repository,
 )
-from src.api.rate_limit import limiter
-from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     ErrorResponse,
     MarketCatalystEvidenceItem,
@@ -33,8 +31,8 @@ from src.api.models import (
     NarrativeBucketPoint,
     NarrativeDocumentItem,
     NarrativeMomentumResponse,
-    NarrativeRunDocumentsResponse,
     NarrativeRunDetailResponse,
+    NarrativeRunDocumentsResponse,
     NarrativeRunItem,
     NarrativeTickerCount,
     RankedThemeItem,
@@ -46,9 +44,11 @@ from src.api.models import (
     ThemeListResponse,
     ThemeMetricsItem,
     ThemeMetricsResponse,
-    ThemeSentimentResponse,
     ThemeNarrativesResponse,
+    ThemeSentimentResponse,
 )
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.event_extraction.theme_integration import EventThemeLinker, ThemeWithEvents
 from src.graph.propagation import SentimentPropagation
 from src.graph.storage import GraphRepository
@@ -174,10 +174,7 @@ def _catalyst_evidence_item(doc: dict) -> MarketCatalystEvidenceItem:
 
 
 def _graph_node_id(node: object) -> str | None:
-    if isinstance(node, dict):
-        value = node.get("node_id")
-    else:
-        value = getattr(node, "node_id", None)
+    value = node.get("node_id") if isinstance(node, dict) else getattr(node, "node_id", None)
     return value if isinstance(value, str) else None
 
 
@@ -246,7 +243,7 @@ async def _build_market_catalyst(
     )
     latest_metric = metrics[-1] if metrics else None
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     since = now - timedelta(days=days)
 
     run_documents = await narrative_repo.get_run_documents(run.run_id, limit=8)
@@ -284,7 +281,7 @@ async def _build_market_catalyst(
             return_exceptions=True,
         )
         best_impacts: dict[str, MarketCatalystRelatedTickerItem] = {}
-        for source_item, result in zip(primary_tickers, propagation_results):
+        for source_item, result in zip(primary_tickers, propagation_results, strict=True):
             if isinstance(result, Exception):
                 logger.warning(
                     "catalyst_propagation_failed",
@@ -581,7 +578,12 @@ async def get_theme_momentum(
 async def get_market_catalysts(
     request: Request,
     limit: int = Query(default=10, ge=1, le=50, description="Maximum catalysts to return"),
-    days: int = Query(default=7, ge=1, le=30, description="Lookback window for event corroboration"),
+    days: int = Query(
+        default=7,
+        ge=1,
+        le=30,
+        description="Lookback window for event corroboration",
+    ),
     api_key: str = Depends(verify_api_key),
     narrative_repo: NarrativeRepository = Depends(get_narrative_repository),
     theme_repo: ThemeRepository = Depends(get_theme_repository),
@@ -966,7 +968,7 @@ async def get_theme_sentiment(
                 detail=f"Theme {theme_id!r} not found",
             )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         since = now - timedelta(days=window_days)
 
         # Fetch lightweight sentiment rows

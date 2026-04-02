@@ -50,7 +50,7 @@ jobs:
         if: steps.python_changes.outputs.python_count != '0'
         run: |
           mapfile -t files <<< "${{ steps.python_changes.outputs.python_files }}"
-          uv run ruff check --select F,E9 "${files[@]}"
+          uv run ruff check "${files[@]}"
       - name: Run Python tests
         if: steps.python_changes.outputs.python_count != '0'
         run: |
