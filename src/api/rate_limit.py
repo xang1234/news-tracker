@@ -27,6 +27,7 @@ def create_limiter() -> Limiter:
         key_func=_get_rate_limit_key,
         default_limits=[settings.rate_limit_default],
         storage_uri=str(settings.redis_url),
+        enabled=settings.rate_limit_enabled,
     )
 
 

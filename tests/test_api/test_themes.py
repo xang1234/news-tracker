@@ -1,11 +1,11 @@
 """Tests for theme REST API endpoints."""
 
-from datetime import date, datetime, timedelta, timezone
-from unittest.mock import MagicMock
+from datetime import UTC, date, datetime, timedelta
+from types import SimpleNamespace
 
 import numpy as np
-import pytest
 
+from src.graph.propagation import PropagationImpact
 from src.ingestion.schemas import EngagementMetrics, NormalizedDocument, Platform
 from src.narrative.schemas import NarrativeRun, NarrativeRunBucket
 from src.sentiment.aggregation import AggregatedSentiment
@@ -19,8 +19,8 @@ def _make_narrative_run(run_id: str = "run_abc123", theme_id: str = "theme_abc12
         status="active",
         centroid=np.ones(768, dtype=np.float32),
         label="NVDA / AMD",
-        started_at=datetime(2026, 2, 5, 8, 0, 0, tzinfo=timezone.utc),
-        last_document_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+        started_at=datetime(2026, 2, 5, 8, 0, 0, tzinfo=UTC),
+        last_document_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
         doc_count=12,
         platform_first_seen={
             "news": "2026-02-05T08:00:00+00:00",
@@ -35,15 +35,15 @@ def _make_narrative_run(run_id: str = "run_abc123", theme_id: str = "theme_abc12
         current_acceleration=2.5,
         conviction_score=78.0,
         metadata={},
-        created_at=datetime(2026, 2, 5, 8, 0, 0, tzinfo=timezone.utc),
-        updated_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+        created_at=datetime(2026, 2, 5, 8, 0, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
     )
 
 
 def _make_narrative_bucket(run_id: str = "run_abc123") -> NarrativeRunBucket:
     return NarrativeRunBucket(
         run_id=run_id,
-        bucket_start=datetime(2026, 2, 5, 9, 30, 0, tzinfo=timezone.utc),
+        bucket_start=datetime(2026, 2, 5, 9, 30, 0, tzinfo=UTC),
         doc_count=4,
     )
 
@@ -97,7 +97,8 @@ class TestListThemes:
         resp = client.get("/themes?lifecycle_stage=accelerating")
         assert resp.status_code == 200
         mock_theme_repo.get_all.assert_called_once_with(
-            lifecycle_stages=["accelerating"], limit=50 + 0,
+            lifecycle_stages=["accelerating"],
+            limit=50 + 0,
         )
 
     def test_pagination(self, client, mock_theme_repo):
@@ -215,9 +216,9 @@ class TestNarrativeEndpoints:
                 "tickers": ["NVDA"],
                 "authority_score": 0.8,
                 "sentiment": {"label": "positive", "confidence": 0.9},
-                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
                 "similarity": 0.91,
-                "assigned_at": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+                "assigned_at": datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
             }
         ]
 
@@ -243,9 +244,9 @@ class TestNarrativeEndpoints:
                 "tickers": ["NVDA"],
                 "authority_score": 0.8,
                 "sentiment": {"label": "positive", "confidence": 0.9},
-                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
                 "similarity": 0.91,
-                "assigned_at": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+                "assigned_at": datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
             }
         ]
 
@@ -255,6 +256,136 @@ class TestNarrativeEndpoints:
         assert data["theme_id"] == "theme_abc123"
         assert data["run_id"] == "run_abc123"
         assert data["total"] == 1
+
+
+class TestMarketCatalysts:
+    """Tests for the market catalyst radar endpoint."""
+
+    def test_get_market_catalysts(
+        self,
+        client,
+        mock_theme_repo,
+        mock_doc_repo,
+        mock_narrative_repo,
+        mock_graph_repo,
+        mock_propagation_service,
+    ):
+        run = _make_narrative_run()
+        metric = _make_metrics()
+        metric.volume_zscore = 2.4
+        metric.avg_authority = 0.78
+
+        mock_narrative_repo.list_global_momentum.return_value = [
+            {"run": run, "theme_name": "ai_training_demand"},
+        ]
+        mock_theme_repo.get_by_id.return_value = _make_theme(
+            name="ai_training_demand",
+            lifecycle_stage="accelerating",
+            top_tickers=["NVDA", "AMD"],
+        )
+        mock_theme_repo.get_metrics_range.return_value = [metric]
+        mock_narrative_repo.get_run_documents.return_value = [
+            {
+                "document_id": "doc_1",
+                "platform": "news_api",
+                "title": "Cloud buyers keep chasing NVIDIA AI capacity",
+                "url": "https://example.com/doc-1",
+                "author_name": "Analyst One",
+                "authority_score": 0.92,
+                "sentiment": {"label": "positive", "confidence": 0.95},
+                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
+            },
+            {
+                "document_id": "doc_2",
+                "platform": "twitter",
+                "title": "AMD also benefits from the same demand pulse",
+                "url": "https://example.com/doc-2",
+                "author_name": "Analyst Two",
+                "authority_score": 0.61,
+                "sentiment": {"label": "positive", "confidence": 0.8},
+                "timestamp": datetime(2026, 2, 5, 9, 45, 0, tzinfo=UTC),
+            },
+        ]
+        mock_doc_repo.get_events_by_tickers.return_value = [
+            {
+                "event_id": "evt_1",
+                "doc_id": "doc_1",
+                "event_type": "product_launch",
+                "actor": "NVIDIA",
+                "action": "launched",
+                "object": "new AI GPU",
+                "time_ref": "Q1 2026",
+                "tickers": ["NVDA"],
+                "confidence": 0.84,
+                "created_at": datetime(2026, 2, 5, 8, 30, 0, tzinfo=UTC),
+            },
+        ]
+        graph_nodes = {
+            "AVGO": SimpleNamespace(node_id="AVGO", node_type="ticker"),
+            "MRVL": SimpleNamespace(node_id="MRVL", node_type="ticker"),
+        }
+        mock_graph_repo.get_node.side_effect = lambda node_id: graph_nodes.get(node_id)
+
+        def propagate_side_effect(source_node: str, sentiment_delta: float):
+            if source_node == "NVDA":
+                return {
+                    "AVGO": PropagationImpact(
+                        node_id="AVGO",
+                        impact=0.18,
+                        depth=1,
+                        path_relation="drives",
+                        edge_confidence=0.75,
+                    ),
+                    "HBM3E": PropagationImpact(
+                        node_id="HBM3E",
+                        impact=0.21,
+                        depth=1,
+                        path_relation="drives",
+                        edge_confidence=0.8,
+                    ),
+                }
+            if source_node == "AMD":
+                return {
+                    "MRVL": PropagationImpact(
+                        node_id="MRVL",
+                        impact=0.12,
+                        depth=2,
+                        path_relation="supplies_to",
+                        edge_confidence=0.72,
+                    ),
+                }
+            return {}
+
+        mock_propagation_service.propagate.side_effect = propagate_side_effect
+
+        resp = client.get("/themes/catalysts?limit=5&days=7")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        assert data["total"] == 1
+        catalyst = data["catalysts"][0]
+        assert catalyst["theme_id"] == "theme_abc123"
+        assert catalyst["bias"] == "bullish"
+        assert catalyst["investment_signal"] == "product_momentum"
+        assert catalyst["market_impact_score"] > 0
+        assert catalyst["primary_tickers"][0] == {"ticker": "NVDA", "mention_count": 8}
+        assert catalyst["related_tickers"][0]["ticker"] == "AVGO"
+        assert catalyst["related_tickers"][1]["ticker"] == "MRVL"
+        assert len(catalyst["related_tickers"]) == 2
+        assert "HBM3E" not in {item["ticker"] for item in catalyst["related_tickers"]}
+        assert catalyst["dominant_event_types"] == ["product_launch"]
+        assert catalyst["evidence"][0]["document_id"] == "doc_1"
+        assert "Bullish setup" in catalyst["summary"]
+        mock_graph_repo.get_all_nodes.assert_not_called()
+
+    def test_get_market_catalysts_empty(self, client, mock_narrative_repo):
+        mock_narrative_repo.list_global_momentum.return_value = []
+
+        resp = client.get("/themes/catalysts")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["catalysts"] == []
+        assert data["total"] == 0
 
 
 # ── GET /themes/{theme_id}/documents ─────────────────────
@@ -269,17 +400,23 @@ class TestGetThemeDocuments:
             id=doc_id,
             platform=Platform.NEWS,
             url="https://example.com/article",
-            timestamp=datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
-            fetched_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+            timestamp=datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
+            fetched_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
             author_id="author1",
             author_name="Jane Doe",
-            content="NVIDIA announced new HBM3E support for H200 GPUs with improved memory bandwidth.",
+            content=(
+                "NVIDIA announced new HBM3E support for H200 GPUs with improved memory bandwidth."
+            ),
             content_type="article",
             title="NVIDIA HBM3E Announcement",
             engagement=EngagementMetrics(likes=100, shares=50, comments=20),
             tickers_mentioned=["NVDA"],
             authority_score=0.85,
-            sentiment={"label": "positive", "confidence": 0.92, "scores": {"positive": 0.92, "negative": 0.03, "neutral": 0.05}},
+            sentiment={
+                "label": "positive",
+                "confidence": 0.92,
+                "scores": {"positive": 0.92, "negative": 0.03, "neutral": 0.05},
+            },
             theme_ids=["theme_abc123"],
         )
 
@@ -381,7 +518,7 @@ class TestGetThemeSentiment:
         mock_theme_repo.get_by_id.return_value = _make_theme()
 
         # Return some sentiment rows
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mock_doc_repo.get_sentiments_for_theme.return_value = [
             {
                 "document_id": "d1",
@@ -441,11 +578,17 @@ class TestGetThemeSentiment:
         resp = client.get("/themes/nonexistent/sentiment")
         assert resp.status_code == 404
 
-    def test_skips_invalid_sentiment_rows(self, client, mock_theme_repo, mock_doc_repo, mock_aggregator):
+    def test_skips_invalid_sentiment_rows(
+        self,
+        client,
+        mock_theme_repo,
+        mock_doc_repo,
+        mock_aggregator,
+    ):
         mock_theme_repo.get_by_id.return_value = _make_theme()
 
         # Mix of valid and invalid rows
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mock_doc_repo.get_sentiments_for_theme.return_value = [
             {
                 "document_id": "d1",
@@ -488,7 +631,9 @@ class TestGetThemeSentiment:
 
         # Verify only 1 valid DocumentSentiment was passed to aggregator
         call_args = mock_aggregator.aggregate_theme_sentiment.call_args
-        doc_sentiments = call_args.kwargs.get("document_sentiments") or call_args[1].get("document_sentiments")
+        doc_sentiments = call_args.kwargs.get("document_sentiments") or call_args[1].get(
+            "document_sentiments"
+        )
         if doc_sentiments is None:
             # positional arg
             doc_sentiments = call_args[0][2]
@@ -499,7 +644,7 @@ class TestGetThemeSentiment:
         mock_theme_repo.get_by_id.return_value = _make_theme()
         mock_doc_repo.get_sentiments_for_theme.return_value = []
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mock_aggregator.aggregate_theme_sentiment.return_value = AggregatedSentiment(
             theme_id="theme_abc123",
             ticker=None,
@@ -638,7 +783,8 @@ class TestRankedThemes:
         data = resp.json()
         assert data["strategy"] == "position"
         mock_ranking_service.get_actionable.assert_called_once_with(
-            strategy="position", max_tier=3,
+            strategy="position",
+            max_tier=3,
         )
 
     def test_max_tier_param(self, client, mock_ranking_service):
@@ -647,7 +793,8 @@ class TestRankedThemes:
         resp = client.get("/themes/ranked?max_tier=1")
         assert resp.status_code == 200
         mock_ranking_service.get_actionable.assert_called_once_with(
-            strategy="swing", max_tier=1,
+            strategy="swing",
+            max_tier=1,
         )
 
     def test_limit_param(self, client, mock_ranking_service):
