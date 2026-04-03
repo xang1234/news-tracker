@@ -1,0 +1,530 @@
+"""Tests for PublishService — lifecycle and pointer semantics.
+
+Uses an in-memory mock repository so that state machine logic and
+pointer advancement can be exercised without a database.
+"""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from typing import Any
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from src.contracts.intelligence.db_schemas import (
+    LaneRun,
+    Manifest,
+    ManifestPointer,
+    PublishedObject,
+)
+from src.contracts.intelligence.lanes import LANE_FILING, LANE_NARRATIVE
+from src.publish.service import PublishService, _generate_id
+
+
+# -- In-memory mock repository ---------------------------------------------
+
+
+class InMemoryPublishRepository:
+    """Minimal in-memory store for testing service logic."""
+
+    def __init__(self) -> None:
+        self.runs: dict[str, LaneRun] = {}
+        self.manifests: dict[str, Manifest] = {}
+        self.pointers: dict[str, ManifestPointer] = {}
+        self.objects: dict[str, PublishedObject] = {}
+
+    async def create_lane_run(self, run: LaneRun) -> LaneRun:
+        self.runs[run.run_id] = run
+        return run
+
+    async def get_lane_run(self, run_id: str) -> LaneRun | None:
+        return self.runs.get(run_id)
+
+    async def update_lane_run_status(
+        self,
+        run_id: str,
+        status: str,
+        *,
+        error_message: str | None = None,
+        metrics: dict[str, Any] | None = None,
+    ) -> LaneRun | None:
+        run = self.runs.get(run_id)
+        if run is None:
+            return None
+        now = datetime.now(timezone.utc)
+        run.status = status
+        if status == "running" and run.started_at is None:
+            run.started_at = now
+        if status in ("completed", "failed", "cancelled"):
+            run.completed_at = now
+        if error_message is not None:
+            run.error_message = error_message
+        if metrics is not None:
+            run.metrics = metrics
+        run.updated_at = now
+        return run
+
+    async def create_manifest(self, manifest: Manifest) -> Manifest:
+        self.manifests[manifest.manifest_id] = manifest
+        return manifest
+
+    async def get_manifest(self, manifest_id: str) -> Manifest | None:
+        return self.manifests.get(manifest_id)
+
+    async def update_manifest(
+        self,
+        manifest_id: str,
+        *,
+        object_count: int | None = None,
+        checksum: str | None = None,
+    ) -> Manifest | None:
+        m = self.manifests.get(manifest_id)
+        if m is None:
+            return None
+        if object_count is not None:
+            m.object_count = object_count
+        if checksum is not None:
+            m.checksum = checksum
+        return m
+
+    async def get_pointer(self, lane: str) -> ManifestPointer | None:
+        return self.pointers.get(lane)
+
+    async def advance_pointer(
+        self,
+        lane: str,
+        manifest_id: str,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> ManifestPointer:
+        old = self.pointers.get(lane)
+        ptr = ManifestPointer(
+            lane=lane,
+            manifest_id=manifest_id,
+            previous_manifest_id=old.manifest_id if old else None,
+            metadata=metadata or {},
+        )
+        self.pointers[lane] = ptr
+        return ptr
+
+    async def create_published_object(
+        self, obj: PublishedObject
+    ) -> PublishedObject:
+        self.objects[obj.object_id] = obj
+        return obj
+
+    async def get_published_object(
+        self, object_id: str
+    ) -> PublishedObject | None:
+        return self.objects.get(object_id)
+
+    async def update_publish_state(
+        self, object_id: str, new_state: str
+    ) -> PublishedObject | None:
+        obj = self.objects.get(object_id)
+        if obj is None:
+            return None
+        obj.publish_state = new_state
+        obj.updated_at = datetime.now(timezone.utc)
+        return obj
+
+    async def list_objects_by_manifest(
+        self,
+        manifest_id: str,
+        *,
+        publish_state: str | None = None,
+    ) -> list[PublishedObject]:
+        results = [
+            o for o in self.objects.values() if o.manifest_id == manifest_id
+        ]
+        if publish_state is not None:
+            results = [o for o in results if o.publish_state == publish_state]
+        return sorted(results, key=lambda o: o.created_at)
+
+
+# -- Fixtures --------------------------------------------------------------
+
+
+@pytest.fixture()
+def repo() -> InMemoryPublishRepository:
+    return InMemoryPublishRepository()
+
+
+@pytest.fixture()
+def service(repo: InMemoryPublishRepository) -> PublishService:
+    return PublishService(repository=repo)
+
+
+# -- Lane run lifecycle tests ----------------------------------------------
+
+
+class TestLaneRunLifecycle:
+    """Full lane run lifecycle: create → start → complete/fail."""
+
+    async def test_create_run(self, service: PublishService) -> None:
+        run = await service.create_run(LANE_NARRATIVE)
+        assert run.lane == LANE_NARRATIVE
+        assert run.status == "pending"
+        assert run.run_id.startswith("run_")
+
+    async def test_full_lifecycle_success(
+        self, service: PublishService
+    ) -> None:
+        run = await service.create_run(LANE_NARRATIVE)
+        started = await service.start_run(run.run_id)
+        assert started.status == "running"
+        assert started.started_at is not None
+
+        completed = await service.complete_run(
+            run.run_id, metrics={"docs_processed": 42}
+        )
+        assert completed.status == "completed"
+        assert completed.completed_at is not None
+        assert completed.metrics["docs_processed"] == 42
+
+    async def test_full_lifecycle_failure(
+        self, service: PublishService
+    ) -> None:
+        run = await service.create_run(LANE_FILING)
+        await service.start_run(run.run_id)
+        failed = await service.fail_run(run.run_id, "connection timeout")
+        assert failed.status == "failed"
+        assert failed.error_message == "connection timeout"
+
+    async def test_cancel_pending_run(self, service: PublishService) -> None:
+        run = await service.create_run(LANE_NARRATIVE)
+        cancelled = await service.cancel_run(run.run_id)
+        assert cancelled.status == "cancelled"
+
+    async def test_cannot_start_completed_run(
+        self, service: PublishService
+    ) -> None:
+        run = await service.create_run(LANE_NARRATIVE)
+        await service.start_run(run.run_id)
+        await service.complete_run(run.run_id)
+        with pytest.raises(ValueError, match="Invalid run transition"):
+            await service.start_run(run.run_id)
+
+    async def test_cannot_complete_pending_run(
+        self, service: PublishService
+    ) -> None:
+        run = await service.create_run(LANE_NARRATIVE)
+        with pytest.raises(ValueError, match="Invalid run transition"):
+            await service.complete_run(run.run_id)
+
+    async def test_nonexistent_run_raises(
+        self, service: PublishService
+    ) -> None:
+        with pytest.raises(ValueError, match="not found"):
+            await service.start_run("run_does_not_exist")
+
+    async def test_invalid_lane_rejected(
+        self, service: PublishService
+    ) -> None:
+        with pytest.raises(ValueError, match="Unknown lane"):
+            await service.create_run("nonexistent_lane")
+
+    async def test_get_run(self, service: PublishService) -> None:
+        run = await service.create_run(LANE_NARRATIVE)
+        fetched = await service.get_run(run.run_id)
+        assert fetched is not None
+        assert fetched.run_id == run.run_id
+
+    async def test_get_nonexistent_run(
+        self, service: PublishService
+    ) -> None:
+        assert await service.get_run("nope") is None
+
+
+# -- Manifest lifecycle tests ----------------------------------------------
+
+
+class TestManifestLifecycle:
+    """Manifest create → seal workflow."""
+
+    async def test_create_manifest(self, service: PublishService) -> None:
+        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        assert m.manifest_id.startswith("manifest_")
+        assert m.lane == LANE_NARRATIVE
+        assert m.run_id == "run_001"
+        assert m.object_count == 0
+        assert m.checksum is None
+
+    async def test_seal_manifest(self, service: PublishService) -> None:
+        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        sealed = await service.seal_manifest(
+            m.manifest_id, object_count=10, checksum="sha256:abc"
+        )
+        assert sealed.object_count == 10
+        assert sealed.checksum == "sha256:abc"
+
+    async def test_seal_nonexistent_manifest_raises(
+        self, service: PublishService
+    ) -> None:
+        with pytest.raises(ValueError, match="not found"):
+            await service.seal_manifest("nope", object_count=0)
+
+    async def test_create_manifest_invalid_lane(
+        self, service: PublishService
+    ) -> None:
+        with pytest.raises(ValueError, match="Unknown lane"):
+            await service.create_manifest("bad_lane", "run_001")
+
+
+# -- Pointer advancement tests ---------------------------------------------
+
+
+class TestPointerAdvancement:
+    """Atomic pointer semantics."""
+
+    async def test_initial_pointer(self, service: PublishService) -> None:
+        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        ptr = await service.advance_pointer(LANE_NARRATIVE, m.manifest_id)
+        assert ptr.lane == LANE_NARRATIVE
+        assert ptr.manifest_id == m.manifest_id
+        assert ptr.previous_manifest_id is None
+
+    async def test_pointer_tracks_previous(
+        self, service: PublishService
+    ) -> None:
+        m1 = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        m2 = await service.create_manifest(LANE_NARRATIVE, "run_002")
+
+        await service.advance_pointer(LANE_NARRATIVE, m1.manifest_id)
+        ptr = await service.advance_pointer(LANE_NARRATIVE, m2.manifest_id)
+
+        assert ptr.manifest_id == m2.manifest_id
+        assert ptr.previous_manifest_id == m1.manifest_id
+
+    async def test_pointer_per_lane_isolation(
+        self, service: PublishService
+    ) -> None:
+        m_narr = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        m_file = await service.create_manifest(LANE_FILING, "run_002")
+
+        await service.advance_pointer(LANE_NARRATIVE, m_narr.manifest_id)
+        await service.advance_pointer(LANE_FILING, m_file.manifest_id)
+
+        ptr_narr = await service.get_pointer(LANE_NARRATIVE)
+        ptr_file = await service.get_pointer(LANE_FILING)
+
+        assert ptr_narr is not None
+        assert ptr_file is not None
+        assert ptr_narr.manifest_id == m_narr.manifest_id
+        assert ptr_file.manifest_id == m_file.manifest_id
+
+    async def test_pointer_nonexistent_manifest_raises(
+        self, service: PublishService
+    ) -> None:
+        with pytest.raises(ValueError, match="not found"):
+            await service.advance_pointer(LANE_NARRATIVE, "nope")
+
+    async def test_pointer_lane_mismatch_raises(
+        self, service: PublishService
+    ) -> None:
+        m = await service.create_manifest(LANE_FILING, "run_001")
+        with pytest.raises(ValueError, match="belongs to lane"):
+            await service.advance_pointer(LANE_NARRATIVE, m.manifest_id)
+
+    async def test_get_pointer_empty(self, service: PublishService) -> None:
+        assert await service.get_pointer(LANE_NARRATIVE) is None
+
+    async def test_three_advances_track_history(
+        self, service: PublishService
+    ) -> None:
+        """Third pointer advance should reference the second manifest."""
+        m1 = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        m2 = await service.create_manifest(LANE_NARRATIVE, "run_002")
+        m3 = await service.create_manifest(LANE_NARRATIVE, "run_003")
+
+        await service.advance_pointer(LANE_NARRATIVE, m1.manifest_id)
+        await service.advance_pointer(LANE_NARRATIVE, m2.manifest_id)
+        ptr = await service.advance_pointer(LANE_NARRATIVE, m3.manifest_id)
+
+        assert ptr.manifest_id == m3.manifest_id
+        assert ptr.previous_manifest_id == m2.manifest_id
+
+
+# -- Published object state transition tests --------------------------------
+
+
+class TestPublishedObjectTransitions:
+    """Published object lifecycle: draft → review → published/retracted."""
+
+    async def test_add_object(self, service: PublishService) -> None:
+        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        obj = await service.add_object(
+            m.manifest_id,
+            object_type="claim",
+            lane=LANE_NARRATIVE,
+            run_id="run_001",
+            payload={"text": "TSMC capacity expansion"},
+            source_ids=["doc_1", "doc_2"],
+        )
+        assert obj.object_id.startswith("obj_")
+        assert obj.publish_state == "draft"
+        assert obj.payload["text"] == "TSMC capacity expansion"
+        assert obj.source_ids == ["doc_1", "doc_2"]
+
+    async def test_draft_to_review_to_published(
+        self, service: PublishService
+    ) -> None:
+        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        obj = await service.add_object(
+            m.manifest_id,
+            object_type="claim",
+            lane=LANE_NARRATIVE,
+            run_id="run_001",
+        )
+        reviewed = await service.transition_object(obj.object_id, "review")
+        assert reviewed.publish_state == "review"
+
+        published = await service.transition_object(obj.object_id, "published")
+        assert published.publish_state == "published"
+
+    async def test_draft_direct_to_published(
+        self, service: PublishService
+    ) -> None:
+        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        obj = await service.add_object(
+            m.manifest_id,
+            object_type="assertion",
+            lane=LANE_NARRATIVE,
+            run_id="run_001",
+        )
+        published = await service.transition_object(obj.object_id, "published")
+        assert published.publish_state == "published"
+
+    async def test_published_to_retracted(
+        self, service: PublishService
+    ) -> None:
+        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        obj = await service.add_object(
+            m.manifest_id,
+            object_type="claim",
+            lane=LANE_NARRATIVE,
+            run_id="run_001",
+        )
+        await service.transition_object(obj.object_id, "published")
+        retracted = await service.transition_object(obj.object_id, "retracted")
+        assert retracted.publish_state == "retracted"
+
+    async def test_retracted_is_terminal(
+        self, service: PublishService
+    ) -> None:
+        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        obj = await service.add_object(
+            m.manifest_id,
+            object_type="claim",
+            lane=LANE_NARRATIVE,
+            run_id="run_001",
+        )
+        await service.transition_object(obj.object_id, "retracted")
+        with pytest.raises(ValueError, match="Invalid publish transition"):
+            await service.transition_object(obj.object_id, "draft")
+
+    async def test_published_cannot_go_to_draft(
+        self, service: PublishService
+    ) -> None:
+        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        obj = await service.add_object(
+            m.manifest_id,
+            object_type="claim",
+            lane=LANE_NARRATIVE,
+            run_id="run_001",
+        )
+        await service.transition_object(obj.object_id, "published")
+        with pytest.raises(ValueError, match="Invalid publish transition"):
+            await service.transition_object(obj.object_id, "draft")
+
+    async def test_review_back_to_draft(
+        self, service: PublishService
+    ) -> None:
+        """Review → draft is allowed (revise workflow)."""
+        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        obj = await service.add_object(
+            m.manifest_id,
+            object_type="claim",
+            lane=LANE_NARRATIVE,
+            run_id="run_001",
+        )
+        await service.transition_object(obj.object_id, "review")
+        revised = await service.transition_object(obj.object_id, "draft")
+        assert revised.publish_state == "draft"
+
+    async def test_transition_nonexistent_raises(
+        self, service: PublishService
+    ) -> None:
+        with pytest.raises(ValueError, match="not found"):
+            await service.transition_object("nope", "published")
+
+    async def test_list_manifest_objects(
+        self, service: PublishService
+    ) -> None:
+        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        await service.add_object(
+            m.manifest_id,
+            object_type="claim",
+            lane=LANE_NARRATIVE,
+            run_id="run_001",
+        )
+        await service.add_object(
+            m.manifest_id,
+            object_type="assertion",
+            lane=LANE_NARRATIVE,
+            run_id="run_001",
+        )
+        objects = await service.list_manifest_objects(m.manifest_id)
+        assert len(objects) == 2
+
+    async def test_list_manifest_objects_filtered(
+        self, service: PublishService
+    ) -> None:
+        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        obj = await service.add_object(
+            m.manifest_id,
+            object_type="claim",
+            lane=LANE_NARRATIVE,
+            run_id="run_001",
+        )
+        await service.add_object(
+            m.manifest_id,
+            object_type="assertion",
+            lane=LANE_NARRATIVE,
+            run_id="run_001",
+        )
+        await service.transition_object(obj.object_id, "published")
+
+        published = await service.list_manifest_objects(
+            m.manifest_id, publish_state="published"
+        )
+        assert len(published) == 1
+        assert published[0].object_id == obj.object_id
+
+
+# -- Checksum utility tests ------------------------------------------------
+
+
+class TestComputeChecksum:
+    """PublishService.compute_checksum() utility."""
+
+    def test_deterministic(self) -> None:
+        ids = ["obj_b", "obj_a", "obj_c"]
+        assert PublishService.compute_checksum(ids) == PublishService.compute_checksum(ids)
+
+    def test_order_independent(self) -> None:
+        assert PublishService.compute_checksum(
+            ["obj_b", "obj_a"]
+        ) == PublishService.compute_checksum(["obj_a", "obj_b"])
+
+    def test_format(self) -> None:
+        result = PublishService.compute_checksum(["obj_1"])
+        assert result.startswith("sha256:")
+        assert len(result) == len("sha256:") + 64
+
+    def test_different_inputs_different_checksums(self) -> None:
+        assert PublishService.compute_checksum(
+            ["obj_a"]
+        ) != PublishService.compute_checksum(["obj_b"])
