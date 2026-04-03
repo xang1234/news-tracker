@@ -18,9 +18,10 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.contracts.intelligence.lanes import validate_lane
+from src.contracts.intelligence.ownership import OwnershipPolicy
 from src.contracts.intelligence.version import ContractRegistry, ContractVersion
 
 
@@ -128,6 +129,20 @@ class Lineage(BaseModel):
     def _validate_contract_version(cls, v: str) -> str:
         return _check_contract_version(v)
 
+    @model_validator(mode="after")
+    def _validate_validity_window(self) -> Lineage:
+        """Reject impossible bitemporal intervals."""
+        if (
+            self.valid_from is not None
+            and self.valid_to is not None
+            and self.valid_to < self.valid_from
+        ):
+            raise ValueError(
+                f"valid_to ({self.valid_to}) must not be before "
+                f"valid_from ({self.valid_from})"
+            )
+        return self
+
 
 class ManifestHeader(BaseModel):
     """Header for a versioned manifest.
@@ -232,6 +247,11 @@ class PublishedObjectRef(BaseModel):
         default_factory=lambda: str(ContractRegistry.CURRENT),
         description="Contract version governing this object",
     )
+
+    @field_validator("object_type")
+    @classmethod
+    def _validate_object_type(cls, v: str) -> str:
+        return OwnershipPolicy.validate_publishable_type(v)
 
     @field_validator("lane")
     @classmethod

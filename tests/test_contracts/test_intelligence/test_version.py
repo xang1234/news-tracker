@@ -108,3 +108,10 @@ class TestContractRegistry:
 
     def test_current_not_deprecated(self) -> None:
         assert not ContractRegistry.is_deprecated(ContractRegistry.CURRENT)
+
+    def test_unregistered_version_not_supported(self) -> None:
+        """Versions not in ALL_VERSIONS are rejected even if same major."""
+        unregistered = ContractVersion(
+            ContractRegistry.CURRENT.major, 99, 0
+        )
+        assert not ContractRegistry.is_supported(unregistered)

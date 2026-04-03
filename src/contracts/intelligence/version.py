@@ -133,10 +133,14 @@ class ContractRegistry:
 
     @classmethod
     def is_supported(cls, version: ContractVersion) -> bool:
-        """Check whether a contract version is still supported."""
+        """Check whether a contract version is still supported.
+
+        A version is supported only if it was actually released
+        (present in ALL_VERSIONS) and is at or above the support floor.
+        """
         return (
-            version >= cls.MINIMUM_SUPPORTED
-            and version.is_compatible_with(cls.CURRENT)
+            version in cls.ALL_VERSIONS
+            and version >= cls.MINIMUM_SUPPORTED
         )
 
     @classmethod
