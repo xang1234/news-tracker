@@ -40,6 +40,16 @@ from src.contracts.intelligence.version import (
     ContractRegistry,
     ContractVersion,
 )
+from src.contracts.intelligence.db_schemas import (
+    VALID_EXPORT_FORMATS,
+    VALID_PUBLISH_STATES,
+    VALID_RUN_STATUSES,
+    ExportBundle,
+    LaneRun,
+    Manifest,
+    ManifestPointer,
+    PublishedObject,
+)
 
 __all__ = [
     # Version
@@ -55,12 +65,21 @@ __all__ = [
     "LaneDescriptor",
     "LaneRegistry",
     "validate_lane",
-    # Schemas
+    # Schemas (Pydantic contract models)
     "Lineage",
     "ManifestHeader",
     "PublishedObjectRef",
     "PublishState",
     "ReviewDecision",
+    # DB schemas (dataclasses mirroring intelligence tables)
+    "VALID_EXPORT_FORMATS",
+    "VALID_PUBLISH_STATES",
+    "VALID_RUN_STATUSES",
+    "ExportBundle",
+    "LaneRun",
+    "Manifest",
+    "ManifestPointer",
+    "PublishedObject",
     # Ownership
     "CONSUMER_REPOS",
     "OWNER_REPO",
