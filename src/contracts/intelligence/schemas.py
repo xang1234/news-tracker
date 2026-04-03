@@ -20,8 +20,22 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
-from src.contracts.intelligence.lanes import VALID_LANES
+from src.contracts.intelligence.lanes import validate_lane
 from src.contracts.intelligence.version import ContractRegistry, ContractVersion
+
+
+# -- Shared validators -----------------------------------------------------
+
+
+def _check_contract_version(v: str) -> str:
+    """Validate a contract_version field value."""
+    cv = ContractVersion.parse(v)
+    if not ContractRegistry.is_supported(cv):
+        raise ValueError(
+            f"Contract version {v} is not supported. "
+            f"Minimum: {ContractRegistry.MINIMUM_SUPPORTED}"
+        )
+    return v
 
 
 # -- Enums -----------------------------------------------------------------
@@ -107,22 +121,12 @@ class Lineage(BaseModel):
     @field_validator("lane")
     @classmethod
     def _validate_lane(cls, v: str) -> str:
-        if v not in VALID_LANES:
-            raise ValueError(
-                f"Unknown lane {v!r}. Must be one of {sorted(VALID_LANES)}"
-            )
-        return v
+        return validate_lane(v)
 
     @field_validator("contract_version")
     @classmethod
     def _validate_contract_version(cls, v: str) -> str:
-        cv = ContractVersion.parse(v)
-        if not ContractRegistry.is_supported(cv):
-            raise ValueError(
-                f"Contract version {v} is not supported. "
-                f"Minimum: {ContractRegistry.MINIMUM_SUPPORTED}"
-            )
-        return v
+        return _check_contract_version(v)
 
 
 class ManifestHeader(BaseModel):
@@ -181,22 +185,12 @@ class ManifestHeader(BaseModel):
     @field_validator("lane")
     @classmethod
     def _validate_lane(cls, v: str) -> str:
-        if v not in VALID_LANES:
-            raise ValueError(
-                f"Unknown lane {v!r}. Must be one of {sorted(VALID_LANES)}"
-            )
-        return v
+        return validate_lane(v)
 
     @field_validator("contract_version")
     @classmethod
     def _validate_contract_version(cls, v: str) -> str:
-        cv = ContractVersion.parse(v)
-        if not ContractRegistry.is_supported(cv):
-            raise ValueError(
-                f"Contract version {v} is not supported. "
-                f"Minimum: {ContractRegistry.MINIMUM_SUPPORTED}"
-            )
-        return v
+        return _check_contract_version(v)
 
 
 class PublishedObjectRef(BaseModel):
@@ -242,8 +236,9 @@ class PublishedObjectRef(BaseModel):
     @field_validator("lane")
     @classmethod
     def _validate_lane(cls, v: str) -> str:
-        if v not in VALID_LANES:
-            raise ValueError(
-                f"Unknown lane {v!r}. Must be one of {sorted(VALID_LANES)}"
-            )
-        return v
+        return validate_lane(v)
+
+    @field_validator("contract_version")
+    @classmethod
+    def _validate_contract_version(cls, v: str) -> str:
+        return _check_contract_version(v)

@@ -163,6 +163,16 @@ class TestPublishedObjectRef:
                 lane="bad_lane",
             )
 
+    def test_invalid_contract_version_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="Invalid contract version"):
+            PublishedObjectRef(
+                object_id="obj_001",
+                object_type="claim",
+                manifest_id="m_001",
+                lane=LANE_NARRATIVE,
+                contract_version="not_a_version",
+            )
+
     def test_publish_state_transition(self) -> None:
         ref = PublishedObjectRef(
             object_id="obj_001",
