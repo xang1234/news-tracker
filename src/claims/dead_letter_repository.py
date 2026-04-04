@@ -86,7 +86,7 @@ class DeadLetterRepository:
             record.error_message,
             json.dumps(record.error_detail),
             record.source_text,
-            json.dumps(record.claim_snapshot) if record.claim_snapshot else None,
+            json.dumps(record.claim_snapshot) if record.claim_snapshot is not None else None,
             json.dumps(record.metadata),
         )
         return _row_to_record(row)
