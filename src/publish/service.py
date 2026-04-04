@@ -458,7 +458,7 @@ class PublishService:
 
     async def transition_object(
         self, object_id: str, target_state: str
-    ) -> PublishedObject:
+    ) -> tuple[str, PublishedObject]:
         """Transition a published object to a new state.
 
         Validates the transition against the publish state machine
@@ -469,7 +469,7 @@ class PublishService:
             target_state: Target publish state.
 
         Returns:
-            The updated PublishedObject.
+            Tuple of (previous_state, updated PublishedObject).
 
         Raises:
             ValueError: If the object doesn't exist or the transition
@@ -478,14 +478,17 @@ class PublishService:
         obj = await self._repo.get_published_object(object_id)
         if obj is None:
             raise ValueError(f"Published object not found: {object_id}")
-        # Block transitions on objects in sealed manifests
+        previous_state = obj.publish_state
+        # Block most transitions on objects in sealed manifests.
+        # Only published → retracted is allowed post-seal.
         manifest = await self._repo.get_manifest(obj.manifest_id)
         if manifest is not None and manifest.published_at is not None:
-            raise ValueError(
-                f"Cannot transition object {object_id}: manifest "
-                f"{obj.manifest_id} is sealed"
-            )
-        _validate_publish_transition(obj.publish_state, target_state)
+            if target_state != "retracted":
+                raise ValueError(
+                    f"Cannot transition object {object_id}: manifest "
+                    f"{obj.manifest_id} is sealed (only retracted allowed)"
+                )
+        _validate_publish_transition(previous_state, target_state)
         result = await self._repo.update_publish_state(object_id, target_state)
         if result is None:
             raise ValueError(
@@ -494,10 +497,10 @@ class PublishService:
         logger.info(
             "Object %s transitioned: %s → %s",
             object_id,
-            obj.publish_state,
+            previous_state,
             target_state,
         )
-        return result
+        return previous_state, result
 
     async def get_object(self, object_id: str) -> PublishedObject | None:
         """Fetch a published object by ID."""
@@ -523,6 +526,11 @@ class PublishService:
         Hashes a stable serialization of each object (sorted by ID),
         covering payload, lineage, validity windows, and all other
         content fields — not just identifiers.
+
+        Note: this is the *manifest seal* checksum over object content.
+        The *bundle export* checksum (in exporter.py) is computed over
+        the full JSONL output including the manifest header. The two
+        checksums serve different purposes and will differ by design.
         """
         serialized = []
         for obj in sorted(objects, key=lambda o: o.object_id):

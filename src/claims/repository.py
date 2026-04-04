@@ -85,6 +85,7 @@ class ClaimRepository:
                 $20, $21, $22
             )
             ON CONFLICT (claim_key) DO UPDATE SET
+                run_id = COALESCE($4, news_intel.evidence_claims.run_id),
                 confidence = $15,
                 subject_concept_id = COALESCE($11, news_intel.evidence_claims.subject_concept_id),
                 object_concept_id = COALESCE($14, news_intel.evidence_claims.object_concept_id),

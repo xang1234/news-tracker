@@ -49,7 +49,7 @@ def make_claim_key(
         predicate.lower().strip(),
         (object_text or "").lower().strip(),
     ]
-    key_input = "|".join(parts)
+    key_input = "\x00".join(parts)
     return f"clk_{hashlib.sha256(key_input.encode()).hexdigest()[:16]}"
 
 

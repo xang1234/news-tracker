@@ -266,15 +266,25 @@ def build_seed_objects(
         target_name = rel_data["target"]
         source_id = name_to_id.get(source_name)
         target_id = name_to_id.get(target_name)
-        if source_id and target_id:
-            relationships.append(
-                ConceptRelationship(
-                    source_concept_id=source_id,
-                    target_concept_id=target_id,
-                    relationship_type=rel_data["type"],
-                    source_attribution="semiconductors_pack_1",
-                )
+        if not source_id or not target_id:
+            missing = []
+            if not source_id:
+                missing.append(f"source={source_name!r}")
+            if not target_id:
+                missing.append(f"target={target_name!r}")
+            logger.warning(
+                "Skipping supply chain relationship: unknown concept(s): %s",
+                ", ".join(missing),
             )
+            continue
+        relationships.append(
+            ConceptRelationship(
+                source_concept_id=source_id,
+                target_concept_id=target_id,
+                relationship_type=rel_data["type"],
+                source_attribution="semiconductors_pack_1",
+            )
+        )
 
     return (
         pack,

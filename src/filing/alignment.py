@@ -152,37 +152,47 @@ def align_sections(
     Returns:
         List of SectionAlignment objects (matched, added, removed).
     """
-    alignments: list[SectionAlignment] = []
-    used_targets: set[int] = set()
-
-    # Build normalized name index for target sections
+    # Build normalized names
+    base_names = [
+        normalize_section_name(s.section_name) for s in base_sections
+    ]
     target_names = [
         normalize_section_name(s.section_name) for s in target_sections
     ]
 
-    for base_sec in base_sections:
-        base_name = normalize_section_name(base_sec.section_name)
-        best_match_idx = -1
-        best_similarity = 0.0
-
+    # Score all candidate pairs, then assign best-first to avoid
+    # greedy order-dependent mismatch (where an early mediocre match
+    # blocks a later perfect match).
+    candidates: list[tuple[float, int, int]] = []
+    for i, base_name in enumerate(base_names):
         for j, target_name in enumerate(target_names):
-            if j in used_targets:
-                continue
             sim = difflib.SequenceMatcher(
                 None, base_name, target_name
             ).ratio()
-            if sim > best_similarity and sim >= min_similarity:
-                best_similarity = sim
-                best_match_idx = j
+            if sim >= min_similarity:
+                candidates.append((sim, i, j))
+    candidates.sort(reverse=True)
 
-        if best_match_idx >= 0:
-            used_targets.add(best_match_idx)
+    used_bases: set[int] = set()
+    used_targets: set[int] = set()
+    matched: dict[int, tuple[int, float]] = {}
+    for sim, i, j in candidates:
+        if i not in used_bases and j not in used_targets:
+            matched[i] = (j, sim)
+            used_bases.add(i)
+            used_targets.add(j)
+
+    # Build alignment list: matched bases, then unmatched bases, then added targets
+    alignments: list[SectionAlignment] = []
+    for i, base_sec in enumerate(base_sections):
+        if i in matched:
+            j, sim = matched[i]
             alignments.append(
                 SectionAlignment(
                     base_section=base_sec,
-                    target_section=target_sections[best_match_idx],
-                    similarity=best_similarity,
-                    normalized_name=base_name,
+                    target_section=target_sections[j],
+                    similarity=sim,
+                    normalized_name=base_names[i],
                 )
             )
         else:
@@ -191,7 +201,7 @@ def align_sections(
                     base_section=base_sec,
                     target_section=None,
                     similarity=0.0,
-                    normalized_name=base_name,
+                    normalized_name=base_names[i],
                 )
             )
 

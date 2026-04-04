@@ -518,8 +518,25 @@ class TestPublishedObjectTransitions:
         )
         await service.transition_object(obj.object_id, "published")
         await service.seal_manifest(m.manifest_id)
+        # Retraction IS allowed post-seal
+        _, retracted = await service.transition_object(obj.object_id, "retracted")
+        assert retracted.publish_state == "retracted"
+
+    async def test_non_retract_transition_in_sealed_manifest_raises(
+        self, service: PublishService
+    ) -> None:
+        run_id, m = await _make_manifest(service)
+        obj = await service.add_object(
+            m.manifest_id,
+            object_type="claim",
+            lane=LANE_NARRATIVE,
+            run_id=run_id,
+        )
+        await service.transition_object(obj.object_id, "published")
+        await service.seal_manifest(m.manifest_id)
+        # Non-retract transitions are blocked post-seal
         with pytest.raises(ValueError, match="sealed"):
-            await service.transition_object(obj.object_id, "retracted")
+            await service.transition_object(obj.object_id, "review")
 
     async def test_add_object_invalid_type_raises(
         self, service: PublishService
@@ -543,10 +560,10 @@ class TestPublishedObjectTransitions:
             lane=LANE_NARRATIVE,
             run_id=run_id,
         )
-        reviewed = await service.transition_object(obj.object_id, "review")
+        _, reviewed = await service.transition_object(obj.object_id, "review")
         assert reviewed.publish_state == "review"
 
-        published = await service.transition_object(obj.object_id, "published")
+        _, published = await service.transition_object(obj.object_id, "published")
         assert published.publish_state == "published"
 
     async def test_draft_direct_to_published(
@@ -559,7 +576,7 @@ class TestPublishedObjectTransitions:
             lane=LANE_NARRATIVE,
             run_id=run_id,
         )
-        published = await service.transition_object(obj.object_id, "published")
+        _, published = await service.transition_object(obj.object_id, "published")
         assert published.publish_state == "published"
 
     async def test_published_to_retracted(
@@ -573,7 +590,7 @@ class TestPublishedObjectTransitions:
             run_id=run_id,
         )
         await service.transition_object(obj.object_id, "published")
-        retracted = await service.transition_object(obj.object_id, "retracted")
+        _, retracted = await service.transition_object(obj.object_id, "retracted")
         assert retracted.publish_state == "retracted"
 
     async def test_retracted_is_terminal(
@@ -616,7 +633,7 @@ class TestPublishedObjectTransitions:
             run_id=run_id,
         )
         await service.transition_object(obj.object_id, "review")
-        revised = await service.transition_object(obj.object_id, "draft")
+        _, revised = await service.transition_object(obj.object_id, "draft")
         assert revised.publish_state == "draft"
 
     async def test_transition_nonexistent_raises(

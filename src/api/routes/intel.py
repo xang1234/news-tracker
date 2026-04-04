@@ -403,20 +403,18 @@ async def submit_review(
     api_key: str = Depends(verify_api_key),
     service: PublishService = Depends(get_publish_service),
 ) -> ReviewResponse:
-    obj = await service.get_object(object_id)
-    if obj is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Published object not found: {object_id}",
-        )
-    previous_state = obj.publish_state
     try:
-        updated = await service.transition_object(object_id, body.target_state)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e),
+        previous_state, updated = await service.transition_object(
+            object_id, body.target_state
         )
+    except ValueError as e:
+        detail = str(e)
+        code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in detail.lower()
+            else status.HTTP_422_UNPROCESSABLE_ENTITY
+        )
+        raise HTTPException(status_code=code, detail=detail)
     return ReviewResponse(
         object=_object_to_response(updated),
         previous_state=previous_state,
