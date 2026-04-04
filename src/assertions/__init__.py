@@ -18,6 +18,13 @@ from src.assertions.edges import (
     compute_exposures,
     derive_edges,
 )
+from src.assertions.recompute import (
+    AssertionDelta,
+    RecomputeResult,
+    build_recompute_result,
+    find_affected_assertion_ids,
+    recompute_assertion,
+)
 from src.assertions.repository import AssertionRepository
 from src.assertions.schemas import (
     VALID_ASSERTION_STATUSES,
@@ -31,15 +38,20 @@ __all__ = [
     "VALID_ASSERTION_STATUSES",
     "VALID_LINK_TYPES",
     "AssertionClaimLink",
+    "AssertionDelta",
     "AssertionRepository",
     "ConceptExposure",
     "ConfidenceBreakdown",
     "DerivedEdge",
     "PathCacheEntry",
+    "RecomputeResult",
     "ResolvedAssertion",
     "aggregate_assertion",
+    "build_recompute_result",
     "build_path_cache",
     "compute_exposures",
     "derive_edges",
+    "find_affected_assertion_ids",
     "make_assertion_id",
+    "recompute_assertion",
 ]
