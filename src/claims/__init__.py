@@ -6,12 +6,22 @@ source lineage, and bitemporal validity.
 """
 
 from src.claims.config import ClaimsConfig
+from src.claims.dead_letter_repository import DeadLetterRepository
 from src.claims.llm_gate import (
     DenyReason,
     FallbackGate,
     FallbackProvenance,
     GateDecision,
     GateVerdict,
+)
+from src.claims.quality import (
+    CheckCode,
+    DeadLetterRecord,
+    Disposition,
+    QualityVerdict,
+    capture_dead_letter,
+    run_quality_checks,
+    verdict_to_dead_letter,
 )
 from src.claims.repository import ClaimRepository
 from src.claims.resolver import EntityResolver, ResolverResult, ResolverTier
@@ -34,6 +44,11 @@ from src.claims.schemas import (
 )
 
 __all__ = [
+    "CheckCode",
+    "DeadLetterRecord",
+    "DeadLetterRepository",
+    "Disposition",
+    "QualityVerdict",
     "VALID_CLAIM_STATUSES",
     "VALID_EXTRACTION_METHODS",
     "VALID_SOURCE_TYPES",
@@ -53,8 +68,11 @@ __all__ = [
     "ResolverTier",
     "ReviewRepository",
     "ReviewTask",
+    "capture_dead_letter",
     "make_claim_id",
     "make_claim_key",
+    "run_quality_checks",
     "make_review_task_id",
     "validate_review_transition",
+    "verdict_to_dead_letter",
 ]

@@ -75,6 +75,27 @@ class ClaimsConfig(BaseSettings):
         description="Maximum LLM fallback invocations per lane run.",
     )
 
+    # -- Quality checks --
+    confidence_floor: float = Field(
+        default=0.05,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Claims with confidence below this floor are quarantined. "
+            "Very low to catch only clearly broken extractions."
+        ),
+    )
+    max_source_text_length: int = Field(
+        default=50_000,
+        ge=1000,
+        description="Maximum source_text length before quarantine.",
+    )
+    max_metadata_size: int = Field(
+        default=100_000,
+        ge=1000,
+        description="Maximum metadata JSON size in bytes before quarantine.",
+    )
+
     # -- Confidence thresholds --
     llm_proposed_confidence: float = Field(
         default=0.45,
