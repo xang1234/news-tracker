@@ -16,8 +16,6 @@ Non-responsibilities:
 
 from __future__ import annotations
 
-import asyncio
-import hashlib
 import logging
 from datetime import date, datetime, timezone
 from typing import Any
@@ -26,50 +24,14 @@ import httpx
 
 from src.filing.provider import FilingProvider
 from src.filing.schemas import (
-    VALID_FILING_TYPES,
     FilingIdentity,
     FilingResult,
     FilingSection,
 )
 from src.filing.sec_policy import SECPolicy
+from src.filing.utils import make_section_id, normalize_filing_type, parse_filing_date
 
 logger = logging.getLogger(__name__)
-
-
-def _section_id(accession: str, index: int, name: str) -> str:
-    """Generate a deterministic section ID."""
-    key = f"{accession}:{index}:{name}"
-    return f"sec_{hashlib.sha256(key.encode()).hexdigest()[:12]}"
-
-
-def _parse_date_str(value: str | None) -> date:
-    """Parse a date string from SEC API responses."""
-    if value:
-        try:
-            return date.fromisoformat(value[:10])
-        except ValueError:
-            pass
-    return date.today()
-
-
-def _normalize_form_type(raw: str) -> str:
-    """Normalize SEC form type to our canonical set."""
-    cleaned = raw.strip().upper()
-    if cleaned.endswith("/A"):
-        cleaned = cleaned[:-2]
-    if cleaned in VALID_FILING_TYPES:
-        return cleaned
-    aliases = {
-        "10K": "10-K",
-        "10Q": "10-Q",
-        "8K": "8-K",
-        "DEF14A": "DEF 14A",
-        "SC13D": "SC 13D",
-        "SC13G": "SC 13G",
-        "13F": "13F-HR",
-        "FORM 4": "4",
-    }
-    return aliases.get(cleaned, "8-K")
 
 
 class SecApiProvider(FilingProvider):
@@ -110,7 +72,6 @@ class SecApiProvider(FilingProvider):
         Downloads the filing's index page to extract metadata, then
         fetches the primary document text.
         """
-        await self._acquire_rate_limit()
         try:
             # Normalize accession number format
             acc_clean = accession_number.replace("-", "")
@@ -118,7 +79,7 @@ class SecApiProvider(FilingProvider):
             # Fetch filing index to get metadata
             client = await self._get_client()
             index_url = (
-                f"https://www.sec.gov/cgi-bin/browse-edgar"
+                f"{self._policy.filing_base_url}"
                 f"?action=getcompany&accession={accession_number}"
                 f"&type=&dateb=&owner=include&count=1&output=atom"
             )
@@ -131,10 +92,9 @@ class SecApiProvider(FilingProvider):
                     f"Index fetch failed: HTTP {index_resp.status_code}",
                 )
 
-            # Try to fetch the full text submission
-            # SEC archives follow: /Archives/edgar/data/{cik}/{acc_no_dashes}/{acc_with_dashes}.txt
+            # Fetch the full text submission
             text_url = (
-                f"https://www.sec.gov/Archives/edgar/data/"
+                f"{self._policy.archives_url}/"
                 f"{acc_clean[:10]}/{acc_clean}/{accession_number}.txt"
             )
             await self._acquire_rate_limit()
@@ -142,13 +102,14 @@ class SecApiProvider(FilingProvider):
 
             if text_resp.status_code == 200:
                 content = text_resp.text
-                word_count = len(content.split())
+                truncated = content[:500_000]
+                word_count = len(truncated.split())
                 sections = [
                     FilingSection(
-                        section_id=_section_id(accession_number, 0, "full_text"),
+                        section_id=make_section_id(accession_number, 0, "full_text"),
                         section_name="Full Text",
                         section_type="narrative",
-                        content=content[:500_000],  # Cap at 500K chars
+                        content=truncated,
                         word_count=word_count,
                     )
                 ]
@@ -193,7 +154,6 @@ class SecApiProvider(FilingProvider):
         if not cik and not ticker:
             raise ValueError("At least one of cik or ticker must be provided")
 
-        await self._acquire_rate_limit()
         try:
             client = await self._get_client()
 
@@ -228,11 +188,11 @@ class SecApiProvider(FilingProvider):
             for hit in hits[:limit]:
                 source = hit.get("_source", {})
                 form = source.get("form_type", source.get("file_type", ""))
-                normalized = _normalize_form_type(form)
-                filed = _parse_date_str(
+                normalized = normalize_filing_type(form)
+                filed = parse_filing_date(
                     source.get("file_date", source.get("date_filed"))
                 )
-                period = _parse_date_str(source.get("period_of_report"))
+                period = parse_filing_date(source.get("period_of_report"))
 
                 results.append(
                     FilingIdentity(

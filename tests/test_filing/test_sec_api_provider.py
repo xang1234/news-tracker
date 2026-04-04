@@ -13,11 +13,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.filing.schemas import FilingIdentity, FilingResult, FilingSection
-from src.filing.sec_api_provider import (
-    SecApiProvider,
-    _normalize_form_type,
-    _parse_date_str,
-    _section_id,
+from src.filing.sec_api_provider import SecApiProvider
+from src.filing.utils import (
+    make_section_id,
+    normalize_filing_type,
+    parse_filing_date,
 )
 from src.filing.sec_policy import SECPolicy
 
@@ -25,49 +25,49 @@ from src.filing.sec_policy import SECPolicy
 # -- Pure function tests ---------------------------------------------------
 
 
-class TestNormalizeFormType:
+class TestNormalizeFilingType:
     """_normalize_form_type handles SEC form variations."""
 
     def test_standard_types(self) -> None:
-        assert _normalize_form_type("10-K") == "10-K"
-        assert _normalize_form_type("10-Q") == "10-Q"
-        assert _normalize_form_type("8-K") == "8-K"
+        assert normalize_filing_type("10-K") == "10-K"
+        assert normalize_filing_type("10-Q") == "10-Q"
+        assert normalize_filing_type("8-K") == "8-K"
 
     def test_amendment_stripped(self) -> None:
-        assert _normalize_form_type("10-K/A") == "10-K"
+        assert normalize_filing_type("10-K/A") == "10-K"
 
     def test_aliases(self) -> None:
-        assert _normalize_form_type("10K") == "10-K"
-        assert _normalize_form_type("DEF14A") == "DEF 14A"
+        assert normalize_filing_type("10K") == "10-K"
+        assert normalize_filing_type("DEF14A") == "DEF 14A"
 
     def test_unknown_defaults_to_8k(self) -> None:
-        assert _normalize_form_type("UNKNOWN") == "8-K"
+        assert normalize_filing_type("UNKNOWN") == "8-K"
 
 
-class TestParseDateStr:
+class TestParseFilingDate:
     """_parse_date_str handles SEC API date formats."""
 
     def test_valid_iso(self) -> None:
-        assert _parse_date_str("2024-03-15") == date(2024, 3, 15)
+        assert parse_filing_date("2024-03-15") == date(2024, 3, 15)
 
     def test_none_returns_today(self) -> None:
-        assert _parse_date_str(None) == date.today()
+        assert parse_filing_date(None) == date.today()
 
     def test_empty_returns_today(self) -> None:
-        assert _parse_date_str("") == date.today()
+        assert parse_filing_date("") == date.today()
 
     def test_long_string_truncated(self) -> None:
-        assert _parse_date_str("2024-03-15T10:30:00Z") == date(2024, 3, 15)
+        assert parse_filing_date("2024-03-15T10:30:00Z") == date(2024, 3, 15)
 
 
 class TestSectionId:
     """_section_id determinism."""
 
     def test_deterministic(self) -> None:
-        assert _section_id("acc", 0, "s") == _section_id("acc", 0, "s")
+        assert make_section_id("acc", 0, "s") == make_section_id("acc", 0, "s")
 
     def test_different_inputs(self) -> None:
-        assert _section_id("acc", 0, "a") != _section_id("acc", 0, "b")
+        assert make_section_id("acc", 0, "a") != make_section_id("acc", 0, "b")
 
 
 # -- Provider contract tests -----------------------------------------------

@@ -17,9 +17,11 @@ from src.filing.edgartools_provider import (
     EdgarToolsProvider,
     _extract_sections,
     _filing_to_result,
-    _normalize_filing_type,
-    _parse_date,
-    _section_id,
+)
+from src.filing.utils import (
+    make_section_id,
+    normalize_filing_type,
+    parse_filing_date,
 )
 from src.filing.schemas import FilingIdentity, FilingResult, FilingSection
 from src.filing.sec_policy import SECPolicy
@@ -73,68 +75,68 @@ def _mock_section(name: str, content: str) -> SimpleNamespace:
 
 
 class TestNormalizeFilingType:
-    """_normalize_filing_type() handles SEC form variations."""
+    """normalize_filing_type() handles SEC form variations."""
 
     def test_standard_types(self) -> None:
-        assert _normalize_filing_type("10-K") == "10-K"
-        assert _normalize_filing_type("10-Q") == "10-Q"
-        assert _normalize_filing_type("8-K") == "8-K"
+        assert normalize_filing_type("10-K") == "10-K"
+        assert normalize_filing_type("10-Q") == "10-Q"
+        assert normalize_filing_type("8-K") == "8-K"
 
     def test_amendment_suffix_stripped(self) -> None:
-        assert _normalize_filing_type("10-K/A") == "10-K"
-        assert _normalize_filing_type("10-Q/A") == "10-Q"
-        assert _normalize_filing_type("8-K/A") == "8-K"
+        assert normalize_filing_type("10-K/A") == "10-K"
+        assert normalize_filing_type("10-Q/A") == "10-Q"
+        assert normalize_filing_type("8-K/A") == "8-K"
 
     def test_case_insensitive(self) -> None:
-        assert _normalize_filing_type("10-k") == "10-K"
-        assert _normalize_filing_type("def 14a") == "DEF 14A"
+        assert normalize_filing_type("10-k") == "10-K"
+        assert normalize_filing_type("def 14a") == "DEF 14A"
 
     def test_aliases(self) -> None:
-        assert _normalize_filing_type("10K") == "10-K"
-        assert _normalize_filing_type("10Q") == "10-Q"
-        assert _normalize_filing_type("DEF14A") == "DEF 14A"
-        assert _normalize_filing_type("FORM 4") == "4"
+        assert normalize_filing_type("10K") == "10-K"
+        assert normalize_filing_type("10Q") == "10-Q"
+        assert normalize_filing_type("DEF14A") == "DEF 14A"
+        assert normalize_filing_type("FORM 4") == "4"
 
     def test_unrecognized_defaults_to_8k(self) -> None:
-        assert _normalize_filing_type("UNKNOWN-FORM") == "8-K"
+        assert normalize_filing_type("UNKNOWN-FORM") == "8-K"
 
     def test_whitespace_handled(self) -> None:
-        assert _normalize_filing_type("  10-K  ") == "10-K"
+        assert normalize_filing_type("  10-K  ") == "10-K"
 
 
 class TestParseDate:
-    """_parse_date() handles edgartools date formats."""
+    """parse_filing_date() handles edgartools date formats."""
 
     def test_date_object(self) -> None:
         d = date(2024, 3, 15)
-        assert _parse_date(d) == d
+        assert parse_filing_date(d) == d
 
     def test_datetime_object(self) -> None:
         dt = datetime(2024, 3, 15, 10, 30, tzinfo=timezone.utc)
-        assert _parse_date(dt) == date(2024, 3, 15)
+        assert parse_filing_date(dt) == date(2024, 3, 15)
 
     def test_iso_string(self) -> None:
-        assert _parse_date("2024-03-15") == date(2024, 3, 15)
+        assert parse_filing_date("2024-03-15") == date(2024, 3, 15)
 
     def test_none_returns_today(self) -> None:
-        assert _parse_date(None) == date.today()
+        assert parse_filing_date(None) == date.today()
 
 
 class TestSectionId:
-    """_section_id() is deterministic."""
+    """make_section_id() is deterministic."""
 
     def test_deterministic(self) -> None:
-        id1 = _section_id("acc-001", 0, "Risk Factors")
-        id2 = _section_id("acc-001", 0, "Risk Factors")
+        id1 = make_section_id("acc-001", 0, "Risk Factors")
+        id2 = make_section_id("acc-001", 0, "Risk Factors")
         assert id1 == id2
 
     def test_different_inputs(self) -> None:
-        id1 = _section_id("acc-001", 0, "Risk Factors")
-        id2 = _section_id("acc-001", 1, "MD&A")
+        id1 = make_section_id("acc-001", 0, "Risk Factors")
+        id2 = make_section_id("acc-001", 1, "MD&A")
         assert id1 != id2
 
     def test_format(self) -> None:
-        sid = _section_id("acc-001", 0, "Risk Factors")
+        sid = make_section_id("acc-001", 0, "Risk Factors")
         assert sid.startswith("sec_")
 
 

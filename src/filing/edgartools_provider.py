@@ -12,7 +12,6 @@ run in a thread executor to avoid blocking the event loop.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 from datetime import date, datetime, timezone
 from functools import partial
@@ -23,9 +22,9 @@ from src.filing.schemas import (
     FilingIdentity,
     FilingResult,
     FilingSection,
-    VALID_FILING_TYPES,
 )
 from src.filing.sec_policy import SECPolicy
+from src.filing.utils import make_section_id, normalize_filing_type, parse_filing_date
 
 logger = logging.getLogger(__name__)
 
@@ -53,10 +52,6 @@ def _ensure_edgartools() -> Any:
         ) from e
 
 
-def _section_id(accession: str, index: int, name: str) -> str:
-    """Generate a deterministic section ID."""
-    key = f"{accession}:{index}:{name}"
-    return f"sec_{hashlib.sha256(key.encode()).hexdigest()[:12]}"
 
 
 def _extract_sections(filing: Any, accession: str) -> list[FilingSection]:
@@ -79,7 +74,7 @@ def _extract_sections(filing: Any, accession: str) -> list[FilingSection]:
                 word_count = len(content.split()) if content else 0
                 sections.append(
                     FilingSection(
-                        section_id=_section_id(accession, i, str(name)),
+                        section_id=make_section_id(accession, i, str(name)),
                         section_name=str(name),
                         section_type="narrative",
                         content=content,
@@ -97,7 +92,7 @@ def _extract_sections(filing: Any, accession: str) -> list[FilingSection]:
             word_count = len(text.split())
             sections.append(
                 FilingSection(
-                    section_id=_section_id(accession, 0, "full_text"),
+                    section_id=make_section_id(accession, 0, "full_text"),
                     section_name="Full Text",
                     section_type="narrative",
                     content=text,
@@ -127,11 +122,11 @@ def _filing_to_result(
     )
 
     # Parse dates
-    filed_date = _parse_date(getattr(header, "filed", None) or getattr(header, "filing_date", None))
-    period = _parse_date(getattr(filing, "period_of_report", None))
+    filed_date = parse_filing_date(getattr(header, "filed", None) or getattr(header, "filing_date", None))
+    period = parse_filing_date(getattr(filing, "period_of_report", None))
 
     # Normalize filing type to match our VALID_FILING_TYPES
-    normalized_type = _normalize_filing_type(form_type)
+    normalized_type = normalize_filing_type(form_type)
 
     # Build identity
     identity = FilingIdentity(
@@ -157,51 +152,6 @@ def _filing_to_result(
         provider=provider_name,
         fetched_at=datetime.now(timezone.utc),
     )
-
-
-def _parse_date(value: Any) -> date:
-    """Parse a date from various edgartools formats."""
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    if isinstance(value, str) and value:
-        try:
-            return date.fromisoformat(value[:10])
-        except ValueError:
-            pass
-    return date.today()
-
-
-def _normalize_filing_type(raw_type: str) -> str:
-    """Normalize a raw SEC form type to our canonical set.
-
-    Handles variations like '10-K/A' (amended) by stripping the
-    amendment suffix. Unrecognized types default to '8-K' to avoid
-    rejection, with a warning logged.
-    """
-    cleaned = raw_type.strip().upper()
-    # Strip amendment suffix
-    if cleaned.endswith("/A"):
-        cleaned = cleaned[:-2]
-    # Direct match
-    if cleaned in VALID_FILING_TYPES:
-        return cleaned
-    # Common aliases
-    aliases = {
-        "10K": "10-K",
-        "10Q": "10-Q",
-        "8K": "8-K",
-        "DEF14A": "DEF 14A",
-        "SC13D": "SC 13D",
-        "SC13G": "SC 13G",
-        "13F": "13F-HR",
-        "FORM 4": "4",
-    }
-    if cleaned in aliases:
-        return aliases[cleaned]
-    logger.warning("Unrecognized filing type %r, defaulting to 8-K", raw_type)
-    return "8-K"
 
 
 class EdgarToolsProvider(FilingProvider):
@@ -334,7 +284,7 @@ class EdgarToolsProvider(FilingProvider):
                 break
 
             header = filing.header if hasattr(filing, "header") else None
-            filed = _parse_date(
+            filed = parse_filing_date(
                 getattr(header, "filed", None)
                 or getattr(header, "filing_date", None)
             )
@@ -346,7 +296,7 @@ class EdgarToolsProvider(FilingProvider):
                 continue
 
             form_type = str(getattr(header, "form_type", "") or "")
-            normalized = _normalize_filing_type(form_type)
+            normalized = normalize_filing_type(form_type)
             accession = str(filing.accession_number) if filing.accession_number else ""
             company_name = str(
                 getattr(header, "company_name", "")
