@@ -19,7 +19,6 @@ from typing import Any
 
 from src.coverage.schemas import (
     CoverageProfile,
-    CoverageTierChange,
     DomainPack,
     DomainPackMember,
 )

@@ -199,6 +199,17 @@ class PublishService:
         """Fetch a lane run by ID."""
         return await self._repo.get_lane_run(run_id)
 
+    async def list_runs(
+        self,
+        lane: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[LaneRun]:
+        """List lane runs with optional filters."""
+        return await self._repo.list_lane_runs(
+            lane=lane, status=status, limit=limit
+        )
+
     # -- Manifest lifecycle ------------------------------------------------
 
     async def create_manifest(

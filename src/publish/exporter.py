@@ -20,7 +20,6 @@ import hashlib
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
 from typing import Any
 
 from src.contracts.intelligence.db_schemas import (
@@ -196,10 +195,10 @@ class BundleExporter:
             manifest_id, publish_state="published"
         )
 
-        # Build JSONL lines and compute checksum
+        # Build JSONL lines, serialize once, compute checksum
         lines = build_bundle_lines(manifest, objects)
-        checksum = compute_bundle_checksum(lines)
         content_bytes = "\n".join(lines).encode("utf-8")
+        checksum = f"sha256:{hashlib.sha256(content_bytes).hexdigest()}"
 
         # Record the export
         bundle = ExportBundle(

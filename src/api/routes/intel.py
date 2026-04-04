@@ -273,7 +273,7 @@ async def list_runs(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Invalid status {run_status!r}. Must be one of {sorted(VALID_RUN_STATUSES)}",
         )
-    runs = await service._repo.list_lane_runs(
+    runs = await service.list_runs(
         lane=lane, status=run_status, limit=limit
     )
     return [_run_to_response(r) for r in runs]
