@@ -98,7 +98,7 @@ class AssertionRepository:
                 confidence = $5,
                 status = $6,
                 valid_from = COALESCE($7, news_intel.resolved_assertions.valid_from),
-                valid_to = $8,
+                valid_to = COALESCE($8, news_intel.resolved_assertions.valid_to),
                 support_count = $9,
                 contradiction_count = $10,
                 first_seen_at = LEAST(
@@ -191,11 +191,21 @@ class AssertionRepository:
     async def list_for_concept(
         self, concept_id: str, *, limit: int = 50
     ) -> list[ResolvedAssertion]:
-        """List all assertions involving a concept (as subject or object)."""
+        """List all assertions involving a concept (as subject or object).
+
+        Uses UNION to allow PostgreSQL to use the subject and object
+        indexes independently rather than falling back to a seq scan
+        from an OR condition.
+        """
         rows = await self._db.fetch(
             """
-            SELECT * FROM news_intel.resolved_assertions
-            WHERE subject_concept_id = $1 OR object_concept_id = $1
+            SELECT * FROM (
+                SELECT * FROM news_intel.resolved_assertions
+                WHERE subject_concept_id = $1
+                UNION
+                SELECT * FROM news_intel.resolved_assertions
+                WHERE object_concept_id = $1
+            ) AS combined
             ORDER BY confidence DESC, last_evidence_at DESC NULLS LAST
             LIMIT $2
             """,
