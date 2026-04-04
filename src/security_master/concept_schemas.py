@@ -33,6 +33,28 @@ VALID_ISSUER_SECURITY_RELATIONSHIPS = frozenset(
     {"primary", "adr", "subsidiary_listing", "preferred", "warrant"}
 )
 
+VALID_RELATIONSHIP_TYPES = frozenset(
+    {
+        "subsidiary_of",
+        "parent_of",
+        "supplies_to",
+        "customer_of",
+        "competes_with",
+        "produces",
+        "consumes",
+        "operates_facility",
+        "located_at",
+        "uses_technology",
+        "develops_technology",
+        "component_of",
+        "contains_component",
+    }
+)
+
+VALID_THEME_LINK_TYPES = frozenset(
+    {"covers", "driven_by", "impacts", "monitors"}
+)
+
 
 def make_concept_id(concept_type: str, canonical_name: str) -> str:
     """Generate a deterministic concept ID.
@@ -121,4 +143,70 @@ class IssuerSecurityLink:
             raise ValueError(
                 f"Invalid relationship_type {self.relationship_type!r}. "
                 f"Must be one of {sorted(VALID_ISSUER_SECURITY_RELATIONSHIPS)}"
+            )
+
+
+@dataclass
+class ConceptRelationship:
+    """A typed directed edge between two concepts.
+
+    Represents structural relationships like subsidiary-of, supplies-to,
+    competes-with, uses-technology, etc. Distinct from causal graph edges
+    which model weighted sentiment propagation.
+
+    Attributes:
+        source_concept_id: The source concept in the relationship.
+        target_concept_id: The target concept in the relationship.
+        relationship_type: Kind of structural relationship.
+        confidence: Confidence score (0-1) in this relationship.
+        source_attribution: Where this relationship was learned from.
+        metadata: Extensible metadata.
+        is_active: Soft-delete flag.
+    """
+
+    source_concept_id: str
+    target_concept_id: str
+    relationship_type: str
+    confidence: float = 1.0
+    source_attribution: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    is_active: bool = True
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        if self.relationship_type not in VALID_RELATIONSHIP_TYPES:
+            raise ValueError(
+                f"Invalid relationship_type {self.relationship_type!r}. "
+                f"Must be one of {sorted(VALID_RELATIONSHIP_TYPES)}"
+            )
+
+
+@dataclass
+class ConceptThemeLink:
+    """Links a theme/narrative_frame concept to an entity it covers.
+
+    Keeps themes and narrative frames as distinct concept types while
+    making their coverage explicitly queryable.
+
+    Attributes:
+        theme_concept_id: The theme or narrative_frame concept.
+        linked_concept_id: The entity (issuer, technology, etc.) being covered.
+        link_type: How they relate (covers, driven_by, impacts, monitors).
+        relevance_score: How relevant the link is (0-1).
+        metadata: Extensible metadata.
+    """
+
+    theme_concept_id: str
+    linked_concept_id: str
+    link_type: str = "covers"
+    relevance_score: float = 1.0
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        if self.link_type not in VALID_THEME_LINK_TYPES:
+            raise ValueError(
+                f"Invalid link_type {self.link_type!r}. "
+                f"Must be one of {sorted(VALID_THEME_LINK_TYPES)}"
             )

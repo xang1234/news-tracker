@@ -13,6 +13,8 @@ from typing import Any
 from src.security_master.concept_schemas import (
     Concept,
     ConceptAlias,
+    ConceptRelationship,
+    ConceptThemeLink,
     IssuerSecurityLink,
 )
 from src.storage.database import Database
@@ -61,6 +63,31 @@ def _row_to_link(row: Any) -> IssuerSecurityLink:
         issuer_concept_id=row["issuer_concept_id"],
         security_concept_id=row["security_concept_id"],
         relationship_type=row["relationship_type"],
+        metadata=_parse_json(row["metadata"]),
+        created_at=row["created_at"],
+    )
+
+
+def _row_to_relationship(row: Any) -> ConceptRelationship:
+    return ConceptRelationship(
+        source_concept_id=row["source_concept_id"],
+        target_concept_id=row["target_concept_id"],
+        relationship_type=row["relationship_type"],
+        confidence=float(row["confidence"]),
+        source_attribution=row["source_attribution"],
+        metadata=_parse_json(row["metadata"]),
+        is_active=row["is_active"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+def _row_to_theme_link(row: Any) -> ConceptThemeLink:
+    return ConceptThemeLink(
+        theme_concept_id=row["theme_concept_id"],
+        linked_concept_id=row["linked_concept_id"],
+        link_type=row["link_type"],
+        relevance_score=float(row["relevance_score"]),
         metadata=_parse_json(row["metadata"]),
         created_at=row["created_at"],
     )
@@ -307,3 +334,145 @@ class ConceptRepository:
             exchange,
         )
         return _row_to_concept(row) if row else None
+
+    # -- Concept relationships ---------------------------------------------
+
+    async def upsert_relationship(
+        self, rel: ConceptRelationship
+    ) -> ConceptRelationship:
+        """Insert or update a concept relationship."""
+        row = await self._db.fetchrow(
+            """
+            INSERT INTO concept_relationships (
+                source_concept_id, target_concept_id, relationship_type,
+                confidence, source_attribution, metadata, is_active
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (source_concept_id, target_concept_id, relationship_type)
+            DO UPDATE SET
+                confidence = $4,
+                source_attribution = $5,
+                metadata = $6,
+                is_active = $7
+            RETURNING *
+            """,
+            rel.source_concept_id,
+            rel.target_concept_id,
+            rel.relationship_type,
+            rel.confidence,
+            rel.source_attribution,
+            json.dumps(rel.metadata),
+            rel.is_active,
+        )
+        return _row_to_relationship(row)
+
+    async def get_relationships(
+        self,
+        concept_id: str,
+        *,
+        relationship_type: str | None = None,
+        direction: str = "both",
+    ) -> list[ConceptRelationship]:
+        """Get relationships involving a concept.
+
+        Args:
+            concept_id: The concept to query.
+            relationship_type: Optional filter by type.
+            direction: 'outgoing', 'incoming', or 'both'.
+        """
+        conditions = ["is_active = TRUE"]
+        params: list[Any] = []
+
+        if direction == "outgoing":
+            params.append(concept_id)
+            conditions.append(f"source_concept_id = ${len(params)}")
+        elif direction == "incoming":
+            params.append(concept_id)
+            conditions.append(f"target_concept_id = ${len(params)}")
+        else:
+            params.append(concept_id)
+            conditions.append(
+                f"(source_concept_id = ${len(params)} OR target_concept_id = ${len(params)})"
+            )
+
+        if relationship_type is not None:
+            params.append(relationship_type)
+            conditions.append(f"relationship_type = ${len(params)}")
+
+        where = " AND ".join(conditions)
+        rows = await self._db.fetch(
+            f"""
+            SELECT * FROM concept_relationships
+            WHERE {where}
+            ORDER BY relationship_type, source_concept_id
+            """,
+            *params,
+        )
+        return [_row_to_relationship(row) for row in rows]
+
+    # -- Theme/narrative links ---------------------------------------------
+
+    async def upsert_theme_link(
+        self, link: ConceptThemeLink
+    ) -> ConceptThemeLink:
+        """Insert or update a theme/narrative link."""
+        row = await self._db.fetchrow(
+            """
+            INSERT INTO concept_theme_links (
+                theme_concept_id, linked_concept_id, link_type,
+                relevance_score, metadata
+            ) VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (theme_concept_id, linked_concept_id, link_type)
+            DO UPDATE SET
+                relevance_score = $4,
+                metadata = $5
+            RETURNING *
+            """,
+            link.theme_concept_id,
+            link.linked_concept_id,
+            link.link_type,
+            link.relevance_score,
+            json.dumps(link.metadata),
+        )
+        return _row_to_theme_link(row)
+
+    async def get_theme_links(
+        self,
+        theme_concept_id: str,
+        *,
+        link_type: str | None = None,
+    ) -> list[ConceptThemeLink]:
+        """Get all entities linked to a theme/narrative concept."""
+        if link_type is not None:
+            rows = await self._db.fetch(
+                """
+                SELECT * FROM concept_theme_links
+                WHERE theme_concept_id = $1 AND link_type = $2
+                ORDER BY relevance_score DESC
+                """,
+                theme_concept_id,
+                link_type,
+            )
+        else:
+            rows = await self._db.fetch(
+                """
+                SELECT * FROM concept_theme_links
+                WHERE theme_concept_id = $1
+                ORDER BY relevance_score DESC
+                """,
+                theme_concept_id,
+            )
+        return [_row_to_theme_link(row) for row in rows]
+
+    async def get_themes_for_concept(
+        self, concept_id: str
+    ) -> list[ConceptThemeLink]:
+        """Get all themes/narratives that cover a concept."""
+        rows = await self._db.fetch(
+            """
+            SELECT * FROM concept_theme_links
+            WHERE linked_concept_id = $1
+            ORDER BY relevance_score DESC
+            """,
+            concept_id,
+        )
+        return [_row_to_theme_link(row) for row in rows]
