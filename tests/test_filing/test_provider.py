@@ -86,7 +86,16 @@ class _StubProvider(FilingProvider):
             provider=self.name,
         )
 
-    async def search_filings(self, **kwargs) -> list[FilingIdentity]:
+    async def search_filings(
+        self,
+        *,
+        cik: str | None = None,
+        ticker: str | None = None,
+        filing_type: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        limit: int = 20,
+    ) -> list[FilingIdentity]:
         return []
 
 

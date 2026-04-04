@@ -19,7 +19,6 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import Any
 
 from src.filing.schemas import FilingIdentity, FilingResult
 from src.filing.sec_policy import SECPolicy

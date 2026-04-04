@@ -63,9 +63,11 @@ class SECPolicy(BaseSettings):
 
     @property
     def headers(self) -> dict[str, str]:
-        """HTTP headers required for SEC EDGAR requests."""
+        """HTTP headers required for SEC EDGAR requests.
+
+        Does not set Host — HTTP clients derive it from the request URL.
+        """
         return {
             "User-Agent": self.user_agent,
             "Accept-Encoding": "gzip, deflate",
-            "Host": "efts.sec.gov",
         }
