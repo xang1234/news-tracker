@@ -221,8 +221,10 @@ class TestManifestEndpoints:
         self, client: TestClient, service: PublishService
     ) -> None:
         import asyncio
-        m = asyncio.get_event_loop().run_until_complete(
-            service.create_manifest(LANE_NARRATIVE, "run_001")
+        loop = asyncio.get_event_loop()
+        run = loop.run_until_complete(service.create_run(LANE_NARRATIVE))
+        m = loop.run_until_complete(
+            service.create_manifest(LANE_NARRATIVE, run.run_id)
         )
         resp = client.get(f"/intel/manifests/{m.manifest_id}")
         assert resp.status_code == 200
@@ -248,8 +250,9 @@ class TestPointerEndpoints:
     ) -> None:
         import asyncio
         loop = asyncio.get_event_loop()
+        run = loop.run_until_complete(service.create_run(LANE_NARRATIVE))
         m = loop.run_until_complete(
-            service.create_manifest(LANE_NARRATIVE, "run_001")
+            service.create_manifest(LANE_NARRATIVE, run.run_id)
         )
         loop.run_until_complete(
             service.seal_manifest(m.manifest_id, object_count=0)
@@ -280,15 +283,16 @@ class TestReviewEndpoints:
     ) -> None:
         import asyncio
         loop = asyncio.get_event_loop()
+        run = loop.run_until_complete(service.create_run(LANE_NARRATIVE))
         m = loop.run_until_complete(
-            service.create_manifest(LANE_NARRATIVE, "run_001")
+            service.create_manifest(LANE_NARRATIVE, run.run_id)
         )
         obj = loop.run_until_complete(
             service.add_object(
                 m.manifest_id,
                 object_type="claim",
                 lane=LANE_NARRATIVE,
-                run_id="run_001",
+                run_id=run.run_id,
             )
         )
         resp = client.post(
@@ -305,15 +309,16 @@ class TestReviewEndpoints:
     ) -> None:
         import asyncio
         loop = asyncio.get_event_loop()
+        run = loop.run_until_complete(service.create_run(LANE_NARRATIVE))
         m = loop.run_until_complete(
-            service.create_manifest(LANE_NARRATIVE, "run_001")
+            service.create_manifest(LANE_NARRATIVE, run.run_id)
         )
         obj = loop.run_until_complete(
             service.add_object(
                 m.manifest_id,
                 object_type="claim",
                 lane=LANE_NARRATIVE,
-                run_id="run_001",
+                run_id=run.run_id,
             )
         )
         # Transition to retracted (terminal)
@@ -331,15 +336,16 @@ class TestReviewEndpoints:
     ) -> None:
         import asyncio
         loop = asyncio.get_event_loop()
+        run = loop.run_until_complete(service.create_run(LANE_NARRATIVE))
         m = loop.run_until_complete(
-            service.create_manifest(LANE_NARRATIVE, "run_001")
+            service.create_manifest(LANE_NARRATIVE, run.run_id)
         )
         obj = loop.run_until_complete(
             service.add_object(
                 m.manifest_id,
                 object_type="claim",
                 lane=LANE_NARRATIVE,
-                run_id="run_001",
+                run_id=run.run_id,
                 payload={"text": "test claim"},
             )
         )

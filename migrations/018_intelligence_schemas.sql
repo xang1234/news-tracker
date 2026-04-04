@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS intel_pub.manifests (
         CHECK (lane IN ('narrative', 'filing', 'structural', 'backtest')),
     run_id          TEXT NOT NULL,
     contract_version TEXT NOT NULL,
-    published_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    published_at    TIMESTAMPTZ,
     object_count    INTEGER NOT NULL DEFAULT 0 CHECK (object_count >= 0),
     checksum        TEXT,
     metadata        JSONB NOT NULL DEFAULT '{}',

@@ -220,8 +220,19 @@ class PublishService:
 
         Returns:
             The persisted Manifest.
+
+        Raises:
+            ValueError: If the lane is invalid or the run doesn't exist
+                or belongs to a different lane.
         """
         validate_lane(lane)
+        run = await self._repo.get_lane_run(run_id)
+        if run is None:
+            raise ValueError(f"Lane run not found: {run_id}")
+        if run.lane != lane:
+            raise ValueError(
+                f"Run {run_id} belongs to lane {run.lane!r}, not {lane!r}"
+            )
         manifest = Manifest(
             manifest_id=_generate_id("manifest"),
             lane=lane,
@@ -372,6 +383,11 @@ class PublishService:
             raise ValueError(
                 f"Object lane {lane!r} does not match manifest lane "
                 f"{manifest.lane!r} for manifest {manifest_id}"
+            )
+        if manifest.run_id != run_id:
+            raise ValueError(
+                f"Object run_id {run_id!r} does not match manifest run_id "
+                f"{manifest.run_id!r} for manifest {manifest_id}"
             )
         # Validate object_type is publishable
         OwnershipPolicy.validate_publishable_type(object_type)

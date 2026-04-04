@@ -138,6 +138,15 @@ def exporter(repo: _InMemoryRepo) -> BundleExporter:
     return BundleExporter(repository=repo)
 
 
+async def _make_manifest(
+    service: PublishService, lane: str = LANE_NARRATIVE
+) -> tuple[str, "Manifest"]:
+    """Helper: create a run + manifest, return (run_id, manifest)."""
+    run = await service.create_run(lane)
+    m = await service.create_manifest(lane, run.run_id)
+    return run.run_id, m
+
+
 # -- Pure function tests ---------------------------------------------------
 
 
@@ -247,12 +256,12 @@ class TestBundleExporter:
         exporter: BundleExporter,
     ) -> None:
         # Create manifest, add objects, seal
-        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        run_id, m = await _make_manifest(service)
         obj = await service.add_object(
             m.manifest_id,
             object_type="claim",
             lane=LANE_NARRATIVE,
-            run_id="run_001",
+            run_id=run_id,
             payload={"text": "test claim"},
         )
         await service.transition_object(obj.object_id, "published")
@@ -272,20 +281,20 @@ class TestBundleExporter:
         service: PublishService,
         exporter: BundleExporter,
     ) -> None:
-        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        run_id, m = await _make_manifest(service)
         # Add one published and one draft
         pub_obj = await service.add_object(
             m.manifest_id,
             object_type="claim",
             lane=LANE_NARRATIVE,
-            run_id="run_001",
+            run_id=run_id,
         )
         await service.transition_object(pub_obj.object_id, "published")
         await service.add_object(
             m.manifest_id,
             object_type="assertion",
             lane=LANE_NARRATIVE,
-            run_id="run_001",
+            run_id=run_id,
         )  # stays draft
         await service.seal_manifest(m.manifest_id, object_count=2)
 
@@ -299,7 +308,7 @@ class TestBundleExporter:
         service: PublishService,
         exporter: BundleExporter,
     ) -> None:
-        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        _, m = await _make_manifest(service)
         with pytest.raises(ValueError, match="not sealed"):
             await exporter.export_manifest(m.manifest_id)
 
@@ -315,12 +324,12 @@ class TestBundleExporter:
         service: PublishService,
         exporter: BundleExporter,
     ) -> None:
-        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        run_id, m = await _make_manifest(service)
         obj = await service.add_object(
             m.manifest_id,
             object_type="claim",
             lane=LANE_NARRATIVE,
-            run_id="run_001",
+            run_id=run_id,
         )
         await service.transition_object(obj.object_id, "published")
         await service.seal_manifest(m.manifest_id, object_count=1)
@@ -334,7 +343,7 @@ class TestBundleExporter:
         service: PublishService,
         exporter: BundleExporter,
     ) -> None:
-        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        _, m = await _make_manifest(service)
         await service.seal_manifest(m.manifest_id, object_count=0)
         bundle, _ = await exporter.export_manifest(m.manifest_id)
         assert bundle.bundle_id in repo.bundles
@@ -355,12 +364,12 @@ class TestContractParity:
         self, service: PublishService, exporter: BundleExporter
     ) -> None:
         """Every published object field survives the JSONL roundtrip."""
-        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        run_id, m = await _make_manifest(service)
         obj = await service.add_object(
             m.manifest_id,
             object_type="claim",
             lane=LANE_NARRATIVE,
-            run_id="run_001",
+            run_id=run_id,
             payload={"confidence": 0.92, "entities": ["TSMC"]},
             source_ids=["doc_1", "doc_2"],
         )
@@ -391,7 +400,7 @@ class TestContractParity:
         self, service: PublishService, exporter: BundleExporter
     ) -> None:
         """Manifest header in bundle matches DB manifest."""
-        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        _, m = await _make_manifest(service)
         await service.seal_manifest(m.manifest_id, object_count=0)
 
         db_manifest = await service.get_manifest(m.manifest_id)
@@ -409,12 +418,12 @@ class TestContractParity:
         self, service: PublishService, exporter: BundleExporter
     ) -> None:
         """All exported objects carry the current contract version."""
-        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        run_id, m = await _make_manifest(service)
         obj = await service.add_object(
             m.manifest_id,
             object_type="claim",
             lane=LANE_NARRATIVE,
-            run_id="run_001",
+            run_id=run_id,
         )
         await service.transition_object(obj.object_id, "published")
         await service.seal_manifest(m.manifest_id, object_count=1)
@@ -432,14 +441,14 @@ class TestContractParity:
         self, service: PublishService, exporter: BundleExporter
     ) -> None:
         """Multiple objects maintain order and content parity."""
-        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        run_id, m = await _make_manifest(service)
         ids = []
         for i in range(5):
             obj = await service.add_object(
                 m.manifest_id,
                 object_type="claim",
                 lane=LANE_NARRATIVE,
-                run_id="run_001",
+                run_id=run_id,
                 payload={"index": i},
             )
             await service.transition_object(obj.object_id, "published")

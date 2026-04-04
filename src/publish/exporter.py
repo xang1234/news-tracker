@@ -19,7 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from dataclasses import asdict
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
@@ -204,7 +204,7 @@ class BundleExporter:
 
         # Record the export
         bundle = ExportBundle(
-            bundle_id=f"bundle_{hashlib.sha256(manifest_id.encode()).hexdigest()[:12]}",
+            bundle_id=f"bundle_{uuid.uuid4().hex[:12]}",
             manifest_id=manifest_id,
             lane=manifest.lane,
             contract_version=str(ContractRegistry.CURRENT),
