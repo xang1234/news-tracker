@@ -17,17 +17,31 @@ from src.filing.schemas import (
     FilingSection,
 )
 from src.filing.sec_policy import SECPolicy
+from src.filing.persistence import (
+    FilingAttachmentRecord,
+    FilingRecord,
+    FilingRepository,
+    FilingSectionRecord,
+    XBRLFactRecord,
+    filing_result_to_records,
+)
 
 __all__ = [
     "VALID_FILING_STATUSES",
     "VALID_FILING_TYPES",
     "EdgarToolsProvider",
+    "FilingAttachmentRecord",
     "FilingConfig",
     "FilingIdentity",
     "FilingProvider",
+    "FilingRecord",
+    "FilingRepository",
     "FilingResult",
     "FilingSection",
+    "FilingSectionRecord",
     "SECPolicy",
     "SECRateLimiter",
     "SecApiProvider",
+    "XBRLFactRecord",
+    "filing_result_to_records",
 ]

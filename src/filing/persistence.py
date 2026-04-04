@@ -272,6 +272,21 @@ def _row_to_xbrl_fact(row: Any) -> XBRLFactRecord:
     )
 
 
+def _row_to_attachment(row: Any) -> FilingAttachmentRecord:
+    return FilingAttachmentRecord(
+        attachment_id=row["attachment_id"],
+        accession_number=row["accession_number"],
+        filename=row["filename"],
+        content_type=row["content_type"],
+        description=row["description"],
+        url=row["url"],
+        size_bytes=row["size_bytes"],
+        content_hash=row["content_hash"],
+        metadata=_parse_json(row["metadata"]),
+        created_at=row["created_at"],
+    )
+
+
 # -- Repository ------------------------------------------------------------
 
 
@@ -420,6 +435,54 @@ class FilingRepository:
             accession_number,
         )
         return [_row_to_section(row) for row in rows]
+
+    # -- Attachments -------------------------------------------------------
+
+    async def upsert_attachment(
+        self, attachment: FilingAttachmentRecord
+    ) -> FilingAttachmentRecord:
+        """Insert or update a filing attachment."""
+        row = await self._db.fetchrow(
+            """
+            INSERT INTO filing_attachments (
+                attachment_id, accession_number, filename,
+                content_type, description, url,
+                size_bytes, content_hash, metadata
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (attachment_id) DO UPDATE SET
+                content_type = $4,
+                description = $5,
+                url = $6,
+                size_bytes = $7,
+                content_hash = $8,
+                metadata = $9
+            RETURNING *
+            """,
+            attachment.attachment_id,
+            attachment.accession_number,
+            attachment.filename,
+            attachment.content_type,
+            attachment.description,
+            attachment.url,
+            attachment.size_bytes,
+            attachment.content_hash,
+            json.dumps(attachment.metadata),
+        )
+        return _row_to_attachment(row)
+
+    async def get_attachments(
+        self, accession_number: str
+    ) -> list[FilingAttachmentRecord]:
+        """Get all attachments for a filing."""
+        rows = await self._db.fetch(
+            """
+            SELECT * FROM filing_attachments
+            WHERE accession_number = $1
+            ORDER BY filename
+            """,
+            accession_number,
+        )
+        return [_row_to_attachment(row) for row in rows]
 
     # -- XBRL facts --------------------------------------------------------
 
