@@ -162,7 +162,12 @@ class EntityResolver:
         predicate: str | None = None,
         run_id: str | None = None,
     ) -> list[ResolverResult]:
-        """Resolve multiple mentions concurrently.
+        """Resolve multiple mentions from the same source context.
+
+        All mentions share passage_length, predicate, and run_id because
+        they originate from the same passage (e.g., subject and object of
+        one claim). For mentions from different passages, call resolve()
+        individually.
 
         If any single resolution fails with a DB error, that mention
         gets an unresolved result rather than aborting the entire batch.
@@ -207,7 +212,6 @@ class EntityResolver:
         If denied, returns an unresolved result with gate denial info
         in metadata for audit.
         """
-        assert self._fallback_gate is not None
         decision = self._fallback_gate.evaluate(
             mention,
             passage_length=passage_length,

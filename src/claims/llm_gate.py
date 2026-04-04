@@ -160,9 +160,8 @@ class FallbackBudget:
         if today != self._daily_date:
             self._daily_count = 0
             self._daily_date = today
-            # Prune stale run counts (keep at most 100 entries)
-            if len(self._run_counts) > 100:
-                self._run_counts.clear()
+            # Day changed — per-run counts from yesterday are stale
+            self._run_counts.clear()
 
 
 class FallbackGate:
@@ -219,12 +218,15 @@ class FallbackGate:
         Returns:
             GateDecision with verdict and reason.
         """
+        # Snapshot budget counts once to avoid redundant lookups
+        daily = self._budget.daily_count
+        run_used = self._budget.run_count(run_id) if run_id else 0
         base = dict(
             mention=mention,
             passage_length=passage_length,
             predicate=predicate,
-            run_invocations=self._budget.run_count(run_id) if run_id else 0,
-            daily_invocations=self._budget.daily_count,
+            run_invocations=run_used,
+            daily_invocations=daily,
         )
 
         # 1. Master switch
@@ -249,8 +251,7 @@ class FallbackGate:
                 **base,
             )
 
-        # 3. Predicate must be high-value (if predicate is known
-        #    and high_value_predicates is non-empty)
+        # 3. Predicate high-value check
         hvp = self._config.high_value_predicates
         if predicate is not None and hvp and predicate not in hvp:
             logger.debug(
@@ -265,10 +266,10 @@ class FallbackGate:
             )
 
         # 4a. Daily budget
-        if self._budget.daily_count >= self._config.daily_llm_budget:
+        if daily >= self._config.daily_llm_budget:
             logger.info(
                 "LLM gate denied: daily budget exhausted (%d/%d)",
-                self._budget.daily_count,
+                daily,
                 self._config.daily_llm_budget,
             )
             return GateDecision(
@@ -278,10 +279,10 @@ class FallbackGate:
             )
 
         # 4b. Per-run budget
-        if run_id and self._budget.run_count(run_id) >= self._config.per_run_llm_budget:
+        if run_id and run_used >= self._config.per_run_llm_budget:
             logger.info(
                 "LLM gate denied: per-run budget exhausted (%d/%d) for %s",
-                self._budget.run_count(run_id),
+                run_used,
                 self._config.per_run_llm_budget,
                 run_id,
             )
