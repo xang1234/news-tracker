@@ -7,9 +7,12 @@ Tier order:
     1. Exact: ticker, CIK, or exact concept name lookup
     2. Alias: case-insensitive alias dictionary resolution
     3. Fuzzy: pg_trgm similarity search with configurable threshold
+    4. LLM Proposed: gated fallback for high-value unresolved mentions
 
-Each tier produces a ResolverResult with confidence decomposition
-so downstream review logic can see which tier resolved (or failed).
+Tiers 1-3 are deterministic. Tier 4 is gated by FallbackGate policy
+and produces LLM_PROPOSED results that require review before becoming
+authoritative. Each tier produces a ResolverResult with confidence
+decomposition so downstream review logic can see which tier resolved.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from src.claims.llm_gate import FallbackGate
 from src.security_master.concept_repository import ConceptRepository
 from src.security_master.concept_schemas import Concept
 
@@ -31,6 +35,7 @@ class ResolverTier(str, Enum):
     EXACT = "exact"
     ALIAS = "alias"
     FUZZY = "fuzzy"
+    LLM_PROPOSED = "llm_proposed"
     UNRESOLVED = "unresolved"
 
 
@@ -83,26 +88,35 @@ class EntityResolver:
         *,
         fuzzy_threshold: float = 0.4,
         fuzzy_limit: int = 5,
+        fallback_gate: FallbackGate | None = None,
     ) -> None:
         self._repo = concept_repo
         self._fuzzy_threshold = fuzzy_threshold
         self._fuzzy_limit = fuzzy_limit
+        self._fallback_gate = fallback_gate
 
     async def resolve(
         self,
         mention: str,
         *,
         concept_type: str | None = None,
+        passage_length: int = 0,
+        predicate: str | None = None,
+        run_id: str | None = None,
     ) -> ResolverResult:
         """Resolve a text mention to a canonical concept.
 
         Runs through the tier cascade in order, returning the first
-        successful resolution. If no tier resolves, returns an
-        unresolved result.
+        successful resolution. If no tier resolves and a fallback gate
+        is configured, evaluates whether LLM fallback is warranted.
 
         Args:
             mention: Raw text mention to resolve.
             concept_type: Optional filter (e.g., "issuer", "technology").
+            passage_length: Character length of the source passage
+                (used by the LLM fallback gate to assess value).
+            predicate: The claim predicate, if known at resolution time.
+            run_id: Current lane run ID (for per-run budget tracking).
 
         Returns:
             ResolverResult with concept, tier, and confidence.
@@ -126,6 +140,16 @@ class EntityResolver:
         if result.resolved:
             return result
 
+        # Tier 4: LLM fallback (gated — only if gate approves)
+        if self._fallback_gate is not None:
+            result = self._evaluate_llm_gate(
+                mention,
+                passage_length=passage_length,
+                predicate=predicate,
+                run_id=run_id,
+            )
+            return result
+
         logger.debug("Unresolved mention: %r", mention)
         return ResolverResult(mention=mention)
 
@@ -134,6 +158,9 @@ class EntityResolver:
         mentions: list[str],
         *,
         concept_type: str | None = None,
+        passage_length: int = 0,
+        predicate: str | None = None,
+        run_id: str | None = None,
     ) -> list[ResolverResult]:
         """Resolve multiple mentions concurrently.
 
@@ -144,7 +171,13 @@ class EntityResolver:
 
         results = await asyncio.gather(
             *(
-                self.resolve(m, concept_type=concept_type)
+                self.resolve(
+                    m,
+                    concept_type=concept_type,
+                    passage_length=passage_length,
+                    predicate=predicate,
+                    run_id=run_id,
+                )
                 for m in mentions
             ),
             return_exceptions=True,
@@ -153,6 +186,63 @@ class EntityResolver:
             r if isinstance(r, ResolverResult) else ResolverResult(mention=m)
             for r, m in zip(results, mentions)
         ]
+
+    # -- Tier 4: LLM fallback gate -----------------------------------------
+
+    def _evaluate_llm_gate(
+        self,
+        mention: str,
+        *,
+        passage_length: int = 0,
+        predicate: str | None = None,
+        run_id: str | None = None,
+    ) -> ResolverResult:
+        """Evaluate the LLM fallback gate and return an appropriate result.
+
+        This method does NOT call the LLM — it only evaluates the gate
+        policy. If approved, it returns an LLM_PROPOSED result with
+        gate metadata so the caller knows an LLM call is warranted.
+        The actual LLM call is the caller's responsibility.
+
+        If denied, returns an unresolved result with gate denial info
+        in metadata for audit.
+        """
+        assert self._fallback_gate is not None
+        decision = self._fallback_gate.evaluate(
+            mention,
+            passage_length=passage_length,
+            predicate=predicate,
+            run_id=run_id,
+        )
+
+        if decision.approved:
+            # Signal to caller that LLM fallback is warranted.
+            # concept is None — the caller must fill it after the LLM call.
+            return ResolverResult(
+                mention=mention,
+                tier=ResolverTier.LLM_PROPOSED,
+                confidence=0.0,  # Will be set after LLM call
+                metadata={
+                    "match_type": "llm_gate_approved",
+                    "gate_verdict": decision.verdict.value,
+                    "passage_length": decision.passage_length,
+                    "predicate": decision.predicate,
+                },
+            )
+
+        # Gate denied — return unresolved with denial info
+        logger.debug(
+            "LLM gate denied for %r: %s", mention, decision.deny_reason
+        )
+        return ResolverResult(
+            mention=mention,
+            metadata={
+                "gate_verdict": decision.verdict.value,
+                "gate_deny_reason": (
+                    decision.deny_reason.value if decision.deny_reason else None
+                ),
+            },
+        )
 
     # -- Tier 1: Exact lookup ----------------------------------------------
 

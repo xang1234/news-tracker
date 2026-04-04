@@ -286,4 +286,5 @@ class TestResolverResult:
         assert ResolverTier.EXACT == "exact"
         assert ResolverTier.ALIAS == "alias"
         assert ResolverTier.FUZZY == "fuzzy"
+        assert ResolverTier.LLM_PROPOSED == "llm_proposed"
         assert ResolverTier.UNRESOLVED == "unresolved"
