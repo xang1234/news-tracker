@@ -6,6 +6,7 @@ source lineage, and bitemporal validity.
 """
 
 from src.claims.repository import ClaimRepository
+from src.claims.resolver import EntityResolver, ResolverResult, ResolverTier
 from src.claims.schemas import (
     VALID_CLAIM_STATUSES,
     VALID_EXTRACTION_METHODS,
@@ -20,7 +21,10 @@ __all__ = [
     "VALID_EXTRACTION_METHODS",
     "VALID_SOURCE_TYPES",
     "ClaimRepository",
+    "EntityResolver",
     "EvidenceClaim",
+    "ResolverResult",
+    "ResolverTier",
     "make_claim_id",
     "make_claim_key",
 ]

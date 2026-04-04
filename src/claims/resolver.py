@@ -1,0 +1,234 @@
+"""Deterministic resolver cascade for entity/relation grounding.
+
+Resolves raw text mentions to canonical concept IDs using a tiered
+cascade that handles common cases cheaply before any LLM fallback.
+
+Tier order:
+    1. Exact: ticker, CIK, or exact concept name lookup
+    2. Alias: case-insensitive alias dictionary resolution
+    3. Fuzzy: pg_trgm similarity search with configurable threshold
+
+Each tier produces a ResolverResult with confidence decomposition
+so downstream review logic can see which tier resolved (or failed).
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
+
+from src.security_master.concept_repository import ConceptRepository
+from src.security_master.concept_schemas import Concept
+
+logger = logging.getLogger(__name__)
+
+
+class ResolverTier(str, Enum):
+    """Which resolution tier produced the result."""
+
+    EXACT = "exact"
+    ALIAS = "alias"
+    FUZZY = "fuzzy"
+    UNRESOLVED = "unresolved"
+
+
+@dataclass
+class ResolverResult:
+    """Result of attempting to resolve a text mention to a concept.
+
+    Attributes:
+        mention: The raw text that was resolved.
+        concept: The resolved concept (None if unresolved).
+        concept_id: Shortcut to concept.concept_id (None if unresolved).
+        tier: Which resolution tier produced this result.
+        confidence: Resolution confidence (0-1).
+        alternatives: Other candidate concepts considered.
+        metadata: Extensible metadata (similarity scores, etc.).
+    """
+
+    mention: str
+    concept: Concept | None = None
+    concept_id: str | None = None
+    tier: ResolverTier = ResolverTier.UNRESOLVED
+    confidence: float = 0.0
+    alternatives: list[Concept] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def resolved(self) -> bool:
+        """Whether the mention was successfully resolved."""
+        return self.concept is not None
+
+
+class EntityResolver:
+    """Tiered deterministic resolver for entity grounding.
+
+    Resolves raw text mentions to canonical concept IDs through
+    a cascade of increasingly expensive tiers. Designed to handle
+    the common cases cheaply (exact ticker/alias) and only fall
+    through to fuzzy matching for genuinely ambiguous mentions.
+
+    Usage:
+        resolver = EntityResolver(concept_repo)
+        result = await resolver.resolve("TSMC")
+        if result.resolved:
+            print(f"Resolved to {result.concept_id} via {result.tier}")
+    """
+
+    def __init__(
+        self,
+        concept_repo: ConceptRepository,
+        *,
+        fuzzy_threshold: float = 0.4,
+        fuzzy_limit: int = 5,
+    ) -> None:
+        self._repo = concept_repo
+        self._fuzzy_threshold = fuzzy_threshold
+        self._fuzzy_limit = fuzzy_limit
+
+    async def resolve(
+        self,
+        mention: str,
+        *,
+        concept_type: str | None = None,
+        context_hints: list[str] | None = None,
+    ) -> ResolverResult:
+        """Resolve a text mention to a canonical concept.
+
+        Runs through the tier cascade in order, returning the first
+        successful resolution. If no tier resolves, returns an
+        unresolved result.
+
+        Args:
+            mention: Raw text mention to resolve.
+            concept_type: Optional filter (e.g., "issuer", "technology").
+            context_hints: Optional contextual hints (e.g., nearby ticker
+                mentions) that may help disambiguation.
+
+        Returns:
+            ResolverResult with concept, tier, and confidence.
+        """
+        mention = mention.strip()
+        if not mention:
+            return ResolverResult(mention=mention)
+
+        # Tier 1: Exact lookup (ticker, CIK, or concept name)
+        result = await self._resolve_exact(mention, concept_type)
+        if result.resolved:
+            return result
+
+        # Tier 2: Alias dictionary (case-insensitive)
+        result = await self._resolve_alias(mention)
+        if result.resolved:
+            return result
+
+        # Tier 3: Fuzzy matching (pg_trgm similarity)
+        result = await self._resolve_fuzzy(mention, concept_type)
+        if result.resolved:
+            return result
+
+        logger.debug("Unresolved mention: %r", mention)
+        return ResolverResult(mention=mention)
+
+    async def resolve_batch(
+        self,
+        mentions: list[str],
+        *,
+        concept_type: str | None = None,
+    ) -> list[ResolverResult]:
+        """Resolve multiple mentions. Convenience wrapper."""
+        results = []
+        for mention in mentions:
+            result = await self.resolve(mention, concept_type=concept_type)
+            results.append(result)
+        return results
+
+    # -- Tier 1: Exact lookup ----------------------------------------------
+
+    async def _resolve_exact(
+        self, mention: str, concept_type: str | None
+    ) -> ResolverResult:
+        """Try exact ticker/CIK/name lookup."""
+        # Try as ticker → security concept → issuer
+        concept = await self._repo.get_concept_for_security(
+            ticker=mention.upper(), exchange="US"
+        )
+        if concept is not None:
+            if concept_type is None or concept.concept_type == concept_type:
+                return ResolverResult(
+                    mention=mention,
+                    concept=concept,
+                    concept_id=concept.concept_id,
+                    tier=ResolverTier.EXACT,
+                    confidence=1.0,
+                    metadata={"match_type": "ticker"},
+                )
+
+        # Try direct concept lookup by ID (for pre-resolved references)
+        if mention.startswith("concept_"):
+            concept = await self._repo.get_concept(mention)
+            if concept is not None:
+                return ResolverResult(
+                    mention=mention,
+                    concept=concept,
+                    concept_id=concept.concept_id,
+                    tier=ResolverTier.EXACT,
+                    confidence=1.0,
+                    metadata={"match_type": "concept_id"},
+                )
+
+        return ResolverResult(mention=mention)
+
+    # -- Tier 2: Alias dictionary ------------------------------------------
+
+    async def _resolve_alias(self, mention: str) -> ResolverResult:
+        """Try case-insensitive alias resolution."""
+        concept = await self._repo.resolve_alias(mention)
+        if concept is not None:
+            return ResolverResult(
+                mention=mention,
+                concept=concept,
+                concept_id=concept.concept_id,
+                tier=ResolverTier.ALIAS,
+                confidence=0.95,
+                metadata={"match_type": "alias"},
+            )
+        return ResolverResult(mention=mention)
+
+    # -- Tier 3: Fuzzy matching --------------------------------------------
+
+    async def _resolve_fuzzy(
+        self, mention: str, concept_type: str | None
+    ) -> ResolverResult:
+        """Try fuzzy matching via pg_trgm similarity."""
+        candidates = await self._repo.search_concepts(
+            mention, limit=self._fuzzy_limit
+        )
+        if not candidates:
+            return ResolverResult(mention=mention)
+
+        # Filter by concept_type if specified
+        if concept_type is not None:
+            candidates = [
+                c for c in candidates if c.concept_type == concept_type
+            ]
+            if not candidates:
+                return ResolverResult(mention=mention)
+
+        best = candidates[0]
+        # search_concepts returns results ordered by similarity DESC,
+        # but we don't have the exact score here. Assign confidence
+        # based on position (best candidate gets highest confidence).
+        confidence = 0.7 if len(candidates) == 1 else 0.6
+
+        return ResolverResult(
+            mention=mention,
+            concept=best,
+            concept_id=best.concept_id,
+            tier=ResolverTier.FUZZY,
+            confidence=confidence,
+            alternatives=candidates[1:],
+            metadata={"match_type": "fuzzy", "candidate_count": len(candidates)},
+        )
