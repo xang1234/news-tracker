@@ -16,6 +16,7 @@ from src.assertions.schemas import (
     VALID_ASSERTION_STATUSES,
     AssertionClaimLink,
     ResolvedAssertion,
+    make_assertion_id,
 )
 from src.storage.database import Database
 
@@ -145,8 +146,6 @@ class AssertionRepository:
         object_concept_id: str | None = None,
     ) -> ResolvedAssertion | None:
         """Fetch an assertion by its subject-predicate-object triple."""
-        from src.assertions.schemas import make_assertion_id
-
         aid = make_assertion_id(subject_concept_id, predicate, object_concept_id)
         return await self.get_assertion(aid)
 
