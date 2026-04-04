@@ -47,6 +47,20 @@ def _make_claim(**overrides) -> EvidenceClaim:
     return EvidenceClaim(**defaults)
 
 
+def _make_raw_claim(**overrides) -> EvidenceClaim:
+    """Build a claim then patch fields, bypassing __post_init__ validation.
+
+    Use this for quality-check tests that need structurally invalid
+    claims (empty source_id, blank predicate, etc.) which the
+    EvidenceClaim constructor would reject.
+    """
+    # Build a valid claim first, then override fields
+    claim = _make_claim()
+    for key, value in overrides.items():
+        object.__setattr__(claim, key, value)
+    return claim
+
+
 # -- Quality check: accept -------------------------------------------------
 
 
@@ -97,26 +111,19 @@ class TestQualityDeadLetter:
         assert CheckCode.EMPTY_SUBJECT in verdict.checks_failed
 
     def test_empty_predicate(self) -> None:
-        claim = _make_claim(predicate="")
-        # predicate="" fails EvidenceClaim validation, so we need to
-        # bypass __post_init__. Instead, test with whitespace-only.
-        claim = _make_claim(predicate="supplies_to")
-        # Manually clear predicate after construction
-        object.__setattr__(claim, "predicate", "   ")
+        claim = _make_raw_claim(predicate="   ")
         verdict = run_quality_checks(claim)
         assert verdict.disposition == Disposition.DEAD_LETTER
         assert CheckCode.EMPTY_PREDICATE in verdict.checks_failed
 
     def test_missing_source_id(self) -> None:
-        claim = _make_claim(source_id="valid")
-        object.__setattr__(claim, "source_id", "")
+        claim = _make_raw_claim(source_id="")
         verdict = run_quality_checks(claim)
         assert verdict.disposition == Disposition.DEAD_LETTER
         assert CheckCode.MISSING_SOURCE_ID in verdict.checks_failed
 
     def test_missing_contract_version(self) -> None:
-        claim = _make_claim(contract_version="0.1.0")
-        object.__setattr__(claim, "contract_version", "")
+        claim = _make_raw_claim(contract_version="")
         verdict = run_quality_checks(claim)
         assert verdict.disposition == Disposition.DEAD_LETTER
         assert CheckCode.MISSING_CONTRACT_VERSION in verdict.checks_failed
@@ -131,23 +138,21 @@ class TestQualityDeadLetter:
 
     def test_multiple_structural_failures(self) -> None:
         """Multiple structural issues are all reported."""
-        claim = _make_claim(
-            subject_text="valid",
+        claim = _make_raw_claim(
+            source_id="",
             source_span_start=100,
             source_span_end=50,
         )
-        object.__setattr__(claim, "source_id", "")
         verdict = run_quality_checks(claim)
         assert verdict.disposition == Disposition.DEAD_LETTER
         assert len(verdict.checks_failed) >= 2
 
     def test_dead_letter_takes_priority_over_quarantine(self) -> None:
         """Structural failures override semantic concerns."""
-        claim = _make_claim(
-            subject_text="valid",
+        claim = _make_raw_claim(
+            source_id="",  # Dead letter
             confidence=0.001,  # Would quarantine
         )
-        object.__setattr__(claim, "source_id", "")  # Dead letter
         verdict = run_quality_checks(claim)
         assert verdict.disposition == Disposition.DEAD_LETTER
 
@@ -340,8 +345,7 @@ class TestVerdictToDeadLetter:
     """Converting failed verdicts to dead-letter records."""
 
     def test_converts_dead_letter_verdict(self) -> None:
-        claim = _make_claim()
-        object.__setattr__(claim, "source_id", "")
+        claim = _make_raw_claim(source_id="")
         verdict = run_quality_checks(claim)
         assert verdict.disposition == Disposition.DEAD_LETTER
 
@@ -354,8 +358,7 @@ class TestVerdictToDeadLetter:
         assert dl.error_detail["disposition"] == "dead_letter"
 
     def test_preserves_source_text(self) -> None:
-        claim = _make_claim()
-        object.__setattr__(claim, "source_id", "")
+        claim = _make_raw_claim(source_id="")
         verdict = run_quality_checks(claim)
         dl = verdict_to_dead_letter(
             verdict,

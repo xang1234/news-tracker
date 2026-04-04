@@ -18,6 +18,7 @@ review before they can become authoritative.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -168,8 +169,6 @@ def run_quality_checks(
             f"limit {max_source_text_length}"
         )
 
-    import json
-
     metadata_bytes = len(json.dumps(claim.metadata).encode())
     if metadata_bytes > max_metadata_size:
         quarantine_codes.append(CheckCode.METADATA_TOO_LARGE)
@@ -274,8 +273,6 @@ def capture_dead_letter(
     claim_snapshot for later inspection. The source_text is
     preserved for replay.
     """
-    import json
-
     error_hash = hashlib.sha256(
         error_message.encode()
     ).hexdigest()[:8]
