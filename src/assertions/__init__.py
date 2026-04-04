@@ -10,6 +10,14 @@ from src.assertions.aggregation import (
     ConfidenceBreakdown,
     aggregate_assertion,
 )
+from src.assertions.edges import (
+    ConceptExposure,
+    DerivedEdge,
+    PathCacheEntry,
+    build_path_cache,
+    compute_exposures,
+    derive_edges,
+)
 from src.assertions.repository import AssertionRepository
 from src.assertions.schemas import (
     VALID_ASSERTION_STATUSES,
@@ -24,8 +32,14 @@ __all__ = [
     "VALID_LINK_TYPES",
     "AssertionClaimLink",
     "AssertionRepository",
+    "ConceptExposure",
     "ConfidenceBreakdown",
+    "DerivedEdge",
+    "PathCacheEntry",
     "ResolvedAssertion",
     "aggregate_assertion",
+    "build_path_cache",
+    "compute_exposures",
+    "derive_edges",
     "make_assertion_id",
 ]
