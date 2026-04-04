@@ -90,12 +90,14 @@ class _InMemoryRepo:
     async def get_manifest(self, manifest_id: str) -> Manifest | None:
         return self.manifests.get(manifest_id)
 
-    async def update_manifest(self, manifest_id, *, object_count=None, checksum=None):
+    async def update_manifest(self, manifest_id, *, object_count=None, checksum=None, published_at=None):
         m = self.manifests.get(manifest_id)
         if m and object_count is not None:
             m.object_count = object_count
         if m and checksum is not None:
             m.checksum = checksum
+        if m and published_at is not None:
+            m.published_at = published_at
         return m
 
     async def get_pointer(self, lane: str) -> ManifestPointer | None:
@@ -248,6 +250,9 @@ class TestPointerEndpoints:
         loop = asyncio.get_event_loop()
         m = loop.run_until_complete(
             service.create_manifest(LANE_NARRATIVE, "run_001")
+        )
+        loop.run_until_complete(
+            service.seal_manifest(m.manifest_id, object_count=0)
         )
         loop.run_until_complete(
             service.advance_pointer(LANE_NARRATIVE, m.manifest_id)

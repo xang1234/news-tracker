@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime
 from typing import Any
 
 from src.contracts.intelligence.db_schemas import (
@@ -251,19 +252,22 @@ class PublishRepository:
         *,
         object_count: int | None = None,
         checksum: str | None = None,
+        published_at: datetime | None = None,
     ) -> Manifest | None:
-        """Update a manifest's object count and/or checksum (sealing)."""
+        """Update a manifest's object count, checksum, and/or published_at."""
         row = await self._db.fetchrow(
             """
             UPDATE intel_pub.manifests
             SET object_count = COALESCE($2, object_count),
-                checksum = COALESCE($3, checksum)
+                checksum = COALESCE($3, checksum),
+                published_at = COALESCE($4, published_at)
             WHERE manifest_id = $1
             RETURNING *
             """,
             manifest_id,
             object_count,
             checksum,
+            published_at,
         )
         return _row_to_manifest(row) if row else None
 

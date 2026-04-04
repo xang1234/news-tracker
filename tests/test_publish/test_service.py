@@ -79,6 +79,7 @@ class InMemoryPublishRepository:
         *,
         object_count: int | None = None,
         checksum: str | None = None,
+        published_at: datetime | None = None,
     ) -> Manifest | None:
         m = self.manifests.get(manifest_id)
         if m is None:
@@ -87,6 +88,8 @@ class InMemoryPublishRepository:
             m.object_count = object_count
         if checksum is not None:
             m.checksum = checksum
+        if published_at is not None:
+            m.published_at = published_at
         return m
 
     async def get_pointer(self, lane: str) -> ManifestPointer | None:
@@ -276,11 +279,19 @@ class TestManifestLifecycle:
 # -- Pointer advancement tests ---------------------------------------------
 
 
+async def _create_and_seal(
+    service: PublishService, lane: str, run_id: str
+) -> Manifest:
+    """Helper: create a manifest and seal it so it can be published."""
+    m = await service.create_manifest(lane, run_id)
+    return await service.seal_manifest(m.manifest_id, object_count=0)
+
+
 class TestPointerAdvancement:
     """Atomic pointer semantics."""
 
     async def test_initial_pointer(self, service: PublishService) -> None:
-        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        m = await _create_and_seal(service, LANE_NARRATIVE, "run_001")
         ptr = await service.advance_pointer(LANE_NARRATIVE, m.manifest_id)
         assert ptr.lane == LANE_NARRATIVE
         assert ptr.manifest_id == m.manifest_id
@@ -289,8 +300,8 @@ class TestPointerAdvancement:
     async def test_pointer_tracks_previous(
         self, service: PublishService
     ) -> None:
-        m1 = await service.create_manifest(LANE_NARRATIVE, "run_001")
-        m2 = await service.create_manifest(LANE_NARRATIVE, "run_002")
+        m1 = await _create_and_seal(service, LANE_NARRATIVE, "run_001")
+        m2 = await _create_and_seal(service, LANE_NARRATIVE, "run_002")
 
         await service.advance_pointer(LANE_NARRATIVE, m1.manifest_id)
         ptr = await service.advance_pointer(LANE_NARRATIVE, m2.manifest_id)
@@ -301,8 +312,8 @@ class TestPointerAdvancement:
     async def test_pointer_per_lane_isolation(
         self, service: PublishService
     ) -> None:
-        m_narr = await service.create_manifest(LANE_NARRATIVE, "run_001")
-        m_file = await service.create_manifest(LANE_FILING, "run_002")
+        m_narr = await _create_and_seal(service, LANE_NARRATIVE, "run_001")
+        m_file = await _create_and_seal(service, LANE_FILING, "run_002")
 
         await service.advance_pointer(LANE_NARRATIVE, m_narr.manifest_id)
         await service.advance_pointer(LANE_FILING, m_file.manifest_id)
@@ -324,8 +335,16 @@ class TestPointerAdvancement:
     async def test_pointer_lane_mismatch_raises(
         self, service: PublishService
     ) -> None:
-        m = await service.create_manifest(LANE_FILING, "run_001")
+        m = await _create_and_seal(service, LANE_FILING, "run_001")
         with pytest.raises(ValueError, match="belongs to lane"):
+            await service.advance_pointer(LANE_NARRATIVE, m.manifest_id)
+
+    async def test_pointer_unsealed_manifest_rejected(
+        self, service: PublishService
+    ) -> None:
+        """Cannot publish an unsealed manifest."""
+        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        with pytest.raises(ValueError, match="not been sealed"):
             await service.advance_pointer(LANE_NARRATIVE, m.manifest_id)
 
     async def test_get_pointer_empty(self, service: PublishService) -> None:
@@ -335,9 +354,9 @@ class TestPointerAdvancement:
         self, service: PublishService
     ) -> None:
         """Third pointer advance should reference the second manifest."""
-        m1 = await service.create_manifest(LANE_NARRATIVE, "run_001")
-        m2 = await service.create_manifest(LANE_NARRATIVE, "run_002")
-        m3 = await service.create_manifest(LANE_NARRATIVE, "run_003")
+        m1 = await _create_and_seal(service, LANE_NARRATIVE, "run_001")
+        m2 = await _create_and_seal(service, LANE_NARRATIVE, "run_002")
+        m3 = await _create_and_seal(service, LANE_NARRATIVE, "run_003")
 
         await service.advance_pointer(LANE_NARRATIVE, m1.manifest_id)
         await service.advance_pointer(LANE_NARRATIVE, m2.manifest_id)
@@ -367,6 +386,41 @@ class TestPublishedObjectTransitions:
         assert obj.publish_state == "draft"
         assert obj.payload["text"] == "TSMC capacity expansion"
         assert obj.source_ids == ["doc_1", "doc_2"]
+
+    async def test_add_object_nonexistent_manifest_raises(
+        self, service: PublishService
+    ) -> None:
+        with pytest.raises(ValueError, match="Manifest not found"):
+            await service.add_object(
+                "nope",
+                object_type="claim",
+                lane=LANE_NARRATIVE,
+                run_id="run_001",
+            )
+
+    async def test_add_object_lane_mismatch_raises(
+        self, service: PublishService
+    ) -> None:
+        m = await service.create_manifest(LANE_FILING, "run_001")
+        with pytest.raises(ValueError, match="does not match manifest lane"):
+            await service.add_object(
+                m.manifest_id,
+                object_type="claim",
+                lane=LANE_NARRATIVE,
+                run_id="run_001",
+            )
+
+    async def test_add_object_invalid_type_raises(
+        self, service: PublishService
+    ) -> None:
+        m = await service.create_manifest(LANE_NARRATIVE, "run_001")
+        with pytest.raises(ValueError, match="not publishable"):
+            await service.add_object(
+                m.manifest_id,
+                object_type="not_a_real_type",
+                lane=LANE_NARRATIVE,
+                run_id="run_001",
+            )
 
     async def test_draft_to_review_to_published(
         self, service: PublishService

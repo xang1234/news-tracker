@@ -105,9 +105,7 @@ class Manifest:
     lane: str
     run_id: str
     contract_version: str
-    published_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    published_at: datetime | None = None
     object_count: int = 0
     checksum: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)

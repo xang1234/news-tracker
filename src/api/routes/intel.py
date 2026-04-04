@@ -61,7 +61,7 @@ class ManifestResponse(BaseModel):
     lane: str
     run_id: str
     contract_version: str
-    published_at: datetime
+    published_at: datetime | None = None
     object_count: int
     checksum: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)

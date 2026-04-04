@@ -27,6 +27,7 @@ from src.contracts.intelligence.db_schemas import (
     PublishedObject,
 )
 from src.contracts.intelligence.lanes import validate_lane
+from src.contracts.intelligence.ownership import OwnershipPolicy
 from src.contracts.intelligence.version import ContractRegistry
 from src.publish.repository import PublishRepository
 
@@ -252,7 +253,10 @@ class PublishService:
             The updated Manifest.
         """
         result = await self._repo.update_manifest(
-            manifest_id, object_count=object_count, checksum=checksum
+            manifest_id,
+            object_count=object_count,
+            checksum=checksum,
+            published_at=datetime.now(timezone.utc),
         )
         if result is None:
             raise ValueError(f"Manifest not found: {manifest_id}")
@@ -304,6 +308,11 @@ class PublishService:
                 f"Manifest {manifest_id} belongs to lane {manifest.lane!r}, "
                 f"not {lane!r}"
             )
+        if manifest.published_at is None:
+            raise ValueError(
+                f"Cannot advance pointer: manifest {manifest_id} has not "
+                f"been sealed. Call seal_manifest() first."
+            )
         pointer = await self._repo.advance_pointer(
             lane, manifest_id, metadata=metadata
         )
@@ -350,7 +359,23 @@ class PublishService:
 
         Returns:
             The persisted PublishedObject in 'draft' state.
+
+        Raises:
+            ValueError: If the manifest doesn't exist, the lane doesn't
+                match, or the object_type is not publishable.
         """
+        # Validate manifest exists and lane matches
+        manifest = await self._repo.get_manifest(manifest_id)
+        if manifest is None:
+            raise ValueError(f"Manifest not found: {manifest_id}")
+        if manifest.lane != lane:
+            raise ValueError(
+                f"Object lane {lane!r} does not match manifest lane "
+                f"{manifest.lane!r} for manifest {manifest_id}"
+            )
+        # Validate object_type is publishable
+        OwnershipPolicy.validate_publishable_type(object_type)
+
         obj = PublishedObject(
             object_id=_generate_id("obj"),
             object_type=object_type,
