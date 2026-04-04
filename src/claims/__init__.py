@@ -15,6 +15,15 @@ from src.claims.llm_gate import (
 )
 from src.claims.repository import ClaimRepository
 from src.claims.resolver import EntityResolver, ResolverResult, ResolverTier
+from src.claims.review import (
+    VALID_TASK_STATUSES,
+    VALID_TASK_TYPES,
+    VALID_TRIGGER_REASONS,
+    ReviewTask,
+    make_review_task_id,
+    validate_review_transition,
+)
+from src.claims.review_repository import ReviewRepository
 from src.claims.schemas import (
     VALID_CLAIM_STATUSES,
     VALID_EXTRACTION_METHODS,
@@ -28,6 +37,9 @@ __all__ = [
     "VALID_CLAIM_STATUSES",
     "VALID_EXTRACTION_METHODS",
     "VALID_SOURCE_TYPES",
+    "VALID_TASK_STATUSES",
+    "VALID_TASK_TYPES",
+    "VALID_TRIGGER_REASONS",
     "ClaimRepository",
     "ClaimsConfig",
     "DenyReason",
@@ -39,6 +51,10 @@ __all__ = [
     "GateVerdict",
     "ResolverResult",
     "ResolverTier",
+    "ReviewRepository",
+    "ReviewTask",
     "make_claim_id",
     "make_claim_key",
+    "make_review_task_id",
+    "validate_review_transition",
 ]
