@@ -483,10 +483,12 @@ class PublishService:
         # Only published → retracted is allowed post-seal.
         manifest = await self._repo.get_manifest(obj.manifest_id)
         if manifest is not None and manifest.published_at is not None:
-            if target_state != "retracted":
+            if target_state != "retracted" or previous_state != "published":
                 raise ValueError(
                     f"Cannot transition object {object_id}: manifest "
-                    f"{obj.manifest_id} is sealed (only retracted allowed)"
+                    f"{obj.manifest_id} is sealed "
+                    f"(only published→retracted allowed, "
+                    f"current state is {previous_state!r})"
                 )
         _validate_publish_transition(previous_state, target_state)
         result = await self._repo.update_publish_state(object_id, target_state)

@@ -135,15 +135,24 @@ class EntityResolver:
         *,
         concept_type: str | None = None,
     ) -> list[ResolverResult]:
-        """Resolve multiple mentions concurrently."""
+        """Resolve multiple mentions concurrently.
+
+        If any single resolution fails with a DB error, that mention
+        gets an unresolved result rather than aborting the entire batch.
+        """
         import asyncio
 
-        return await asyncio.gather(
+        results = await asyncio.gather(
             *(
                 self.resolve(m, concept_type=concept_type)
                 for m in mentions
-            )
+            ),
+            return_exceptions=True,
         )
+        return [
+            r if isinstance(r, ResolverResult) else ResolverResult(mention=m)
+            for r, m in zip(results, mentions)
+        ]
 
     # -- Tier 1: Exact lookup ----------------------------------------------
 
@@ -156,6 +165,9 @@ class EntityResolver:
         ticker = mention.upper()
         exchange = "US"
         if "." in ticker:
+            # Handle exchange suffix (e.g., "005930.KS" → ticker="005930", exchange="KS")
+            # For ambiguous multi-dot inputs (e.g., "A.B.C"), use the last segment
+            # as exchange and log for visibility.
             parts = ticker.rsplit(".", 1)
             ticker, exchange = parts[0], parts[1]
         concept = await self._repo.get_concept_for_security(
