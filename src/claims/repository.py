@@ -10,7 +10,7 @@ import json
 import logging
 from typing import Any
 
-from src.claims.schemas import EvidenceClaim
+from src.claims.schemas import VALID_CLAIM_STATUSES, EvidenceClaim
 from src.storage.database import Database
 
 logger = logging.getLogger(__name__)
@@ -178,6 +178,11 @@ class ClaimRepository:
         self, claim_id: str, new_status: str
     ) -> EvidenceClaim | None:
         """Update a claim's status."""
+        if new_status not in VALID_CLAIM_STATUSES:
+            raise ValueError(
+                f"Invalid claim status {new_status!r}. "
+                f"Must be one of {sorted(VALID_CLAIM_STATUSES)}"
+            )
         row = await self._db.fetchrow(
             """
             UPDATE news_intel.evidence_claims
