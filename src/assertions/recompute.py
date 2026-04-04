@@ -174,21 +174,18 @@ def build_recompute_result(
     Counts how many assertions actually changed, and how many
     edges were added or removed from current state.
     """
-    assertions_updated = sum(
-        1 for d in deltas if d.confidence_changed or d.status_changed
-    )
-    edges_added = sum(
-        1 for d in deltas
-        if d.edge_after is not None
-        and d.edge_after.is_current
-        and (d.edge_before is None or not d.edge_before.is_current)
-    )
-    edges_removed = sum(
-        1 for d in deltas
-        if d.edge_before is not None
-        and d.edge_before.is_current
-        and (d.edge_after is None or not d.edge_after.is_current)
-    )
+    assertions_updated = 0
+    edges_added = 0
+    edges_removed = 0
+    for d in deltas:
+        if d.confidence_changed or d.status_changed:
+            assertions_updated += 1
+        had_current_before = d.edge_before is not None and d.edge_before.is_current
+        has_current_after = d.edge_after is not None and d.edge_after.is_current
+        if has_current_after and not had_current_before:
+            edges_added += 1
+        elif had_current_before and not has_current_after:
+            edges_removed += 1
 
     return RecomputeResult(
         trigger=trigger,
@@ -210,9 +207,10 @@ def find_affected_assertion_ids(
     Looks up which assertions reference the given claim IDs
     through their claim links.
     """
+    claim_id_set = set(claim_ids)
     affected = {
         lnk.assertion_id
         for lnk in links
-        if lnk.claim_id in set(claim_ids)
+        if lnk.claim_id in claim_id_set
     }
     return sorted(affected)
