@@ -25,8 +25,6 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
-
 from src.assertions.schemas import (
     AssertionClaimLink,
     ResolvedAssertion,
@@ -41,6 +39,7 @@ DEFAULT_FRESHNESS_DECAY = 0.01  # exp decay lambda (per day)
 DEFAULT_DIVERSITY_TARGET = 3  # distinct source types for full diversity credit
 DEFAULT_REVIEW_BONUS = 0.1  # confidence boost for review-approved claims
 DEFAULT_CONTRADICTION_PENALTY = 0.5  # weight of contradictions vs support
+DEFAULT_DISPUTED_THRESHOLD = 0.6  # support ratio below this → disputed
 
 
 # -- Confidence breakdown ---------------------------------------------------
@@ -85,6 +84,7 @@ def aggregate_assertion(
     freshness_decay: float = DEFAULT_FRESHNESS_DECAY,
     diversity_target: int = DEFAULT_DIVERSITY_TARGET,
     review_bonus: float = DEFAULT_REVIEW_BONUS,
+    disputed_threshold: float = DEFAULT_DISPUTED_THRESHOLD,
 ) -> tuple[ResolvedAssertion, ConfidenceBreakdown]:
     """Aggregate claims into a resolved assertion with confidence breakdown.
 
@@ -113,11 +113,8 @@ def aggregate_assertion(
         subject_concept_id, predicate, object_concept_id
     )
 
-    # Build claim lookup and link lookup
+    # Build claim lookup
     claim_map: dict[str, EvidenceClaim] = {c.claim_id: c for c in claims}
-    link_map: dict[str, AssertionClaimLink] = {
-        lnk.claim_id: lnk for lnk in links
-    }
 
     # Partition into support and contradiction
     support_claims: list[tuple[EvidenceClaim, AssertionClaimLink]] = []
@@ -132,6 +129,7 @@ def aggregate_assertion(
         else:
             contradiction_claims.append((claim, lnk))
 
+    all_evidence = support_claims + contradiction_claims
     support_count = len(support_claims)
     contradiction_count = len(contradiction_claims)
     total_evidence = support_count + contradiction_count
@@ -150,7 +148,7 @@ def aggregate_assertion(
     # -- Freshness: exponential decay from most recent evidence --
     timestamps = [
         c.source_published_at
-        for c, _ in support_claims + contradiction_claims
+        for c, _ in all_evidence
         if c.source_published_at is not None
     ]
     if timestamps:
@@ -165,9 +163,7 @@ def aggregate_assertion(
         last_evidence = None
 
     # -- Source diversity: distinct source types --
-    source_types = {
-        c.source_type for c, _ in support_claims + contradiction_claims
-    }
+    source_types = {c.source_type for c, _ in all_evidence}
     diversity_count = len(source_types)
     diversity = min(1.0, diversity_count / diversity_target) if diversity_target > 0 else 1.0
 
@@ -200,7 +196,7 @@ def aggregate_assertion(
     # -- Determine assertion status --
     if total_evidence == 0:
         status = "active"  # no evidence yet, default
-    elif contradiction_count > 0 and support_ratio < 0.6:
+    elif contradiction_count > 0 and support_ratio < disputed_threshold:
         status = "disputed"
     else:
         status = "active"
