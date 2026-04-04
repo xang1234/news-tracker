@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from dataclasses import asdict
+from datetime import datetime, timezone
 
 
 # -- Component scores ------------------------------------------------------
@@ -116,30 +117,10 @@ class NarrativeComponents:
     def to_dict(self) -> dict[str, object]:
         """Serialize for storage in metadata or published payloads."""
         return {
-            "attention": {
-                "velocity": self.attention.velocity,
-                "acceleration": self.attention.acceleration,
-                "doc_mass": self.attention.doc_mass,
-                "score": self.attention.score,
-            },
-            "corroboration": {
-                "platform_spread": self.corroboration.platform_spread,
-                "source_diversity": self.corroboration.source_diversity,
-                "cross_platform_speed": self.corroboration.cross_platform_speed,
-                "score": self.corroboration.score,
-            },
-            "confirmation": {
-                "authority_alignment": self.confirmation.authority_alignment,
-                "crowd_agreement": self.confirmation.crowd_agreement,
-                "authority_weight": self.confirmation.authority_weight,
-                "score": self.confirmation.score,
-            },
-            "novelty_persistence": {
-                "recency": self.novelty_persistence.recency,
-                "persistence": self.novelty_persistence.persistence,
-                "novelty_ratio": self.novelty_persistence.novelty_ratio,
-                "score": self.novelty_persistence.score,
-            },
+            "attention": asdict(self.attention),
+            "corroboration": asdict(self.corroboration),
+            "confirmation": asdict(self.confirmation),
+            "novelty_persistence": asdict(self.novelty_persistence),
             "composite": self.composite,
         }
 
