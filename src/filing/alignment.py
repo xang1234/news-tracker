@@ -14,20 +14,18 @@ Design:
 from __future__ import annotations
 
 import difflib
-import hashlib
 import re
 from dataclasses import dataclass, field
-from typing import Any
 
 from src.filing.persistence import FilingSectionRecord
 
 # -- Normalization ---------------------------------------------------------
 
-# Patterns to strip from section names for matching
-_STRIP_PATTERNS = [
-    re.compile(r"^item\s+\d+[a-z]?\.?\s*", re.IGNORECASE),
-    re.compile(r"^part\s+[ivx]+\.?\s*", re.IGNORECASE),
-    re.compile(r"\s+", re.IGNORECASE),
+# (pattern, replacement) pairs for section name normalization
+_NORMALIZE_RULES: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"^item\s+\d+[a-z]?\.?\s*", re.IGNORECASE), ""),
+    (re.compile(r"^part\s+[ivx]+\.?\s*", re.IGNORECASE), ""),
+    (re.compile(r"\s+"), " "),
 ]
 
 
@@ -38,8 +36,8 @@ def normalize_section_name(name: str) -> str:
     and lowercases. E.g., "Item 1A. Risk Factors" → "risk factors".
     """
     result = name.strip()
-    for pattern in _STRIP_PATTERNS:
-        result = pattern.sub(" " if pattern.pattern == r"\s+" else "", result)
+    for pattern, replacement in _NORMALIZE_RULES:
+        result = pattern.sub(replacement, result)
     return result.strip().lower()
 
 
