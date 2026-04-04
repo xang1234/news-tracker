@@ -82,6 +82,8 @@ class ParityReport:
 # Directional agreement threshold: component composite and legacy
 # conviction should move in the same direction within this tolerance
 DIRECTIONAL_TOLERANCE = 20.0  # points on 0-100 scale
+FLOAT_TOLERANCE = 0.01  # for backfill metric comparison
+STRONG_COMPONENT_THRESHOLD = 0.3  # min component score to explain a signal
 
 
 def check_component_conviction_parity(
@@ -138,11 +140,11 @@ def check_backfill_stability(
         issues.append(
             f"platform_count: {run_a.platform_count} vs {run_b.platform_count}"
         )
-    if abs(run_a.avg_sentiment - run_b.avg_sentiment) > 0.01:
+    if abs(run_a.avg_sentiment - run_b.avg_sentiment) > FLOAT_TOLERANCE:
         issues.append(
             f"avg_sentiment: {run_a.avg_sentiment:.3f} vs {run_b.avg_sentiment:.3f}"
         )
-    if abs(run_a.avg_authority - run_b.avg_authority) > 0.01:
+    if abs(run_a.avg_authority - run_b.avg_authority) > FLOAT_TOLERANCE:
         issues.append(
             f"avg_authority: {run_a.avg_authority:.3f} vs {run_b.avg_authority:.3f}"
         )
@@ -186,12 +188,11 @@ def check_replay_coverage(
             details={"run_id": run.run_id, "signal_triggered": False},
         )
 
-    # A triggered signal should have at least one component > 0.3
     has_strong_component = (
-        components.attention.score > 0.3
-        or components.corroboration.score > 0.3
-        or components.confirmation.score > 0.3
-        or components.novelty_persistence.score > 0.3
+        components.attention.score > STRONG_COMPONENT_THRESHOLD
+        or components.corroboration.score > STRONG_COMPONENT_THRESHOLD
+        or components.confirmation.score > STRONG_COMPONENT_THRESHOLD
+        or components.novelty_persistence.score > STRONG_COMPONENT_THRESHOLD
     )
 
     return ParityCheck(
