@@ -265,7 +265,7 @@ class TestBundleExporter:
             payload={"text": "test claim"},
         )
         await service.transition_object(obj.object_id, "published")
-        await service.seal_manifest(m.manifest_id, object_count=1)
+        await service.seal_manifest(m.manifest_id)
 
         # Export
         bundle, lines = await exporter.export_manifest(m.manifest_id)
@@ -276,32 +276,21 @@ class TestBundleExporter:
         assert bundle.checksum is not None
         assert bundle.size_bytes > 0
 
-    async def test_export_excludes_drafts(
+    async def test_seal_rejects_drafts(
         self,
         service: PublishService,
         exporter: BundleExporter,
     ) -> None:
+        """Cannot seal (and therefore export) a manifest with draft objects."""
         run_id, m = await _make_manifest(service)
-        # Add one published and one draft
-        pub_obj = await service.add_object(
+        await service.add_object(
             m.manifest_id,
             object_type="claim",
             lane=LANE_NARRATIVE,
             run_id=run_id,
-        )
-        await service.transition_object(pub_obj.object_id, "published")
-        await service.add_object(
-            m.manifest_id,
-            object_type="assertion",
-            lane=LANE_NARRATIVE,
-            run_id=run_id,
         )  # stays draft
-        await service.seal_manifest(m.manifest_id, object_count=2)
-
-        bundle, lines = await exporter.export_manifest(m.manifest_id)
-        _, objects = parse_bundle_lines(lines)
-        assert len(objects) == 1
-        assert objects[0]["object_id"] == pub_obj.object_id
+        with pytest.raises(ValueError, match="still in"):
+            await service.seal_manifest(m.manifest_id)
 
     async def test_export_unsealed_raises(
         self,
@@ -332,7 +321,7 @@ class TestBundleExporter:
             run_id=run_id,
         )
         await service.transition_object(obj.object_id, "published")
-        await service.seal_manifest(m.manifest_id, object_count=1)
+        await service.seal_manifest(m.manifest_id)
 
         bundle, lines = await exporter.export_manifest(m.manifest_id)
         assert verify_bundle_checksum(lines, bundle.checksum) is True
@@ -344,7 +333,7 @@ class TestBundleExporter:
         exporter: BundleExporter,
     ) -> None:
         _, m = await _make_manifest(service)
-        await service.seal_manifest(m.manifest_id, object_count=0)
+        await service.seal_manifest(m.manifest_id)
         bundle, _ = await exporter.export_manifest(m.manifest_id)
         assert bundle.bundle_id in repo.bundles
 
@@ -374,7 +363,7 @@ class TestContractParity:
             source_ids=["doc_1", "doc_2"],
         )
         await service.transition_object(obj.object_id, "published")
-        await service.seal_manifest(m.manifest_id, object_count=1)
+        await service.seal_manifest(m.manifest_id)
 
         # DB path: read directly
         db_obj = await service.get_object(obj.object_id)
@@ -401,7 +390,7 @@ class TestContractParity:
     ) -> None:
         """Manifest header in bundle matches DB manifest."""
         _, m = await _make_manifest(service)
-        await service.seal_manifest(m.manifest_id, object_count=0)
+        await service.seal_manifest(m.manifest_id)
 
         db_manifest = await service.get_manifest(m.manifest_id)
         _, lines = await exporter.export_manifest(m.manifest_id)
@@ -426,7 +415,7 @@ class TestContractParity:
             run_id=run_id,
         )
         await service.transition_object(obj.object_id, "published")
-        await service.seal_manifest(m.manifest_id, object_count=1)
+        await service.seal_manifest(m.manifest_id)
 
         bundle, lines = await exporter.export_manifest(m.manifest_id)
         header, objects = parse_bundle_lines(lines)
@@ -453,7 +442,7 @@ class TestContractParity:
             )
             await service.transition_object(obj.object_id, "published")
             ids.append(obj.object_id)
-        await service.seal_manifest(m.manifest_id, object_count=5)
+        await service.seal_manifest(m.manifest_id)
 
         _, lines = await exporter.export_manifest(m.manifest_id)
         _, bundle_objects = parse_bundle_lines(lines)

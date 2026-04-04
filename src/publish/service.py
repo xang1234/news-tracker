@@ -18,6 +18,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+import json
+
 from src.contracts.intelligence.db_schemas import (
     VALID_PUBLISH_STATES,
     VALID_RUN_STATUSES,
@@ -257,23 +259,47 @@ class PublishService:
         self,
         manifest_id: str,
         *,
-        object_count: int,
         checksum: str | None = None,
     ) -> Manifest:
-        """Seal a manifest with its final object count and checksum.
+        """Seal a manifest after all its objects are in 'published' state.
 
-        Once sealed, the manifest is ready to be published via
-        advance_pointer(). The checksum should be computed over
-        the sorted published objects.
+        Validates that every object in the manifest has been transitioned
+        to 'published'. Derives the object count from the DB and computes
+        a content checksum if none is provided.
 
         Args:
             manifest_id: Manifest to seal.
-            object_count: Final count of objects in the manifest.
-            checksum: Integrity checksum (optional).
+            checksum: Integrity checksum (optional; auto-computed if omitted).
 
         Returns:
             The updated Manifest.
+
+        Raises:
+            ValueError: If the manifest doesn't exist, is already sealed,
+                or contains non-published objects.
         """
+        manifest = await self._repo.get_manifest(manifest_id)
+        if manifest is None:
+            raise ValueError(f"Manifest not found: {manifest_id}")
+        if manifest.published_at is not None:
+            raise ValueError(f"Manifest {manifest_id} is already sealed")
+
+        # Verify all objects are published
+        all_objects = await self._repo.list_objects_by_manifest(manifest_id)
+        non_published = [
+            o for o in all_objects if o.publish_state != "published"
+        ]
+        if non_published:
+            states = {o.publish_state for o in non_published}
+            raise ValueError(
+                f"Cannot seal manifest {manifest_id}: "
+                f"{len(non_published)} object(s) still in {sorted(states)}"
+            )
+
+        object_count = len(all_objects)
+        if checksum is None:
+            checksum = self.compute_checksum(all_objects)
+
         result = await self._repo.update_manifest(
             manifest_id,
             object_count=object_count,
@@ -281,7 +307,7 @@ class PublishService:
             published_at=datetime.now(timezone.utc),
         )
         if result is None:
-            raise ValueError(f"Manifest not found: {manifest_id}")
+            raise ValueError(f"Failed to seal manifest: {manifest_id}")
         logger.info(
             "Manifest sealed: %s (objects=%d, checksum=%s)",
             manifest_id,
@@ -491,11 +517,27 @@ class PublishService:
     # -- Convenience: compute manifest checksum ----------------------------
 
     @staticmethod
-    def compute_checksum(object_ids: list[str]) -> str:
-        """Compute a deterministic checksum over sorted object IDs.
+    def compute_checksum(objects: list[PublishedObject]) -> str:
+        """Compute a deterministic checksum over published object contents.
 
-        This is a convenience for sealing manifests. The checksum
-        is SHA-256 over the sorted, newline-joined object IDs.
+        Hashes a stable serialization of each object (sorted by ID),
+        covering payload, lineage, validity windows, and all other
+        content fields — not just identifiers.
         """
-        content = "\n".join(sorted(object_ids))
+        serialized = []
+        for obj in sorted(objects, key=lambda o: o.object_id):
+            record = {
+                "object_id": obj.object_id,
+                "object_type": obj.object_type,
+                "lane": obj.lane,
+                "contract_version": obj.contract_version,
+                "source_ids": sorted(obj.source_ids),
+                "run_id": obj.run_id,
+                "valid_from": obj.valid_from.isoformat() if obj.valid_from else None,
+                "valid_to": obj.valid_to.isoformat() if obj.valid_to else None,
+                "payload": obj.payload,
+                "lineage": obj.lineage,
+            }
+            serialized.append(json.dumps(record, sort_keys=True))
+        content = "\n".join(serialized)
         return f"sha256:{hashlib.sha256(content.encode()).hexdigest()}"

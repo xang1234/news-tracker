@@ -265,17 +265,41 @@ class TestManifestLifecycle:
     async def test_seal_manifest(self, service: PublishService) -> None:
         run_id = await _make_run(service, LANE_NARRATIVE)
         m = await service.create_manifest(LANE_NARRATIVE, run_id)
-        sealed = await service.seal_manifest(
-            m.manifest_id, object_count=10, checksum="sha256:abc"
+        sealed = await service.seal_manifest(m.manifest_id)
+        assert sealed.object_count == 0
+        assert sealed.checksum is not None
+        assert sealed.published_at is not None
+
+    async def test_seal_manifest_with_objects(self, service: PublishService) -> None:
+        run_id, m = await _make_manifest(service)
+        obj = await service.add_object(
+            m.manifest_id,
+            object_type="claim",
+            lane=LANE_NARRATIVE,
+            run_id=run_id,
         )
-        assert sealed.object_count == 10
-        assert sealed.checksum == "sha256:abc"
+        await service.transition_object(obj.object_id, "published")
+        sealed = await service.seal_manifest(m.manifest_id)
+        assert sealed.object_count == 1
+
+    async def test_seal_rejects_non_published_objects(
+        self, service: PublishService
+    ) -> None:
+        run_id, m = await _make_manifest(service)
+        await service.add_object(
+            m.manifest_id,
+            object_type="claim",
+            lane=LANE_NARRATIVE,
+            run_id=run_id,
+        )  # stays draft
+        with pytest.raises(ValueError, match="still in"):
+            await service.seal_manifest(m.manifest_id)
 
     async def test_seal_nonexistent_manifest_raises(
         self, service: PublishService
     ) -> None:
         with pytest.raises(ValueError, match="not found"):
-            await service.seal_manifest("nope", object_count=0)
+            await service.seal_manifest("nope")
 
     async def test_create_manifest_invalid_lane(
         self, service: PublishService
@@ -310,7 +334,7 @@ async def _create_and_seal(
         await service.complete_run(run.run_id)
         run_id = run.run_id
     m = await service.create_manifest(lane, run_id)
-    return await service.seal_manifest(m.manifest_id, object_count=0)
+    return await service.seal_manifest(m.manifest_id)
 
 
 class TestPointerAdvancement:
@@ -380,7 +404,7 @@ class TestPointerAdvancement:
         """Cannot publish from a run that hasn't completed."""
         run_id = await _make_run(service, LANE_NARRATIVE)
         m = await service.create_manifest(LANE_NARRATIVE, run_id)
-        await service.seal_manifest(m.manifest_id, object_count=0)
+        await service.seal_manifest(m.manifest_id)
         with pytest.raises(ValueError, match="not 'completed'"):
             await service.advance_pointer(LANE_NARRATIVE, m.manifest_id)
 
@@ -473,7 +497,7 @@ class TestPublishedObjectTransitions:
         self, service: PublishService
     ) -> None:
         run_id, m = await _make_manifest(service)
-        await service.seal_manifest(m.manifest_id, object_count=0)
+        await service.seal_manifest(m.manifest_id)
         with pytest.raises(ValueError, match="sealed manifest"):
             await service.add_object(
                 m.manifest_id,
@@ -493,7 +517,7 @@ class TestPublishedObjectTransitions:
             run_id=run_id,
         )
         await service.transition_object(obj.object_id, "published")
-        await service.seal_manifest(m.manifest_id, object_count=1)
+        await service.seal_manifest(m.manifest_id)
         with pytest.raises(ValueError, match="sealed"):
             await service.transition_object(obj.object_id, "retracted")
 
@@ -651,21 +675,38 @@ class TestPublishedObjectTransitions:
 class TestComputeChecksum:
     """PublishService.compute_checksum() utility."""
 
+    def _make_obj(self, object_id: str, **kwargs) -> PublishedObject:
+        defaults = dict(
+            object_id=object_id,
+            object_type="claim",
+            manifest_id="m1",
+            lane="narrative",
+            publish_state="published",
+            run_id="r1",
+        )
+        defaults.update(kwargs)
+        return PublishedObject(**defaults)
+
     def test_deterministic(self) -> None:
-        ids = ["obj_b", "obj_a", "obj_c"]
-        assert PublishService.compute_checksum(ids) == PublishService.compute_checksum(ids)
+        objs = [self._make_obj("obj_b"), self._make_obj("obj_a")]
+        assert PublishService.compute_checksum(objs) == PublishService.compute_checksum(objs)
 
     def test_order_independent(self) -> None:
-        assert PublishService.compute_checksum(
-            ["obj_b", "obj_a"]
-        ) == PublishService.compute_checksum(["obj_a", "obj_b"])
+        objs1 = [self._make_obj("obj_b"), self._make_obj("obj_a")]
+        objs2 = [self._make_obj("obj_a"), self._make_obj("obj_b")]
+        assert PublishService.compute_checksum(objs1) == PublishService.compute_checksum(objs2)
 
     def test_format(self) -> None:
-        result = PublishService.compute_checksum(["obj_1"])
+        result = PublishService.compute_checksum([self._make_obj("obj_1")])
         assert result.startswith("sha256:")
         assert len(result) == len("sha256:") + 64
 
-    def test_different_inputs_different_checksums(self) -> None:
+    def test_different_ids_different_checksums(self) -> None:
         assert PublishService.compute_checksum(
-            ["obj_a"]
-        ) != PublishService.compute_checksum(["obj_b"])
+            [self._make_obj("obj_a")]
+        ) != PublishService.compute_checksum([self._make_obj("obj_b")])
+
+    def test_different_payloads_different_checksums(self) -> None:
+        obj1 = self._make_obj("obj_a", payload={"text": "version 1"})
+        obj2 = self._make_obj("obj_a", payload={"text": "version 2"})
+        assert PublishService.compute_checksum([obj1]) != PublishService.compute_checksum([obj2])

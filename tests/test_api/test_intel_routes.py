@@ -257,7 +257,7 @@ class TestPointerEndpoints:
             service.create_manifest(LANE_NARRATIVE, run.run_id)
         )
         loop.run_until_complete(
-            service.seal_manifest(m.manifest_id, object_count=0)
+            service.seal_manifest(m.manifest_id)
         )
         loop.run_until_complete(
             service.advance_pointer(LANE_NARRATIVE, m.manifest_id)
