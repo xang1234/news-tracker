@@ -237,7 +237,7 @@ class PublishService:
             manifest_id=_generate_id("manifest"),
             lane=lane,
             run_id=run_id,
-            contract_version=str(ContractRegistry.CURRENT),
+            contract_version=run.contract_version,
             metadata=metadata or {},
         )
         return await self._repo.create_manifest(manifest)
@@ -375,10 +375,14 @@ class PublishService:
             ValueError: If the manifest doesn't exist, the lane doesn't
                 match, or the object_type is not publishable.
         """
-        # Validate manifest exists and lane matches
+        # Validate manifest exists, is unsealed, and fields match
         manifest = await self._repo.get_manifest(manifest_id)
         if manifest is None:
             raise ValueError(f"Manifest not found: {manifest_id}")
+        if manifest.published_at is not None:
+            raise ValueError(
+                f"Cannot add objects to sealed manifest {manifest_id}"
+            )
         if manifest.lane != lane:
             raise ValueError(
                 f"Object lane {lane!r} does not match manifest lane "
@@ -398,7 +402,7 @@ class PublishService:
             manifest_id=manifest_id,
             lane=lane,
             publish_state="draft",
-            contract_version=str(ContractRegistry.CURRENT),
+            contract_version=manifest.contract_version,
             source_ids=source_ids or [],
             run_id=run_id,
             valid_from=valid_from,
@@ -430,6 +434,13 @@ class PublishService:
         obj = await self._repo.get_published_object(object_id)
         if obj is None:
             raise ValueError(f"Published object not found: {object_id}")
+        # Block transitions on objects in sealed manifests
+        manifest = await self._repo.get_manifest(obj.manifest_id)
+        if manifest is not None and manifest.published_at is not None:
+            raise ValueError(
+                f"Cannot transition object {object_id}: manifest "
+                f"{obj.manifest_id} is sealed"
+            )
         _validate_publish_transition(obj.publish_state, target_state)
         result = await self._repo.update_publish_state(object_id, target_state)
         if result is None:

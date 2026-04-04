@@ -456,6 +456,34 @@ class TestPublishedObjectTransitions:
                 run_id=other_run_id,
             )
 
+    async def test_add_object_to_sealed_manifest_raises(
+        self, service: PublishService
+    ) -> None:
+        run_id, m = await _make_manifest(service)
+        await service.seal_manifest(m.manifest_id, object_count=0)
+        with pytest.raises(ValueError, match="sealed manifest"):
+            await service.add_object(
+                m.manifest_id,
+                object_type="claim",
+                lane=LANE_NARRATIVE,
+                run_id=run_id,
+            )
+
+    async def test_transition_object_in_sealed_manifest_raises(
+        self, service: PublishService
+    ) -> None:
+        run_id, m = await _make_manifest(service)
+        obj = await service.add_object(
+            m.manifest_id,
+            object_type="claim",
+            lane=LANE_NARRATIVE,
+            run_id=run_id,
+        )
+        await service.transition_object(obj.object_id, "published")
+        await service.seal_manifest(m.manifest_id, object_count=1)
+        with pytest.raises(ValueError, match="sealed"):
+            await service.transition_object(obj.object_id, "retracted")
+
     async def test_add_object_invalid_type_raises(
         self, service: PublishService
     ) -> None:

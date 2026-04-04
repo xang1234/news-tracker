@@ -28,7 +28,6 @@ from src.contracts.intelligence.db_schemas import (
     Manifest,
     PublishedObject,
 )
-from src.contracts.intelligence.version import ContractRegistry
 from src.publish.repository import PublishRepository
 
 logger = logging.getLogger(__name__)
@@ -207,7 +206,7 @@ class BundleExporter:
             bundle_id=f"bundle_{uuid.uuid4().hex[:12]}",
             manifest_id=manifest_id,
             lane=manifest.lane,
-            contract_version=str(ContractRegistry.CURRENT),
+            contract_version=manifest.contract_version,
             format="jsonl",
             object_count=len(objects),
             size_bytes=len(content_bytes),
