@@ -303,9 +303,12 @@ class TestManifestLifecycle:
 async def _create_and_seal(
     service: PublishService, lane: str, run_id: str | None = None
 ) -> Manifest:
-    """Helper: create a run + manifest and seal it so it can be published."""
+    """Helper: create a completed run + sealed manifest for publishing."""
     if run_id is None:
-        run_id = await _make_run(service, lane)
+        run = await service.create_run(lane)
+        await service.start_run(run.run_id)
+        await service.complete_run(run.run_id)
+        run_id = run.run_id
     m = await service.create_manifest(lane, run_id)
     return await service.seal_manifest(m.manifest_id, object_count=0)
 
@@ -369,6 +372,16 @@ class TestPointerAdvancement:
         run_id = await _make_run(service, LANE_NARRATIVE)
         m = await service.create_manifest(LANE_NARRATIVE, run_id)
         with pytest.raises(ValueError, match="not been sealed"):
+            await service.advance_pointer(LANE_NARRATIVE, m.manifest_id)
+
+    async def test_pointer_incomplete_run_rejected(
+        self, service: PublishService
+    ) -> None:
+        """Cannot publish from a run that hasn't completed."""
+        run_id = await _make_run(service, LANE_NARRATIVE)
+        m = await service.create_manifest(LANE_NARRATIVE, run_id)
+        await service.seal_manifest(m.manifest_id, object_count=0)
+        with pytest.raises(ValueError, match="not 'completed'"):
             await service.advance_pointer(LANE_NARRATIVE, m.manifest_id)
 
     async def test_get_pointer_empty(self, service: PublishService) -> None:

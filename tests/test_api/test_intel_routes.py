@@ -251,6 +251,8 @@ class TestPointerEndpoints:
         import asyncio
         loop = asyncio.get_event_loop()
         run = loop.run_until_complete(service.create_run(LANE_NARRATIVE))
+        loop.run_until_complete(service.start_run(run.run_id))
+        loop.run_until_complete(service.complete_run(run.run_id))
         m = loop.run_until_complete(
             service.create_manifest(LANE_NARRATIVE, run.run_id)
         )

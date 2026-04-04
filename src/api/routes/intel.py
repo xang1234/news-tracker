@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_publish_service
 from src.api.models import ErrorResponse
+from src.contracts.intelligence.db_schemas import VALID_RUN_STATUSES
 from src.contracts.intelligence.lanes import ALL_LANES, VALID_LANES
 from src.contracts.intelligence.ownership import (
     OwnershipPolicy,
@@ -266,6 +267,11 @@ async def list_runs(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Invalid lane {lane!r}. Must be one of {sorted(VALID_LANES)}",
+        )
+    if run_status is not None and run_status not in VALID_RUN_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid status {run_status!r}. Must be one of {sorted(VALID_RUN_STATUSES)}",
         )
     runs = await service._repo.list_lane_runs(
         lane=lane, status=run_status, limit=limit

@@ -216,13 +216,21 @@ class ConceptRepository:
         return _row_to_alias(row)
 
     async def resolve_alias(self, alias: str) -> Concept | None:
-        """Resolve an alias to its concept (case-insensitive)."""
+        """Resolve an alias to its concept (case-insensitive).
+
+        When multiple concepts share a case-insensitive alias, resolution
+        is deterministic: prefer primary aliases, then exact case match,
+        then earliest concept_id alphabetically.
+        """
         row = await self._db.fetchrow(
             """
             SELECT c.* FROM concepts c
             JOIN concept_aliases ca ON c.concept_id = ca.concept_id
             WHERE lower(ca.alias) = lower($1)
               AND c.is_active = TRUE
+            ORDER BY ca.is_primary DESC,
+                     (ca.alias = $1)::int DESC,
+                     c.concept_id
             LIMIT 1
             """,
             alias,

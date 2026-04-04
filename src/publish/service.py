@@ -324,6 +324,13 @@ class PublishService:
                 f"Cannot advance pointer: manifest {manifest_id} has not "
                 f"been sealed. Call seal_manifest() first."
             )
+        run = await self._repo.get_lane_run(manifest.run_id)
+        if run is None or run.status != "completed":
+            run_status = run.status if run else "missing"
+            raise ValueError(
+                f"Cannot advance pointer: lane run {manifest.run_id} "
+                f"is {run_status!r}, not 'completed'"
+            )
         pointer = await self._repo.advance_pointer(
             lane, manifest_id, metadata=metadata
         )
