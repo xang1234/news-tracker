@@ -140,19 +140,19 @@ def derive_edge(
 ) -> DerivedEdge | None:
     """Derive a graph edge from a single assertion.
 
-    Returns None if the assertion has no object (unary) or falls
-    below the confidence threshold for current edges.
+    Returns None if the assertion has no object (unary) or if the
+    assertion is active but below the confidence threshold.
 
-    Retracted/superseded assertions produce history edges (is_current=False).
+    Active/disputed assertions above threshold → current edges.
+    Retracted/superseded/disputed-below-threshold → history edges.
     """
     if assertion.object_concept_id is None:
         return None
 
     is_current = (
-        assertion.status == "active"
+        assertion.status in ("active", "disputed")
         and assertion.confidence >= confidence_threshold
     )
-    # History edges include everything with an object concept
     if not is_current and assertion.status not in ("retracted", "superseded", "disputed"):
         return None
 
@@ -274,11 +274,16 @@ def build_path_cache(
 
     Only uses current (active, above-threshold) edges for path
     computation — history edges are excluded from traversal.
+    Edges are pre-sorted by confidence DESC globally, so per-concept
+    buckets are already in order.
     """
+    # Sort once globally, then partition into pre-sorted buckets
+    sorted_edges = sorted(current_edges, key=lambda e: -e.confidence)
+
     outgoing: dict[str, list[DerivedEdge]] = {}
     incoming: dict[str, list[DerivedEdge]] = {}
 
-    for edge in current_edges:
+    for edge in sorted_edges:
         outgoing.setdefault(edge.source_concept_id, []).append(edge)
         incoming.setdefault(edge.target_concept_id, []).append(edge)
 
@@ -286,12 +291,8 @@ def build_path_cache(
     return {
         cid: PathCacheEntry(
             concept_id=cid,
-            outgoing=tuple(
-                sorted(outgoing.get(cid, []), key=lambda e: -e.confidence)
-            ),
-            incoming=tuple(
-                sorted(incoming.get(cid, []), key=lambda e: -e.confidence)
-            ),
+            outgoing=tuple(outgoing.get(cid, [])),
+            incoming=tuple(incoming.get(cid, [])),
         )
         for cid in all_concepts
     }

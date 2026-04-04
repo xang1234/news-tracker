@@ -90,8 +90,16 @@ class TestDeriveEdge:
         assert edge is not None
         assert edge.is_current is False
 
-    def test_disputed_produces_history_edge(self) -> None:
+    def test_disputed_above_threshold_is_current(self) -> None:
+        """Disputed assertions are actively contested, not historical."""
         a = _make_assertion(status="disputed", confidence=0.5)
+        edge = derive_edge(a)
+        assert edge is not None
+        assert edge.is_current is True
+        assert edge.assertion_status == "disputed"
+
+    def test_disputed_below_threshold_is_history(self) -> None:
+        a = _make_assertion(status="disputed", confidence=0.1)
         edge = derive_edge(a)
         assert edge is not None
         assert edge.is_current is False
