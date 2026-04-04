@@ -8,13 +8,13 @@ workflows — it provides a lane-compatible interface on top.
 Responsibilities:
     - Map narrative worker processing cycles to LaneRun records
     - Wrap narrative run outputs into publishable object payloads
-    - Extract claim-ready triples from narrative signals
-    - Track lane-level metadata for the narrative pipeline
+    - Wrap signal state into publishable signal payloads
+    - Build source ID lineage for published objects
 
 Usage:
     adapter = NarrativeLaneAdapter(contract_version="0.1.0")
-    lane_run = adapter.create_lane_run(config_snapshot={...})
-    payloads = adapter.extract_payloads(narrative_runs, signals)
+    lane_run_fields = adapter.start_lane_run(config_snapshot={...})
+    payloads = adapter.extract_run_payloads(narrative_runs)
 """
 
 from __future__ import annotations
