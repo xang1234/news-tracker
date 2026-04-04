@@ -8,6 +8,7 @@ fallback) are in separate modules.
 from src.filing.config import FilingConfig
 from src.filing.edgartools_provider import EdgarToolsProvider
 from src.filing.provider import FilingProvider, SECRateLimiter
+from src.filing.sec_api_provider import SecApiProvider
 from src.filing.schemas import (
     VALID_FILING_STATUSES,
     VALID_FILING_TYPES,
@@ -28,4 +29,5 @@ __all__ = [
     "FilingSection",
     "SECPolicy",
     "SECRateLimiter",
+    "SecApiProvider",
 ]
