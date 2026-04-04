@@ -6,6 +6,10 @@ without touching raw claims directly. Every assertion retains
 explicit support and contradiction links for auditability.
 """
 
+from src.assertions.aggregation import (
+    ConfidenceBreakdown,
+    aggregate_assertion,
+)
 from src.assertions.repository import AssertionRepository
 from src.assertions.schemas import (
     VALID_ASSERTION_STATUSES,
@@ -20,6 +24,8 @@ __all__ = [
     "VALID_LINK_TYPES",
     "AssertionClaimLink",
     "AssertionRepository",
+    "ConfidenceBreakdown",
     "ResolvedAssertion",
+    "aggregate_assertion",
     "make_assertion_id",
 ]
