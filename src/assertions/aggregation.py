@@ -25,6 +25,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
+
 from src.assertions.schemas import (
     AssertionClaimLink,
     ResolvedAssertion,
@@ -38,7 +39,6 @@ from src.claims.schemas import EvidenceClaim
 DEFAULT_FRESHNESS_DECAY = 0.01  # exp decay lambda (per day)
 DEFAULT_DIVERSITY_TARGET = 3  # distinct source types for full diversity credit
 DEFAULT_REVIEW_BONUS = 0.1  # confidence boost for review-approved claims
-DEFAULT_CONTRADICTION_PENALTY = 0.5  # weight of contradictions vs support
 DEFAULT_DISPUTED_THRESHOLD = 0.6  # support ratio below this → disputed
 
 
@@ -101,6 +101,7 @@ def aggregate_assertion(
         freshness_decay: Exponential decay lambda per day.
         diversity_target: Distinct source types for full diversity credit.
         review_bonus: Additive bonus for review-approved evidence.
+        disputed_threshold: Support ratio below this marks assertion disputed.
 
     Returns:
         (assertion, breakdown) tuple with the aggregated assertion
