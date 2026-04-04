@@ -93,7 +93,6 @@ class EntityResolver:
         mention: str,
         *,
         concept_type: str | None = None,
-        context_hints: list[str] | None = None,
     ) -> ResolverResult:
         """Resolve a text mention to a canonical concept.
 
@@ -104,8 +103,6 @@ class EntityResolver:
         Args:
             mention: Raw text mention to resolve.
             concept_type: Optional filter (e.g., "issuer", "technology").
-            context_hints: Optional contextual hints (e.g., nearby ticker
-                mentions) that may help disambiguation.
 
         Returns:
             ResolverResult with concept, tier, and confidence.
@@ -114,7 +111,7 @@ class EntityResolver:
         if not mention:
             return ResolverResult(mention=mention)
 
-        # Tier 1: Exact lookup (ticker, CIK, or concept name)
+        # Tier 1: Exact lookup (ticker or concept_id)
         result = await self._resolve_exact(mention, concept_type)
         if result.resolved:
             return result
@@ -138,22 +135,31 @@ class EntityResolver:
         *,
         concept_type: str | None = None,
     ) -> list[ResolverResult]:
-        """Resolve multiple mentions. Convenience wrapper."""
-        results = []
-        for mention in mentions:
-            result = await self.resolve(mention, concept_type=concept_type)
-            results.append(result)
-        return results
+        """Resolve multiple mentions concurrently."""
+        import asyncio
+
+        return await asyncio.gather(
+            *(
+                self.resolve(m, concept_type=concept_type)
+                for m in mentions
+            )
+        )
 
     # -- Tier 1: Exact lookup ----------------------------------------------
 
     async def _resolve_exact(
         self, mention: str, concept_type: str | None
     ) -> ResolverResult:
-        """Try exact ticker/CIK/name lookup."""
-        # Try as ticker → security concept → issuer
+        """Try exact ticker or concept_id lookup."""
+        # Try as ticker → security concept (US exchange first, then
+        # try with exchange suffix like "005930.KS")
+        ticker = mention.upper()
+        exchange = "US"
+        if "." in ticker:
+            parts = ticker.rsplit(".", 1)
+            ticker, exchange = parts[0], parts[1]
         concept = await self._repo.get_concept_for_security(
-            ticker=mention.upper(), exchange="US"
+            ticker=ticker, exchange=exchange
         )
         if concept is not None:
             if concept_type is None or concept.concept_type == concept_type:
