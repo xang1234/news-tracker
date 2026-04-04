@@ -27,7 +27,7 @@ from src.claims.triggers import (
     LOW_CONFIDENCE_THRESHOLD,
     build_merge_proposal,
     build_split_proposal,
-    check_contradiction,
+    check_competing_predicates,
     check_high_impact_predicate,
     check_llm_proposed,
     check_low_confidence,
@@ -331,13 +331,13 @@ class TestCheckLlmProposed:
 # -- Trigger: contradiction -------------------------------------------------
 
 
-class TestCheckContradiction:
-    """Trigger for contradictory claims."""
+class TestCheckCompetingPredicates:
+    """Trigger for competing predicate claims."""
 
     def test_triggers_on_different_predicates(self) -> None:
         claim_a = _make_claim("claim_a", predicate="supplies_to")
         claim_b = _make_claim("claim_b", predicate="competes_with")
-        task = check_contradiction(claim_a, claim_b)
+        task = check_competing_predicates(claim_a, claim_b)
         assert task is not None
         assert task.task_type == "claim_review"
         assert task.trigger_reason == "contradiction"
@@ -347,23 +347,23 @@ class TestCheckContradiction:
     def test_skips_same_predicate(self) -> None:
         claim_a = _make_claim("claim_a", predicate="supplies_to")
         claim_b = _make_claim("claim_b", predicate="supplies_to")
-        assert check_contradiction(claim_a, claim_b) is None
+        assert check_competing_predicates(claim_a, claim_b) is None
 
     def test_skips_different_subjects(self) -> None:
         claim_a = _make_claim("claim_a", subject_concept_id="c1")
         claim_b = _make_claim("claim_b", subject_concept_id="c2")
-        assert check_contradiction(claim_a, claim_b) is None
+        assert check_competing_predicates(claim_a, claim_b) is None
 
     def test_skips_unresolved_concepts(self) -> None:
         claim_a = _make_claim("claim_a", subject_concept_id=None)
         claim_b = _make_claim("claim_b", subject_concept_id=None)
-        assert check_contradiction(claim_a, claim_b) is None
+        assert check_competing_predicates(claim_a, claim_b) is None
 
     def test_deterministic_task_id(self) -> None:
         claim_a = _make_claim("claim_a", predicate="supplies_to")
         claim_b = _make_claim("claim_b", predicate="competes_with")
-        task1 = check_contradiction(claim_a, claim_b)
-        task2 = check_contradiction(claim_b, claim_a)
+        task1 = check_competing_predicates(claim_a, claim_b)
+        task2 = check_competing_predicates(claim_b, claim_a)
         assert task1.task_id == task2.task_id
 
 

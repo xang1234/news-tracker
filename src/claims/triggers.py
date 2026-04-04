@@ -8,7 +8,7 @@ is responsible for persisting any returned tasks.
 Trigger inventory:
     - check_low_confidence: Fuzzy match with close alternatives
     - check_llm_proposed: Any LLM-gated resolution
-    - check_contradiction: Conflicting claims about same entities
+    - check_competing_predicates: Different predicates on same entities
     - check_high_impact_predicate: Risky predicates that need review
 """
 
@@ -128,17 +128,18 @@ def check_llm_proposed(
     )
 
 
-def check_contradiction(
+def check_competing_predicates(
     claim_a: EvidenceClaim,
     claim_b: EvidenceClaim,
 ) -> ReviewTask | None:
-    """Trigger review when two claims contradict each other.
+    """Trigger review when two claims assert different predicates about the same entities.
 
-    Two claims contradict if they share the same subject and object
-    concept IDs but assert different predicates, or if they assert
-    the same predicate with conflicting confidence directions.
+    Flags for human review — not all predicate differences are true
+    contradictions (e.g., "supplies_to" and "competes_with" can
+    coexist). The reviewer decides whether both claims are valid or
+    one should be retracted.
 
-    Both claims must have resolved concepts to detect contradiction.
+    Both claims must have resolved concepts to detect the overlap.
     """
     if not claim_a.subject_concept_id or not claim_b.subject_concept_id:
         return None

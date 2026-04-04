@@ -13,8 +13,6 @@ from typing import Any
 
 from src.claims.review import (
     VALID_RESOLUTIONS,
-    VALID_TASK_STATUSES,
-    VALID_TASK_TYPES,
     ReviewTask,
     validate_review_transition,
 )
@@ -175,11 +173,6 @@ class ReviewRepository:
         Returns (previous_status, updated_task).
         Raises ValueError on invalid transition or missing task.
         """
-        if target_status not in VALID_TASK_STATUSES:
-            raise ValueError(
-                f"Invalid target status {target_status!r}. "
-                f"Must be one of {sorted(VALID_TASK_STATUSES)}"
-            )
         if resolution is not None and resolution not in VALID_RESOLUTIONS:
             raise ValueError(
                 f"Invalid resolution {resolution!r}. "
