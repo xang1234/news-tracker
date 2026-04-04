@@ -202,6 +202,11 @@ class TestSourceIds:
 class TestObjectTypes:
     """Narrative object type registry."""
 
-    def test_object_types_defined(self) -> None:
-        assert "narrative_run_snapshot" in NARRATIVE_OBJECT_TYPES
-        assert "narrative_signal" in NARRATIVE_OBJECT_TYPES
+    def test_object_types_match_ownership_policy(self) -> None:
+        """Narrative types must be in OwnershipPolicy.PUBLISHABLE_OBJECT_TYPES."""
+        from src.contracts.intelligence.ownership import OwnershipPolicy
+
+        for ot in NARRATIVE_OBJECT_TYPES:
+            assert ot in OwnershipPolicy.PUBLISHABLE_OBJECT_TYPES, (
+                f"{ot!r} not in PUBLISHABLE_OBJECT_TYPES"
+            )

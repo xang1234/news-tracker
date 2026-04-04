@@ -29,8 +29,10 @@ from src.narrative.schemas import NarrativeRun, NarrativeSignalState
 
 # -- Valid output types for the narrative lane ------------------------------
 
+# Must match OwnershipPolicy.PUBLISHABLE_OBJECT_TYPES in
+# src/contracts/intelligence/ownership.py
 NARRATIVE_OBJECT_TYPES = frozenset(
-    {"narrative_run_snapshot", "narrative_signal"}
+    {"narrative_run", "signal"}
 )
 
 
