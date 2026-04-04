@@ -148,7 +148,6 @@ def check_competing_predicates(
     # Object concepts must also match (or both be None)
     if claim_a.object_concept_id != claim_b.object_concept_id:
         return None
-    # Same predicate is not a contradiction
     if claim_a.predicate == claim_b.predicate:
         return None
 
