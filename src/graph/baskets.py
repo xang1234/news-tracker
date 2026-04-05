@@ -45,7 +45,6 @@ class BasketMember:
         best_score: Highest path score among all paths to this concept.
         best_sign: Sign of the best-scoring path.
         min_hops: Closest path distance (1 or 2).
-        path_count: Total paths reaching this concept.
         positive_paths: Count of positive-sign paths.
         negative_paths: Count of negative-sign paths.
         paths: All paths to this concept, best first.
@@ -56,10 +55,14 @@ class BasketMember:
     best_score: float
     best_sign: int
     min_hops: int
-    path_count: int
     positive_paths: int
     negative_paths: int
     paths: list[ScoredPath] = field(default_factory=list)
+
+    @property
+    def path_count(self) -> int:
+        """Total paths reaching this concept."""
+        return len(self.paths)
 
     @property
     def is_second_order(self) -> bool:
@@ -101,7 +104,6 @@ class ThematicBasket:
         source_concept_id: The theme or seed concept.
         beneficiaries: Positive-sign members, best score first.
         at_risk: Negative-sign members, best score first.
-        member_count: Total unique concepts in the basket.
         first_order_count: Members reachable in 1 hop.
         second_order_count: Members reachable only in 2 hops.
         computed_at: When this basket was assembled.
@@ -110,12 +112,16 @@ class ThematicBasket:
     source_concept_id: str
     beneficiaries: list[BasketMember] = field(default_factory=list)
     at_risk: list[BasketMember] = field(default_factory=list)
-    member_count: int = 0
     first_order_count: int = 0
     second_order_count: int = 0
     computed_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
+
+    @property
+    def member_count(self) -> int:
+        """Total unique concepts in the basket."""
+        return len(self.beneficiaries) + len(self.at_risk)
 
     def to_dict(self) -> dict[str, Any]:
         """Summary serialization for publication."""
@@ -164,7 +170,6 @@ def _build_member(
         best_score=best.path_score,
         best_sign=best.path_sign,
         min_hops=min(p.hops for p in paths),
-        path_count=len(paths),
         positive_paths=positive,
         negative_paths=negative,
         paths=list(paths),
@@ -217,7 +222,6 @@ def build_thematic_basket(
         source_concept_id=source_concept_id,
         beneficiaries=beneficiaries,
         at_risk=at_risk,
-        member_count=len(all_members),
         first_order_count=first_order,
         second_order_count=second_order,
         computed_at=now,
