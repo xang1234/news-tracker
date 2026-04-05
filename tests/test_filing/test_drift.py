@@ -304,23 +304,26 @@ class TestPeerStats:
     """Mean and standard deviation of peer magnitudes."""
 
     def test_basic(self) -> None:
-        mean, std = _peer_stats([0.2, 0.4, 0.6])
+        mean, std, has = _peer_stats([0.2, 0.4, 0.6])
+        assert has is True
         assert abs(mean - 0.4) < 0.001
         assert std > 0
 
     def test_single_peer(self) -> None:
-        mean, std = _peer_stats([0.3])
+        mean, std, has = _peer_stats([0.3])
+        assert has is True
         assert mean == 0.3
         assert std == 0.0
 
     def test_no_peers(self) -> None:
-        import math
-        mean, std = _peer_stats([])
-        assert math.isnan(mean)
-        assert math.isnan(std)
+        mean, std, has = _peer_stats([])
+        assert has is False
+        assert mean == 0.0
+        assert std == 0.0
 
     def test_identical_values(self) -> None:
-        mean, std = _peer_stats([0.5, 0.5, 0.5])
+        mean, std, has = _peer_stats([0.5, 0.5, 0.5])
+        assert has is True
         assert mean == 0.5
         assert std == 0.0
 
@@ -469,7 +472,7 @@ class TestComputeDriftDecomposition:
         reg = next(d for d in result.dimensions if d.dimension == "regulatory")
         assert "legal proceedings" in reg.section_names
         assert "regulatory matters" in reg.section_names
-        assert reg.section_count == 2
+        assert len(reg.section_names) == 2
 
     def test_custom_unusual_threshold(self) -> None:
         """Higher threshold makes it harder to flag as unusual."""

@@ -76,6 +76,12 @@ DIMENSION_SECTIONS: dict[str, frozenset[str]] = {
 Z_SCORE_CAP = 3.0
 UNUSUAL_THRESHOLD = 1.5
 
+# Reverse lookup: normalized section name → dimension (O(1) exact match)
+_SECTION_DIM_EXACT: dict[str, str] = {}
+for _dim, _names in DIMENSION_SECTIONS.items():
+    for _name in _names:
+        _SECTION_DIM_EXACT[_name] = _dim
+
 
 # -- Section change (intermediate representation) ----------------------------
 
@@ -113,12 +119,11 @@ class DimensionDrift:
         dimension: Which business dimension (strategy, risk, etc.).
         magnitude: 0-1, how much this dimension changed for the issuer.
         word_count_delta: Net word change across dimension sections.
-        peer_mean: Average magnitude across peers (NaN if no peers).
-        peer_std: Std dev of peer magnitudes (NaN if no peers).
+        peer_mean: Average magnitude across peers (0 if no peers).
+        peer_std: Std dev of peer magnitudes (0 if no peers).
         z_score: Peer-normalized deviation (0 if no peers).
         is_unusual: Whether |z_score| exceeds threshold.
         section_names: Which sections contributed to this dimension.
-        section_count: Number of sections in this dimension.
     """
 
     dimension: str
@@ -129,7 +134,6 @@ class DimensionDrift:
     z_score: float
     is_unusual: bool
     section_names: list[str] = field(default_factory=list)
-    section_count: int = 0
 
 
 # -- Complete decomposition result -------------------------------------------
@@ -173,7 +177,7 @@ class DriftDecomposition:
                     "z_score": round(d.z_score, 4),
                     "is_unusual": d.is_unusual,
                     "section_names": d.section_names,
-                    "section_count": d.section_count,
+                    "section_count": len(d.section_names),
                 }
                 for d in self.dimensions
             ],
@@ -188,14 +192,13 @@ class DriftDecomposition:
 def _section_to_dimension(section_name: str) -> str | None:
     """Map a normalized section name to its drift dimension.
 
-    Tries exact match first, then substring containment.
-    Returns None if the section doesn't map to any dimension.
+    O(1) exact lookup first, then substring containment fallback
+    for long SEC headers like "management's discussion and analysis
+    of financial condition and results of operations".
     """
-    for dim, names in DIMENSION_SECTIONS.items():
-        if section_name in names:
-            return dim
-    # Substring fallback: "management's discussion and analysis of financial
-    # condition" should still match the "capex" dimension.
+    exact = _SECTION_DIM_EXACT.get(section_name)
+    if exact is not None:
+        return exact
     for dim, names in DIMENSION_SECTIONS.items():
         for name in names:
             if name in section_name or section_name in name:
@@ -303,19 +306,20 @@ def _z_score(value: float, mean: float, std: float) -> float:
     return max(-Z_SCORE_CAP, min(Z_SCORE_CAP, raw))
 
 
-def _peer_stats(values: list[float]) -> tuple[float, float]:
+def _peer_stats(values: list[float]) -> tuple[float, float, bool]:
     """Compute mean and std for peer magnitudes.
 
-    Returns (mean, std). Returns (NaN, NaN) if no values.
+    Returns (mean, std, has_peers). When has_peers is False,
+    mean and std are 0.0 — caller should skip normalization.
     """
     if not values:
-        return float("nan"), float("nan")
+        return 0.0, 0.0, False
     n = len(values)
     mean = sum(values) / n
     if n < 2:
-        return mean, 0.0
+        return mean, 0.0, True
     variance = sum((v - mean) ** 2 for v in values) / (n - 1)
-    return mean, math.sqrt(variance)
+    return mean, math.sqrt(variance), True
 
 
 # -- Main compute function ---------------------------------------------------
@@ -373,11 +377,8 @@ def compute_drift_decomposition(
         word_delta = sum(c.word_count_delta for c in dim_changes)
         section_names = sorted({c.section_name for c in dim_changes})
 
-        peer_mean, peer_std = _peer_stats(peer_by_dim[dim])
-        if math.isnan(peer_mean):
-            z = 0.0
-        else:
-            z = _z_score(magnitude, peer_mean, peer_std)
+        peer_mean, peer_std, has_peers = _peer_stats(peer_by_dim[dim])
+        z = _z_score(magnitude, peer_mean, peer_std) if has_peers else 0.0
 
         is_unusual = abs(z) >= unusual_threshold
         if is_unusual:
@@ -387,12 +388,11 @@ def compute_drift_decomposition(
             dimension=dim,
             magnitude=round(magnitude, 4),
             word_count_delta=word_delta,
-            peer_mean=round(peer_mean, 4) if not math.isnan(peer_mean) else 0.0,
-            peer_std=round(peer_std, 4) if not math.isnan(peer_std) else 0.0,
+            peer_mean=round(peer_mean, 4),
+            peer_std=round(peer_std, 4),
             z_score=round(z, 4),
             is_unusual=is_unusual,
             section_names=section_names,
-            section_count=len(dim_changes),
         ))
 
     return DriftDecomposition(

@@ -228,15 +228,19 @@ def _get_section_weight(section_name: str) -> float:
     return DEFAULT_SECTION_WEIGHT
 
 
-def _count_term_mentions(content: str, terms: list[str]) -> dict[str, int]:
+def _count_term_mentions(
+    content: str,
+    terms: list[str],
+    terms_lower: list[str],
+) -> dict[str, int]:
     """Count case-insensitive mentions of each term in content.
 
-    Returns dict mapping term -> count. Only terms with >0 matches.
+    Returns dict mapping original term -> count. Only terms with >0 matches.
+    Caller provides pre-lowercased terms to avoid per-section re-lowering.
     """
     content_lower = content.lower()
     counts: dict[str, int] = {}
-    for term in terms:
-        term_lower = term.lower()
+    for term, term_lower in zip(terms, terms_lower):
         count = content_lower.count(term_lower)
         if count > 0:
             counts[term] = count
@@ -255,19 +259,18 @@ def _compute_section_signals(
     if not keywords:
         return []
 
+    keywords_lower = [k.lower() for k in keywords]
     signals: list[SectionSignal] = []
     for section in sections:
         if section.word_count == 0:
             continue
-        mentions = _count_term_mentions(section.content, keywords)
+        mentions = _count_term_mentions(section.content, keywords, keywords_lower)
         if not mentions:
             continue
         total_mentions = sum(mentions.values())
         density = total_mentions / section.word_count * 1000
         weight = _get_section_weight(section.section_name)
-        # Strength combines density and section importance.
-        # Cap density contribution at 1.0 to prevent outlier sections
-        # from dominating.
+        # Cap density contribution to prevent outlier sections from dominating
         density_factor = min(1.0, density / DENSITY_SATURATION)
         strength = density_factor * weight
 
@@ -324,16 +327,14 @@ def _compute_section_coverage(
     if not sections:
         return 0.0
 
-    total_weight = sum(_get_section_weight(s.section_name) for s in sections)
+    # Compute weights once per section, reuse for both total and matched
+    weights = {s.section_id: _get_section_weight(s.section_name) for s in sections}
+    total_weight = sum(weights.values())
     if total_weight == 0:
         return 0.0
 
     matched_ids = {s.section_id for s in signals}
-    matched_weight = sum(
-        _get_section_weight(s.section_name)
-        for s in sections
-        if s.section_id in matched_ids
-    )
+    matched_weight = sum(w for sid, w in weights.items() if sid in matched_ids)
     return matched_weight / total_weight
 
 

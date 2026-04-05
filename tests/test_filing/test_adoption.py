@@ -73,19 +73,24 @@ def _make_fact(
 # -- Term counting tests ---------------------------------------------------
 
 
+def _count(content: str, terms: list[str]) -> dict[str, int]:
+    """Test helper wrapping _count_term_mentions with pre-lowered terms."""
+    return _count_term_mentions(content, terms, [t.lower() for t in terms])
+
+
 class TestTermCounting:
     """Case-insensitive term matching in section content."""
 
     def test_single_term(self) -> None:
-        counts = _count_term_mentions("HBM memory is growing. HBM demand.", ["HBM"])
+        counts = _count("HBM memory is growing. HBM demand.", ["HBM"])
         assert counts == {"HBM": 2}
 
     def test_case_insensitive(self) -> None:
-        counts = _count_term_mentions("hbm HBM Hbm", ["HBM"])
+        counts = _count("hbm HBM Hbm", ["HBM"])
         assert counts == {"HBM": 3}
 
     def test_multiple_terms(self) -> None:
-        counts = _count_term_mentions(
+        counts = _count(
             "HBM memory is used in GPU data centers",
             ["HBM", "GPU", "DRAM"],
         )
@@ -93,20 +98,20 @@ class TestTermCounting:
         assert "DRAM" not in counts
 
     def test_no_matches(self) -> None:
-        counts = _count_term_mentions("nothing relevant here", ["HBM"])
+        counts = _count("nothing relevant here", ["HBM"])
         assert counts == {}
 
     def test_empty_content(self) -> None:
-        counts = _count_term_mentions("", ["HBM"])
+        counts = _count("", ["HBM"])
         assert counts == {}
 
     def test_empty_terms(self) -> None:
-        counts = _count_term_mentions("some content", [])
+        counts = _count("some content", [])
         assert counts == {}
 
     def test_substring_matching(self) -> None:
         """Terms match as substrings — 'HBM' matches in 'HBM3e'."""
-        counts = _count_term_mentions("HBM3e production ramping", ["HBM"])
+        counts = _count("HBM3e production ramping", ["HBM"])
         assert counts == {"HBM": 1}
 
 
