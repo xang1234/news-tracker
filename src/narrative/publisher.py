@@ -276,12 +276,7 @@ def prepare_narrative_publication(
         return NarrativePublicationResult(
             published=False,
             lane_health=lane_health,
-            block_reason=(
-                f"Lane {lane_health.lane} is blocked: "
-                f"freshness={lane_health.freshness.value}, "
-                f"quality={lane_health.quality.value}, "
-                f"quarantine={lane_health.quarantine.value}"
-            ),
+            block_reason=lane_health.format_block_reason(),
         )
 
     # Extract payloads

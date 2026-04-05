@@ -98,6 +98,15 @@ class LaneHealthStatus:
     quarantine_reason: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
+    def format_block_reason(self) -> str:
+        """Human-readable block reason string for publication results."""
+        return (
+            f"Lane {self.lane} is blocked: "
+            f"freshness={self.freshness.value}, "
+            f"quality={self.quality.value}, "
+            f"quarantine={self.quarantine.value}"
+        )
+
 
 # -- QuarantineRecord -----------------------------------------------------
 

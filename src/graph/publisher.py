@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from src.graph.baskets import BasketMember, ThematicBasket
+from src.graph.baskets import ThematicBasket
 from src.graph.path_scoring import ScoredPath
 from src.publish.lane_health import LaneHealthStatus, PublishReadiness
 
@@ -231,12 +231,7 @@ def prepare_structural_publication(
         return StructuralPublicationResult(
             published=False,
             lane_health=lane_health,
-            block_reason=(
-                f"Lane {lane_health.lane} is blocked: "
-                f"freshness={lane_health.freshness.value}, "
-                f"quality={lane_health.quality.value}, "
-                f"quarantine={lane_health.quarantine.value}"
-            ),
+            block_reason=lane_health.format_block_reason(),
         )
 
     path_explanations = [build_path_explanation(p) for p in paths]
