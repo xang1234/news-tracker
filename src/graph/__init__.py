@@ -26,6 +26,14 @@ from src.graph.schemas import (
     CausalEdge,
     CausalNode,
 )
+from src.graph.publisher import (
+    BasketPayload,
+    PathExplanation,
+    StructuralPublicationResult,
+    build_basket_payload,
+    build_path_explanation,
+    prepare_structural_publication,
+)
 from src.graph.path_scoring import (
     ScoredEdge,
     ScoredPath,
@@ -44,26 +52,32 @@ from src.graph.structural import (
 
 __all__ = [
     "BasketMember",
+    "BasketPayload",
     "CausalEdge",
     "CausalGraph",
     "CausalNode",
     "GraphConfig",
     "GraphRepository",
+    "PathExplanation",
     "PropagationImpact",
     "SEED_VERSION",
     "ScoredEdge",
     "ScoredPath",
     "SentimentPropagation",
+    "StructuralPublicationResult",
     "StructuralRelation",
     "StructuralSnapshot",
     "ThematicBasket",
     "VALID_NODE_TYPES",
     "VALID_RELATION_TYPES",
+    "build_basket_payload",
+    "build_path_explanation",
     "build_structural_snapshot",
     "build_thematic_basket",
     "get_predicate_sign",
     "score_edge",
     "score_paths_from",
+    "prepare_structural_publication",
     "seed_graph",
     "translate_derived_edge",
 ]
