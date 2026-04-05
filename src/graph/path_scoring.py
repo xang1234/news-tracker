@@ -39,6 +39,8 @@ DEFAULT_DIVERSITY_CEILING = 3
 DEFAULT_VOLUME_CEILING = 5
 DEFAULT_MIN_PATH_SCORE = 0.01
 
+_LN2 = math.log(2)
+
 
 # -- Scored edge ---------------------------------------------------------------
 
@@ -72,14 +74,12 @@ class PathScoreBreakdown:
         freshness_product: Product of freshness factors.
         corroboration_product: Product of corroboration factors.
         hop_decay: Decay factor applied for path length.
-        composite: Final path score.
     """
 
     confidence_product: float
     freshness_product: float
     corroboration_product: float
     hop_decay: float
-    composite: float
 
 
 # -- Scored path ---------------------------------------------------------------
@@ -147,7 +147,7 @@ def compute_freshness_factor(
     if valid_from is None:
         return DEFAULT_FRESHNESS_UNKNOWN
     days = max(0.0, (now - valid_from).total_seconds() / 86400)
-    return math.exp(-0.693 * days / half_life_days)
+    return math.exp(-_LN2 * days / half_life_days)
 
 
 def compute_corroboration_factor(
@@ -244,7 +244,6 @@ def _make_path(
             freshness_product=round(fresh_prod, 4),
             corroboration_product=round(corr_prod, 4),
             hop_decay=round(decay, 4),
-            composite=round(composite, 4),
         ),
         edges=list(scored_edges),
         intermediate_concept_id=(
@@ -299,23 +298,23 @@ def score_paths_from(
 
     paths: list[ScoredPath] = []
 
-    # 1-hop paths
-    for rel in adj.get(source_concept_id, []):
-        se = score_edge(rel, now, **score_kwargs)
+    # Score first-hop edges once, reuse in both 1-hop and 2-hop paths
+    first_hop: list[tuple[StructuralRelation, ScoredEdge]] = [
+        (rel, score_edge(rel, now, **score_kwargs))
+        for rel in adj.get(source_concept_id, [])
+    ]
+
+    for rel, se in first_hop:
         path = _make_path([se], hop_decay)
         if path.path_score >= min_path_score:
             paths.append(path)
 
-    # 2-hop paths
     if max_hops >= 2:
-        for rel1 in adj.get(source_concept_id, []):
-            se1 = score_edge(rel1, now, **score_kwargs)
+        for rel1, se1 in first_hop:
             mid = rel1.target_concept_id
-            # Don't loop back to source
             if mid == source_concept_id:
                 continue
             for rel2 in adj.get(mid, []):
-                # Don't loop back to source or intermediate
                 if rel2.target_concept_id in (source_concept_id, mid):
                     continue
                 se2 = score_edge(rel2, now, **score_kwargs)
