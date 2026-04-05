@@ -322,7 +322,7 @@ class TestDataclasses:
             )
 
     def test_valid_metric_types_complete(self) -> None:
-        assert len(VALID_METRIC_TYPES) == 4
+        assert len(VALID_METRIC_TYPES) == 6
 
     def test_skipped_count_clamped(self) -> None:
         """Inconsistent inputs don't produce negative skipped_count."""

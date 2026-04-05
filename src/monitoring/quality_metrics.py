@@ -34,6 +34,8 @@ VALID_METRIC_TYPES = frozenset({
     "unresolved_entities",
     "filing_parse_quality",
     "stale_evidence",
+    "lane_failure_rate",
+    "lane_freshness_budget",
 })
 
 
