@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from src.filing.alignment import SectionAlignment, SectionDiff, normalize_section_name
+from src.filing.alignment import SectionAlignment, SectionDiff
 
 
 # -- Drift dimensions --------------------------------------------------------
