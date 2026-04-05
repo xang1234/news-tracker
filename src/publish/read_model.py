@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from src.contracts.intelligence.db_schemas import Manifest, PublishedObject
@@ -111,7 +111,14 @@ class ReadModelBuilder:
             ValueError: If the object type is not publishable.
         """
         OwnershipPolicy.validate_publishable_type(obj.object_type)
+        return self._build_record_unchecked(manifest, obj)
 
+    def _build_record_unchecked(
+        self,
+        manifest: Manifest,
+        obj: PublishedObject,
+    ) -> ReadModelRecord:
+        """Build a record without type validation (caller pre-validated)."""
         return ReadModelRecord(
             record_id=make_record_id(manifest.manifest_id, obj.object_id),
             manifest_id=manifest.manifest_id,
@@ -127,7 +134,7 @@ class ReadModelBuilder:
             payload=dict(obj.payload),
             lineage=dict(obj.lineage),
             published_at=manifest.published_at,
-            metadata=dict(obj.lineage) if not obj.lineage else {
+            metadata={
                 "manifest_checksum": manifest.checksum,
                 "manifest_object_count": manifest.object_count,
             },
@@ -150,11 +157,16 @@ class ReadModelBuilder:
         Returns:
             List of ReadModelRecord for materialization.
         """
+        # Validate unique object types once upfront
+        unique_types = {obj.object_type for obj in objects}
+        for ot in unique_types:
+            OwnershipPolicy.validate_publishable_type(ot)
+
         records: list[ReadModelRecord] = []
         for obj in objects:
             if published_only and obj.publish_state != "published":
                 continue
-            records.append(self.build_record(manifest, obj))
+            records.append(self._build_record_unchecked(manifest, obj))
         return records
 
     def build_summary(
