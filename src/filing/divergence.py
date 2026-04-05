@@ -329,7 +329,7 @@ def _check_lagging_adoption(
     adoption: FilingAdoptionScore,
     now: datetime,
 ) -> DivergenceAlert | None:
-    """Moderate narrative with partial but growing filing adoption.
+    """Strong narrative with partial but growing filing adoption.
 
     Informational: theme is starting to appear in filings but
     hasn't fully caught up. Temporal consistency between thresholds
@@ -401,22 +401,24 @@ def check_divergence(
 
     alerts: list[DivergenceAlert] = []
 
-    # Narrative/adoption divergence checks
-    alert = _check_narrative_without_filing(
+    # Lagging adoption is a more specific diagnosis than narrative-
+    # without-filing (same preconditions plus temporal growth signal).
+    # Check it first; if it fires, skip the blunter hype-risk alert.
+    lagging = _check_lagging_adoption(
         issuer_concept_id, theme_concept_id,
         narrative_strength, adoption, now,
     )
-    if alert is not None:
-        alerts.append(alert)
+    if lagging is not None:
+        alerts.append(lagging)
+    else:
+        alert = _check_narrative_without_filing(
+            issuer_concept_id, theme_concept_id,
+            narrative_strength, adoption, now,
+        )
+        if alert is not None:
+            alerts.append(alert)
 
     alert = _check_filing_without_narrative(
-        issuer_concept_id, theme_concept_id,
-        narrative_strength, adoption, now,
-    )
-    if alert is not None:
-        alerts.append(alert)
-
-    alert = _check_lagging_adoption(
         issuer_concept_id, theme_concept_id,
         narrative_strength, adoption, now,
     )

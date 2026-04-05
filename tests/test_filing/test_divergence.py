@@ -500,10 +500,10 @@ class TestCheckDivergence:
     """Full divergence check pipeline."""
 
     def test_hype_scenario(self) -> None:
-        """Strong narrative, weak adoption, no drift."""
+        """Strong narrative, weak adoption, no temporal growth."""
         alerts = check_divergence(
             ISSUER, THEME, 75.0,
-            _make_adoption(score=0.05),
+            _make_adoption(score=0.05, temporal_consistency=0.1, period_count=1),
             now=NOW,
         )
         reasons = {a.reason for a in alerts}
@@ -539,7 +539,7 @@ class TestCheckDivergence:
         ])
         alerts = check_divergence(
             ISSUER, THEME, 75.0,
-            _make_adoption(score=0.05),
+            _make_adoption(score=0.05, temporal_consistency=0.1, period_count=1),
             drift=drift,
             now=NOW,
         )
@@ -551,7 +551,7 @@ class TestCheckDivergence:
         """No drift provided → no adverse/contradictory checks."""
         alerts = check_divergence(
             ISSUER, THEME, 75.0,
-            _make_adoption(score=0.05),
+            _make_adoption(score=0.05, temporal_consistency=0.1, period_count=1),
             drift=None,
             now=NOW,
         )
@@ -562,7 +562,7 @@ class TestCheckDivergence:
     def test_all_alerts_have_correct_ids(self) -> None:
         alerts = check_divergence(
             ISSUER, THEME, 75.0,
-            _make_adoption(score=0.05),
+            _make_adoption(score=0.05, temporal_consistency=0.1, period_count=1),
             now=NOW,
         )
         for alert in alerts:
@@ -579,10 +579,23 @@ class TestCheckDivergence:
         )
         assert alerts == []
 
+    def test_lagging_suppresses_hype(self) -> None:
+        """When lagging adoption fires, narrative_without_filing is suppressed."""
+        adoption = _make_adoption(
+            score=0.05, temporal_consistency=0.5,
+            period_count=4, periods_with_signal=2,
+        )
+        alerts = check_divergence(
+            ISSUER, THEME, 75.0, adoption, now=NOW,
+        )
+        reasons = {a.reason for a in alerts}
+        assert DivergenceReason.LAGGING_ADOPTION.value in reasons
+        assert DivergenceReason.NARRATIVE_WITHOUT_FILING.value not in reasons
+
     def test_to_dict(self) -> None:
         alerts = check_divergence(
             ISSUER, THEME, 75.0,
-            _make_adoption(score=0.05),
+            _make_adoption(score=0.05, temporal_consistency=0.1, period_count=1),
             now=NOW,
         )
         assert len(alerts) > 0
