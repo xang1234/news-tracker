@@ -15,6 +15,11 @@ from src.filing.adoption import (
     compute_filing_adoption,
 )
 from src.filing.config import FilingConfig
+from src.filing.divergence import (
+    DivergenceAlert,
+    DivergenceReason,
+    check_divergence,
+)
 from src.filing.drift import (
     DimensionDrift,
     DriftDecomposition,
@@ -47,6 +52,8 @@ from src.filing.persistence import (
 __all__ = [
     "AdoptionBreakdown",
     "DimensionDrift",
+    "DivergenceAlert",
+    "DivergenceReason",
     "DriftDecomposition",
     "VALID_FILING_STATUSES",
     "VALID_FILING_TYPES",
@@ -70,6 +77,7 @@ __all__ = [
     "SectionSignal",
     "SecApiProvider",
     "XBRLFactRecord",
+    "check_divergence",
     "classify_by_dimension",
     "compute_dimension_magnitude",
     "compute_drift_decomposition",
