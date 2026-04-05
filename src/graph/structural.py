@@ -232,23 +232,20 @@ def build_structural_snapshot(
 
     current: list[StructuralRelation] = []
     history: list[StructuralRelation] = []
+    predicate_counts: dict[str, int] = {}
+    concepts: set[str] = set()
 
     for edge in edges:
         relation = translate_derived_edge(edge)
         if relation.is_current:
             current.append(relation)
+            predicate_counts[relation.predicate] = (
+                predicate_counts.get(relation.predicate, 0) + 1
+            )
+            concepts.add(relation.source_concept_id)
+            concepts.add(relation.target_concept_id)
         else:
             history.append(relation)
-
-    # Compute metadata from current relations
-    predicate_counts: dict[str, int] = {}
-    concepts: set[str] = set()
-    for rel in current:
-        predicate_counts[rel.predicate] = (
-            predicate_counts.get(rel.predicate, 0) + 1
-        )
-        concepts.add(rel.source_concept_id)
-        concepts.add(rel.target_concept_id)
 
     return StructuralSnapshot(
         current=current,
