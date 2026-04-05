@@ -21,7 +21,6 @@ Publication flow:
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -165,8 +164,8 @@ def build_symbol_rollups(
             s["run_ids"].append(run.run_id)
             s["doc_count"] += count
             s["max_composite"] = max(s["max_composite"], composite)
-            s["sentiment_sum"] += run.avg_sentiment * run.doc_count
-            s["sentiment_weight"] += run.doc_count
+            s["sentiment_sum"] += run.avg_sentiment * count
+            s["sentiment_weight"] += count
 
     rollups = []
     for symbol, s in sorted(symbol_data.items()):
