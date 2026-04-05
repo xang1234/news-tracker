@@ -205,7 +205,7 @@ def check_replay_coverage(
             f"confirmation={components.confirmation.score:.2f}, "
             f"novelty={components.novelty_persistence.score:.2f})"
             if has_strong_component
-            else "Signal triggered but no component score > 0.3 — investigate"
+            else f"Signal triggered but no component score > {STRONG_COMPONENT_THRESHOLD} — investigate"
         ),
         details={
             "run_id": run.run_id,
