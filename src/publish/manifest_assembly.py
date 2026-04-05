@@ -72,7 +72,7 @@ class LaneContribution:
     lane: str
     manifest_id: str
     object_count: int
-    readiness: str  # PublishReadiness value
+    readiness: PublishReadiness
 
 
 @dataclass(frozen=True)
@@ -104,8 +104,6 @@ class CompositeManifest:
         composite_id: Deterministic ID from included manifest IDs.
         contributions: Included lane contributions.
         total_object_count: Sum of objects across all lanes.
-        lanes_included: Which lanes are in this composite.
-        lanes_excluded: Which lanes were skipped (with reasons).
         exclusion_reasons: Lane → reason for exclusion.
         contract_version: Contract version for this composite.
         assembled_at: When assembly was performed.
@@ -114,13 +112,21 @@ class CompositeManifest:
     composite_id: str
     contributions: list[LaneContribution] = field(default_factory=list)
     total_object_count: int = 0
-    lanes_included: list[str] = field(default_factory=list)
-    lanes_excluded: list[str] = field(default_factory=list)
     exclusion_reasons: dict[str, str] = field(default_factory=dict)
     contract_version: str = ""
     assembled_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
+
+    @property
+    def lanes_included(self) -> list[str]:
+        """Which lanes are in this composite."""
+        return [c.lane for c in self.contributions]
+
+    @property
+    def lanes_excluded(self) -> list[str]:
+        """Which lanes were skipped."""
+        return sorted(self.exclusion_reasons.keys())
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for audit and logging."""
@@ -214,6 +220,7 @@ def assemble_composite_manifest(
             block_reasons.append(f"{output.lane}: No objects to publish")
             continue
 
+        # Defense-in-depth: health may degrade between publish and assembly
         if output.health.readiness == PublishReadiness.BLOCKED:
             reason = output.health.format_block_reason()
             excluded[output.lane] = reason
@@ -225,7 +232,7 @@ def assemble_composite_manifest(
                 lane=output.lane,
                 manifest_id=output.manifest_id,
                 object_count=output.object_count,
-                readiness=output.health.readiness.value,
+                readiness=output.health.readiness,
             )
         )
         advancements.append(
@@ -236,16 +243,12 @@ def assemble_composite_manifest(
             )
         )
 
-    included_lanes = [c.lane for c in contributions]
-    excluded_lanes = sorted(excluded.keys())
     manifest_ids = [c.manifest_id for c in contributions]
 
     composite = CompositeManifest(
         composite_id=make_composite_id(manifest_ids) if manifest_ids else "composite_empty",
         contributions=contributions,
         total_object_count=sum(c.object_count for c in contributions),
-        lanes_included=included_lanes,
-        lanes_excluded=excluded_lanes,
         exclusion_reasons=excluded,
         contract_version=contract_version,
         assembled_at=now,

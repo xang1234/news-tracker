@@ -300,8 +300,8 @@ class TestCompositeMetadata:
         readiness = {
             c.lane: c.readiness for c in result.composite.contributions
         }
-        assert readiness["narrative"] == "ready"
-        assert readiness["filing"] == "warn"
+        assert readiness["narrative"] == PublishReadiness.READY
+        assert readiness["filing"] == PublishReadiness.WARN
 
 
 # -- Integration: realistic scenario ----------------------------------------
