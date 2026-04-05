@@ -189,7 +189,11 @@ def determine_readiness(
 
     BLOCKED if any component is in a blocking state.
     WARN if any component is in a warning state.
-    READY only if all components are healthy.
+    READY only if all components are healthy or unknown.
+
+    UNKNOWN freshness/quality (no data yet) does NOT block — a new
+    lane with no runs is not unhealthy, just empty. The manifest
+    assembler separately checks whether there are objects to publish.
     """
     if quarantine == QuarantineState.QUARANTINED:
         return PublishReadiness.BLOCKED
