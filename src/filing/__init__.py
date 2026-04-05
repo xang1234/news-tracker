@@ -5,6 +5,15 @@ for the filing lane. Provider implementations (edgartools, SEC API
 fallback) are in separate modules.
 """
 
+from src.filing.adoption import (
+    AdoptionBreakdown,
+    FactInput,
+    FactSignal,
+    FilingAdoptionScore,
+    SectionInput,
+    SectionSignal,
+    compute_filing_adoption,
+)
 from src.filing.config import FilingConfig
 from src.filing.edgartools_provider import EdgarToolsProvider
 from src.filing.provider import FilingProvider, SECRateLimiter
@@ -27,9 +36,13 @@ from src.filing.persistence import (
 )
 
 __all__ = [
+    "AdoptionBreakdown",
     "VALID_FILING_STATUSES",
     "VALID_FILING_TYPES",
     "EdgarToolsProvider",
+    "FactInput",
+    "FactSignal",
+    "FilingAdoptionScore",
     "FilingAttachmentRecord",
     "FilingConfig",
     "FilingIdentity",
@@ -41,7 +54,10 @@ __all__ = [
     "FilingSectionRecord",
     "SECPolicy",
     "SECRateLimiter",
+    "SectionInput",
+    "SectionSignal",
     "SecApiProvider",
     "XBRLFactRecord",
+    "compute_filing_adoption",
     "filing_result_to_records",
 ]
