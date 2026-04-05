@@ -15,6 +15,15 @@ from src.filing.adoption import (
     compute_filing_adoption,
 )
 from src.filing.config import FilingConfig
+from src.filing.drift import (
+    DimensionDrift,
+    DriftDecomposition,
+    SectionChange,
+    classify_by_dimension,
+    compute_dimension_magnitude,
+    compute_drift_decomposition,
+    extract_section_changes,
+)
 from src.filing.edgartools_provider import EdgarToolsProvider
 from src.filing.provider import FilingProvider, SECRateLimiter
 from src.filing.sec_api_provider import SecApiProvider
@@ -37,6 +46,8 @@ from src.filing.persistence import (
 
 __all__ = [
     "AdoptionBreakdown",
+    "DimensionDrift",
+    "DriftDecomposition",
     "VALID_FILING_STATUSES",
     "VALID_FILING_TYPES",
     "EdgarToolsProvider",
@@ -54,10 +65,15 @@ __all__ = [
     "FilingSectionRecord",
     "SECPolicy",
     "SECRateLimiter",
+    "SectionChange",
     "SectionInput",
     "SectionSignal",
     "SecApiProvider",
     "XBRLFactRecord",
+    "classify_by_dimension",
+    "compute_dimension_magnitude",
+    "compute_drift_decomposition",
     "compute_filing_adoption",
+    "extract_section_changes",
     "filing_result_to_records",
 ]
