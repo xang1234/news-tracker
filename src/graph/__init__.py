@@ -21,6 +21,12 @@ from src.graph.schemas import (
     CausalEdge,
     CausalNode,
 )
+from src.graph.path_scoring import (
+    ScoredEdge,
+    ScoredPath,
+    score_edge,
+    score_paths_from,
+)
 from src.graph.seed_data import SEED_VERSION, seed_graph
 from src.graph.storage import GraphRepository
 from src.graph.structural import (
@@ -39,6 +45,8 @@ __all__ = [
     "GraphRepository",
     "PropagationImpact",
     "SEED_VERSION",
+    "ScoredEdge",
+    "ScoredPath",
     "SentimentPropagation",
     "StructuralRelation",
     "StructuralSnapshot",
@@ -46,6 +54,8 @@ __all__ = [
     "VALID_RELATION_TYPES",
     "build_structural_snapshot",
     "get_predicate_sign",
+    "score_edge",
+    "score_paths_from",
     "seed_graph",
     "translate_derived_edge",
 ]
