@@ -14,13 +14,11 @@ counts and state, the checker classifies them.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
 
 from src.contracts.intelligence.lanes import ALL_LANES
-from src.contracts.intelligence.ownership import CompatibilityResult, check_compatibility
-from src.contracts.intelligence.version import ContractRegistry, ContractVersion
+from src.contracts.intelligence.ownership import check_compatibility
+from src.contracts.intelligence.version import ContractRegistry
 from src.monitoring.quality_metrics import (
     SEVERITY_CRITICAL,
     SEVERITY_OK,
@@ -217,6 +215,8 @@ def check_contract_compat(
 
     result = check_compatibility(published_version)
 
+    # Categorical classification — not a continuous rate, so _classify
+    # doesn't apply here. Incompatible = critical, deprecated = warning.
     if not result.compatible:
         severity = SEVERITY_CRITICAL
     elif ContractRegistry.is_deprecated(result.checked):
@@ -229,7 +229,7 @@ def check_contract_compat(
         lane="all",
         value=1.0 if result.compatible else 0.0,
         severity=severity,
-        thresholds={"warning": 1.0, "critical": 1.0},
+        thresholds={},
         message=result.message,
         details={
             "published_version": str(result.checked),
