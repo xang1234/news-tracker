@@ -243,35 +243,27 @@ def build_issuer_summaries(
 
     Groups adoption scores and alerts by issuer, aggregates metrics.
     """
+    def _new_entry() -> dict[str, Any]:
+        return {
+            "themes": set(),
+            "scores": [],
+            "alert_count": 0,
+            "critical_count": 0,
+            "warning_count": 0,
+            "reason_counts": {},
+        }
+
     issuer_data: dict[str, dict[str, Any]] = {}
 
     for adoption in adoptions:
         iid = adoption.issuer_concept_id
-        if iid not in issuer_data:
-            issuer_data[iid] = {
-                "themes": set(),
-                "scores": [],
-                "alert_count": 0,
-                "critical_count": 0,
-                "warning_count": 0,
-                "reason_counts": {},
-            }
-        d = issuer_data[iid]
+        d = issuer_data.setdefault(iid, _new_entry())
         d["themes"].add(adoption.theme_concept_id)
         d["scores"].append(adoption.score)
 
     for alert in alerts:
         iid = alert.issuer_concept_id
-        if iid not in issuer_data:
-            issuer_data[iid] = {
-                "themes": set(),
-                "scores": [],
-                "alert_count": 0,
-                "critical_count": 0,
-                "warning_count": 0,
-                "reason_counts": {},
-            }
-        d = issuer_data[iid]
+        d = issuer_data.setdefault(iid, _new_entry())
         d["themes"].add(alert.theme_concept_id)
         d["alert_count"] += 1
         if alert.severity == "critical":
@@ -331,7 +323,6 @@ def prepare_filing_publication(
     Returns:
         FilingPublicationResult with payloads, summaries, and counts.
     """
-    # Check lane health
     if lane_health.readiness == PublishReadiness.BLOCKED:
         return FilingPublicationResult(
             published=False,
@@ -344,11 +335,8 @@ def prepare_filing_publication(
             ),
         )
 
-    # Build payloads
     adoption_payloads = [build_adoption_payload(a) for a in adoptions]
     divergence_payloads = [build_divergence_payload(a) for a in alerts]
-
-    # Build issuer summaries
     issuer_summaries = build_issuer_summaries(adoptions, alerts)
 
     object_count = (
