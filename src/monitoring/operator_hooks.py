@@ -22,6 +22,11 @@ from typing import Any
 from src.contracts.intelligence.db_schemas import LaneRun
 from src.publish.lane_health import QuarantineRecord, QuarantineState
 
+# Terminal run statuses — runs that can be replayed or inspected.
+# Derived from RUN_TRANSITIONS in publish/service.py (states with
+# no outgoing transitions).
+TERMINAL_RUN_STATUSES = frozenset({"failed", "completed", "cancelled"})
+
 
 # -- Replay plan ---------------------------------------------------------------
 
@@ -232,7 +237,7 @@ def build_replay_plan(
     if now is None:
         now = datetime.now(timezone.utc)
 
-    if run.status not in ("failed", "completed", "cancelled"):
+    if run.status not in TERMINAL_RUN_STATUSES:
         raise ValueError(
             f"Cannot replay run {run.run_id}: status is {run.status!r}, "
             f"not a terminal state"
@@ -295,7 +300,7 @@ def build_inspection_report(
     )
 
     replay = None
-    if include_replay_plan and run.status in ("failed", "completed", "cancelled"):
+    if include_replay_plan and run.status in TERMINAL_RUN_STATUSES:
         replay = build_replay_plan(
             run, reason="Operator inspection replay", now=now,
         )
