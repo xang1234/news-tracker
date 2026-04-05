@@ -16,46 +16,44 @@ aggregated run counts and timestamps, the checker classifies them.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
 
-from src.contracts.intelligence.lanes import ALL_LANES
+from src.contracts.intelligence.lanes import (
+    ALL_LANES,
+    LANE_BACKTEST,
+    LANE_FILING,
+    LANE_NARRATIVE,
+    LANE_STRUCTURAL,
+)
 from src.monitoring.quality_metrics import (
     SEVERITY_CRITICAL,
     SEVERITY_OK,
-    SEVERITY_ORDER,
     SEVERITY_WARNING,
     QualityMetric,
     QualityReport,
+    _classify,
 )
 
 
 # -- Default thresholds -------------------------------------------------------
 
-# Failure rate: fraction of recent runs that failed
 DEFAULT_FAILURE_WARNING = 0.10
 DEFAULT_FAILURE_CRITICAL = 0.25
 
-# Freshness budgets (hours): per-lane operational SLAs.
-# These are SEPARATE from publish-gating thresholds in lane_health.py.
-# A lane can be within budget but aging (operationally fine),
-# or exceeding budget but not yet stale enough to block publication.
+# Per-lane operational SLAs, separate from publish-gating thresholds
+# in lane_health.py. A lane can be within budget but aging
+# (operationally fine), or exceeding budget but not yet stale
+# enough to block publication.
 DEFAULT_FRESHNESS_BUDGETS: dict[str, float] = {
-    "narrative": 6.0,
-    "filing": 72.0,
-    "structural": 24.0,
-    "backtest": 168.0,  # weekly
+    LANE_NARRATIVE: 6.0,
+    LANE_FILING: 72.0,
+    LANE_STRUCTURAL: 24.0,
+    LANE_BACKTEST: 168.0,
 }
 
-DEFAULT_BUDGET_WARNING_FRACTION = 0.75  # warn at 75% of budget
-DEFAULT_BUDGET_CRITICAL_FRACTION = 1.0  # critical at 100% of budget
-
-# Valid metric types for lane ops (extend the quality_metrics set)
-VALID_LANE_OPS_TYPES = frozenset({
-    "lane_failure_rate",
-    "lane_freshness_budget",
-})
+DEFAULT_BUDGET_WARNING_FRACTION = 0.75
+DEFAULT_BUDGET_CRITICAL_FRACTION = 1.0
 
 
 # -- Trace context helpers -----------------------------------------------------
@@ -148,12 +146,9 @@ def check_lane_failure_rate(
         now = datetime.now(timezone.utc)
 
     rate = summary.failure_rate
-    if rate <= warning_threshold:
-        severity = SEVERITY_OK
-    elif rate <= critical_threshold:
-        severity = SEVERITY_WARNING
-    else:
-        severity = SEVERITY_CRITICAL
+    severity = _classify(
+        rate, warning_threshold, critical_threshold, higher_is_better=False,
+    )
 
     return QualityMetric(
         metric_type="lane_failure_rate",
@@ -224,12 +219,9 @@ def check_lane_freshness_budget(
     warning_at = budget_hours * warning_fraction
     critical_at = budget_hours * critical_fraction
 
-    if hours_since <= warning_at:
-        severity = SEVERITY_OK
-    elif hours_since <= critical_at:
-        severity = SEVERITY_WARNING
-    else:
-        severity = SEVERITY_CRITICAL
+    severity = _classify(
+        hours_since, warning_at, critical_at, higher_is_better=False,
+    )
 
     return QualityMetric(
         metric_type="lane_freshness_budget",
