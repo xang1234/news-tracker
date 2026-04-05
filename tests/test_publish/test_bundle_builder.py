@@ -18,8 +18,8 @@ from src.publish.bundle_builder import (
     build_rollups_artifact,
     check_bundle_parity,
     verify_bundle_integrity,
-    _checksum,
 )
+from src.publish.exporter import compute_bundle_checksum
 from src.publish.lane_health import PublishReadiness
 from src.publish.manifest_assembly import CompositeManifest, LaneContribution
 
@@ -76,20 +76,20 @@ class TestChecksum:
     """SHA-256 checksum utility."""
 
     def test_deterministic(self) -> None:
-        c1 = _checksum(["line1", "line2"])
-        c2 = _checksum(["line1", "line2"])
+        c1 = compute_bundle_checksum(["line1", "line2"])
+        c2 = compute_bundle_checksum(["line1", "line2"])
         assert c1 == c2
 
     def test_prefix(self) -> None:
-        assert _checksum(["test"]).startswith("sha256:")
+        assert compute_bundle_checksum(["test"]).startswith("sha256:")
 
     def test_different_content(self) -> None:
-        c1 = _checksum(["a"])
-        c2 = _checksum(["b"])
+        c1 = compute_bundle_checksum(["a"])
+        c2 = compute_bundle_checksum(["b"])
         assert c1 != c2
 
     def test_empty(self) -> None:
-        c = _checksum([])
+        c = compute_bundle_checksum([])
         assert c.startswith("sha256:")
 
 
@@ -205,7 +205,7 @@ class TestBuildCompositeBundle:
         )
         assert len(bundle.artifacts) == 3
 
-    def test_overall_checksum_is_manifest_checksum(self) -> None:
+    def test_overall_checksum_is_manifestcompute_bundle_checksum(self) -> None:
         bundle = build_composite_bundle(
             _composite(), _objects(), _rollups(), now=NOW,
         )
@@ -281,7 +281,6 @@ class TestVerifyIntegrity:
             contract_version=bundle.contract_version,
             artifacts=tampered_artifacts,
             overall_checksum=bundle.overall_checksum,
-            total_records=bundle.total_records,
             created_at=NOW,
         )
         assert verify_bundle_integrity(tampered_bundle) is False

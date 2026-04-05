@@ -21,12 +21,12 @@ Integrity:
 
 from __future__ import annotations
 
-import hashlib
 import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from src.publish.exporter import compute_bundle_checksum
 from src.publish.manifest_assembly import CompositeManifest
 
 
@@ -70,10 +70,14 @@ class CompositeBundle:
     contract_version: str
     artifacts: dict[str, BundleArtifact] = field(default_factory=dict)
     overall_checksum: str = ""
-    total_records: int = 0
     created_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
+
+    @property
+    def total_records(self) -> int:
+        """Sum of records across all artifacts."""
+        return sum(a.record_count for a in self.artifacts.values())
 
     def to_dict(self) -> dict[str, Any]:
         """Summary serialization for audit."""
@@ -87,16 +91,21 @@ class CompositeBundle:
         }
 
 
-# -- Checksum utility ----------------------------------------------------------
-
-
-def _checksum(lines: list[str]) -> str:
-    """SHA-256 checksum of JSONL content."""
-    content = "\n".join(lines).encode("utf-8")
-    return f"sha256:{hashlib.sha256(content).hexdigest()}"
-
-
 # -- Artifact builders (stateless) ---------------------------------------------
+
+
+def _build_jsonl_artifact(
+    name: str,
+    items: list[dict[str, Any]],
+) -> BundleArtifact:
+    """Build a JSONL artifact from a list of serialized dicts."""
+    lines = [json.dumps(item, sort_keys=True) for item in items]
+    return BundleArtifact(
+        name=name,
+        lines=lines,
+        checksum=compute_bundle_checksum(lines),
+        record_count=len(items),
+    )
 
 
 def build_objects_artifact(
@@ -117,14 +126,7 @@ def build_objects_artifact(
     for lane in sorted(lane_objects.keys()):
         all_objects.extend(lane_objects[lane])
     all_objects.sort(key=lambda o: o.get("object_id", ""))
-
-    lines = [json.dumps(obj, sort_keys=True) for obj in all_objects]
-    return BundleArtifact(
-        name="objects.jsonl",
-        lines=lines,
-        checksum=_checksum(lines) if lines else _checksum([]),
-        record_count=len(all_objects),
-    )
+    return _build_jsonl_artifact("objects.jsonl", all_objects)
 
 
 def build_rollups_artifact(
@@ -141,13 +143,7 @@ def build_rollups_artifact(
     Returns:
         BundleArtifact named "rollups.jsonl".
     """
-    lines = [json.dumps(r, sort_keys=True) for r in rollups]
-    return BundleArtifact(
-        name="rollups.jsonl",
-        lines=lines,
-        checksum=_checksum(lines) if lines else _checksum([]),
-        record_count=len(rollups),
-    )
+    return _build_jsonl_artifact("rollups.jsonl", rollups)
 
 
 def build_manifest_artifact(
@@ -194,7 +190,7 @@ def build_manifest_artifact(
     return BundleArtifact(
         name="manifest.json",
         lines=lines,
-        checksum=_checksum(lines),
+        checksum=compute_bundle_checksum(lines),
         record_count=1,
     )
 
@@ -241,14 +237,11 @@ def build_composite_bundle(
         rollups_art.name: rollups_art,
     }
 
-    total = sum(a.record_count for a in artifacts.values())
-
     return CompositeBundle(
         composite_id=composite.composite_id,
         contract_version=composite.contract_version,
         artifacts=artifacts,
         overall_checksum=manifest_art.checksum,
-        total_records=total,
         created_at=now,
     )
 
@@ -263,7 +256,7 @@ def verify_bundle_integrity(bundle: CompositeBundle) -> bool:
     stored checksums. Returns True only if all match.
     """
     for artifact in bundle.artifacts.values():
-        recomputed = _checksum(artifact.lines)
+        recomputed = compute_bundle_checksum(artifact.lines)
         if recomputed != artifact.checksum:
             return False
     return True

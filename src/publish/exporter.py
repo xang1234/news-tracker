@@ -195,10 +195,9 @@ class BundleExporter:
             manifest_id, publish_state="published"
         )
 
-        # Build JSONL lines, serialize once, compute checksum
         lines = build_bundle_lines(manifest, objects)
+        checksum = compute_bundle_checksum(lines)
         content_bytes = "\n".join(lines).encode("utf-8")
-        checksum = f"sha256:{hashlib.sha256(content_bytes).hexdigest()}"
 
         # Record the export
         bundle = ExportBundle(
