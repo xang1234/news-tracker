@@ -5,6 +5,15 @@ manifest pointers, published object state transitions, and
 bundle export with integrity checksums.
 """
 
+from src.publish.manifest_assembly import (
+    AssemblyResult,
+    CompositeManifest,
+    LaneContribution,
+    LaneOutput,
+    PointerAdvancement,
+    assemble_composite_manifest,
+    make_composite_id,
+)
 from src.publish.exporter import (
     BundleExporter,
     build_bundle_lines,
@@ -20,13 +29,20 @@ from src.publish.service import (
 )
 
 __all__ = [
+    "AssemblyResult",
     "BundleExporter",
+    "CompositeManifest",
+    "LaneContribution",
+    "LaneOutput",
     "PUBLISH_TRANSITIONS",
+    "PointerAdvancement",
     "PublishRepository",
     "PublishService",
     "RUN_TRANSITIONS",
+    "assemble_composite_manifest",
     "build_bundle_lines",
     "compute_bundle_checksum",
+    "make_composite_id",
     "parse_bundle_lines",
     "verify_bundle_checksum",
 ]
