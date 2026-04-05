@@ -30,6 +30,16 @@ from src.filing.drift import (
     extract_section_changes,
 )
 from src.filing.edgartools_provider import EdgarToolsProvider
+from src.filing.publisher import (
+    AdoptionPayload,
+    DivergencePayload,
+    FilingPublicationResult,
+    IssuerDivergenceSummary,
+    build_adoption_payload,
+    build_divergence_payload,
+    build_issuer_summaries,
+    prepare_filing_publication,
+)
 from src.filing.provider import FilingProvider, SECRateLimiter
 from src.filing.sec_api_provider import SecApiProvider
 from src.filing.schemas import (
@@ -51,10 +61,14 @@ from src.filing.persistence import (
 
 __all__ = [
     "AdoptionBreakdown",
+    "AdoptionPayload",
     "DimensionDrift",
     "DivergenceAlert",
+    "DivergencePayload",
     "DivergenceReason",
     "DriftDecomposition",
+    "FilingPublicationResult",
+    "IssuerDivergenceSummary",
     "VALID_FILING_STATUSES",
     "VALID_FILING_TYPES",
     "EdgarToolsProvider",
@@ -77,6 +91,9 @@ __all__ = [
     "SectionSignal",
     "SecApiProvider",
     "XBRLFactRecord",
+    "build_adoption_payload",
+    "build_divergence_payload",
+    "build_issuer_summaries",
     "check_divergence",
     "classify_by_dimension",
     "compute_dimension_magnitude",
@@ -84,4 +101,5 @@ __all__ = [
     "compute_filing_adoption",
     "extract_section_changes",
     "filing_result_to_records",
+    "prepare_filing_publication",
 ]
