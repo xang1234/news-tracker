@@ -23,6 +23,13 @@ from src.graph.schemas import (
 )
 from src.graph.seed_data import SEED_VERSION, seed_graph
 from src.graph.storage import GraphRepository
+from src.graph.structural import (
+    StructuralRelation,
+    StructuralSnapshot,
+    build_structural_snapshot,
+    get_predicate_sign,
+    translate_derived_edge,
+)
 
 __all__ = [
     "CausalEdge",
@@ -33,7 +40,12 @@ __all__ = [
     "PropagationImpact",
     "SEED_VERSION",
     "SentimentPropagation",
+    "StructuralRelation",
+    "StructuralSnapshot",
     "VALID_NODE_TYPES",
     "VALID_RELATION_TYPES",
+    "build_structural_snapshot",
+    "get_predicate_sign",
     "seed_graph",
+    "translate_derived_edge",
 ]
