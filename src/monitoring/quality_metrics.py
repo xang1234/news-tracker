@@ -36,6 +36,10 @@ VALID_METRIC_TYPES = frozenset({
     "stale_evidence",
     "lane_failure_rate",
     "lane_freshness_budget",
+    "manifest_seal_rate",
+    "bundle_integrity",
+    "coverage_drift",
+    "contract_compat",
 })
 
 
