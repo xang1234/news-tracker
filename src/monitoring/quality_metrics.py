@@ -29,6 +29,14 @@ SEVERITY_CRITICAL = "critical"
 SEVERITY_ORDER = {SEVERITY_OK: 0, SEVERITY_WARNING: 1, SEVERITY_CRITICAL: 2}
 
 
+VALID_METRIC_TYPES = frozenset({
+    "lineage_completeness",
+    "unresolved_entities",
+    "filing_parse_quality",
+    "stale_evidence",
+})
+
+
 # -- Default thresholds -------------------------------------------------------
 
 # Lineage completeness: fraction of objects with source lineage
@@ -77,6 +85,18 @@ class QualityMetric:
         default_factory=lambda: datetime.now(timezone.utc)
     )
 
+    def __post_init__(self) -> None:
+        if self.metric_type not in VALID_METRIC_TYPES:
+            raise ValueError(
+                f"Invalid metric_type {self.metric_type!r}. "
+                f"Must be one of {sorted(VALID_METRIC_TYPES)}"
+            )
+        if self.severity not in SEVERITY_ORDER:
+            raise ValueError(
+                f"Invalid severity {self.severity!r}. "
+                f"Must be one of {sorted(SEVERITY_ORDER)}"
+            )
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "metric_type": self.metric_type,
@@ -114,7 +134,7 @@ class QualityReport:
             return SEVERITY_OK
         return max(
             self.metrics,
-            key=lambda m: SEVERITY_ORDER.get(m.severity, 0),
+            key=lambda m: SEVERITY_ORDER[m.severity],
         ).severity
 
     def to_dict(self) -> dict[str, Any]:
@@ -278,7 +298,7 @@ def check_filing_parse_quality(
             "total_filings": total_filings,
             "parsed_count": parsed_count,
             "failed_count": failed_count,
-            "skipped_count": total_filings - parsed_count - failed_count,
+            "skipped_count": max(0, total_filings - parsed_count - failed_count),
         },
         measured_at=now,
     )

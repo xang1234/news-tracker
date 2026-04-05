@@ -9,7 +9,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+
 from src.monitoring.quality_metrics import (
+    VALID_METRIC_TYPES,
     DEFAULT_LINEAGE_CRITICAL,
     DEFAULT_LINEAGE_WARNING,
     DEFAULT_PARSE_CRITICAL,
@@ -303,3 +306,25 @@ class TestDataclasses:
             assert False, "Should be frozen"
         except AttributeError:
             pass
+
+    def test_invalid_metric_type(self) -> None:
+        with pytest.raises(ValueError, match="Invalid metric_type"):
+            QualityMetric(
+                metric_type="bogus", lane="narrative",
+                value=0.5, severity="ok",
+            )
+
+    def test_invalid_severity(self) -> None:
+        with pytest.raises(ValueError, match="Invalid severity"):
+            QualityMetric(
+                metric_type="lineage_completeness", lane="narrative",
+                value=0.5, severity="fatal",
+            )
+
+    def test_valid_metric_types_complete(self) -> None:
+        assert len(VALID_METRIC_TYPES) == 4
+
+    def test_skipped_count_clamped(self) -> None:
+        """Inconsistent inputs don't produce negative skipped_count."""
+        m = check_filing_parse_quality(10, 8, 5, now=NOW)
+        assert m.details["skipped_count"] >= 0
