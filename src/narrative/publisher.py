@@ -25,7 +25,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from src.contracts.intelligence.lanes import LANE_NARRATIVE
 from src.narrative.components import NarrativeComponents, compute_narrative_components
 from src.narrative.lane_adapter import (
     NarrativeLaneAdapter,
