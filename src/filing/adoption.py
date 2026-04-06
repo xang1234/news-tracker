@@ -23,11 +23,10 @@ XBRL facts, and concept-derived keywords, then passes them here.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.filing.alignment import normalize_section_name
-
 
 # -- Section importance weights -----------------------------------------------
 
@@ -188,7 +187,7 @@ class FilingAdoptionScore:
     period_count: int = 0
     periods_with_signal: int = 0
     computed_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -240,7 +239,7 @@ def _count_term_mentions(
     """
     content_lower = content.lower()
     counts: dict[str, int] = {}
-    for term, term_lower in zip(terms, terms_lower):
+    for term, term_lower in zip(terms, terms_lower, strict=False):
         count = content_lower.count(term_lower)
         if count > 0:
             counts[term] = count
@@ -412,7 +411,7 @@ def compute_filing_adoption(
         FilingAdoptionScore with decomposed breakdown and signals.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     # Compute signals
     section_signals = _compute_section_signals(sections, keywords)

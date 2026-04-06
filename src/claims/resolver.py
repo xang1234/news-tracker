@@ -189,7 +189,7 @@ class EntityResolver:
         )
         return [
             r if isinstance(r, ResolverResult) else ResolverResult(mention=m)
-            for r, m in zip(results, mentions)
+            for r, m in zip(results, mentions, strict=False)
         ]
 
     # -- Tier 4: LLM fallback gate -----------------------------------------
@@ -267,8 +267,9 @@ class EntityResolver:
         concept = await self._repo.get_concept_for_security(
             ticker=ticker, exchange=exchange
         )
-        if concept is not None:
-            if concept_type is None or concept.concept_type == concept_type:
+        if concept is not None and (
+            concept_type is None or concept.concept_type == concept_type
+        ):
                 return ResolverResult(
                     mention=mention,
                     concept=concept,

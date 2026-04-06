@@ -20,11 +20,10 @@ paths from score_paths_from().
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.graph.path_scoring import ScoredPath
-
 
 # -- Basket roles -------------------------------------------------------------
 
@@ -115,7 +114,7 @@ class ThematicBasket:
     first_order_count: int = 0
     second_order_count: int = 0
     computed_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     @property
@@ -197,7 +196,7 @@ def build_thematic_basket(
         ThematicBasket with members sorted by best_score descending.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     groups = _group_paths_by_target(paths)
 

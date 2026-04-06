@@ -16,7 +16,6 @@ from src.claims.quality import (
     CheckCode,
     DeadLetterRecord,
     Disposition,
-    QualityVerdict,
     capture_dead_letter,
     make_dead_letter_id,
     run_quality_checks,
@@ -32,17 +31,17 @@ MIGRATION_PATH = Path("migrations/025_claim_dead_letters.sql")
 
 def _make_claim(**overrides) -> EvidenceClaim:
     """Build a valid EvidenceClaim with sensible defaults."""
-    defaults = dict(
-        claim_id="claim_test_001",
-        claim_key="clk_test_001",
-        lane="narrative",
-        source_id="doc_1",
-        predicate="supplies_to",
-        subject_text="TSMC",
-        confidence=0.7,
-        contract_version="0.1.0",
-        extraction_method="rule",
-    )
+    defaults = {
+        "claim_id": "claim_test_001",
+        "claim_key": "clk_test_001",
+        "lane": "narrative",
+        "source_id": "doc_1",
+        "predicate": "supplies_to",
+        "subject_text": "TSMC",
+        "confidence": 0.7,
+        "contract_version": "0.1.0",
+        "extraction_method": "rule",
+    }
     defaults.update(overrides)
     return EvidenceClaim(**defaults)
 

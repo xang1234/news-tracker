@@ -7,7 +7,7 @@ and lane health gating.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.filing.adoption import (
     AdoptionBreakdown,
@@ -15,10 +15,6 @@ from src.filing.adoption import (
 )
 from src.filing.divergence import DivergenceAlert, DivergenceReason
 from src.filing.publisher import (
-    AdoptionPayload,
-    DivergencePayload,
-    FilingPublicationResult,
-    IssuerDivergenceSummary,
     build_adoption_payload,
     build_divergence_payload,
     build_issuer_summaries,
@@ -32,7 +28,7 @@ from src.publish.lane_health import (
     QuarantineState,
 )
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 ISSUER_A = "concept_issuer_aaa"
 ISSUER_B = "concept_issuer_bbb"
@@ -144,7 +140,7 @@ class TestAdoptionPayload:
         payload = build_adoption_payload(_make_adoption())
         try:
             payload.score = 0.0  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -190,7 +186,7 @@ class TestDivergencePayload:
         payload = build_divergence_payload(_make_alert())
         try:
             payload.severity = "info"  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 

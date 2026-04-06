@@ -7,15 +7,11 @@ gating.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.graph.baskets import BasketMember, ThematicBasket
 from src.graph.path_scoring import PathScoreBreakdown, ScoredEdge, ScoredPath
 from src.graph.publisher import (
-    DEFAULT_TOP_N,
-    BasketPayload,
-    PathExplanation,
-    StructuralPublicationResult,
     build_basket_payload,
     build_path_explanation,
     prepare_structural_publication,
@@ -29,7 +25,7 @@ from src.publish.lane_health import (
     QuarantineState,
 )
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 THEME = "concept_theme_hbm"
 
 
@@ -214,7 +210,7 @@ class TestPathExplanation:
         expl = build_path_explanation(_path())
         try:
             expl.path_score = 0.0  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -266,7 +262,7 @@ class TestBasketPayload:
         payload = build_basket_payload(_basket())
         try:
             payload.beneficiary_count = 0  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 

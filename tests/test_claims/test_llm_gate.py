@@ -14,11 +14,9 @@ from src.claims.llm_gate import (
     DenyReason,
     FallbackBudget,
     FallbackGate,
-    FallbackProvenance,
     GateDecision,
     GateVerdict,
 )
-
 
 # -- Helpers ---------------------------------------------------------------
 
@@ -417,7 +415,7 @@ class TestResolverGateIntegration:
         self, repo
     ) -> None:
         """Short passage denied by gate produces unresolved."""
-        from src.claims.resolver import EntityResolver, ResolverTier
+        from src.claims.resolver import EntityResolver
 
         gate = FallbackGate(_make_config(min_passage_length=100))
         resolver = EntityResolver(repo, fallback_gate=gate)

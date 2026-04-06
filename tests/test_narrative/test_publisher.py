@@ -6,20 +6,18 @@ with component scores, symbol/theme rollups, and lane health gating.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 
+from src.narrative.components import NarrativeComponents, compute_narrative_components
 from src.narrative.publisher import (
-    NarrativePublicationResult,
     SymbolRollup,
     ThemeRollup,
     build_symbol_rollups,
     build_theme_rollups,
     prepare_narrative_publication,
 )
-from src.narrative.components import NarrativeComponents, compute_narrative_components
-from src.narrative.lane_adapter import NarrativeLaneAdapter
 from src.narrative.schemas import NarrativeRun
 from src.publish.lane_health import (
     FreshnessLevel,
@@ -29,7 +27,7 @@ from src.publish.lane_health import (
     QuarantineState,
 )
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Helpers ---------------------------------------------------------------
@@ -42,23 +40,23 @@ def _make_run(
     doc_count: int = 15,
     **overrides,
 ) -> NarrativeRun:
-    defaults = dict(
-        run_id=run_id,
-        theme_id=theme_id,
-        status="active",
-        centroid=np.zeros(768),
-        label=label,
-        started_at=NOW - timedelta(hours=4),
-        last_document_at=NOW,
-        doc_count=doc_count,
-        platform_count=3,
-        avg_sentiment=0.6,
-        avg_authority=0.7,
-        current_rate_per_hour=20.0,
-        current_acceleration=8.0,
-        conviction_score=50.0,
-        ticker_counts={"TSM": 5, "NVDA": 3},
-    )
+    defaults = {
+        "run_id": run_id,
+        "theme_id": theme_id,
+        "status": "active",
+        "centroid": np.zeros(768),
+        "label": label,
+        "started_at": NOW - timedelta(hours=4),
+        "last_document_at": NOW,
+        "doc_count": doc_count,
+        "platform_count": 3,
+        "avg_sentiment": 0.6,
+        "avg_authority": 0.7,
+        "current_rate_per_hour": 20.0,
+        "current_acceleration": 8.0,
+        "conviction_score": 50.0,
+        "ticker_counts": {"TSM": 5, "NVDA": 3},
+    }
     defaults.update(overrides)
     return NarrativeRun(**defaults)
 

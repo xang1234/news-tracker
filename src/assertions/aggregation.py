@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.assertions.schemas import (
     AssertionClaimLink,
@@ -32,7 +32,6 @@ from src.assertions.schemas import (
     make_assertion_id,
 )
 from src.claims.schemas import EvidenceClaim
-
 
 # -- Configuration defaults -------------------------------------------------
 
@@ -108,7 +107,7 @@ def aggregate_assertion(
         and its confidence decomposition.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     assertion_id = make_assertion_id(
         subject_concept_id, predicate, object_concept_id
@@ -169,10 +168,7 @@ def aggregate_assertion(
     diversity = min(1.0, diversity_count / diversity_target) if diversity_target > 0 else 1.0
 
     # -- Support ratio: proportion of support vs total --
-    if total_evidence > 0:
-        support_ratio = support_count / total_evidence
-    else:
-        support_ratio = 0.0
+    support_ratio = support_count / total_evidence if total_evidence > 0 else 0.0
 
     # -- Review bonus: any review-approved claim adds a bonus --
     has_review_approval = any(

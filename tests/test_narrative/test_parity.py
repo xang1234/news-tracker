@@ -7,11 +7,11 @@ narrative publication is safe.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 
-from src.narrative.components import NarrativeComponents, compute_narrative_components
+from src.narrative.components import NarrativeComponents
 from src.narrative.parity import (
     DIRECTIONAL_TOLERANCE,
     ParityCheck,
@@ -24,7 +24,7 @@ from src.narrative.parity import (
 )
 from src.narrative.schemas import NarrativeRun
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Helpers ---------------------------------------------------------------
@@ -44,22 +44,22 @@ def _make_run(
     last_document_at: datetime | None = None,
     **overrides,
 ) -> NarrativeRun:
-    defaults = dict(
-        run_id=run_id,
-        theme_id="theme_test",
-        status="active",
-        centroid=np.zeros(768),
-        label="Test Run",
-        started_at=started_at or NOW - timedelta(hours=4),
-        last_document_at=last_document_at or NOW,
-        conviction_score=conviction_score,
-        current_rate_per_hour=current_rate_per_hour,
-        current_acceleration=current_acceleration,
-        doc_count=doc_count,
-        platform_count=platform_count,
-        avg_sentiment=avg_sentiment,
-        avg_authority=avg_authority,
-    )
+    defaults = {
+        "run_id": run_id,
+        "theme_id": "theme_test",
+        "status": "active",
+        "centroid": np.zeros(768),
+        "label": "Test Run",
+        "started_at": started_at or NOW - timedelta(hours=4),
+        "last_document_at": last_document_at or NOW,
+        "conviction_score": conviction_score,
+        "current_rate_per_hour": current_rate_per_hour,
+        "current_acceleration": current_acceleration,
+        "doc_count": doc_count,
+        "platform_count": platform_count,
+        "avg_sentiment": avg_sentiment,
+        "avg_authority": avg_authority,
+    }
     defaults.update(overrides)
     return NarrativeRun(**defaults)
 

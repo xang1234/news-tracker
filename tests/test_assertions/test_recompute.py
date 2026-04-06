@@ -6,12 +6,10 @@ recomputation of assertions and derived edges, with full audit trail.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 
 from src.assertions.recompute import (
-    CONFIDENCE_EPSILON,
     AssertionDelta,
-    RecomputeResult,
     build_recompute_result,
     find_affected_assertion_ids,
     recompute_assertion,
@@ -23,7 +21,7 @@ from src.assertions.schemas import (
 )
 from src.claims.schemas import EvidenceClaim
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Helpers ---------------------------------------------------------------
@@ -106,7 +104,7 @@ class TestRecomputeAssertion:
         """Same claims → no change in confidence."""
         claim = _make_claim(confidence=0.8)
         link = _make_link()
-        existing = _make_existing()
+        _make_existing()
 
         # First compute to get the actual confidence
         first, _ = recompute_assertion(

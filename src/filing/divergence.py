@@ -20,13 +20,12 @@ narrative strength, filing adoption scores, and drift decomposition.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
 from src.filing.adoption import FilingAdoptionScore
 from src.filing.drift import DriftDecomposition
-
 
 # -- Reason codes and severity ------------------------------------------------
 
@@ -96,7 +95,7 @@ class DivergenceAlert:
     summary: str
     evidence: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     def __post_init__(self) -> None:
@@ -397,7 +396,7 @@ def check_divergence(
         List of DivergenceAlert objects (empty if no divergence).
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     alerts: list[DivergenceAlert] = []
 

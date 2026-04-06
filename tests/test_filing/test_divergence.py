@@ -7,40 +7,33 @@ divergence scenarios.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from src.filing.adoption import (
     AdoptionBreakdown,
+    FactSignal,
     FilingAdoptionScore,
     SectionSignal,
-    FactSignal,
 )
 from src.filing.divergence import (
-    ADVERSE_DIMENSIONS,
-    ADVERSE_WORD_INCREASE,
-    CONTRADICTORY_MIN_MAGNITUDE,
-    LAGGING_TEMPORAL_MAX,
-    LAGGING_TEMPORAL_MIN,
     STRONG_ADOPTION,
     STRONG_NARRATIVE,
-    VERY_STRONG_NARRATIVE,
-    VERY_WEAK_ADOPTION,
     WEAK_ADOPTION,
     WEAK_NARRATIVE,
     DivergenceAlert,
     DivergenceReason,
-    check_divergence,
     _check_adverse_drift,
     _check_contradictory_drift,
     _check_filing_without_narrative,
     _check_lagging_adoption,
     _check_narrative_without_filing,
+    check_divergence,
 )
 from src.filing.drift import DimensionDrift, DriftDecomposition
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 ISSUER = "concept_issuer_abc123"
 THEME = "concept_theme_xyz789"

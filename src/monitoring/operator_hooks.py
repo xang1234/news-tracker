@@ -16,7 +16,7 @@ handles persistence (via PublishService, repositories, etc.).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.contracts.intelligence.db_schemas import LaneRun
@@ -55,7 +55,7 @@ class ReplayPlan:
     reason: str
     requested_by: str = "operator"
     requested_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -93,7 +93,7 @@ class QuarantineAction:
     reason: str
     actor: str = "operator"
     acted_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -188,7 +188,7 @@ class InspectionReport:
     quality_issues: list[str] = field(default_factory=list)
     replay_plan: ReplayPlan | None = None
     inspected_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -235,7 +235,7 @@ def build_replay_plan(
         ValueError: If the run is not in a terminal state.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     if run.status not in TERMINAL_RUN_STATUSES:
         raise ValueError(
@@ -286,7 +286,7 @@ def build_inspection_report(
         InspectionReport with linked context and optional replay plan.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     context = RunFailureContext(
         run_id=run.run_id,

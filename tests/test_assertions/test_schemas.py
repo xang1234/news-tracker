@@ -7,7 +7,7 @@ structural validation.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -27,23 +27,23 @@ MIGRATION_PATH = Path("migrations/026_resolved_assertions.sql")
 
 
 def _make_assertion(**overrides) -> ResolvedAssertion:
-    defaults = dict(
-        assertion_id="asrt_test_001",
-        subject_concept_id="concept_issuer_tsmc",
-        predicate="supplies_to",
-        object_concept_id="concept_issuer_nvda",
-        confidence=0.8,
-    )
+    defaults = {
+        "assertion_id": "asrt_test_001",
+        "subject_concept_id": "concept_issuer_tsmc",
+        "predicate": "supplies_to",
+        "object_concept_id": "concept_issuer_nvda",
+        "confidence": 0.8,
+    }
     defaults.update(overrides)
     return ResolvedAssertion(**defaults)
 
 
 def _make_link(**overrides) -> AssertionClaimLink:
-    defaults = dict(
-        assertion_id="asrt_test_001",
-        claim_id="claim_test_001",
-        link_type="support",
-    )
+    defaults = {
+        "assertion_id": "asrt_test_001",
+        "claim_id": "claim_test_001",
+        "link_type": "support",
+    }
     defaults.update(overrides)
     return AssertionClaimLink(**defaults)
 
@@ -71,16 +71,16 @@ class TestResolvedAssertion:
 
     def test_valid_from_before_valid_to(self) -> None:
         a = _make_assertion(
-            valid_from=datetime(2025, 1, 1, tzinfo=timezone.utc),
-            valid_to=datetime(2025, 12, 31, tzinfo=timezone.utc),
+            valid_from=datetime(2025, 1, 1, tzinfo=UTC),
+            valid_to=datetime(2025, 12, 31, tzinfo=UTC),
         )
         assert a.valid_from < a.valid_to
 
     def test_inverted_validity_rejected(self) -> None:
         with pytest.raises(ValueError, match="valid_from"):
             _make_assertion(
-                valid_from=datetime(2025, 12, 31, tzinfo=timezone.utc),
-                valid_to=datetime(2025, 1, 1, tzinfo=timezone.utc),
+                valid_from=datetime(2025, 12, 31, tzinfo=UTC),
+                valid_to=datetime(2025, 1, 1, tzinfo=UTC),
             )
 
     def test_none_validity_allowed(self) -> None:
@@ -90,7 +90,7 @@ class TestResolvedAssertion:
     def test_open_ended_validity(self) -> None:
         """valid_from set, valid_to None = ongoing fact."""
         a = _make_assertion(
-            valid_from=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            valid_from=datetime(2025, 1, 1, tzinfo=UTC),
             valid_to=None,
         )
         assert a.valid_to is None

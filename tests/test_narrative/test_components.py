@@ -7,15 +7,12 @@ blends all four.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from src.narrative.components import (
     ATTENTION_WEIGHT,
     CONFIRMATION_WEIGHT,
     CORROBORATION_WEIGHT,
-    MAX_DOC_COUNT,
-    MAX_PLATFORMS,
-    MAX_RATE_PER_HOUR,
     NOVELTY_WEIGHT,
     AttentionScore,
     ConfirmationScore,
@@ -29,7 +26,7 @@ from src.narrative.components import (
     compute_novelty_persistence,
 )
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Attention tests -------------------------------------------------------

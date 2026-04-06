@@ -19,9 +19,8 @@ outputs from both systems.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-
 
 # -- Severity and recommendation constants ------------------------------------
 
@@ -91,7 +90,7 @@ class DisagreementSet:
     disagreements: list[Disagreement] = field(default_factory=list)
     total_comparisons: int = 0
     computed_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     @property
@@ -246,9 +245,12 @@ def _classify_severity(
     Numeric values within tolerance are minor. All other
     differences (strings, bools, lists) are material.
     """
-    if isinstance(current_val, (int, float)) and isinstance(shadow_val, (int, float)):
-        if abs(current_val - shadow_val) <= tolerance:
-            return SEVERITY_MINOR
+    if (
+        isinstance(current_val, (int, float))
+        and isinstance(shadow_val, (int, float))
+        and abs(current_val - shadow_val) <= tolerance
+    ):
+        return SEVERITY_MINOR
     return SEVERITY_MATERIAL
 
 
@@ -272,7 +274,7 @@ def build_disagreement_set(
         DisagreementSet (category/severity counts derived via properties).
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     return DisagreementSet(
         disagreements=disagreements,

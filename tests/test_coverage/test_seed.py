@@ -15,26 +15,21 @@ from pathlib import Path
 import pytest
 
 from src.coverage.schemas import (
-    CoverageProfile,
     DomainPack,
-    DomainPackMember,
 )
 from src.coverage.seed import (
     build_seed_objects,
     load_pack_data,
 )
 from src.security_master.concept_schemas import (
-    Concept,
-    ConceptAlias,
-    ConceptRelationship,
-    IssuerSecurityLink,
     VALID_CONCEPT_TYPES,
     VALID_RELATIONSHIP_TYPES,
-    make_concept_id,
 )
 
-
-PACK_PATH = Path(__file__).resolve().parents[2] / "src" / "coverage" / "data" / "semiconductors_pack_1.json"
+PACK_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "src" / "coverage" / "data" / "semiconductors_pack_1.json"
+)
 
 
 @pytest.fixture()

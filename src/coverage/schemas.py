@@ -6,7 +6,7 @@ Maps 1:1 to the tables in migration 021.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 VALID_COVERAGE_TIERS = frozenset({"full", "partial", "stub", "unsupported"})
@@ -38,7 +38,7 @@ class CoverageProfile:
     narrative_coverage: bool = False
     graph_coverage: bool = False
     last_assessed_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime | None = None
@@ -70,7 +70,7 @@ class CoverageTierChange:
     concept_id: str
     coverage_tier: str
     valid_from: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
     valid_to: datetime | None = None
     changed_by: str | None = None
@@ -126,7 +126,7 @@ class DomainPackMember:
     concept_id: str
     role: str = "member"
     added_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
     metadata: dict[str, Any] = field(default_factory=dict)
 

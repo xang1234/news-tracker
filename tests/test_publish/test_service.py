@@ -6,10 +6,8 @@ pointer advancement can be exercised without a database.
 
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -20,8 +18,7 @@ from src.contracts.intelligence.db_schemas import (
     PublishedObject,
 )
 from src.contracts.intelligence.lanes import LANE_FILING, LANE_NARRATIVE
-from src.publish.service import PublishService, _generate_id
-
+from src.publish.service import PublishService
 
 # -- In-memory mock repository ---------------------------------------------
 
@@ -53,7 +50,7 @@ class InMemoryPublishRepository:
         run = self.runs.get(run_id)
         if run is None:
             return None
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         run.status = status
         if status == "running" and run.started_at is None:
             run.started_at = now
@@ -130,7 +127,7 @@ class InMemoryPublishRepository:
         if obj is None:
             return None
         obj.publish_state = new_state
-        obj.updated_at = datetime.now(timezone.utc)
+        obj.updated_at = datetime.now(UTC)
         return obj
 
     async def list_objects_by_manifest(
@@ -693,14 +690,14 @@ class TestComputeChecksum:
     """PublishService.compute_checksum() utility."""
 
     def _make_obj(self, object_id: str, **kwargs) -> PublishedObject:
-        defaults = dict(
-            object_id=object_id,
-            object_type="claim",
-            manifest_id="m1",
-            lane="narrative",
-            publish_state="published",
-            run_id="r1",
-        )
+        defaults = {
+            "object_id": object_id,
+            "object_type": "claim",
+            "manifest_id": "m1",
+            "lane": "narrative",
+            "publish_state": "published",
+            "run_id": "r1",
+        }
         defaults.update(kwargs)
         return PublishedObject(**defaults)
 

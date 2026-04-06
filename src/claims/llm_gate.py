@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -97,7 +97,7 @@ class FallbackProvenance:
     gate_decision: GateDecision
     model_id: str = ""
     invoked_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
     proposed_concept_id: str | None = None
     proposed_name: str | None = None
@@ -156,7 +156,7 @@ class FallbackBudget:
             self._run_counts[run_id] = self._run_counts.get(run_id, 0) + 1
 
     def _maybe_reset_daily(self) -> None:
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         if today != self._daily_date:
             self._daily_count = 0
             self._daily_date = today
@@ -221,13 +221,13 @@ class FallbackGate:
         # Snapshot budget counts once to avoid redundant lookups
         daily = self._budget.daily_count
         run_used = self._budget.run_count(run_id) if run_id else 0
-        base = dict(
-            mention=mention,
-            passage_length=passage_length,
-            predicate=predicate,
-            run_invocations=run_used,
-            daily_invocations=daily,
-        )
+        base = {
+            "mention": mention,
+            "passage_length": passage_length,
+            "predicate": predicate,
+            "run_invocations": run_used,
+            "daily_invocations": daily,
+        }
 
         # 1. Master switch
         if not self._config.llm_fallback_enabled:

@@ -1,12 +1,11 @@
 """Tests for filing persistence schemas and conversion."""
 
 import pathlib
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 
 from src.filing.persistence import (
-    FilingAttachmentRecord,
     FilingRecord,
     FilingSectionRecord,
     XBRLFactRecord,
@@ -113,8 +112,8 @@ class TestFilingResultToRecords:
     """filing_result_to_records conversion."""
 
     def _make_result(self, **kwargs) -> FilingResult:
-        defaults = dict(
-            identity=FilingIdentity(
+        defaults = {
+            "identity": FilingIdentity(
                 cik="0001234567",
                 accession_number="0001234567-24-000123",
                 filing_type="10-K",
@@ -122,7 +121,7 @@ class TestFilingResultToRecords:
                 company_name="Test Corp",
                 ticker="TST",
             ),
-            sections=[
+            "sections": [
                 FilingSection(
                     section_id="sec_001",
                     section_name="Risk Factors",
@@ -136,11 +135,11 @@ class TestFilingResultToRecords:
                     word_count=4,
                 ),
             ],
-            raw_url="https://sec.gov/filing",
-            status="parsed",
-            provider="edgartools",
-            fetched_at=datetime(2024, 3, 16, tzinfo=timezone.utc),
-        )
+            "raw_url": "https://sec.gov/filing",
+            "status": "parsed",
+            "provider": "edgartools",
+            "fetched_at": datetime(2024, 3, 16, tzinfo=UTC),
+        }
         defaults.update(kwargs)
         return FilingResult(**defaults)
 
@@ -188,7 +187,7 @@ class TestFilingResultToRecords:
     def test_ingested_at_from_fetched_at(self) -> None:
         result = self._make_result()
         filing, _ = filing_result_to_records(result)
-        assert filing.ingested_at == datetime(2024, 3, 16, tzinfo=timezone.utc)
+        assert filing.ingested_at == datetime(2024, 3, 16, tzinfo=UTC)
 
     def test_deterministic_hashes(self) -> None:
         r1 = self._make_result()

@@ -14,7 +14,7 @@ This module defines the shared building blocks that all three families use.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -23,7 +23,6 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from src.contracts.intelligence.lanes import validate_lane
 from src.contracts.intelligence.ownership import OwnershipPolicy
 from src.contracts.intelligence.version import ContractRegistry, ContractVersion
-
 
 # -- Shared validators -----------------------------------------------------
 
@@ -68,7 +67,7 @@ class ReviewDecision(str, Enum):
 
 
 def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # -- Building-block schemas ------------------------------------------------

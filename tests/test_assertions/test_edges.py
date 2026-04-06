@@ -7,20 +7,15 @@ per-concept exposure aggregation, and adjacency cache construction.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.assertions.edges import (
-    DEFAULT_EDGE_CONFIDENCE_THRESHOLD,
-    ConceptExposure,
-    DerivedEdge,
-    PathCacheEntry,
     build_path_cache,
     compute_exposures,
     derive_edge,
     derive_edges,
 )
 from src.assertions.schemas import ResolvedAssertion
-
 
 # -- Helpers ---------------------------------------------------------------
 
@@ -128,8 +123,8 @@ class TestDeriveEdge:
         assert edge.source_diversity == 3
 
     def test_carries_validity_window(self) -> None:
-        t1 = datetime(2025, 1, 1, tzinfo=timezone.utc)
-        t2 = datetime(2025, 12, 31, tzinfo=timezone.utc)
+        t1 = datetime(2025, 1, 1, tzinfo=UTC)
+        t2 = datetime(2025, 12, 31, tzinfo=UTC)
         a = _make_assertion(valid_from=t1, valid_to=t2)
         edge = derive_edge(a)
         assert edge is not None

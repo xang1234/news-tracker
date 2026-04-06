@@ -10,8 +10,7 @@ Proves that:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 import pytest
 
@@ -36,7 +35,6 @@ from src.publish.exporter import (
     verify_bundle_checksum,
 )
 from src.publish.service import PublishService
-
 
 # -- In-memory mock repository (reuse pattern) -----------------------------
 
@@ -72,7 +70,9 @@ class _InMemoryRepo:
     async def get_manifest(self, manifest_id):
         return self.manifests.get(manifest_id)
 
-    async def update_manifest(self, manifest_id, *, object_count=None, checksum=None, published_at=None):
+    async def update_manifest(
+        self, manifest_id, *, object_count=None, checksum=None, published_at=None,
+    ):
         m = self.manifests.get(manifest_id)
         if m is None:
             return None
@@ -140,7 +140,7 @@ def exporter(repo: _InMemoryRepo) -> BundleExporter:
 
 async def _make_manifest(
     service: PublishService, lane: str = LANE_NARRATIVE
-) -> tuple[str, "Manifest"]:
+) -> tuple[str, Manifest]:
     """Helper: create a run + manifest, return (run_id, manifest)."""
     run = await service.create_run(lane)
     m = await service.create_manifest(lane, run.run_id)
@@ -154,14 +154,14 @@ class TestBuildBundleLines:
     """build_bundle_lines() produces valid JSONL."""
 
     def test_header_first(self) -> None:
-        manifest = make_manifest(published_at=datetime.now(timezone.utc))
+        manifest = make_manifest(published_at=datetime.now(UTC))
         lines = build_bundle_lines(manifest, [])
         header = json.loads(lines[0])
         assert header["_type"] == "manifest_header"
         assert header["manifest_id"] == manifest.manifest_id
 
     def test_objects_sorted_by_id(self) -> None:
-        manifest = make_manifest(published_at=datetime.now(timezone.utc))
+        manifest = make_manifest(published_at=datetime.now(UTC))
         obj_b = make_published_object(object_id="obj_b")
         obj_a = make_published_object(object_id="obj_a")
         lines = build_bundle_lines(manifest, [obj_b, obj_a])
@@ -173,12 +173,12 @@ class TestBuildBundleLines:
         assert parsed_b["object_id"] == "obj_b"
 
     def test_empty_manifest(self) -> None:
-        manifest = make_manifest(published_at=datetime.now(timezone.utc))
+        manifest = make_manifest(published_at=datetime.now(UTC))
         lines = build_bundle_lines(manifest, [])
         assert len(lines) == 1  # Just the header
 
     def test_lines_are_valid_json(self) -> None:
-        manifest = make_manifest(published_at=datetime.now(timezone.utc))
+        manifest = make_manifest(published_at=datetime.now(UTC))
         obj = make_published_object()
         lines = build_bundle_lines(manifest, [obj])
         for line in lines:
@@ -189,7 +189,7 @@ class TestChecksums:
     """Checksum generation and verification."""
 
     def test_deterministic(self) -> None:
-        manifest = make_manifest(published_at=datetime.now(timezone.utc))
+        manifest = make_manifest(published_at=datetime.now(UTC))
         obj = make_published_object()
         lines1 = build_bundle_lines(manifest, [obj])
         lines2 = build_bundle_lines(manifest, [obj])
@@ -220,7 +220,7 @@ class TestParseBundleLines:
     """parse_bundle_lines() consumer deserialization."""
 
     def test_roundtrip(self) -> None:
-        manifest = make_manifest(published_at=datetime.now(timezone.utc))
+        manifest = make_manifest(published_at=datetime.now(UTC))
         obj = make_published_object()
         lines = build_bundle_lines(manifest, [obj])
         header, objects = parse_bundle_lines(lines)
@@ -237,7 +237,7 @@ class TestParseBundleLines:
             parse_bundle_lines(['{"foo": "bar"}'])
 
     def test_header_only(self) -> None:
-        manifest = make_manifest(published_at=datetime.now(timezone.utc))
+        manifest = make_manifest(published_at=datetime.now(UTC))
         lines = build_bundle_lines(manifest, [])
         header, objects = parse_bundle_lines(lines)
         assert header["_type"] == "manifest_header"

@@ -6,14 +6,9 @@ trace context building, and multi-lane report aggregation.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from src.monitoring.lane_ops import (
-    DEFAULT_BUDGET_CRITICAL_FRACTION,
-    DEFAULT_BUDGET_WARNING_FRACTION,
-    DEFAULT_FAILURE_CRITICAL,
-    DEFAULT_FAILURE_WARNING,
-    DEFAULT_FRESHNESS_BUDGETS,
     LaneRunSummary,
     build_lane_trace_attributes,
     check_all_lanes,
@@ -26,7 +21,7 @@ from src.monitoring.quality_metrics import (
     SEVERITY_WARNING,
 )
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Helpers ---------------------------------------------------------------
@@ -112,7 +107,7 @@ class TestLaneRunSummary:
         s = _summary()
         try:
             s.failed = 99  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 

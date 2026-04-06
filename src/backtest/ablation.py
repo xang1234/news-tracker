@@ -22,12 +22,11 @@ engine with each config, the framework compares the outputs.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.backtest.intelligence_pit import IntelligenceSnapshot
 from src.contracts.intelligence.version import ContractRegistry
-
 
 # -- Intelligence layer names --------------------------------------------------
 
@@ -107,7 +106,10 @@ def build_standard_suite(
         ),
         AblationConfig(
             name="narrative_v2",
-            description="New narrative component scores (attention, corroboration, confirmation, novelty)",
+            description=(
+                "New narrative component scores"
+                " (attention, corroboration, confirmation, novelty)"
+            ),
             enabled_layers=frozenset({LAYER_NARRATIVE}),
             contract_version=version,
         ),
@@ -188,7 +190,7 @@ class AblationResult:
     metrics: dict[str, float] = field(default_factory=dict)
     run_id: str = ""
     evaluated_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -245,7 +247,7 @@ class AblationComparison:
     results: dict[str, AblationResult] = field(default_factory=dict)
     contributions: list[LayerContribution] = field(default_factory=list)
     compared_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -276,7 +278,7 @@ def compare_ablation_results(
         AblationComparison with per-layer contribution estimates.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     by_name = {r.config.name: r for r in results}
     baseline = by_name.get(baseline_name)

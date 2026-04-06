@@ -26,7 +26,6 @@ from src.graph.baskets import ThematicBasket
 from src.graph.path_scoring import ScoredPath
 from src.publish.lane_health import LaneHealthStatus, PublishReadiness
 
-
 # -- Path explanation payload --------------------------------------------------
 
 

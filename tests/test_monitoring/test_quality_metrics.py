@@ -7,34 +7,25 @@ classification and report aggregation.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from src.monitoring.quality_metrics import (
-    VALID_METRIC_TYPES,
-    DEFAULT_LINEAGE_CRITICAL,
-    DEFAULT_LINEAGE_WARNING,
-    DEFAULT_PARSE_CRITICAL,
-    DEFAULT_PARSE_WARNING,
-    DEFAULT_STALE_CRITICAL,
-    DEFAULT_STALE_WARNING,
-    DEFAULT_UNRESOLVED_CRITICAL,
-    DEFAULT_UNRESOLVED_WARNING,
     SEVERITY_CRITICAL,
     SEVERITY_OK,
     SEVERITY_WARNING,
+    VALID_METRIC_TYPES,
     QualityMetric,
-    QualityReport,
+    _classify,
     build_quality_report,
     check_filing_parse_quality,
     check_lineage_completeness,
     check_stale_evidence,
     check_unresolved_entities,
-    _classify,
 )
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Classification tests -----------------------------------------------------
@@ -295,7 +286,7 @@ class TestDataclasses:
         m = check_lineage_completeness(100, 100, "narrative", now=NOW)
         try:
             m.value = 0.0  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -303,7 +294,7 @@ class TestDataclasses:
         report = build_quality_report([], now=NOW)
         try:
             report.measured_at = NOW  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 

@@ -30,6 +30,15 @@ from src.filing.drift import (
     extract_section_changes,
 )
 from src.filing.edgartools_provider import EdgarToolsProvider
+from src.filing.persistence import (
+    FilingAttachmentRecord,
+    FilingRecord,
+    FilingRepository,
+    FilingSectionRecord,
+    XBRLFactRecord,
+    filing_result_to_records,
+)
+from src.filing.provider import FilingProvider, SECRateLimiter
 from src.filing.publisher import (
     AdoptionPayload,
     DivergencePayload,
@@ -40,8 +49,6 @@ from src.filing.publisher import (
     build_issuer_summaries,
     prepare_filing_publication,
 )
-from src.filing.provider import FilingProvider, SECRateLimiter
-from src.filing.sec_api_provider import SecApiProvider
 from src.filing.schemas import (
     VALID_FILING_STATUSES,
     VALID_FILING_TYPES,
@@ -49,15 +56,8 @@ from src.filing.schemas import (
     FilingResult,
     FilingSection,
 )
+from src.filing.sec_api_provider import SecApiProvider
 from src.filing.sec_policy import SECPolicy
-from src.filing.persistence import (
-    FilingAttachmentRecord,
-    FilingRecord,
-    FilingRepository,
-    FilingSectionRecord,
-    XBRLFactRecord,
-    filing_result_to_records,
-)
 
 __all__ = [
     "AdoptionBreakdown",

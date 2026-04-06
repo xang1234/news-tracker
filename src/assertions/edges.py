@@ -17,7 +17,7 @@ Path-cache inputs: pre-computed adjacency for BFS/traversal.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from src.assertions.schemas import ResolvedAssertion

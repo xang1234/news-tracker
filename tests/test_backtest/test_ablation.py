@@ -6,15 +6,14 @@ comparison, and per-layer contribution quantification.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
+import pytest
 
 from src.backtest.ablation import (
     ALL_LAYERS,
-    LAYER_DIVERGENCE,
     LAYER_FILING,
     LAYER_NARRATIVE,
-    LAYER_STRUCTURAL,
-    AblationComparison,
     AblationConfig,
     AblationResult,
     LayerContribution,
@@ -24,9 +23,7 @@ from src.backtest.ablation import (
 )
 from src.backtest.intelligence_pit import IntelligenceSnapshot
 
-import pytest
-
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 PAST = NOW - timedelta(days=7)
 
 

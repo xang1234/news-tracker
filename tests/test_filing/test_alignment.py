@@ -18,7 +18,6 @@ import pytest
 from src.filing.alignment import (
     FilingComparison,
     SectionAlignment,
-    SectionDiff,
     align_sections,
     compare_filings,
     diff_aligned_sections,

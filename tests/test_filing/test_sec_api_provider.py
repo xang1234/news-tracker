@@ -7,20 +7,19 @@ lineage parity with the primary EdgarToolsProvider.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import date
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.filing.schemas import FilingIdentity, FilingResult, FilingSection
+from src.filing.schemas import FilingIdentity, FilingResult
 from src.filing.sec_api_provider import SecApiProvider
+from src.filing.sec_policy import SECPolicy
 from src.filing.utils import (
     make_section_id,
     normalize_filing_type,
     parse_filing_date,
 )
-from src.filing.sec_policy import SECPolicy
-
 
 # -- Pure function tests ---------------------------------------------------
 

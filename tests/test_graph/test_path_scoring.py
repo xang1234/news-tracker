@@ -6,19 +6,12 @@ compounding, hop decay, and the full scoring pipeline.
 
 from __future__ import annotations
 
-import math
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from src.graph.path_scoring import (
-    DEFAULT_DIVERSITY_CEILING,
     DEFAULT_FRESHNESS_HALF_LIFE_DAYS,
     DEFAULT_FRESHNESS_UNKNOWN,
     DEFAULT_HOP_DECAY,
-    DEFAULT_MIN_PATH_SCORE,
-    DEFAULT_VOLUME_CEILING,
-    PathScoreBreakdown,
-    ScoredEdge,
-    ScoredPath,
     compute_corroboration_factor,
     compute_freshness_factor,
     score_edge,
@@ -26,7 +19,7 @@ from src.graph.path_scoring import (
 )
 from src.graph.structural import StructuralRelation, StructuralSnapshot
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Helpers ---------------------------------------------------------------
@@ -401,7 +394,7 @@ class TestDataclasses:
         paths = score_paths_from(snap, "A", now=NOW)
         try:
             paths[0].path_score = 0.0  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -409,6 +402,6 @@ class TestDataclasses:
         se = score_edge(_rel(), NOW)
         try:
             se.edge_score = 0.0  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass

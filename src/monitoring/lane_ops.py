@@ -17,7 +17,7 @@ aggregated run counts and timestamps, the checker classifies them.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.contracts.intelligence.lanes import (
     ALL_LANES,
@@ -27,14 +27,10 @@ from src.contracts.intelligence.lanes import (
     LANE_STRUCTURAL,
 )
 from src.monitoring.quality_metrics import (
-    SEVERITY_CRITICAL,
-    SEVERITY_OK,
-    SEVERITY_WARNING,
     QualityMetric,
     QualityReport,
     _classify,
 )
-
 
 # -- Default thresholds -------------------------------------------------------
 
@@ -143,7 +139,7 @@ def check_lane_failure_rate(
         QualityMetric with lane_failure_rate type.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     rate = summary.failure_rate
     severity = _classify(
@@ -205,7 +201,7 @@ def check_lane_freshness_budget(
         QualityMetric with lane_freshness_budget type.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
     if budget_hours is None:
         budget_hours = DEFAULT_FRESHNESS_BUDGETS.get(lane, 24.0)
 
@@ -240,7 +236,9 @@ def check_lane_freshness_budget(
             else f"{lane}: no completed runs (budget={budget_hours:.0f}h)"
         ),
         details={
-            "hours_since_completion": round(hours_since, 2) if hours_since != float("inf") else None,
+            "hours_since_completion": (
+                round(hours_since, 2) if hours_since != float("inf") else None
+            ),
             "budget_hours": budget_hours,
             "utilization": round(utilization, 4) if utilization != float("inf") else None,
             "last_completed_at": (
@@ -281,7 +279,7 @@ def check_all_lanes(
         QualityReport with per-lane failure and freshness metrics.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     metrics: list[QualityMetric] = []
 

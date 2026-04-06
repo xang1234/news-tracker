@@ -20,7 +20,7 @@ Usage in consumer tests:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.contracts.intelligence.db_schemas import (
@@ -41,7 +41,7 @@ from src.contracts.intelligence.version import ContractRegistry
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 # -- Pydantic contract model fixtures --------------------------------------

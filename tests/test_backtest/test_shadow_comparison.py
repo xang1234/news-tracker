@@ -6,13 +6,11 @@ statistics, and rollout recommendation logic.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 from src.backtest.shadow_comparison import (
-    DEFAULT_BLOCK_THRESHOLD,
-    DEFAULT_INVESTIGATE_THRESHOLD,
     RECOMMEND_BLOCK,
     RECOMMEND_INVESTIGATE,
     RECOMMEND_PROCEED,
@@ -20,15 +18,13 @@ from src.backtest.shadow_comparison import (
     SEVERITY_MINOR,
     SEVERITY_MISSING,
     Disagreement,
-    DisagreementSet,
-    QASummary,
+    _classify_severity,
     build_disagreement_set,
     build_qa_summary,
     compare_keyed_outputs,
-    _classify_severity,
 )
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Severity classification tests -------------------------------------------

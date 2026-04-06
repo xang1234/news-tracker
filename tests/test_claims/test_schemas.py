@@ -82,16 +82,16 @@ class TestEvidenceClaim:
 
     def _make_claim(self, **overrides) -> EvidenceClaim:
         key = make_claim_key("narrative", "doc_1", "TSMC", "supplies_to", "NVIDIA")
-        defaults = dict(
-            claim_id=make_claim_id(key),
-            claim_key=key,
-            lane="narrative",
-            source_id="doc_1",
-            subject_text="TSMC",
-            predicate="supplies_to",
-            object_text="NVIDIA",
-            contract_version="0.1.0",
-        )
+        defaults = {
+            "claim_id": make_claim_id(key),
+            "claim_key": key,
+            "lane": "narrative",
+            "source_id": "doc_1",
+            "subject_text": "TSMC",
+            "predicate": "supplies_to",
+            "object_text": "NVIDIA",
+            "contract_version": "0.1.0",
+        }
         defaults.update(overrides)
         return EvidenceClaim(**defaults)
 

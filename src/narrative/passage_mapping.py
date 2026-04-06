@@ -21,11 +21,10 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.security_master.concept_schemas import make_concept_id
-
 
 # -- PassageMapping --------------------------------------------------------
 
@@ -66,7 +65,7 @@ class PassageMapping:
     confidence: float = 1.0
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
 

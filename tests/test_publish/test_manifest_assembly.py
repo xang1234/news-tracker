@@ -7,7 +7,7 @@ and diagnostics capture exclusion reasons.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.publish.lane_health import (
     FreshnessLevel,
@@ -17,16 +17,12 @@ from src.publish.lane_health import (
     QuarantineState,
 )
 from src.publish.manifest_assembly import (
-    AssemblyResult,
-    CompositeManifest,
-    LaneContribution,
     LaneOutput,
-    PointerAdvancement,
     assemble_composite_manifest,
     make_composite_id,
 )
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Helpers ---------------------------------------------------------------
@@ -346,7 +342,7 @@ class TestDataclasses:
         o = _output()
         try:
             o.published = False  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -354,7 +350,7 @@ class TestDataclasses:
         result = assemble_composite_manifest([], {}, now=NOW)
         try:
             result.composite.total_object_count = 99  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -362,6 +358,6 @@ class TestDataclasses:
         result = assemble_composite_manifest([], {}, now=NOW)
         try:
             result.ready = True  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass

@@ -18,7 +18,7 @@ as input and return validation results. The caller handles I/O.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.narrative.components import (
@@ -26,7 +26,6 @@ from src.narrative.components import (
     compute_narrative_components,
 )
 from src.narrative.schemas import NarrativeRun
-
 
 # -- Validation results ----------------------------------------------------
 
@@ -62,7 +61,7 @@ class ParityReport:
     checks: list[ParityCheck] = field(default_factory=list)
     run_count: int = 0
     validated_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     @property
@@ -205,7 +204,10 @@ def check_replay_coverage(
             f"confirmation={components.confirmation.score:.2f}, "
             f"novelty={components.novelty_persistence.score:.2f})"
             if has_strong_component
-            else f"Signal triggered but no component score > {STRONG_COMPONENT_THRESHOLD} — investigate"
+            else (
+                f"Signal triggered but no component score"
+                f" > {STRONG_COMPONENT_THRESHOLD} — investigate"
+            )
         ),
         details={
             "run_id": run.run_id,

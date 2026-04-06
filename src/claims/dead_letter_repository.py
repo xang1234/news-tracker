@@ -11,7 +11,7 @@ import json
 import logging
 from typing import Any
 
-from src.claims.quality import VALID_DL_REASONS, DeadLetterRecord
+from src.claims.quality import DeadLetterRecord
 from src.storage.database import Database
 
 logger = logging.getLogger(__name__)

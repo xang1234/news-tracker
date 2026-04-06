@@ -22,7 +22,7 @@ Publication flow:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.narrative.components import NarrativeComponents, compute_narrative_components
@@ -32,7 +32,6 @@ from src.narrative.lane_adapter import (
 )
 from src.narrative.schemas import NarrativeRun
 from src.publish.lane_health import LaneHealthStatus, PublishReadiness
-
 
 # -- Rollup dataclasses ----------------------------------------------------
 
@@ -267,7 +266,7 @@ def prepare_narrative_publication(
         NarrativePublicationResult with payloads, components, rollups.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
     if adapter is None:
         adapter = NarrativeLaneAdapter()
 

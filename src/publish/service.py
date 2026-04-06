@@ -13,12 +13,11 @@ raise ValueError with a descriptive message.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-
-import json
 
 from src.contracts.intelligence.db_schemas import (
     VALID_PUBLISH_STATES,
@@ -304,7 +303,7 @@ class PublishService:
             manifest_id,
             object_count=object_count,
             checksum=checksum,
-            published_at=datetime.now(timezone.utc),
+            published_at=datetime.now(UTC),
         )
         if result is None:
             raise ValueError(f"Failed to seal manifest: {manifest_id}")
@@ -482,8 +481,11 @@ class PublishService:
         # Block most transitions on objects in sealed manifests.
         # Only published → retracted is allowed post-seal.
         manifest = await self._repo.get_manifest(obj.manifest_id)
-        if manifest is not None and manifest.published_at is not None:
-            if target_state != "retracted" or previous_state != "published":
+        if (
+            manifest is not None
+            and manifest.published_at is not None
+            and (target_state != "retracted" or previous_state != "published")
+        ):
                 raise ValueError(
                     f"Cannot transition object {object_id}: manifest "
                     f"{obj.manifest_id} is sealed "

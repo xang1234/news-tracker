@@ -26,7 +26,6 @@ from typing import Any
 from src.contracts.intelligence.db_schemas import Manifest, PublishedObject
 from src.contracts.intelligence.ownership import OwnershipPolicy
 
-
 # -- ReadModelRecord -------------------------------------------------------
 
 

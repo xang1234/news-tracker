@@ -6,13 +6,10 @@ independently and the full cascade end-to-end.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
-
 import pytest
 
 from src.claims.resolver import EntityResolver, ResolverResult, ResolverTier
-from src.security_master.concept_schemas import Concept, ConceptAlias
-
+from src.security_master.concept_schemas import Concept
 
 # -- Mock concept repository -----------------------------------------------
 

@@ -6,7 +6,7 @@ checksums, integrity verification, and parity checking.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.publish.bundle_builder import (
@@ -23,7 +23,7 @@ from src.publish.exporter import compute_bundle_checksum
 from src.publish.lane_health import PublishReadiness
 from src.publish.manifest_assembly import CompositeManifest, LaneContribution
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Helpers ---------------------------------------------------------------
@@ -340,7 +340,7 @@ class TestDataclasses:
         art = build_objects_artifact(_objects())
         try:
             art.checksum = "tampered"  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -350,6 +350,6 @@ class TestDataclasses:
         )
         try:
             bundle.overall_checksum = "tampered"  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass

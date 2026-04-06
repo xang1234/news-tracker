@@ -1,6 +1,6 @@
 """Tests for intelligence contract schemas."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -76,8 +76,8 @@ class TestLineage:
         assert lineage.contract_version == str(ContractRegistry.CURRENT)
 
     def test_valid_temporal_window(self) -> None:
-        t1 = datetime(2026, 1, 1, tzinfo=timezone.utc)
-        t2 = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        t1 = datetime(2026, 1, 1, tzinfo=UTC)
+        t2 = datetime(2026, 6, 1, tzinfo=UTC)
         lineage = Lineage(
             lane=LANE_NARRATIVE,
             run_id="run_001",
@@ -88,7 +88,7 @@ class TestLineage:
         assert lineage.valid_to == t2
 
     def test_same_from_to_allowed(self) -> None:
-        t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        t = datetime(2026, 1, 1, tzinfo=UTC)
         lineage = Lineage(
             lane=LANE_NARRATIVE,
             run_id="run_001",
@@ -98,8 +98,8 @@ class TestLineage:
         assert lineage.valid_from == lineage.valid_to
 
     def test_inverted_temporal_window_rejected(self) -> None:
-        t1 = datetime(2026, 6, 1, tzinfo=timezone.utc)
-        t2 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        t1 = datetime(2026, 6, 1, tzinfo=UTC)
+        t2 = datetime(2026, 1, 1, tzinfo=UTC)
         with pytest.raises(ValidationError, match="valid_to.*must not be before"):
             Lineage(
                 lane=LANE_NARRATIVE,

@@ -6,16 +6,10 @@ and contract compatibility checks.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
+from src.contracts.intelligence.version import ContractRegistry, ContractVersion
 from src.monitoring.publish_metrics import (
-    DEFAULT_COVERAGE_CRITICAL,
-    DEFAULT_COVERAGE_WARNING,
-    DEFAULT_INTEGRITY_CRITICAL,
-    DEFAULT_INTEGRITY_WARNING,
-    DEFAULT_MIN_LANE_OBJECTS,
-    DEFAULT_SEAL_CRITICAL,
-    DEFAULT_SEAL_WARNING,
     check_bundle_integrity,
     check_contract_compat,
     check_coverage_drift,
@@ -28,7 +22,7 @@ from src.monitoring.quality_metrics import (
     SEVERITY_WARNING,
 )
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Manifest seal rate tests --------------------------------------------------
@@ -203,10 +197,6 @@ class TestContractCompat:
         assert "current_version" in m.details
 
 
-# Need ContractVersion/Registry for some tests
-from src.contracts.intelligence.version import ContractRegistry, ContractVersion
-
-
 # -- Publish boundary report tests ---------------------------------------------
 
 
@@ -269,6 +259,6 @@ class TestDataclasses:
         m = check_manifest_seal_rate(10, 10, "narrative", now=NOW)
         try:
             m.value = 0.0  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass

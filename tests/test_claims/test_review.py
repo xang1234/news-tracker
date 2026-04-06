@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from src.claims.resolver import ResolverResult, ResolverTier
 from src.claims.review import (
     REVIEW_TRANSITIONS,
     VALID_RESOLUTIONS,
@@ -20,11 +21,9 @@ from src.claims.review import (
     make_review_task_id,
     validate_review_transition,
 )
-from src.claims.resolver import ResolverResult, ResolverTier
 from src.claims.schemas import EvidenceClaim
 from src.claims.triggers import (
     HIGH_IMPACT_PREDICATES,
-    LOW_CONFIDENCE_THRESHOLD,
     build_merge_proposal,
     build_split_proposal,
     check_competing_predicates,

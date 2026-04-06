@@ -21,12 +21,11 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.contracts.intelligence.version import ContractRegistry
 from src.publish.lane_health import LaneHealthStatus, PublishReadiness
-
 
 # -- Lane output (common interface) -------------------------------------------
 
@@ -115,7 +114,7 @@ class CompositeManifest:
     exclusion_reasons: dict[str, str] = field(default_factory=dict)
     contract_version: str = ""
     assembled_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     @property
@@ -199,7 +198,7 @@ def assemble_composite_manifest(
         AssemblyResult with composite, advancements, and diagnostics.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
     if contract_version is None:
         contract_version = str(ContractRegistry.CURRENT)
 

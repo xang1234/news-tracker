@@ -17,7 +17,7 @@ Non-responsibilities:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
 import httpx
@@ -129,7 +129,7 @@ class SecApiProvider(FilingProvider):
                 raw_url=text_url,
                 status=status,
                 provider=self.name,
-                fetched_at=datetime.now(timezone.utc),
+                fetched_at=datetime.now(UTC),
             )
 
         except Exception as e:
@@ -228,5 +228,5 @@ class SecApiProvider(FilingProvider):
             status="failed",
             error_message=error_message,
             provider=self.name,
-            fetched_at=datetime.now(timezone.utc),
+            fetched_at=datetime.now(UTC),
         )

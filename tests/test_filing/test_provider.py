@@ -2,8 +2,6 @@
 
 from datetime import date
 
-import pytest
-
 from src.filing.config import FilingConfig
 from src.filing.provider import FilingProvider, SECRateLimiter
 from src.filing.schemas import FilingIdentity, FilingResult

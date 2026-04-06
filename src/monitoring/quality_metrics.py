@@ -16,9 +16,8 @@ counts from the database, the checker classifies them.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-
 
 # -- Severity levels ----------------------------------------------------------
 
@@ -88,7 +87,7 @@ class QualityMetric:
     message: str = ""
     details: dict[str, Any] = field(default_factory=dict)
     measured_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     def __post_init__(self) -> None:
@@ -130,7 +129,7 @@ class QualityReport:
 
     metrics: list[QualityMetric] = field(default_factory=list)
     measured_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     @property
@@ -203,7 +202,7 @@ def check_lineage_completeness(
     enabling traceability from published output back to source data.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     rate = objects_with_lineage / total_objects if total_objects > 0 else 1.0
     severity = _classify(rate, warning_threshold, critical_threshold)
@@ -243,7 +242,7 @@ def check_unresolved_entities(
     (exact → alias → fuzzy → LLM) could not find a canonical concept.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     rate = unresolved_count / total_entities if total_entities > 0 else 0.0
     severity = _classify(
@@ -285,7 +284,7 @@ def check_filing_parse_quality(
     and overall filing ingestion success rate.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     rate = parsed_count / total_filings if total_filings > 0 else 1.0
     severity = _classify(rate, warning_threshold, critical_threshold)
@@ -327,7 +326,7 @@ def check_stale_evidence(
     relationships that should be revalidated or retracted.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     rate = stale_count / total_assertions if total_assertions > 0 else 0.0
     severity = _classify(
@@ -368,5 +367,5 @@ def build_quality_report(
     The report's overall_severity is the worst across all metrics.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
     return QualityReport(metrics=metrics, measured_at=now)

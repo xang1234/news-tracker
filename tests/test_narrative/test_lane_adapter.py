@@ -6,7 +6,7 @@ pipeline without modifying existing narrative workflows.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import numpy as np
 
@@ -19,7 +19,7 @@ from src.narrative.lane_adapter import (
 )
 from src.narrative.schemas import NarrativeRun, NarrativeSignalState
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Helpers ---------------------------------------------------------------
@@ -29,22 +29,22 @@ def _make_narrative_run(
     run_id: str = "nr_001",
     **overrides,
 ) -> NarrativeRun:
-    defaults = dict(
-        run_id=run_id,
-        theme_id="theme_hbm",
-        status="active",
-        centroid=np.zeros(768),
-        label="HBM Supply Surge",
-        started_at=NOW,
-        last_document_at=NOW,
-        doc_count=15,
-        platform_count=3,
-        avg_sentiment=0.6,
-        avg_authority=0.7,
-        current_rate_per_hour=12.0,
-        conviction_score=75.0,
-        ticker_counts={"TSM": 5, "NVDA": 3},
-    )
+    defaults = {
+        "run_id": run_id,
+        "theme_id": "theme_hbm",
+        "status": "active",
+        "centroid": np.zeros(768),
+        "label": "HBM Supply Surge",
+        "started_at": NOW,
+        "last_document_at": NOW,
+        "doc_count": 15,
+        "platform_count": 3,
+        "avg_sentiment": 0.6,
+        "avg_authority": 0.7,
+        "current_rate_per_hour": 12.0,
+        "conviction_score": 75.0,
+        "ticker_counts": {"TSM": 5, "NVDA": 3},
+    }
     defaults.update(overrides)
     return NarrativeRun(**defaults)
 
@@ -54,13 +54,13 @@ def _make_signal(
     trigger_type: str = "narrative_surge",
     **overrides,
 ) -> NarrativeSignalState:
-    defaults = dict(
-        run_id=run_id,
-        trigger_type=trigger_type,
-        state="active",
-        last_score=0.85,
-        metadata={"uplift": 3.2},
-    )
+    defaults = {
+        "run_id": run_id,
+        "trigger_type": trigger_type,
+        "state": "active",
+        "last_score": 0.85,
+        "metadata": {"uplift": 3.2},
+    }
     defaults.update(overrides)
     return NarrativeSignalState(**defaults)
 

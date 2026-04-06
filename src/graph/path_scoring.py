@@ -24,11 +24,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.graph.structural import StructuralRelation, StructuralSnapshot
-
 
 # -- Configuration defaults ---------------------------------------------------
 
@@ -287,14 +286,14 @@ def score_paths_from(
         List of ScoredPath sorted by path_score descending.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     adj = _build_adjacency(snapshot.current)
-    score_kwargs = dict(
-        half_life_days=half_life_days,
-        diversity_ceiling=diversity_ceiling,
-        volume_ceiling=volume_ceiling,
-    )
+    score_kwargs = {
+        "half_life_days": half_life_days,
+        "diversity_ceiling": diversity_ceiling,
+        "volume_ceiling": volume_ceiling,
+    }
 
     paths: list[ScoredPath] = []
 
@@ -304,7 +303,7 @@ def score_paths_from(
         for rel in adj.get(source_concept_id, [])
     ]
 
-    for rel, se in first_hop:
+    for _rel, se in first_hop:
         path = _make_path([se], hop_decay)
         if path.path_score >= min_path_score:
             paths.append(path)

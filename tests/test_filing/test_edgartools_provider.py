@@ -7,7 +7,7 @@ into our FilingResult contract shape.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -18,14 +18,13 @@ from src.filing.edgartools_provider import (
     _extract_sections,
     _filing_to_result,
 )
+from src.filing.schemas import FilingIdentity, FilingResult
+from src.filing.sec_policy import SECPolicy
 from src.filing.utils import (
     make_section_id,
     normalize_filing_type,
     parse_filing_date,
 )
-from src.filing.schemas import FilingIdentity, FilingResult, FilingSection
-from src.filing.sec_policy import SECPolicy
-
 
 # -- Helper: mock edgartools Filing object ---------------------------------
 
@@ -112,7 +111,7 @@ class TestParseDate:
         assert parse_filing_date(d) == d
 
     def test_datetime_object(self) -> None:
-        dt = datetime(2024, 3, 15, 10, 30, tzinfo=timezone.utc)
+        dt = datetime(2024, 3, 15, 10, 30, tzinfo=UTC)
         assert parse_filing_date(dt) == date(2024, 3, 15)
 
     def test_iso_string(self) -> None:

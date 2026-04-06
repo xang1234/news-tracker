@@ -7,18 +7,16 @@ mixed-signal detection, and path provenance.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.graph.baskets import (
     ROLE_AT_RISK,
     ROLE_BENEFICIARY,
-    BasketMember,
-    ThematicBasket,
     build_thematic_basket,
 )
 from src.graph.path_scoring import PathScoreBreakdown, ScoredPath
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 THEME = "concept_theme_hbm"
 
 
@@ -290,7 +288,7 @@ class TestDataclasses:
         basket = build_thematic_basket(THEME, [_path()], now=NOW)
         try:
             basket.beneficiaries[0].best_score = 0.0  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -298,6 +296,6 @@ class TestDataclasses:
         basket = build_thematic_basket(THEME, [], now=NOW)
         try:
             basket.member_count = 99  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass

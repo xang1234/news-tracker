@@ -6,16 +6,11 @@ assembly can use to decide what is publishable.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from src.publish.lane_health import (
-    DEFAULT_AGING_HOURS,
     DEFAULT_FRESH_HOURS,
-    DEFAULT_MIN_QUALITY_SAMPLE,
-    DEFAULT_QUALITY_CRITICAL,
-    DEFAULT_QUALITY_THRESHOLD,
     FreshnessLevel,
-    LaneHealthStatus,
     PublishReadiness,
     QualityLevel,
     QuarantineRecord,
@@ -26,7 +21,7 @@ from src.publish.lane_health import (
     determine_readiness,
 )
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Freshness tests -------------------------------------------------------

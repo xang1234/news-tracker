@@ -17,10 +17,8 @@ metrics as input and return a scored breakdown.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
-from dataclasses import asdict
-from datetime import datetime, timezone
-
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 
 # -- Component scores ------------------------------------------------------
 
@@ -239,7 +237,7 @@ def compute_novelty_persistence(
     grows logarithmically with duration (diminishing returns).
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     hours_since_last = max(
         0.0, (now - last_document_at).total_seconds() / 3600

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from functools import partial
 from typing import Any
 
@@ -23,7 +23,6 @@ from src.filing.schemas import (
     FilingResult,
     FilingSection,
 )
-from src.filing.sec_policy import SECPolicy
 from src.filing.utils import make_section_id, normalize_filing_type, parse_filing_date
 
 logger = logging.getLogger(__name__)
@@ -122,7 +121,9 @@ def _filing_to_result(
     )
 
     # Parse dates
-    filed_date = parse_filing_date(getattr(header, "filed", None) or getattr(header, "filing_date", None))
+    filed_date = parse_filing_date(
+        getattr(header, "filed", None) or getattr(header, "filing_date", None)
+    )
     period = parse_filing_date(getattr(filing, "period_of_report", None))
 
     # Normalize filing type to match our VALID_FILING_TYPES
@@ -150,7 +151,7 @@ def _filing_to_result(
         raw_url=raw_url,
         status="parsed" if sections else "fetched",
         provider=provider_name,
-        fetched_at=datetime.now(timezone.utc),
+        fetched_at=datetime.now(UTC),
     )
 
 
@@ -195,7 +196,7 @@ class EdgarToolsProvider(FilingProvider):
                 status="failed",
                 error_message=str(e),
                 provider=self.name,
-                fetched_at=datetime.now(timezone.utc),
+                fetched_at=datetime.now(UTC),
             )
 
     def _fetch_filing_sync(self, accession_number: str) -> FilingResult:
@@ -216,7 +217,7 @@ class EdgarToolsProvider(FilingProvider):
                 status="failed",
                 error_message=f"Filing not found: {accession_number}",
                 provider=self.name,
-                fetched_at=datetime.now(timezone.utc),
+                fetched_at=datetime.now(UTC),
             )
 
         return _filing_to_result(filing, self.name)

@@ -14,7 +14,7 @@ counts and state, the checker classifies them.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.contracts.intelligence.lanes import ALL_LANES
 from src.contracts.intelligence.ownership import check_compatibility
@@ -27,7 +27,6 @@ from src.monitoring.quality_metrics import (
     QualityReport,
     _classify,
 )
-
 
 # -- Default thresholds -------------------------------------------------------
 
@@ -65,7 +64,7 @@ def check_manifest_seal_rate(
     objects were added but the manifest was never finalized.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     rate = sealed_count / total_manifests if total_manifests > 0 else 1.0
     severity = _classify(rate, warning_threshold, critical_threshold)
@@ -103,7 +102,7 @@ def check_bundle_integrity(
     content doesn't match its recorded checksum.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     rate = valid_count / total_bundles if total_bundles > 0 else 1.0
     severity = _classify(rate, warning_threshold, critical_threshold)
@@ -154,7 +153,7 @@ def check_coverage_drift(
         QualityMetric with coverage_drift type.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
     if expected_lanes is None:
         expected_lanes = ALL_LANES
 
@@ -211,7 +210,7 @@ def check_contract_compat(
         QualityMetric with contract_compat type.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     result = check_compatibility(published_version)
 
@@ -265,7 +264,7 @@ def check_publish_boundary(
         QualityReport with publish boundary metrics.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     metrics: list[QualityMetric] = []
 

@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import logging
 
-from src.claims.review import ReviewTask, make_review_task_id
 from src.claims.resolver import ResolverResult, ResolverTier
+from src.claims.review import ReviewTask, make_review_task_id
 from src.claims.schemas import EvidenceClaim
 
 logger = logging.getLogger(__name__)

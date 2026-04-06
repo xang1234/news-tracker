@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 # -- Valid state sets -------------------------------------------------------
@@ -84,10 +84,10 @@ class ResolvedAssertion:
     source_diversity: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
     updated_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     def __post_init__(self) -> None:
@@ -143,7 +143,7 @@ class AssertionClaimLink:
     contribution_weight: float = 1.0
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     def __post_init__(self) -> None:

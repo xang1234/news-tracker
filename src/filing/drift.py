@@ -23,11 +23,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.filing.alignment import SectionAlignment, SectionDiff
-
 
 # -- Drift dimensions --------------------------------------------------------
 
@@ -158,7 +157,7 @@ class DriftDecomposition:
     dimensions: list[DimensionDrift] = field(default_factory=list)
     unusual_dimensions: list[str] = field(default_factory=list)
     computed_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -353,7 +352,7 @@ def compute_drift_decomposition(
         DriftDecomposition with per-dimension z-scores and flags.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     # Classify issuer changes
     issuer_by_dim = classify_by_dimension(issuer_changes)

@@ -6,7 +6,7 @@ lane runs, and manifests, plus snapshot building and validation.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src.assertions.schemas import ResolvedAssertion
@@ -23,7 +23,7 @@ from src.backtest.intelligence_pit import (
 )
 from src.contracts.intelligence.db_schemas import LaneRun, Manifest
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 PAST = NOW - timedelta(days=7)
 FUTURE = NOW + timedelta(days=7)
 
@@ -412,6 +412,6 @@ class TestDataclasses:
         )
         try:
             snap.as_of = FUTURE  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass

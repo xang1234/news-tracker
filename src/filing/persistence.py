@@ -10,7 +10,7 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import Any
 
 from src.filing.schemas import VALID_FILING_STATUSES, FilingResult
@@ -66,7 +66,7 @@ class FilingRecord:
     error_message: str | None = None
     source_published_at: datetime | None = None
     ingested_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime | None = None
@@ -172,7 +172,7 @@ def filing_result_to_records(
         run_id=run_id,
         status=result.status,
         error_message=result.error_message,
-        ingested_at=result.fetched_at or datetime.now(timezone.utc),
+        ingested_at=result.fetched_at or datetime.now(UTC),
         metadata=result.metadata,
     )
 

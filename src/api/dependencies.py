@@ -24,12 +24,12 @@ from src.keywords.service import KeywordsService
 from src.narrative.repository import NarrativeRepository
 from src.ner.config import NERConfig
 from src.ner.service import NERService
+from src.publish.repository import PublishRepository
+from src.publish.service import PublishService
 from src.security_master.repository import SecurityMasterRepository
 from src.sentiment.aggregation import SentimentAggregator
 from src.sentiment.config import SentimentConfig
 from src.sentiment.service import SentimentService
-from src.publish.repository import PublishRepository
-from src.publish.service import PublishService
 from src.sources.repository import SourcesRepository
 from src.storage.database import Database
 from src.storage.repository import DocumentRepository
@@ -561,8 +561,10 @@ async def cleanup_dependencies() -> None:
     """Clean up global dependencies on shutdown."""
     global _embedding_service, _sentiment_service, _redis_client, _vector_store_manager, _database
     global _theme_repository, _document_repository, _sentiment_aggregator, _ranking_service
-    global _alert_repository, _feedback_repository, _causal_graph, _propagation_service, _alert_broadcaster
-    global _graph_repository, _ner_service, _keywords_service, _pattern_extractor, _security_master_repository
+    global _alert_repository, _feedback_repository, _causal_graph
+    global _propagation_service, _alert_broadcaster
+    global _graph_repository, _ner_service, _keywords_service
+    global _pattern_extractor, _security_master_repository
     global _sources_repository, _publish_service
 
     _vector_store_manager = None

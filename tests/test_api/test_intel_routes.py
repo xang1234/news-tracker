@@ -6,9 +6,7 @@ to exercise API endpoint logic without a database.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
-from unittest.mock import AsyncMock
+from datetime import UTC, datetime
 
 import pytest
 from fastapi import FastAPI
@@ -21,16 +19,15 @@ from src.contracts.intelligence.db_schemas import (
     ManifestPointer,
     PublishedObject,
 )
-from src.contracts.intelligence.lanes import LANE_FILING, LANE_NARRATIVE
+from src.contracts.intelligence.lanes import LANE_NARRATIVE
 from src.contracts.intelligence.version import ContractRegistry
 from src.publish.service import PublishService
-
 
 # -- Test app setup --------------------------------------------------------
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _make_app(service: PublishService) -> FastAPI:
@@ -39,8 +36,8 @@ def _make_app(service: PublishService) -> FastAPI:
     app.include_router(router)
 
     # Override dependencies
-    from src.api.dependencies import get_publish_service
     from src.api.auth import verify_api_key
+    from src.api.dependencies import get_publish_service
 
     app.dependency_overrides[get_publish_service] = lambda: service
     app.dependency_overrides[verify_api_key] = lambda: "test_key"
@@ -90,7 +87,9 @@ class _InMemoryRepo:
     async def get_manifest(self, manifest_id: str) -> Manifest | None:
         return self.manifests.get(manifest_id)
 
-    async def update_manifest(self, manifest_id, *, object_count=None, checksum=None, published_at=None):
+    async def update_manifest(
+        self, manifest_id, *, object_count=None, checksum=None, published_at=None,
+    ):
         m = self.manifests.get(manifest_id)
         if m and object_count is not None:
             m.object_count = object_count

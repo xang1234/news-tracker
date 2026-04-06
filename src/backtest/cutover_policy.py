@@ -16,9 +16,8 @@ values, the policy evaluates them against thresholds.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-
 
 # -- Publish gate --------------------------------------------------------------
 
@@ -123,7 +122,7 @@ class CutoverChecklist:
     gates: list[PublishGate] = field(default_factory=list)
     triggered_quarantines: list[dict[str, Any]] = field(default_factory=list)
     evaluated_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     @property
@@ -366,7 +365,7 @@ def evaluate_cutover_checklist(
         CutoverChecklist with pass/fail for each gate.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
     if gates is None:
         gates = DEFAULT_GATES
 

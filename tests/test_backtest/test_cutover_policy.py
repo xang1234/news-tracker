@@ -6,7 +6,7 @@ full cutover go/no-go recommendation.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -14,14 +14,13 @@ from src.backtest.cutover_policy import (
     DEFAULT_GATES,
     DEFAULT_QUARANTINE_TRIGGERS,
     CutoverChecklist,
-    PublishGate,
     QuarantineTrigger,
     evaluate_cutover_checklist,
     evaluate_gate,
     evaluate_quarantine_triggers,
 )
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Helpers ---------------------------------------------------------------

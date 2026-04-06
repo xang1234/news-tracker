@@ -13,8 +13,26 @@ from fastapi.responses import JSONResponse
 
 from src.api.dependencies import cleanup_dependencies, get_alert_broadcaster, stop_alert_broadcaster
 from src.api.middleware.timeout import TimeoutMiddleware
-from src.api.routes import alerts, documents, embed, entities, events, events_extract, feedback, graph, health, intel, keywords_route, ner, search, securities, sentiment, sources, themes
-from src.api.routes import ws_alerts
+from src.api.routes import (
+    alerts,
+    documents,
+    embed,
+    entities,
+    events,
+    events_extract,
+    feedback,
+    graph,
+    health,
+    intel,
+    keywords_route,
+    ner,
+    search,
+    securities,
+    sentiment,
+    sources,
+    themes,
+    ws_alerts,
+)
 from src.api.routes.ws_alerts import set_broadcaster
 from src.config.settings import get_settings
 

@@ -208,7 +208,7 @@ async def check_contract_compatibility(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(e),
-        )
+        ) from e
     return CompatibilityResponse(
         compatible=result.compatible,
         current_version=str(result.current),
@@ -232,8 +232,8 @@ async def check_contract_compatibility(
 )
 async def get_run(
     run_id: str,
-    api_key: str = Depends(verify_api_key),
-    service: PublishService = Depends(get_publish_service),
+    api_key: str = Depends(verify_api_key),  # noqa: B008
+    service: PublishService = Depends(get_publish_service),  # noqa: B008
 ) -> LaneRunResponse:
     run = await service.get_run(run_id)
     if run is None:
@@ -260,8 +260,8 @@ async def list_runs(
         default=None, alias="status", description="Filter by status"
     ),
     limit: int = Query(default=50, ge=1, le=200, description="Max results"),
-    api_key: str = Depends(verify_api_key),
-    service: PublishService = Depends(get_publish_service),
+    api_key: str = Depends(verify_api_key),  # noqa: B008
+    service: PublishService = Depends(get_publish_service),  # noqa: B008
 ) -> list[LaneRunResponse]:
     if lane is not None and lane not in VALID_LANES:
         raise HTTPException(
@@ -294,8 +294,8 @@ async def list_runs(
 )
 async def get_manifest(
     manifest_id: str,
-    api_key: str = Depends(verify_api_key),
-    service: PublishService = Depends(get_publish_service),
+    api_key: str = Depends(verify_api_key),  # noqa: B008
+    service: PublishService = Depends(get_publish_service),  # noqa: B008
 ) -> ManifestResponse:
     m = await service.get_manifest(manifest_id)
     if m is None:
@@ -332,8 +332,8 @@ async def get_manifest(
 )
 async def get_pointer(
     lane: str,
-    api_key: str = Depends(verify_api_key),
-    service: PublishService = Depends(get_publish_service),
+    api_key: str = Depends(verify_api_key),  # noqa: B008
+    service: PublishService = Depends(get_publish_service),  # noqa: B008
 ) -> PointerResponse:
     if lane not in VALID_LANES:
         raise HTTPException(
@@ -370,8 +370,8 @@ async def get_pointer(
 )
 async def get_object(
     object_id: str,
-    api_key: str = Depends(verify_api_key),
-    service: PublishService = Depends(get_publish_service),
+    api_key: str = Depends(verify_api_key),  # noqa: B008
+    service: PublishService = Depends(get_publish_service),  # noqa: B008
 ) -> PublishedObjectResponse:
     obj = await service.get_object(object_id)
     if obj is None:
@@ -400,8 +400,8 @@ async def get_object(
 async def submit_review(
     object_id: str,
     body: ReviewRequest,
-    api_key: str = Depends(verify_api_key),
-    service: PublishService = Depends(get_publish_service),
+    api_key: str = Depends(verify_api_key),  # noqa: B008
+    service: PublishService = Depends(get_publish_service),  # noqa: B008
 ) -> ReviewResponse:
     try:
         previous_state, updated = await service.transition_object(
@@ -414,7 +414,7 @@ async def submit_review(
             if "not found" in detail.lower()
             else status.HTTP_422_UNPROCESSABLE_ENTITY
         )
-        raise HTTPException(status_code=code, detail=detail)
+        raise HTTPException(status_code=code, detail=detail) from e
     return ReviewResponse(
         object=_object_to_response(updated),
         previous_state=previous_state,

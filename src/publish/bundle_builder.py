@@ -23,12 +23,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.publish.exporter import compute_bundle_checksum
 from src.publish.manifest_assembly import CompositeManifest
-
 
 # -- Artifact dataclass --------------------------------------------------------
 
@@ -71,7 +70,7 @@ class CompositeBundle:
     artifacts: dict[str, BundleArtifact] = field(default_factory=dict)
     overall_checksum: str = ""
     created_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     @property
@@ -220,7 +219,7 @@ def build_composite_bundle(
         CompositeBundle with all artifacts and overall checksum.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     objects_art = build_objects_artifact(lane_objects)
     rollups_art = build_rollups_artifact(rollups)

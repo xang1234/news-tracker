@@ -25,7 +25,6 @@ from src.filing.adoption import FilingAdoptionScore
 from src.filing.divergence import DivergenceAlert
 from src.publish.lane_health import LaneHealthStatus, PublishReadiness
 
-
 # -- Payload dataclasses (publishable, no internal state) --------------------
 
 

@@ -23,7 +23,7 @@ class TestLaneConstants:
             assert lane in VALID_LANES
 
     def test_valid_lanes_matches_all_lanes(self) -> None:
-        assert VALID_LANES == frozenset(ALL_LANES)
+        assert frozenset(ALL_LANES) == VALID_LANES
 
     def test_named_constants_in_all_lanes(self) -> None:
         expected = {LANE_NARRATIVE, LANE_FILING, LANE_STRUCTURAL, LANE_BACKTEST}

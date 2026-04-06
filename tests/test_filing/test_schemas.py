@@ -1,6 +1,6 @@
 """Tests for filing lane schemas."""
 
-from datetime import date, datetime, timezone
+from datetime import date
 
 import pytest
 

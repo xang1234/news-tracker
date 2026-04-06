@@ -6,23 +6,19 @@ reports, and the linkage between failures and artifacts.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from src.contracts.intelligence.db_schemas import LaneRun
 from src.monitoring.operator_hooks import (
-    VALID_QUARANTINE_ACTIONS,
-    InspectionReport,
     QuarantineAction,
-    ReplayPlan,
-    RunFailureContext,
     build_inspection_report,
     build_replay_plan,
 )
 from src.publish.lane_health import QuarantineState
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Helpers ---------------------------------------------------------------

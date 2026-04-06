@@ -7,7 +7,7 @@ filtering, and deterministic IDs.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -20,7 +20,7 @@ from src.publish.read_model import (
 )
 
 MIGRATION_PATH = Path("migrations/028_read_model.sql")
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Helpers ---------------------------------------------------------------
@@ -30,15 +30,15 @@ def _make_manifest(
     manifest_id: str = "mfst_001",
     **overrides,
 ) -> Manifest:
-    defaults = dict(
-        manifest_id=manifest_id,
-        lane="narrative",
-        run_id="run_001",
-        contract_version="0.1.0",
-        published_at=NOW,
-        object_count=3,
-        checksum="sha256_abc",
-    )
+    defaults = {
+        "manifest_id": manifest_id,
+        "lane": "narrative",
+        "run_id": "run_001",
+        "contract_version": "0.1.0",
+        "published_at": NOW,
+        "object_count": 3,
+        "checksum": "sha256_abc",
+    }
     defaults.update(overrides)
     return Manifest(**defaults)
 
@@ -49,18 +49,18 @@ def _make_object(
     publish_state: str = "published",
     **overrides,
 ) -> PublishedObject:
-    defaults = dict(
-        object_id=object_id,
-        object_type=object_type,
-        manifest_id="mfst_001",
-        lane="narrative",
-        publish_state=publish_state,
-        contract_version="0.1.0",
-        source_ids=["doc_1"],
-        run_id="run_001",
-        payload={"subject": "TSMC", "predicate": "supplies_to"},
-        lineage={"extraction_method": "rule"},
-    )
+    defaults = {
+        "object_id": object_id,
+        "object_type": object_type,
+        "manifest_id": "mfst_001",
+        "lane": "narrative",
+        "publish_state": publish_state,
+        "contract_version": "0.1.0",
+        "source_ids": ["doc_1"],
+        "run_id": "run_001",
+        "payload": {"subject": "TSMC", "predicate": "supplies_to"},
+        "lineage": {"extraction_method": "rule"},
+    }
     defaults.update(overrides)
     return PublishedObject(**defaults)
 
@@ -141,8 +141,8 @@ class TestBuildRecord:
         assert record.source_ids == ["doc_1", "doc_2"]
 
     def test_carries_validity_window(self) -> None:
-        t1 = datetime(2025, 1, 1, tzinfo=timezone.utc)
-        t2 = datetime(2025, 12, 31, tzinfo=timezone.utc)
+        t1 = datetime(2025, 1, 1, tzinfo=UTC)
+        t2 = datetime(2025, 12, 31, tzinfo=UTC)
         builder = ReadModelBuilder()
         manifest = _make_manifest()
         obj = _make_object(valid_from=t1, valid_to=t2)

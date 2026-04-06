@@ -12,6 +12,13 @@ from src.publish.bundle_builder import (
     check_bundle_parity,
     verify_bundle_integrity,
 )
+from src.publish.exporter import (
+    BundleExporter,
+    build_bundle_lines,
+    compute_bundle_checksum,
+    parse_bundle_lines,
+    verify_bundle_checksum,
+)
 from src.publish.manifest_assembly import (
     AssemblyResult,
     CompositeManifest,
@@ -20,13 +27,6 @@ from src.publish.manifest_assembly import (
     PointerAdvancement,
     assemble_composite_manifest,
     make_composite_id,
-)
-from src.publish.exporter import (
-    BundleExporter,
-    build_bundle_lines,
-    compute_bundle_checksum,
-    parse_bundle_lines,
-    verify_bundle_checksum,
 )
 from src.publish.repository import PublishRepository
 from src.publish.service import (

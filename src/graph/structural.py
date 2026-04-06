@@ -25,11 +25,10 @@ Translation flow:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.assertions.edges import DerivedEdge
-
 
 # -- Predicate sign mapping ---------------------------------------------------
 
@@ -149,7 +148,7 @@ class StructuralSnapshot:
     predicate_counts: dict[str, int] = field(default_factory=dict)
     concept_count: int = 0
     computed_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
 
     @property
@@ -228,7 +227,7 @@ def build_structural_snapshot(
         StructuralSnapshot with current/history split and metadata.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     current: list[StructuralRelation] = []
     history: list[StructuralRelation] = []

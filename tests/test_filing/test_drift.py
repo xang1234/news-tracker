@@ -6,27 +6,25 @@ peer-normalized, and flagged when unusual.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.filing.alignment import SectionAlignment, SectionDiff, normalize_section_name
 from src.filing.drift import (
     DRIFT_DIMENSIONS,
-    UNUSUAL_THRESHOLD,
     Z_SCORE_CAP,
     DimensionDrift,
-    DriftDecomposition,
     SectionChange,
+    _peer_stats,
+    _section_to_dimension,
+    _z_score,
     classify_by_dimension,
     compute_dimension_magnitude,
     compute_drift_decomposition,
     extract_section_changes,
-    _peer_stats,
-    _section_to_dimension,
-    _z_score,
 )
 from src.filing.persistence import FilingSectionRecord
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 ISSUER = "concept_issuer_abc123"
 
 
@@ -536,7 +534,7 @@ class TestDataclasses:
         c = _make_change()
         try:
             c.change_magnitude = 0.0  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -548,7 +546,7 @@ class TestDataclasses:
         )
         try:
             d.magnitude = 0.0  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -556,6 +554,6 @@ class TestDataclasses:
         result = compute_drift_decomposition(ISSUER, [], [], now=NOW)
         try:
             result.issuer_concept_id = "other"  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass

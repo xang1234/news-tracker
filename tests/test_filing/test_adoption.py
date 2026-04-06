@@ -6,10 +6,9 @@ and temporal consistency combine into a traceable adoption score.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.filing.adoption import (
-    DENSITY_SATURATION,
     DEFAULT_SECTION_WEIGHT,
     WEIGHT_FACT_ALIGNMENT,
     WEIGHT_SECTION_COVERAGE,
@@ -17,11 +16,8 @@ from src.filing.adoption import (
     WEIGHT_TEMPORAL_CONSISTENCY,
     AdoptionBreakdown,
     FactInput,
-    FactSignal,
-    FilingAdoptionScore,
     SectionInput,
     SectionSignal,
-    compute_filing_adoption,
     _compute_fact_signals,
     _compute_section_coverage,
     _compute_section_depth,
@@ -29,9 +25,10 @@ from src.filing.adoption import (
     _compute_temporal_consistency,
     _count_term_mentions,
     _get_section_weight,
+    compute_filing_adoption,
 )
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 ISSUER = "concept_issuer_abc123"
 THEME = "concept_theme_xyz789"
@@ -607,7 +604,7 @@ class TestDataclasses:
         s = _make_section()
         try:
             s.content = "modified"  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -615,7 +612,7 @@ class TestDataclasses:
         f = _make_fact()
         try:
             f.value = "0"  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -626,7 +623,7 @@ class TestDataclasses:
         )
         try:
             result.score = 0.5  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -639,6 +636,6 @@ class TestDataclasses:
         )
         try:
             b.section_coverage = 1.0  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass

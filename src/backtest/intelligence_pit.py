@@ -24,7 +24,6 @@ from typing import Any
 from src.assertions.schemas import ResolvedAssertion
 from src.contracts.intelligence.db_schemas import LaneRun, Manifest
 
-
 # -- Point-in-time filter functions -------------------------------------------
 
 

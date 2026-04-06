@@ -7,13 +7,9 @@ decay, source diversity, review bonuses, and edge cases.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
-import pytest
+from datetime import UTC, datetime, timedelta
 
 from src.assertions.aggregation import (
-    DEFAULT_DIVERSITY_TARGET,
-    DEFAULT_FRESHNESS_DECAY,
     DEFAULT_REVIEW_BONUS,
     ConfidenceBreakdown,
     aggregate_assertion,
@@ -21,10 +17,9 @@ from src.assertions.aggregation import (
 from src.assertions.schemas import AssertionClaimLink, ResolvedAssertion
 from src.claims.schemas import EvidenceClaim
 
-
 # -- Helpers ---------------------------------------------------------------
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 def _make_claim(
@@ -348,9 +343,9 @@ class TestValidityWindow:
     """Assertion validity derived from supporting claims."""
 
     def test_derives_from_claims(self) -> None:
-        t1 = datetime(2025, 1, 1, tzinfo=timezone.utc)
-        t2 = datetime(2025, 6, 1, tzinfo=timezone.utc)
-        t3 = datetime(2025, 12, 31, tzinfo=timezone.utc)
+        t1 = datetime(2025, 1, 1, tzinfo=UTC)
+        t2 = datetime(2025, 6, 1, tzinfo=UTC)
+        t3 = datetime(2025, 12, 31, tzinfo=UTC)
         claims = [
             _make_claim("c1", source_published_at=NOW,
                         claim_valid_from=t1, claim_valid_to=t2),

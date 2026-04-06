@@ -6,21 +6,19 @@ with predicate signs, current/history split, and snapshot metadata.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from src.assertions.edges import DerivedEdge
 from src.graph.structural import (
     DEFAULT_SIGN,
     PREDICATE_SIGNS,
-    StructuralRelation,
-    StructuralSnapshot,
     build_structural_snapshot,
     get_predicate_sign,
     translate_derived_edge,
 )
 
-NOW = datetime(2026, 4, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 4, 1, tzinfo=UTC)
 
 
 # -- Helpers ---------------------------------------------------------------
@@ -305,7 +303,7 @@ class TestDataclasses:
         rel = translate_derived_edge(_make_edge())
         try:
             rel.confidence = 0.0  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass
 
@@ -313,6 +311,6 @@ class TestDataclasses:
         snap = build_structural_snapshot([], now=NOW)
         try:
             snap.concept_count = 99  # type: ignore[misc]
-            assert False, "Should be frozen"
+            raise AssertionError("Should be frozen")
         except AttributeError:
             pass

@@ -14,10 +14,9 @@ provides the computation and decision logic.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
-
 
 # -- Health status types ---------------------------------------------------
 
@@ -127,7 +126,7 @@ class QuarantineRecord:
     lane: str
     reason: str
     quarantined_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
+        default_factory=lambda: datetime.now(UTC)
     )
     quarantined_by: str = "system"
     state: QuarantineState = QuarantineState.QUARANTINED
@@ -152,7 +151,7 @@ def compute_freshness(
         return FreshnessLevel.UNKNOWN, None
 
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
     hours = (now - last_completed_at).total_seconds() / 3600
     hours = max(0.0, hours)
