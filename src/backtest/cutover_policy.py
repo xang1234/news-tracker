@@ -373,20 +373,24 @@ def evaluate_cutover_checklist(
     evaluated_gates: list[PublishGate] = []
     for gate_def in gates:
         name = gate_def["name"]
+        higher = gate_def.get("higher_is_better", True)
+        threshold = gate_def["threshold"]
         value = metric_values.get(name)
+
         if value is None:
-            evaluated_gates.append(PublishGate(
-                name=name,
-                description=gate_def["description"],
-                threshold=gate_def["threshold"],
-                current_value=0.0,
-                passed=False,
-                higher_is_better=gate_def.get("higher_is_better", True),
-            ))
+            passed = False
+            value = 0.0
         else:
-            gate = evaluate_gate(name, value, gates=gates)
-            if gate is not None:
-                evaluated_gates.append(gate)
+            passed = value >= threshold if higher else value <= threshold
+
+        evaluated_gates.append(PublishGate(
+            name=name,
+            description=gate_def["description"],
+            threshold=threshold,
+            current_value=value,
+            passed=passed,
+            higher_is_better=higher,
+        ))
 
     triggered = evaluate_quarantine_triggers(
         metric_values, lane, triggers=triggers,
