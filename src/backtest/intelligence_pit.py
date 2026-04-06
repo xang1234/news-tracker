@@ -18,7 +18,7 @@ entity lists, the filters select what was known at as_of.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from src.assertions.schemas import ResolvedAssertion
@@ -26,6 +26,18 @@ from src.contracts.intelligence.db_schemas import LaneRun, Manifest
 
 
 # -- Point-in-time filter functions -------------------------------------------
+
+
+def _filter_dicts_pit(
+    items: list[dict[str, Any]],
+    ts_field: str,
+    as_of: datetime,
+) -> list[dict[str, Any]]:
+    """Filter dicts by a timestamp field <= as_of."""
+    return [
+        d for d in items
+        if d.get(ts_field) is not None and d[ts_field] <= as_of
+    ]
 
 
 def filter_claims_pit(
@@ -36,14 +48,8 @@ def filter_claims_pit(
 
     Uses created_at as the PIT anchor — when the claim was
     first ingested, not when the source was published.
-
-    Claims are passed as dicts (from repository queries) since
-    the EvidenceClaim schema varies by claim type.
     """
-    return [
-        c for c in claims
-        if c.get("created_at") is not None and c["created_at"] <= as_of
-    ]
+    return _filter_dicts_pit(claims, "created_at", as_of)
 
 
 def filter_assertions_pit(
@@ -69,14 +75,8 @@ def filter_filings_pit(
     Uses ingested_at (when we fetched from EDGAR), NOT
     source_published_at (when SEC published). This prevents
     look-ahead from late-fetched filings.
-
-    Filings are passed as dicts for flexibility across
-    FilingRecord and raw query results.
     """
-    return [
-        f for f in filings
-        if f.get("ingested_at") is not None and f["ingested_at"] <= as_of
-    ]
+    return _filter_dicts_pit(filings, "ingested_at", as_of)
 
 
 def filter_lane_runs_pit(
@@ -165,7 +165,6 @@ class IntelligenceSnapshot:
         filings: Filings ingested by as_of.
         lane_runs: Completed lane runs by as_of.
         manifests: Sealed manifests by as_of.
-        active_manifests: Most recent manifest per lane at as_of.
     """
 
     as_of: datetime
@@ -174,7 +173,17 @@ class IntelligenceSnapshot:
     filings: list[dict[str, Any]] = field(default_factory=list)
     lane_runs: list[LaneRun] = field(default_factory=list)
     manifests: list[Manifest] = field(default_factory=list)
-    active_manifests: dict[str, Manifest] = field(default_factory=dict)
+
+    @property
+    def active_manifests(self) -> dict[str, Manifest]:
+        """Most recent sealed manifest per lane."""
+        active: dict[str, Manifest] = {}
+        for m in self.manifests:
+            if m.published_at is None:
+                continue
+            if m.lane not in active or m.published_at > active[m.lane].published_at:  # type: ignore[operator]
+                active[m.lane] = m
+        return active
 
     def to_dict(self) -> dict[str, Any]:
         """Summary for audit logging."""
@@ -202,8 +211,8 @@ def build_intelligence_snapshot(
 ) -> IntelligenceSnapshot:
     """Build a point-in-time snapshot from pre-fetched data.
 
-    Applies PIT filters to all entity types and reconstructs
-    the active manifest per lane.
+    Applies PIT filters to all entity types. The active_manifests
+    property on the snapshot derives the latest per-lane manifest.
 
     Args:
         as_of: Evaluation timestamp.
@@ -216,29 +225,13 @@ def build_intelligence_snapshot(
     Returns:
         IntelligenceSnapshot with only data known at as_of.
     """
-    pit_claims = filter_claims_pit(claims, as_of)
-    pit_assertions = filter_assertions_pit(assertions, as_of)
-    pit_filings = filter_filings_pit(filings, as_of)
-    pit_runs = filter_lane_runs_pit(lane_runs, as_of)
-    pit_manifests = filter_manifests_pit(manifests, as_of)
-
-    active: dict[str, Manifest] = {}
-    for m in pit_manifests:
-        if m.lane not in active or (
-            m.published_at is not None
-            and (active[m.lane].published_at is None
-                 or m.published_at > active[m.lane].published_at)
-        ):
-            active[m.lane] = m
-
     return IntelligenceSnapshot(
         as_of=as_of,
-        claims=pit_claims,
-        assertions=pit_assertions,
-        filings=pit_filings,
-        lane_runs=pit_runs,
-        manifests=pit_manifests,
-        active_manifests=active,
+        claims=filter_claims_pit(claims, as_of),
+        assertions=filter_assertions_pit(assertions, as_of),
+        filings=filter_filings_pit(filings, as_of),
+        lane_runs=filter_lane_runs_pit(lane_runs, as_of),
+        manifests=filter_manifests_pit(manifests, as_of),
     )
 
 
