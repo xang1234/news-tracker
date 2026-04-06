@@ -87,9 +87,7 @@ class RecomputeResult:
     assertions_updated: int = 0
     edges_added: int = 0
     edges_removed: int = 0
-    recomputed_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    recomputed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def had_changes(self) -> bool:
@@ -208,9 +206,5 @@ def find_affected_assertion_ids(
     through their claim links.
     """
     claim_id_set = set(claim_ids)
-    affected = {
-        lnk.assertion_id
-        for lnk in links
-        if lnk.claim_id in claim_id_set
-    }
+    affected = {lnk.assertion_id for lnk in links if lnk.claim_id in claim_id_set}
     return sorted(affected)

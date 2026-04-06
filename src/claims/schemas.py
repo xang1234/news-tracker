@@ -16,17 +16,11 @@ from typing import Any
 
 from src.contracts.intelligence.lanes import VALID_LANES
 
-VALID_CLAIM_STATUSES = frozenset(
-    {"active", "superseded", "retracted", "disputed"}
-)
+VALID_CLAIM_STATUSES = frozenset({"active", "superseded", "retracted", "disputed"})
 
-VALID_SOURCE_TYPES = frozenset(
-    {"document", "filing_section", "graph_edge", "manual"}
-)
+VALID_SOURCE_TYPES = frozenset({"document", "filing_section", "graph_edge", "manual"})
 
-VALID_EXTRACTION_METHODS = frozenset(
-    {"rule", "llm", "hybrid", "manual"}
-)
+VALID_EXTRACTION_METHODS = frozenset({"rule", "llm", "hybrid", "manual"})
 
 
 def make_claim_key(
@@ -119,10 +113,7 @@ class EvidenceClaim:
 
     def __post_init__(self) -> None:
         if self.lane not in VALID_LANES:
-            raise ValueError(
-                f"Invalid lane {self.lane!r}. "
-                f"Must be one of {sorted(VALID_LANES)}"
-            )
+            raise ValueError(f"Invalid lane {self.lane!r}. Must be one of {sorted(VALID_LANES)}")
         if self.source_type not in VALID_SOURCE_TYPES:
             raise ValueError(
                 f"Invalid source_type {self.source_type!r}. "

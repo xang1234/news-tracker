@@ -69,9 +69,7 @@ class CompositeBundle:
     contract_version: str
     artifacts: dict[str, BundleArtifact] = field(default_factory=dict)
     overall_checksum: str = ""
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def total_records(self) -> int:

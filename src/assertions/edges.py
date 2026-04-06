@@ -150,8 +150,7 @@ def derive_edge(
         return None
 
     is_current = (
-        assertion.status in ("active", "disputed")
-        and assertion.confidence >= confidence_threshold
+        assertion.status in ("active", "disputed") and assertion.confidence >= confidence_threshold
     )
     if not is_current and assertion.status not in ("retracted", "superseded", "disputed"):
         return None

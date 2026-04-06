@@ -193,8 +193,7 @@ class TestQASummary:
 
     def test_investigate(self) -> None:
         disagreements = [
-            Disagreement(key=f"d{i}", category="test", severity=SEVERITY_MATERIAL)
-            for i in range(8)
+            Disagreement(key=f"d{i}", category="test", severity=SEVERITY_MATERIAL) for i in range(8)
         ]
         ds = build_disagreement_set(disagreements, 100, now=NOW)
         qa = build_qa_summary(ds)
@@ -212,8 +211,7 @@ class TestQASummary:
     def test_minor_disagreements_dont_trigger(self) -> None:
         """Only material disagreements count toward thresholds."""
         disagreements = [
-            Disagreement(key=f"d{i}", category="test", severity=SEVERITY_MINOR)
-            for i in range(50)
+            Disagreement(key=f"d{i}", category="test", severity=SEVERITY_MINOR) for i in range(50)
         ]
         ds = build_disagreement_set(disagreements, 100, now=NOW)
         qa = build_qa_summary(ds)
@@ -225,7 +223,9 @@ class TestQASummary:
         ]
         ds = build_disagreement_set(disagreements, 100, now=NOW)
         qa = build_qa_summary(
-            ds, investigate_threshold=0.005, block_threshold=0.02,
+            ds,
+            investigate_threshold=0.005,
+            block_threshold=0.02,
         )
         assert qa.recommendation == RECOMMEND_INVESTIGATE
 
@@ -252,7 +252,9 @@ class TestQASummary:
     def test_run_provenance(self) -> None:
         ds = build_disagreement_set([], 10, now=NOW)
         qa = build_qa_summary(
-            ds, current_run_id="run_cur", shadow_run_id="run_shd",
+            ds,
+            current_run_id="run_cur",
+            shadow_run_id="run_shd",
         )
         assert qa.current_run_id == "run_cur"
         assert qa.shadow_run_id == "run_shd"

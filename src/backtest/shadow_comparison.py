@@ -89,9 +89,7 @@ class DisagreementSet:
 
     disagreements: list[Disagreement] = field(default_factory=list)
     total_comparisons: int = 0
-    computed_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    computed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def category_counts(self) -> dict[str, int]:
@@ -208,29 +206,46 @@ def compare_keyed_outputs(
         in_shadow = key in shadow
 
         if not in_current:
-            disagreements.append(Disagreement(
-                key=key, category=category, severity=SEVERITY_MISSING,
-                current_value=None, shadow_value=shadow[key],
-                explanation=f"{key}: present in shadow but not current",
-                run_provenance=provenance,
-            ))
+            disagreements.append(
+                Disagreement(
+                    key=key,
+                    category=category,
+                    severity=SEVERITY_MISSING,
+                    current_value=None,
+                    shadow_value=shadow[key],
+                    explanation=f"{key}: present in shadow but not current",
+                    run_provenance=provenance,
+                )
+            )
         elif not in_shadow:
-            disagreements.append(Disagreement(
-                key=key, category=category, severity=SEVERITY_MISSING,
-                current_value=current[key], shadow_value=None,
-                explanation=f"{key}: present in current but not shadow",
-                run_provenance=provenance,
-            ))
+            disagreements.append(
+                Disagreement(
+                    key=key,
+                    category=category,
+                    severity=SEVERITY_MISSING,
+                    current_value=current[key],
+                    shadow_value=None,
+                    explanation=f"{key}: present in current but not shadow",
+                    run_provenance=provenance,
+                )
+            )
         elif current[key] != shadow[key]:
             severity = _classify_severity(
-                current[key], shadow[key], numeric_tolerance,
+                current[key],
+                shadow[key],
+                numeric_tolerance,
             )
-            disagreements.append(Disagreement(
-                key=key, category=category, severity=severity,
-                current_value=current[key], shadow_value=shadow[key],
-                explanation=f"{key}: {current[key]} → {shadow[key]}",
-                run_provenance=provenance,
-            ))
+            disagreements.append(
+                Disagreement(
+                    key=key,
+                    category=category,
+                    severity=severity,
+                    current_value=current[key],
+                    shadow_value=shadow[key],
+                    explanation=f"{key}: {current[key]} → {shadow[key]}",
+                    run_provenance=provenance,
+                )
+            )
 
     return disagreements
 

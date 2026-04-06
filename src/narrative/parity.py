@@ -60,9 +60,7 @@ class ParityReport:
 
     checks: list[ParityCheck] = field(default_factory=list)
     run_count: int = 0
-    validated_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    validated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def passed(self) -> bool:
@@ -132,21 +130,13 @@ def check_backfill_stability(
     """
     issues = []
     if run_a.doc_count != run_b.doc_count:
-        issues.append(
-            f"doc_count: {run_a.doc_count} vs {run_b.doc_count}"
-        )
+        issues.append(f"doc_count: {run_a.doc_count} vs {run_b.doc_count}")
     if run_a.platform_count != run_b.platform_count:
-        issues.append(
-            f"platform_count: {run_a.platform_count} vs {run_b.platform_count}"
-        )
+        issues.append(f"platform_count: {run_a.platform_count} vs {run_b.platform_count}")
     if abs(run_a.avg_sentiment - run_b.avg_sentiment) > FLOAT_TOLERANCE:
-        issues.append(
-            f"avg_sentiment: {run_a.avg_sentiment:.3f} vs {run_b.avg_sentiment:.3f}"
-        )
+        issues.append(f"avg_sentiment: {run_a.avg_sentiment:.3f} vs {run_b.avg_sentiment:.3f}")
     if abs(run_a.avg_authority - run_b.avg_authority) > FLOAT_TOLERANCE:
-        issues.append(
-            f"avg_authority: {run_a.avg_authority:.3f} vs {run_b.avg_authority:.3f}"
-        )
+        issues.append(f"avg_authority: {run_a.avg_authority:.3f} vs {run_b.avg_authority:.3f}")
 
     passed = len(issues) == 0
     return ParityCheck(

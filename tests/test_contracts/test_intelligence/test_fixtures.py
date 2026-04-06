@@ -5,7 +5,6 @@ can be serialized and deserialized without errors. These tests
 serve as the consumer-side compatibility verification target.
 """
 
-
 from src.contracts.intelligence.fixtures import (
     make_export_bundle,
     make_lane_run,

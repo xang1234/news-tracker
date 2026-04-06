@@ -128,9 +128,7 @@ class TestQualityDeadLetter:
         assert CheckCode.MISSING_CONTRACT_VERSION in verdict.checks_failed
 
     def test_inverted_span(self) -> None:
-        claim = _make_claim(
-            source_span_start=100, source_span_end=50
-        )
+        claim = _make_claim(source_span_start=100, source_span_end=50)
         verdict = run_quality_checks(claim)
         assert verdict.disposition == Disposition.DEAD_LETTER
         assert CheckCode.INVALID_SPAN in verdict.checks_failed
@@ -195,9 +193,7 @@ class TestQualityQuarantine:
 
     def test_custom_source_text_limit(self) -> None:
         claim = _make_claim(source_text="x" * 200)
-        verdict = run_quality_checks(
-            claim, max_source_text_length=100
-        )
+        verdict = run_quality_checks(claim, max_source_text_length=100)
         assert verdict.disposition == Disposition.QUARANTINE
 
     def test_metadata_too_large(self) -> None:
@@ -348,9 +344,7 @@ class TestVerdictToDeadLetter:
         verdict = run_quality_checks(claim)
         assert verdict.disposition == Disposition.DEAD_LETTER
 
-        dl = verdict_to_dead_letter(
-            verdict, claim=claim, run_id="run_1"
-        )
+        dl = verdict_to_dead_letter(verdict, claim=claim, run_id="run_1")
         assert dl.reason == "quality_check_failed"
         assert dl.claim_snapshot is not None
         assert "checks_failed" in dl.error_detail

@@ -73,9 +73,7 @@ class AssertionRepository:
 
     # -- Assertion CRUD ----------------------------------------------------
 
-    async def upsert_assertion(
-        self, assertion: ResolvedAssertion
-    ) -> ResolvedAssertion:
+    async def upsert_assertion(self, assertion: ResolvedAssertion) -> ResolvedAssertion:
         """Insert or update an assertion (idempotent on assertion_id).
 
         On conflict, updates aggregate fields (confidence, counts,
@@ -128,13 +126,10 @@ class AssertionRepository:
         )
         return _row_to_assertion(row)
 
-    async def get_assertion(
-        self, assertion_id: str
-    ) -> ResolvedAssertion | None:
+    async def get_assertion(self, assertion_id: str) -> ResolvedAssertion | None:
         """Fetch an assertion by ID."""
         row = await self._db.fetchrow(
-            "SELECT * FROM news_intel.resolved_assertions "
-            "WHERE assertion_id = $1",
+            "SELECT * FROM news_intel.resolved_assertions WHERE assertion_id = $1",
             assertion_id,
         )
         return _row_to_assertion(row) if row else None
@@ -214,9 +209,7 @@ class AssertionRepository:
         )
         return [_row_to_assertion(row) for row in rows]
 
-    async def update_status(
-        self, assertion_id: str, new_status: str
-    ) -> ResolvedAssertion | None:
+    async def update_status(self, assertion_id: str, new_status: str) -> ResolvedAssertion | None:
         """Update an assertion's status."""
         if new_status not in VALID_ASSERTION_STATUSES:
             raise ValueError(
@@ -237,9 +230,7 @@ class AssertionRepository:
 
     # -- Claim link CRUD ---------------------------------------------------
 
-    async def upsert_link(
-        self, link: AssertionClaimLink
-    ) -> AssertionClaimLink:
+    async def upsert_link(self, link: AssertionClaimLink) -> AssertionClaimLink:
         """Insert or update a claim link (idempotent on assertion_id + claim_id).
 
         On conflict, updates link_type and weight (a claim might
@@ -265,9 +256,7 @@ class AssertionRepository:
         )
         return _row_to_link(row)
 
-    async def get_links_for_assertion(
-        self, assertion_id: str
-    ) -> list[AssertionClaimLink]:
+    async def get_links_for_assertion(self, assertion_id: str) -> list[AssertionClaimLink]:
         """Get all claim links for an assertion."""
         rows = await self._db.fetch(
             """
@@ -279,9 +268,7 @@ class AssertionRepository:
         )
         return [_row_to_link(row) for row in rows]
 
-    async def get_links_for_claim(
-        self, claim_id: str
-    ) -> list[AssertionClaimLink]:
+    async def get_links_for_claim(self, claim_id: str) -> list[AssertionClaimLink]:
         """Get all assertion links for a specific claim."""
         rows = await self._db.fetch(
             """

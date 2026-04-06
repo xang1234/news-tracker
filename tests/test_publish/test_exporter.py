@@ -71,7 +71,12 @@ class _InMemoryRepo:
         return self.manifests.get(manifest_id)
 
     async def update_manifest(
-        self, manifest_id, *, object_count=None, checksum=None, published_at=None,
+        self,
+        manifest_id,
+        *,
+        object_count=None,
+        checksum=None,
+        published_at=None,
     ):
         m = self.manifests.get(manifest_id)
         if m is None:
@@ -90,7 +95,8 @@ class _InMemoryRepo:
     async def advance_pointer(self, lane, manifest_id, *, metadata=None):
         old = self.pointers.get(lane)
         ptr = ManifestPointer(
-            lane=lane, manifest_id=manifest_id,
+            lane=lane,
+            manifest_id=manifest_id,
             previous_manifest_id=old.manifest_id if old else None,
         )
         self.pointers[lane] = ptr

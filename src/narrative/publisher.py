@@ -167,19 +167,17 @@ def build_symbol_rollups(
 
     rollups = []
     for symbol, s in sorted(symbol_data.items()):
-        avg_sent = (
-            s["sentiment_sum"] / s["sentiment_weight"]
-            if s["sentiment_weight"] > 0
-            else 0.0
+        avg_sent = s["sentiment_sum"] / s["sentiment_weight"] if s["sentiment_weight"] > 0 else 0.0
+        rollups.append(
+            SymbolRollup(
+                symbol=symbol,
+                run_count=len(s["run_ids"]),
+                total_doc_count=s["doc_count"],
+                max_composite=s["max_composite"],
+                avg_sentiment=avg_sent,
+                contributing_run_ids=s["run_ids"],
+            )
         )
-        rollups.append(SymbolRollup(
-            symbol=symbol,
-            run_count=len(s["run_ids"]),
-            total_doc_count=s["doc_count"],
-            max_composite=s["max_composite"],
-            avg_sentiment=avg_sent,
-            contributing_run_ids=s["run_ids"],
-        ))
     return rollups
 
 
@@ -216,24 +214,20 @@ def build_theme_rollups(
 
     rollups = []
     for tid, t in sorted(theme_data.items()):
-        avg_sent = (
-            t["sentiment_sum"] / t["sentiment_weight"]
-            if t["sentiment_weight"] > 0
-            else 0.0
+        avg_sent = t["sentiment_sum"] / t["sentiment_weight"] if t["sentiment_weight"] > 0 else 0.0
+        top_symbols = sorted(t["symbol_counts"], key=lambda s: -t["symbol_counts"][s])[:5]
+        rollups.append(
+            ThemeRollup(
+                theme_id=tid,
+                theme_label=t["label"],
+                run_count=len(t["run_ids"]),
+                total_doc_count=t["doc_count"],
+                max_composite=t["max_composite"],
+                avg_sentiment=avg_sent,
+                top_symbols=top_symbols,
+                contributing_run_ids=t["run_ids"],
+            )
         )
-        top_symbols = sorted(
-            t["symbol_counts"], key=lambda s: -t["symbol_counts"][s]
-        )[:5]
-        rollups.append(ThemeRollup(
-            theme_id=tid,
-            theme_label=t["label"],
-            run_count=len(t["run_ids"]),
-            total_doc_count=t["doc_count"],
-            max_composite=t["max_composite"],
-            avg_sentiment=avg_sent,
-            top_symbols=top_symbols,
-            contributing_run_ids=t["run_ids"],
-        ))
     return rollups
 
 

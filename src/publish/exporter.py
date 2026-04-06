@@ -63,9 +63,7 @@ def _serialize_manifest_header(manifest: Manifest) -> dict[str, Any]:
         "lane": manifest.lane,
         "run_id": manifest.run_id,
         "contract_version": manifest.contract_version,
-        "published_at": manifest.published_at.isoformat()
-        if manifest.published_at
-        else None,
+        "published_at": manifest.published_at.isoformat() if manifest.published_at else None,
         "object_count": manifest.object_count,
         "checksum": manifest.checksum,
         "metadata": manifest.metadata,
@@ -73,9 +71,7 @@ def _serialize_manifest_header(manifest: Manifest) -> dict[str, Any]:
     }
 
 
-def build_bundle_lines(
-    manifest: Manifest, objects: list[PublishedObject]
-) -> list[str]:
+def build_bundle_lines(manifest: Manifest, objects: list[PublishedObject]) -> list[str]:
     """Build JSONL lines for a bundle export.
 
     Args:
@@ -126,8 +122,7 @@ def parse_bundle_lines(
     header = json.loads(lines[0])
     if header.get("_type") != "manifest_header":
         raise ValueError(
-            "First line of bundle must be a manifest header "
-            f"(got _type={header.get('_type')!r})"
+            f"First line of bundle must be a manifest header (got _type={header.get('_type')!r})"
         )
     objects = [json.loads(line) for line in lines[1:]]
     return header, objects
@@ -186,14 +181,11 @@ class BundleExporter:
             raise ValueError(f"Manifest not found: {manifest_id}")
         if manifest.published_at is None:
             raise ValueError(
-                f"Manifest {manifest_id} is not sealed. "
-                "Call seal_manifest() before exporting."
+                f"Manifest {manifest_id} is not sealed. Call seal_manifest() before exporting."
             )
 
         # Fetch only published objects
-        objects = await self._repo.list_objects_by_manifest(
-            manifest_id, publish_state="published"
-        )
+        objects = await self._repo.list_objects_by_manifest(manifest_id, publish_state="published")
 
         lines = build_bundle_lines(manifest, objects)
         checksum = compute_bundle_checksum(lines)

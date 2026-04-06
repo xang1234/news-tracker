@@ -277,7 +277,9 @@ class TestPrepareStructuralPublication:
         paths = [_path(target="A"), _path(target="B")]
         baskets = [_basket()]
         result = prepare_structural_publication(
-            paths, baskets, _healthy_status(),
+            paths,
+            baskets,
+            _healthy_status(),
         )
         assert result.published is True
         assert len(result.path_explanations) == 2
@@ -287,7 +289,9 @@ class TestPrepareStructuralPublication:
 
     def test_blocked_publication(self) -> None:
         result = prepare_structural_publication(
-            [_path()], [_basket()], _blocked_status(),
+            [_path()],
+            [_basket()],
+            _blocked_status(),
         )
         assert result.published is False
         assert result.block_reason is not None
@@ -297,7 +301,9 @@ class TestPrepareStructuralPublication:
 
     def test_empty_inputs(self) -> None:
         result = prepare_structural_publication(
-            [], [], _healthy_status(),
+            [],
+            [],
+            _healthy_status(),
         )
         assert result.published is True
         assert result.object_count == 0
@@ -306,7 +312,9 @@ class TestPrepareStructuralPublication:
         paths = [_path(target="A"), _path(target="B"), _path(target="C")]
         baskets = [_basket(), _basket()]
         result = prepare_structural_publication(
-            paths, baskets, _healthy_status(),
+            paths,
+            baskets,
+            _healthy_status(),
         )
         assert result.object_count == 5  # 3 paths + 2 baskets
 
@@ -319,13 +327,17 @@ class TestPrepareStructuralPublication:
             readiness=PublishReadiness.WARN,
         )
         result = prepare_structural_publication(
-            [_path()], [], warn_health,
+            [_path()],
+            [],
+            warn_health,
         )
         assert result.published is True
 
     def test_block_reason_includes_details(self) -> None:
         result = prepare_structural_publication(
-            [], [], _blocked_status(),
+            [],
+            [],
+            _blocked_status(),
         )
         assert result.block_reason is not None
         assert "stale" in result.block_reason.lower() or "blocked" in result.block_reason.lower()
@@ -333,13 +345,18 @@ class TestPrepareStructuralPublication:
     def test_path_explanations_have_assertion_lineage(self) -> None:
         paths = [_path()]
         result = prepare_structural_publication(
-            paths, [], _healthy_status(),
+            paths,
+            [],
+            _healthy_status(),
         )
         assert len(result.path_explanations[0].assertion_ids) > 0
 
     def test_custom_top_n(self) -> None:
         baskets = [_basket(beneficiaries=10)]
         result = prepare_structural_publication(
-            [], baskets, _healthy_status(), top_n=3,
+            [],
+            baskets,
+            _healthy_status(),
+            top_n=3,
         )
         assert len(result.basket_payloads[0].top_beneficiaries) == 3

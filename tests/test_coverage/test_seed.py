@@ -27,8 +27,7 @@ from src.security_master.concept_schemas import (
 )
 
 PACK_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "src" / "coverage" / "data" / "semiconductors_pack_1.json"
+    Path(__file__).resolve().parents[2] / "src" / "coverage" / "data" / "semiconductors_pack_1.json"
 )
 
 
@@ -164,7 +163,8 @@ class TestSemiconductorPackContent:
 
     def test_tsmc_supplies_nvidia(self, pack_data: dict) -> None:
         tsmc_nvidia = [
-            r for r in pack_data["supply_chain"]
+            r
+            for r in pack_data["supply_chain"]
             if r["source"] == "Taiwan Semiconductor Manufacturing"
             and r["target"] == "NVIDIA Corporation"
         ]
@@ -194,8 +194,8 @@ class TestPackAsTemplate:
         _, concepts, aliases, links, rels, profiles, members = seed_objects
         # If we got here without exceptions, all __post_init__ passed
         assert len(concepts) > 20  # issuers + securities + technologies + themes
-        assert len(aliases) > 50   # multiple aliases per concept
-        assert len(rels) > 10      # supply chain edges
+        assert len(aliases) > 50  # multiple aliases per concept
+        assert len(rels) > 10  # supply chain edges
         assert len(profiles) > 20  # one per non-security concept
 
     def test_build_is_pure_function(self, pack_data: dict) -> None:

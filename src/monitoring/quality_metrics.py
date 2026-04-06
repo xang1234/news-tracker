@@ -28,18 +28,20 @@ SEVERITY_CRITICAL = "critical"
 SEVERITY_ORDER = {SEVERITY_OK: 0, SEVERITY_WARNING: 1, SEVERITY_CRITICAL: 2}
 
 
-VALID_METRIC_TYPES = frozenset({
-    "lineage_completeness",
-    "unresolved_entities",
-    "filing_parse_quality",
-    "stale_evidence",
-    "lane_failure_rate",
-    "lane_freshness_budget",
-    "manifest_seal_rate",
-    "bundle_integrity",
-    "coverage_drift",
-    "contract_compat",
-})
+VALID_METRIC_TYPES = frozenset(
+    {
+        "lineage_completeness",
+        "unresolved_entities",
+        "filing_parse_quality",
+        "stale_evidence",
+        "lane_failure_rate",
+        "lane_freshness_budget",
+        "manifest_seal_rate",
+        "bundle_integrity",
+        "coverage_drift",
+        "contract_compat",
+    }
+)
 
 
 # -- Default thresholds -------------------------------------------------------
@@ -86,9 +88,7 @@ class QualityMetric:
     thresholds: dict[str, float] = field(default_factory=dict)
     message: str = ""
     details: dict[str, Any] = field(default_factory=dict)
-    measured_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    measured_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.metric_type not in VALID_METRIC_TYPES:
@@ -98,8 +98,7 @@ class QualityMetric:
             )
         if self.severity not in SEVERITY_ORDER:
             raise ValueError(
-                f"Invalid severity {self.severity!r}. "
-                f"Must be one of {sorted(SEVERITY_ORDER)}"
+                f"Invalid severity {self.severity!r}. Must be one of {sorted(SEVERITY_ORDER)}"
             )
 
     def to_dict(self) -> dict[str, Any]:
@@ -128,9 +127,7 @@ class QualityReport:
     """
 
     metrics: list[QualityMetric] = field(default_factory=list)
-    measured_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    measured_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def overall_severity(self) -> str:
@@ -246,7 +243,10 @@ def check_unresolved_entities(
 
     rate = unresolved_count / total_entities if total_entities > 0 else 0.0
     severity = _classify(
-        rate, warning_threshold, critical_threshold, higher_is_better=False,
+        rate,
+        warning_threshold,
+        critical_threshold,
+        higher_is_better=False,
     )
 
     return QualityMetric(
@@ -256,8 +256,7 @@ def check_unresolved_entities(
         severity=severity,
         thresholds={"warning": warning_threshold, "critical": critical_threshold},
         message=(
-            f"{lane}: {rate:.1%} unresolved entity rate "
-            f"({unresolved_count}/{total_entities})"
+            f"{lane}: {rate:.1%} unresolved entity rate ({unresolved_count}/{total_entities})"
         ),
         details={
             "total_entities": total_entities,
@@ -330,7 +329,10 @@ def check_stale_evidence(
 
     rate = stale_count / total_assertions if total_assertions > 0 else 0.0
     severity = _classify(
-        rate, warning_threshold, critical_threshold, higher_is_better=False,
+        rate,
+        warning_threshold,
+        critical_threshold,
+        higher_is_better=False,
     )
 
     return QualityMetric(

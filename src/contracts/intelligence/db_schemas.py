@@ -22,13 +22,9 @@ from src.contracts.intelligence.lanes import VALID_LANES
 
 # -- Valid state sets -------------------------------------------------------
 
-VALID_RUN_STATUSES = frozenset(
-    {"pending", "running", "completed", "failed", "cancelled"}
-)
+VALID_RUN_STATUSES = frozenset({"pending", "running", "completed", "failed", "cancelled"})
 
-VALID_PUBLISH_STATES = frozenset(
-    {"draft", "review", "published", "retracted"}
-)
+VALID_PUBLISH_STATES = frozenset({"draft", "review", "published", "retracted"})
 
 VALID_EXPORT_FORMATS = frozenset({"jsonl", "parquet", "csv"})
 
@@ -63,23 +59,15 @@ class LaneRun:
     config_snapshot: dict[str, Any] = field(default_factory=dict)
     metrics: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
-    updated_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.lane not in VALID_LANES:
-            raise ValueError(
-                f"Invalid lane {self.lane!r}. "
-                f"Must be one of {sorted(VALID_LANES)}"
-            )
+            raise ValueError(f"Invalid lane {self.lane!r}. Must be one of {sorted(VALID_LANES)}")
         if self.status not in VALID_RUN_STATUSES:
             raise ValueError(
-                f"Invalid run status {self.status!r}. "
-                f"Must be one of {sorted(VALID_RUN_STATUSES)}"
+                f"Invalid run status {self.status!r}. Must be one of {sorted(VALID_RUN_STATUSES)}"
             )
 
 
@@ -109,16 +97,11 @@ class Manifest:
     object_count: int = 0
     checksum: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.lane not in VALID_LANES:
-            raise ValueError(
-                f"Invalid lane {self.lane!r}. "
-                f"Must be one of {sorted(VALID_LANES)}"
-            )
+            raise ValueError(f"Invalid lane {self.lane!r}. Must be one of {sorted(VALID_LANES)}")
 
 
 # -- intel_pub.manifest_pointers -------------------------------------------
@@ -141,18 +124,13 @@ class ManifestPointer:
 
     lane: str
     manifest_id: str
-    activated_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    activated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     previous_manifest_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.lane not in VALID_LANES:
-            raise ValueError(
-                f"Invalid lane {self.lane!r}. "
-                f"Must be one of {sorted(VALID_LANES)}"
-            )
+            raise ValueError(f"Invalid lane {self.lane!r}. Must be one of {sorted(VALID_LANES)}")
 
 
 # -- intel_pub.published_objects --------------------------------------------
@@ -189,19 +167,12 @@ class PublishedObject:
     valid_to: datetime | None = None
     payload: dict[str, Any] = field(default_factory=dict)
     lineage: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
-    updated_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.lane not in VALID_LANES:
-            raise ValueError(
-                f"Invalid lane {self.lane!r}. "
-                f"Must be one of {sorted(VALID_LANES)}"
-            )
+            raise ValueError(f"Invalid lane {self.lane!r}. Must be one of {sorted(VALID_LANES)}")
         if self.publish_state not in VALID_PUBLISH_STATES:
             raise ValueError(
                 f"Invalid publish state {self.publish_state!r}. "
@@ -238,21 +209,14 @@ class ExportBundle:
     object_count: int = 0
     size_bytes: int | None = None
     checksum: str | None = None
-    exported_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    exported_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     exported_by: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.lane not in VALID_LANES:
-            raise ValueError(
-                f"Invalid lane {self.lane!r}. "
-                f"Must be one of {sorted(VALID_LANES)}"
-            )
+            raise ValueError(f"Invalid lane {self.lane!r}. Must be one of {sorted(VALID_LANES)}")
         if self.format not in VALID_EXPORT_FORMATS:
             raise ValueError(
                 f"Invalid export format {self.format!r}. "

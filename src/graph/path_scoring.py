@@ -119,9 +119,7 @@ class ScoredPath:
             "breakdown": {
                 "confidence_product": round(self.breakdown.confidence_product, 4),
                 "freshness_product": round(self.breakdown.freshness_product, 4),
-                "corroboration_product": round(
-                    self.breakdown.corroboration_product, 4
-                ),
+                "corroboration_product": round(self.breakdown.corroboration_product, 4),
                 "hop_decay": round(self.breakdown.hop_decay, 4),
             },
             "intermediate_concept_id": self.intermediate_concept_id,
@@ -187,7 +185,9 @@ def score_edge(
 ) -> ScoredEdge:
     """Score a single structural relation with decomposed factors."""
     freshness = compute_freshness_factor(
-        relation.valid_from, now, half_life_days=half_life_days,
+        relation.valid_from,
+        now,
+        half_life_days=half_life_days,
     )
     corroboration = compute_corroboration_factor(
         relation.support_count,
@@ -245,11 +245,7 @@ def _make_path(
             hop_decay=round(decay, 4),
         ),
         edges=list(scored_edges),
-        intermediate_concept_id=(
-            scored_edges[0].relation.target_concept_id
-            if hops == 2
-            else None
-        ),
+        intermediate_concept_id=(scored_edges[0].relation.target_concept_id if hops == 2 else None),
     )
 
 
@@ -299,8 +295,7 @@ def score_paths_from(
 
     # Score first-hop edges once, reuse in both 1-hop and 2-hop paths
     first_hop: list[tuple[StructuralRelation, ScoredEdge]] = [
-        (rel, score_edge(rel, now, **score_kwargs))
-        for rel in adj.get(source_concept_id, [])
+        (rel, score_edge(rel, now, **score_kwargs)) for rel in adj.get(source_concept_id, [])
     ]
 
     for _rel, se in first_hop:

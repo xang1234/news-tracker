@@ -96,10 +96,7 @@ class SecApiProvider(FilingProvider):
             # The first 10 digits of the accession number are the CIK.
             cik_raw = acc_clean[:10]
             cik_dir = cik_raw.lstrip("0") or "0"
-            text_url = (
-                f"{self._policy.archives_url}/"
-                f"{cik_dir}/{acc_clean}/{accession_number}.txt"
-            )
+            text_url = f"{self._policy.archives_url}/{cik_dir}/{acc_clean}/{accession_number}.txt"
             await self._acquire_rate_limit()
             text_resp = await client.get(text_url)
 
@@ -179,9 +176,7 @@ class SecApiProvider(FilingProvider):
             resp = await client.get(url, params=params)
 
             if resp.status_code != 200:
-                logger.warning(
-                    "EFTS search failed: HTTP %d", resp.status_code
-                )
+                logger.warning("EFTS search failed: HTTP %d", resp.status_code)
                 return []
 
             data = resp.json()
@@ -192,9 +187,7 @@ class SecApiProvider(FilingProvider):
                 source = hit.get("_source", {})
                 form = source.get("form_type", source.get("file_type", ""))
                 normalized = normalize_filing_type(form)
-                filed = parse_filing_date(
-                    source.get("file_date", source.get("date_filed"))
-                )
+                filed = parse_filing_date(source.get("file_date", source.get("date_filed")))
                 period = parse_filing_date(source.get("period_of_report"))
 
                 results.append(
@@ -217,9 +210,7 @@ class SecApiProvider(FilingProvider):
             logger.error("SecApiProvider.search_filings failed: %s", e)
             return []
 
-    def _failed_result(
-        self, accession_number: str, error_message: str
-    ) -> FilingResult:
+    def _failed_result(self, accession_number: str, error_message: str) -> FilingResult:
         """Build a failed FilingResult preserving lineage fields."""
         return FilingResult(
             identity=FilingIdentity(

@@ -113,9 +113,7 @@ class CompositeManifest:
     total_object_count: int = 0
     exclusion_reasons: dict[str, str] = field(default_factory=dict)
     contract_version: str = ""
-    assembled_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    assembled_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def lanes_included(self) -> list[str]:

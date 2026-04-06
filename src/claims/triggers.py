@@ -75,8 +75,7 @@ def check_low_confidence(
             "matched_concept_id": result.concept_id,
             "matched_confidence": result.confidence,
             "alternatives": [
-                {"concept_id": a.concept_id, "name": a.canonical_name}
-                for a in result.alternatives
+                {"concept_id": a.concept_id, "name": a.canonical_name} for a in result.alternatives
             ],
         },
         lineage={
@@ -182,9 +181,7 @@ def check_competing_predicates(
         },
         lineage={
             "source_claim_ids": claim_ids,
-            "run_ids": [
-                r for r in [claim_a.run_id, claim_b.run_id] if r
-            ],
+            "run_ids": [r for r in [claim_a.run_id, claim_b.run_id] if r],
         },
     )
 

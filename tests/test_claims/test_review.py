@@ -390,9 +390,7 @@ class TestCheckHighImpactPredicate:
     def test_custom_threshold(self) -> None:
         claim = _make_claim(predicate="acquires", confidence=0.8)
         # Default threshold 0.7 would skip this, but custom 0.9 catches it
-        task = check_high_impact_predicate(
-            claim, confidence_threshold=0.9
-        )
+        task = check_high_impact_predicate(claim, confidence_threshold=0.9)
         assert task is not None
 
     def test_all_high_impact_predicates_covered(self) -> None:

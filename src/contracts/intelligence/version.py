@@ -22,9 +22,7 @@ from dataclasses import dataclass
 from functools import total_ordering
 from typing import ClassVar
 
-_SEMVER_RE = re.compile(
-    r"^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)$"
-)
+_SEMVER_RE = re.compile(r"^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)$")
 
 
 @total_ordering
@@ -46,9 +44,7 @@ class ContractVersion:
         for name in ("major", "minor", "patch"):
             val = getattr(self, name)
             if not isinstance(val, int) or val < 0:
-                raise ValueError(
-                    f"ContractVersion.{name} must be a non-negative int, got {val!r}"
-                )
+                raise ValueError(f"ContractVersion.{name} must be a non-negative int, got {val!r}")
 
     def __str__(self) -> str:
         return f"{self.major}.{self.minor}.{self.patch}"
@@ -122,9 +118,7 @@ class ContractRegistry:
     MINIMUM_SUPPORTED: ClassVar[ContractVersion] = ContractVersion(0, 1, 0)
 
     # -- Full version history (oldest → newest) ----------------------------
-    ALL_VERSIONS: ClassVar[tuple[ContractVersion, ...]] = (
-        ContractVersion(0, 1, 0),
-    )
+    ALL_VERSIONS: ClassVar[tuple[ContractVersion, ...]] = (ContractVersion(0, 1, 0),)
 
     # -- Deprecation schedule ----------------------------------------------
     # Maps a deprecated version to its replacement.
@@ -138,10 +132,7 @@ class ContractRegistry:
         A version is supported only if it was actually released
         (present in ALL_VERSIONS) and is at or above the support floor.
         """
-        return (
-            version in cls.ALL_VERSIONS
-            and version >= cls.MINIMUM_SUPPORTED
-        )
+        return version in cls.ALL_VERSIONS and version >= cls.MINIMUM_SUPPORTED
 
     @classmethod
     def is_deprecated(cls, version: ContractVersion) -> bool:

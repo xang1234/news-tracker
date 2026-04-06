@@ -314,9 +314,7 @@ class PublishRepository:
 
     # -- Published objects -------------------------------------------------
 
-    async def create_published_object(
-        self, obj: PublishedObject
-    ) -> PublishedObject:
+    async def create_published_object(self, obj: PublishedObject) -> PublishedObject:
         """Insert a new published object."""
         row = await self._db.fetchrow(
             """
@@ -343,9 +341,7 @@ class PublishRepository:
         )
         return _row_to_published_object(row)
 
-    async def get_published_object(
-        self, object_id: str
-    ) -> PublishedObject | None:
+    async def get_published_object(self, object_id: str) -> PublishedObject | None:
         """Fetch a published object by ID."""
         row = await self._db.fetchrow(
             "SELECT * FROM intel_pub.published_objects WHERE object_id = $1",
@@ -353,9 +349,7 @@ class PublishRepository:
         )
         return _row_to_published_object(row) if row else None
 
-    async def update_publish_state(
-        self, object_id: str, new_state: str
-    ) -> PublishedObject | None:
+    async def update_publish_state(self, object_id: str, new_state: str) -> PublishedObject | None:
         """Update the publish state of an object."""
         row = await self._db.fetchrow(
             """

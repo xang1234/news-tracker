@@ -237,10 +237,7 @@ class TestComposite:
         assert result.composite < 20.0
 
     def test_weights_sum_to_one(self) -> None:
-        total = (
-            ATTENTION_WEIGHT + CORROBORATION_WEIGHT
-            + CONFIRMATION_WEIGHT + NOVELTY_WEIGHT
-        )
+        total = ATTENTION_WEIGHT + CORROBORATION_WEIGHT + CONFIRMATION_WEIGHT + NOVELTY_WEIGHT
         assert abs(total - 1.0) < 1e-9
 
     def test_to_dict_serialization(self) -> None:

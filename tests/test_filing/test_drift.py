@@ -80,6 +80,7 @@ def _make_matched_alignment(
     )
     # Compute a realistic diff_ratio
     import difflib
+
     ratio = difflib.SequenceMatcher(
         None,
         content_base.splitlines(),
@@ -108,17 +109,16 @@ class TestSectionToDimension:
         assert _section_to_dimension("business") == "strategy"
 
     def test_mda(self) -> None:
-        assert _section_to_dimension(
-            "management's discussion and analysis"
-        ) == "capex"
+        assert _section_to_dimension("management's discussion and analysis") == "capex"
 
     def test_legal_proceedings(self) -> None:
         assert _section_to_dimension("legal proceedings") == "regulatory"
 
     def test_market_risk(self) -> None:
-        assert _section_to_dimension(
-            "quantitative and qualitative disclosures about market risk"
-        ) == "regulatory"
+        assert (
+            _section_to_dimension("quantitative and qualitative disclosures about market risk")
+            == "regulatory"
+        )
 
     def test_customers(self) -> None:
         assert _section_to_dimension("major customers") == "customer_supplier"
@@ -131,13 +131,12 @@ class TestSectionToDimension:
 
     def test_substring_match(self) -> None:
         """Longer section name containing a known key still matches."""
-        dim = _section_to_dimension(
-            "management's discussion and analysis of financial condition"
-        )
+        dim = _section_to_dimension("management's discussion and analysis of financial condition")
         assert dim == "capex"
 
     def test_all_dimensions_have_at_least_one_section(self) -> None:
         from src.filing.drift import DIMENSION_SECTIONS
+
         for dim in DRIFT_DIMENSIONS:
             assert len(DIMENSION_SECTIONS[dim]) > 0
 
@@ -204,12 +203,14 @@ class TestExtractSectionChanges:
         a1, d1 = _make_matched_alignment("Risk Factors", "old", "new")
         added_target = _section_record("Customers", "New section")
         a_added = SectionAlignment(
-            base_section=None, target_section=added_target,
+            base_section=None,
+            target_section=added_target,
             normalized_name="customers",
         )
         removed_base = _section_record("Legal Proceedings", "Old legal")
         a_removed = SectionAlignment(
-            base_section=removed_base, target_section=None,
+            base_section=removed_base,
+            target_section=None,
             normalized_name="legal proceedings",
         )
         changes = extract_section_changes([d1], [a1, a_added, a_removed])
@@ -381,7 +382,9 @@ class TestComputeDriftDecomposition:
             _make_change(section_name="business", change_magnitude=0.12),
         ]
         result = compute_drift_decomposition(
-            ISSUER, issuer_changes, [peer1, peer2],
+            ISSUER,
+            issuer_changes,
+            [peer1, peer2],
             base_accession="acc-base",
             target_accession="acc-target",
             now=NOW,
@@ -397,14 +400,20 @@ class TestComputeDriftDecomposition:
 
     def test_all_five_dimensions_present(self) -> None:
         result = compute_drift_decomposition(
-            ISSUER, [], [], now=NOW,
+            ISSUER,
+            [],
+            [],
+            now=NOW,
         )
         dims = {d.dimension for d in result.dimensions}
         assert dims == set(DRIFT_DIMENSIONS)
 
     def test_no_changes_no_drift(self) -> None:
         result = compute_drift_decomposition(
-            ISSUER, [], [], now=NOW,
+            ISSUER,
+            [],
+            [],
+            now=NOW,
         )
         for dim in result.dimensions:
             assert dim.magnitude == 0.0
@@ -421,7 +430,10 @@ class TestComputeDriftDecomposition:
             [_make_change(section_name="risk factors", change_magnitude=0.11)],
         ]
         result = compute_drift_decomposition(
-            ISSUER, issuer, peers, now=NOW,
+            ISSUER,
+            issuer,
+            peers,
+            now=NOW,
         )
         risk = next(d for d in result.dimensions if d.dimension == "risk")
         assert risk.is_unusual
@@ -431,7 +443,10 @@ class TestComputeDriftDecomposition:
         """Without peers, z_score is 0 and nothing is unusual."""
         issuer = [_make_change(section_name="risk factors", change_magnitude=0.8)]
         result = compute_drift_decomposition(
-            ISSUER, issuer, [], now=NOW,
+            ISSUER,
+            issuer,
+            [],
+            now=NOW,
         )
         risk = next(d for d in result.dimensions if d.dimension == "risk")
         assert risk.magnitude == 0.8
@@ -443,7 +458,10 @@ class TestComputeDriftDecomposition:
         issuer = [_make_change(section_name="risk factors", change_magnitude=0.5)]
         peer = [_make_change(section_name="risk factors", change_magnitude=0.1)]
         result = compute_drift_decomposition(
-            ISSUER, issuer, [peer], now=NOW,
+            ISSUER,
+            issuer,
+            [peer],
+            now=NOW,
         )
         risk = next(d for d in result.dimensions if d.dimension == "risk")
         assert risk.z_score == Z_SCORE_CAP  # Different from peer, std=0
@@ -454,7 +472,10 @@ class TestComputeDriftDecomposition:
             _make_change(section_name="regulatory matters", word_count_delta=-30),
         ]
         result = compute_drift_decomposition(
-            ISSUER, issuer, [], now=NOW,
+            ISSUER,
+            issuer,
+            [],
+            now=NOW,
         )
         reg = next(d for d in result.dimensions if d.dimension == "regulatory")
         assert reg.word_count_delta == 70
@@ -465,7 +486,10 @@ class TestComputeDriftDecomposition:
             _make_change(section_name="regulatory matters"),
         ]
         result = compute_drift_decomposition(
-            ISSUER, issuer, [], now=NOW,
+            ISSUER,
+            issuer,
+            [],
+            now=NOW,
         )
         reg = next(d for d in result.dimensions if d.dimension == "regulatory")
         assert "legal proceedings" in reg.section_names
@@ -481,7 +505,9 @@ class TestComputeDriftDecomposition:
             [_make_change(section_name="risk factors", change_magnitude=0.12)],
         ]
         result_strict = compute_drift_decomposition(
-            ISSUER, issuer, peers,
+            ISSUER,
+            issuer,
+            peers,
             unusual_threshold=10.0,  # Very strict
             now=NOW,
         )
@@ -490,7 +516,9 @@ class TestComputeDriftDecomposition:
     def test_to_dict(self) -> None:
         issuer = [_make_change(section_name="risk factors", change_magnitude=0.3)]
         result = compute_drift_decomposition(
-            ISSUER, issuer, [],
+            ISSUER,
+            issuer,
+            [],
             base_accession="acc-001",
             target_accession="acc-002",
             now=NOW,
@@ -506,7 +534,10 @@ class TestComputeDriftDecomposition:
 
     def test_computed_at_uses_now(self) -> None:
         result = compute_drift_decomposition(
-            ISSUER, [], [], now=NOW,
+            ISSUER,
+            [],
+            [],
+            now=NOW,
         )
         assert result.computed_at == NOW
 
@@ -516,7 +547,10 @@ class TestComputeDriftDecomposition:
         # Peer only changed business section, not risk
         peer = [_make_change(section_name="business", change_magnitude=0.3)]
         result = compute_drift_decomposition(
-            ISSUER, issuer, [peer], now=NOW,
+            ISSUER,
+            issuer,
+            [peer],
+            now=NOW,
         )
         risk = next(d for d in result.dimensions if d.dimension == "risk")
         # Peer has 0 risk magnitude, issuer has 0.5
@@ -540,9 +574,14 @@ class TestDataclasses:
 
     def test_dimension_drift_frozen(self) -> None:
         d = DimensionDrift(
-            dimension="risk", magnitude=0.3, word_count_delta=10,
-            peer_mean=0.1, peer_std=0.05, z_score=2.0,
-            is_unusual=True, section_names=["risk factors"],
+            dimension="risk",
+            magnitude=0.3,
+            word_count_delta=10,
+            peer_mean=0.1,
+            peer_std=0.05,
+            z_score=2.0,
+            is_unusual=True,
+            section_names=["risk factors"],
         )
         try:
             d.magnitude = 0.0  # type: ignore[misc]

@@ -37,9 +37,7 @@ class CoverageProfile:
     filing_coverage: bool = False
     narrative_coverage: bool = False
     graph_coverage: bool = False
-    last_assessed_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    last_assessed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -69,9 +67,7 @@ class CoverageTierChange:
 
     concept_id: str
     coverage_tier: str
-    valid_from: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    valid_from: datetime = field(default_factory=lambda: datetime.now(UTC))
     valid_to: datetime | None = None
     changed_by: str | None = None
     change_reason: str = ""
@@ -125,14 +121,11 @@ class DomainPackMember:
     pack_id: str
     concept_id: str
     role: str = "member"
-    added_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    added_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.role not in VALID_PACK_ROLES:
             raise ValueError(
-                f"Invalid role {self.role!r}. "
-                f"Must be one of {sorted(VALID_PACK_ROLES)}"
+                f"Invalid role {self.role!r}. Must be one of {sorted(VALID_PACK_ROLES)}"
             )

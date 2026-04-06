@@ -75,10 +75,7 @@ def check_manifest_seal_rate(
         value=rate,
         severity=severity,
         thresholds={"warning": warning_threshold, "critical": critical_threshold},
-        message=(
-            f"{lane}: {rate:.1%} seal rate "
-            f"({sealed_count}/{total_manifests})"
-        ),
+        message=(f"{lane}: {rate:.1%} seal rate ({sealed_count}/{total_manifests})"),
         details={
             "total_manifests": total_manifests,
             "sealed_count": sealed_count,
@@ -113,10 +110,7 @@ def check_bundle_integrity(
         value=rate,
         severity=severity,
         thresholds={"warning": warning_threshold, "critical": critical_threshold},
-        message=(
-            f"Bundle integrity: {rate:.1%} valid "
-            f"({valid_count}/{total_bundles})"
-        ),
+        message=(f"Bundle integrity: {rate:.1%} valid ({valid_count}/{total_bundles})"),
         details={
             "total_bundles": total_bundles,
             "valid_count": valid_count,
@@ -157,18 +151,12 @@ def check_coverage_drift(
     if expected_lanes is None:
         expected_lanes = ALL_LANES
 
-    covered = sum(
-        1 for lane in expected_lanes
-        if lane_object_counts.get(lane, 0) >= min_objects
-    )
+    covered = sum(1 for lane in expected_lanes if lane_object_counts.get(lane, 0) >= min_objects)
     total_expected = len(expected_lanes)
     rate = covered / total_expected if total_expected > 0 else 1.0
     severity = _classify(rate, warning_threshold, critical_threshold)
 
-    missing = [
-        lane for lane in expected_lanes
-        if lane_object_counts.get(lane, 0) < min_objects
-    ]
+    missing = [lane for lane in expected_lanes if lane_object_counts.get(lane, 0) < min_objects]
 
     return QualityMetric(
         metric_type="coverage_drift",
@@ -270,21 +258,13 @@ def check_publish_boundary(
 
     for lane in sorted(seal_rates.keys()):
         total, sealed = seal_rates[lane]
-        metrics.append(
-            check_manifest_seal_rate(total, sealed, lane, now=now)
-        )
+        metrics.append(check_manifest_seal_rate(total, sealed, lane, now=now))
 
     total_bundles, valid = bundle_stats
-    metrics.append(
-        check_bundle_integrity(total_bundles, valid, now=now)
-    )
+    metrics.append(check_bundle_integrity(total_bundles, valid, now=now))
 
-    metrics.append(
-        check_coverage_drift(lane_object_counts, now=now)
-    )
+    metrics.append(check_coverage_drift(lane_object_counts, now=now))
 
-    metrics.append(
-        check_contract_compat(published_version, now=now)
-    )
+    metrics.append(check_contract_compat(published_version, now=now))
 
     return QualityReport(metrics=metrics, measured_at=now)

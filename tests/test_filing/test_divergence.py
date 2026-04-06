@@ -69,8 +69,7 @@ def _make_adoption(
             for i in range(section_signals)
         ],
         fact_signals=[
-            FactSignal(concept_name=f"Concept{i}", value="1B")
-            for i in range(fact_signals)
+            FactSignal(concept_name=f"Concept{i}", value="1B") for i in range(fact_signals)
         ],
         filing_count=filing_count,
         period_count=period_count,
@@ -86,8 +85,12 @@ def _make_drift(
     if dimensions is None:
         dimensions = [
             DimensionDrift(
-                dimension=d, magnitude=0.1, word_count_delta=10,
-                peer_mean=0.1, peer_std=0.05, z_score=0.0,
+                dimension=d,
+                magnitude=0.1,
+                word_count_delta=10,
+                peer_mean=0.1,
+                peer_std=0.05,
+                z_score=0.0,
                 is_unusual=False,
             )
             for d in ["strategy", "risk", "capex", "customer_supplier", "regulatory"]
@@ -130,8 +133,11 @@ class TestNarrativeWithoutFiling:
 
     def test_critical_very_strong_very_weak(self) -> None:
         alert = _check_narrative_without_filing(
-            ISSUER, THEME, 80.0,
-            _make_adoption(score=0.05), NOW,
+            ISSUER,
+            THEME,
+            80.0,
+            _make_adoption(score=0.05),
+            NOW,
         )
         assert alert is not None
         assert alert.reason == DivergenceReason.NARRATIVE_WITHOUT_FILING.value
@@ -141,53 +147,74 @@ class TestNarrativeWithoutFiling:
 
     def test_warning_strong_weak(self) -> None:
         alert = _check_narrative_without_filing(
-            ISSUER, THEME, 55.0,
-            _make_adoption(score=0.15), NOW,
+            ISSUER,
+            THEME,
+            55.0,
+            _make_adoption(score=0.15),
+            NOW,
         )
         assert alert is not None
         assert alert.severity == "warning"
 
     def test_no_alert_weak_narrative(self) -> None:
         alert = _check_narrative_without_filing(
-            ISSUER, THEME, 30.0,
-            _make_adoption(score=0.05), NOW,
+            ISSUER,
+            THEME,
+            30.0,
+            _make_adoption(score=0.05),
+            NOW,
         )
         assert alert is None
 
     def test_no_alert_strong_adoption(self) -> None:
         alert = _check_narrative_without_filing(
-            ISSUER, THEME, 80.0,
-            _make_adoption(score=0.3), NOW,
+            ISSUER,
+            THEME,
+            80.0,
+            _make_adoption(score=0.3),
+            NOW,
         )
         assert alert is None
 
     def test_boundary_narrative_exactly_strong(self) -> None:
         alert = _check_narrative_without_filing(
-            ISSUER, THEME, STRONG_NARRATIVE,
-            _make_adoption(score=0.05), NOW,
+            ISSUER,
+            THEME,
+            STRONG_NARRATIVE,
+            _make_adoption(score=0.05),
+            NOW,
         )
         assert alert is not None
 
     def test_boundary_adoption_exactly_weak(self) -> None:
         """Adoption at WEAK_ADOPTION threshold is NOT weak — no alert."""
         alert = _check_narrative_without_filing(
-            ISSUER, THEME, 60.0,
-            _make_adoption(score=WEAK_ADOPTION), NOW,
+            ISSUER,
+            THEME,
+            60.0,
+            _make_adoption(score=WEAK_ADOPTION),
+            NOW,
         )
         assert alert is None
 
     def test_evidence_gap(self) -> None:
         alert = _check_narrative_without_filing(
-            ISSUER, THEME, 60.0,
-            _make_adoption(score=0.1), NOW,
+            ISSUER,
+            THEME,
+            60.0,
+            _make_adoption(score=0.1),
+            NOW,
         )
         assert alert is not None
         assert alert.evidence["gap"] == round(0.6 - 0.1, 4)
 
     def test_signal_counts_in_evidence(self) -> None:
         alert = _check_narrative_without_filing(
-            ISSUER, THEME, 60.0,
-            _make_adoption(score=0.1, section_signals=3, fact_signals=2), NOW,
+            ISSUER,
+            THEME,
+            60.0,
+            _make_adoption(score=0.1, section_signals=3, fact_signals=2),
+            NOW,
         )
         assert alert is not None
         assert alert.evidence["adoption_section_signals"] == 3
@@ -202,8 +229,11 @@ class TestFilingWithoutNarrative:
 
     def test_info_alert(self) -> None:
         alert = _check_filing_without_narrative(
-            ISSUER, THEME, 10.0,
-            _make_adoption(score=0.7), NOW,
+            ISSUER,
+            THEME,
+            10.0,
+            _make_adoption(score=0.7),
+            NOW,
         )
         assert alert is not None
         assert alert.reason == DivergenceReason.FILING_WITHOUT_NARRATIVE.value
@@ -211,30 +241,42 @@ class TestFilingWithoutNarrative:
 
     def test_no_alert_strong_narrative(self) -> None:
         alert = _check_filing_without_narrative(
-            ISSUER, THEME, 30.0,
-            _make_adoption(score=0.7), NOW,
+            ISSUER,
+            THEME,
+            30.0,
+            _make_adoption(score=0.7),
+            NOW,
         )
         assert alert is None
 
     def test_no_alert_weak_adoption(self) -> None:
         alert = _check_filing_without_narrative(
-            ISSUER, THEME, 10.0,
-            _make_adoption(score=0.4), NOW,
+            ISSUER,
+            THEME,
+            10.0,
+            _make_adoption(score=0.4),
+            NOW,
         )
         assert alert is None
 
     def test_boundary_narrative_exactly_weak(self) -> None:
         """Narrative at WEAK_NARRATIVE is NOT weak — no alert."""
         alert = _check_filing_without_narrative(
-            ISSUER, THEME, WEAK_NARRATIVE,
-            _make_adoption(score=0.7), NOW,
+            ISSUER,
+            THEME,
+            WEAK_NARRATIVE,
+            _make_adoption(score=0.7),
+            NOW,
         )
         assert alert is None
 
     def test_boundary_adoption_exactly_strong(self) -> None:
         alert = _check_filing_without_narrative(
-            ISSUER, THEME, 10.0,
-            _make_adoption(score=STRONG_ADOPTION), NOW,
+            ISSUER,
+            THEME,
+            10.0,
+            _make_adoption(score=STRONG_ADOPTION),
+            NOW,
         )
         assert alert is not None
 
@@ -246,97 +288,113 @@ class TestAdverseDrift:
     """Unusual drift in risk/regulatory sections."""
 
     def test_risk_drift(self) -> None:
-        drift = _make_drift(dimensions=[
-            _dim("risk", magnitude=0.5, word_count_delta=300, z_score=2.5),
-            _dim("strategy", magnitude=0.1, word_count_delta=50, is_unusual=False),
-            _dim("capex", magnitude=0.05, word_count_delta=20, is_unusual=False),
-            _dim("customer_supplier", magnitude=0.0, word_count_delta=0, is_unusual=False),
-            _dim("regulatory", magnitude=0.1, word_count_delta=50, is_unusual=False),
-        ])
+        drift = _make_drift(
+            dimensions=[
+                _dim("risk", magnitude=0.5, word_count_delta=300, z_score=2.5),
+                _dim("strategy", magnitude=0.1, word_count_delta=50, is_unusual=False),
+                _dim("capex", magnitude=0.05, word_count_delta=20, is_unusual=False),
+                _dim("customer_supplier", magnitude=0.0, word_count_delta=0, is_unusual=False),
+                _dim("regulatory", magnitude=0.1, word_count_delta=50, is_unusual=False),
+            ]
+        )
         alert = _check_adverse_drift(ISSUER, THEME, drift, NOW)
         assert alert is not None
         assert alert.reason == DivergenceReason.ADVERSE_DRIFT.value
         assert alert.severity == "critical"  # z_score >= 2.5
 
     def test_regulatory_drift(self) -> None:
-        drift = _make_drift(dimensions=[
-            _dim("risk", magnitude=0.1, is_unusual=False, word_count_delta=10),
-            _dim("strategy", magnitude=0.1, is_unusual=False, word_count_delta=10),
-            _dim("capex", magnitude=0.1, is_unusual=False, word_count_delta=10),
-            _dim("customer_supplier", magnitude=0.1, is_unusual=False, word_count_delta=10),
-            _dim("regulatory", magnitude=0.4, word_count_delta=200, z_score=2.0),
-        ])
+        drift = _make_drift(
+            dimensions=[
+                _dim("risk", magnitude=0.1, is_unusual=False, word_count_delta=10),
+                _dim("strategy", magnitude=0.1, is_unusual=False, word_count_delta=10),
+                _dim("capex", magnitude=0.1, is_unusual=False, word_count_delta=10),
+                _dim("customer_supplier", magnitude=0.1, is_unusual=False, word_count_delta=10),
+                _dim("regulatory", magnitude=0.4, word_count_delta=200, z_score=2.0),
+            ]
+        )
         alert = _check_adverse_drift(ISSUER, THEME, drift, NOW)
         assert alert is not None
         assert "regulatory" in alert.title
 
     def test_warning_below_critical_zscore(self) -> None:
-        drift = _make_drift(dimensions=[
-            _dim("risk", magnitude=0.3, word_count_delta=150, z_score=1.8),
-            _dim("strategy", is_unusual=False, word_count_delta=10),
-            _dim("capex", is_unusual=False, word_count_delta=10),
-            _dim("customer_supplier", is_unusual=False, word_count_delta=10),
-            _dim("regulatory", is_unusual=False, word_count_delta=10),
-        ])
+        drift = _make_drift(
+            dimensions=[
+                _dim("risk", magnitude=0.3, word_count_delta=150, z_score=1.8),
+                _dim("strategy", is_unusual=False, word_count_delta=10),
+                _dim("capex", is_unusual=False, word_count_delta=10),
+                _dim("customer_supplier", is_unusual=False, word_count_delta=10),
+                _dim("regulatory", is_unusual=False, word_count_delta=10),
+            ]
+        )
         alert = _check_adverse_drift(ISSUER, THEME, drift, NOW)
         assert alert is not None
         assert alert.severity == "warning"
 
     def test_no_alert_not_unusual(self) -> None:
-        drift = _make_drift(dimensions=[
-            _dim("risk", magnitude=0.3, word_count_delta=200, is_unusual=False),
-            _dim("strategy", is_unusual=False, word_count_delta=10),
-            _dim("capex", is_unusual=False, word_count_delta=10),
-            _dim("customer_supplier", is_unusual=False, word_count_delta=10),
-            _dim("regulatory", is_unusual=False, word_count_delta=10),
-        ])
+        drift = _make_drift(
+            dimensions=[
+                _dim("risk", magnitude=0.3, word_count_delta=200, is_unusual=False),
+                _dim("strategy", is_unusual=False, word_count_delta=10),
+                _dim("capex", is_unusual=False, word_count_delta=10),
+                _dim("customer_supplier", is_unusual=False, word_count_delta=10),
+                _dim("regulatory", is_unusual=False, word_count_delta=10),
+            ]
+        )
         alert = _check_adverse_drift(ISSUER, THEME, drift, NOW)
         assert alert is None
 
     def test_no_alert_low_word_count(self) -> None:
         """Unusual but trivial word count change → no alert."""
-        drift = _make_drift(dimensions=[
-            _dim("risk", magnitude=0.3, word_count_delta=50, z_score=2.0),
-            _dim("strategy", is_unusual=False, word_count_delta=10),
-            _dim("capex", is_unusual=False, word_count_delta=10),
-            _dim("customer_supplier", is_unusual=False, word_count_delta=10),
-            _dim("regulatory", is_unusual=False, word_count_delta=10),
-        ])
+        drift = _make_drift(
+            dimensions=[
+                _dim("risk", magnitude=0.3, word_count_delta=50, z_score=2.0),
+                _dim("strategy", is_unusual=False, word_count_delta=10),
+                _dim("capex", is_unusual=False, word_count_delta=10),
+                _dim("customer_supplier", is_unusual=False, word_count_delta=10),
+                _dim("regulatory", is_unusual=False, word_count_delta=10),
+            ]
+        )
         alert = _check_adverse_drift(ISSUER, THEME, drift, NOW)
         assert alert is None
 
     def test_no_alert_non_adverse_dimension(self) -> None:
         """Unusual drift in strategy (not risk/regulatory) → no alert."""
-        drift = _make_drift(dimensions=[
-            _dim("strategy", magnitude=0.5, word_count_delta=300, z_score=2.5),
-            _dim("risk", is_unusual=False, word_count_delta=10),
-            _dim("capex", is_unusual=False, word_count_delta=10),
-            _dim("customer_supplier", is_unusual=False, word_count_delta=10),
-            _dim("regulatory", is_unusual=False, word_count_delta=10),
-        ])
+        drift = _make_drift(
+            dimensions=[
+                _dim("strategy", magnitude=0.5, word_count_delta=300, z_score=2.5),
+                _dim("risk", is_unusual=False, word_count_delta=10),
+                _dim("capex", is_unusual=False, word_count_delta=10),
+                _dim("customer_supplier", is_unusual=False, word_count_delta=10),
+                _dim("regulatory", is_unusual=False, word_count_delta=10),
+            ]
+        )
         alert = _check_adverse_drift(ISSUER, THEME, drift, NOW)
         assert alert is None
 
     def test_both_adverse_dimensions(self) -> None:
-        drift = _make_drift(dimensions=[
-            _dim("risk", magnitude=0.4, word_count_delta=200, z_score=2.0),
-            _dim("strategy", is_unusual=False, word_count_delta=10),
-            _dim("capex", is_unusual=False, word_count_delta=10),
-            _dim("customer_supplier", is_unusual=False, word_count_delta=10),
-            _dim("regulatory", magnitude=0.3, word_count_delta=150, z_score=1.8),
-        ])
+        drift = _make_drift(
+            dimensions=[
+                _dim("risk", magnitude=0.4, word_count_delta=200, z_score=2.0),
+                _dim("strategy", is_unusual=False, word_count_delta=10),
+                _dim("capex", is_unusual=False, word_count_delta=10),
+                _dim("customer_supplier", is_unusual=False, word_count_delta=10),
+                _dim("regulatory", magnitude=0.3, word_count_delta=150, z_score=1.8),
+            ]
+        )
         alert = _check_adverse_drift(ISSUER, THEME, drift, NOW)
         assert alert is not None
         assert len(alert.evidence["adverse_dimensions"]) == 2
 
     def test_evidence_contains_accessions(self) -> None:
-        drift = _make_drift(dimensions=[
-            _dim("risk", word_count_delta=200),
-            _dim("strategy", is_unusual=False, word_count_delta=10),
-            _dim("capex", is_unusual=False, word_count_delta=10),
-            _dim("customer_supplier", is_unusual=False, word_count_delta=10),
-            _dim("regulatory", is_unusual=False, word_count_delta=10),
-        ])
+        drift = _make_drift(
+            dimensions=[
+                _dim("risk", word_count_delta=200),
+                _dim("strategy", is_unusual=False, word_count_delta=10),
+                _dim("capex", is_unusual=False, word_count_delta=10),
+                _dim("customer_supplier", is_unusual=False, word_count_delta=10),
+                _dim("regulatory", is_unusual=False, word_count_delta=10),
+            ]
+        )
         alert = _check_adverse_drift(ISSUER, THEME, drift, NOW)
         assert alert is not None
         assert alert.evidence["base_accession"] == "acc-001"
@@ -350,73 +408,85 @@ class TestContradictoryDrift:
     """Strong narrative but filings shrinking in strategy/capex."""
 
     def test_strategy_shrinking(self) -> None:
-        drift = _make_drift(dimensions=[
-            _dim("strategy", magnitude=0.2, word_count_delta=-500),
-            _dim("risk", is_unusual=False, word_count_delta=10),
-            _dim("capex", is_unusual=False, word_count_delta=10),
-            _dim("customer_supplier", is_unusual=False, word_count_delta=10),
-            _dim("regulatory", is_unusual=False, word_count_delta=10),
-        ])
+        drift = _make_drift(
+            dimensions=[
+                _dim("strategy", magnitude=0.2, word_count_delta=-500),
+                _dim("risk", is_unusual=False, word_count_delta=10),
+                _dim("capex", is_unusual=False, word_count_delta=10),
+                _dim("customer_supplier", is_unusual=False, word_count_delta=10),
+                _dim("regulatory", is_unusual=False, word_count_delta=10),
+            ]
+        )
         alert = _check_contradictory_drift(ISSUER, THEME, 60.0, drift, NOW)
         assert alert is not None
         assert alert.reason == DivergenceReason.CONTRADICTORY_DRIFT.value
         assert alert.severity == "warning"
 
     def test_capex_shrinking(self) -> None:
-        drift = _make_drift(dimensions=[
-            _dim("strategy", is_unusual=False, word_count_delta=10),
-            _dim("risk", is_unusual=False, word_count_delta=10),
-            _dim("capex", magnitude=0.25, word_count_delta=-300),
-            _dim("customer_supplier", is_unusual=False, word_count_delta=10),
-            _dim("regulatory", is_unusual=False, word_count_delta=10),
-        ])
+        drift = _make_drift(
+            dimensions=[
+                _dim("strategy", is_unusual=False, word_count_delta=10),
+                _dim("risk", is_unusual=False, word_count_delta=10),
+                _dim("capex", magnitude=0.25, word_count_delta=-300),
+                _dim("customer_supplier", is_unusual=False, word_count_delta=10),
+                _dim("regulatory", is_unusual=False, word_count_delta=10),
+            ]
+        )
         alert = _check_contradictory_drift(ISSUER, THEME, 55.0, drift, NOW)
         assert alert is not None
         assert "capex" in alert.title
 
     def test_no_alert_weak_narrative(self) -> None:
-        drift = _make_drift(dimensions=[
-            _dim("strategy", magnitude=0.3, word_count_delta=-500),
-            _dim("risk", is_unusual=False, word_count_delta=10),
-            _dim("capex", is_unusual=False, word_count_delta=10),
-            _dim("customer_supplier", is_unusual=False, word_count_delta=10),
-            _dim("regulatory", is_unusual=False, word_count_delta=10),
-        ])
+        drift = _make_drift(
+            dimensions=[
+                _dim("strategy", magnitude=0.3, word_count_delta=-500),
+                _dim("risk", is_unusual=False, word_count_delta=10),
+                _dim("capex", is_unusual=False, word_count_delta=10),
+                _dim("customer_supplier", is_unusual=False, word_count_delta=10),
+                _dim("regulatory", is_unusual=False, word_count_delta=10),
+            ]
+        )
         alert = _check_contradictory_drift(ISSUER, THEME, 30.0, drift, NOW)
         assert alert is None
 
     def test_no_alert_growing_sections(self) -> None:
         """Sections growing = consistent with narrative, not contradictory."""
-        drift = _make_drift(dimensions=[
-            _dim("strategy", magnitude=0.3, word_count_delta=500),
-            _dim("risk", is_unusual=False, word_count_delta=10),
-            _dim("capex", is_unusual=False, word_count_delta=10),
-            _dim("customer_supplier", is_unusual=False, word_count_delta=10),
-            _dim("regulatory", is_unusual=False, word_count_delta=10),
-        ])
+        drift = _make_drift(
+            dimensions=[
+                _dim("strategy", magnitude=0.3, word_count_delta=500),
+                _dim("risk", is_unusual=False, word_count_delta=10),
+                _dim("capex", is_unusual=False, word_count_delta=10),
+                _dim("customer_supplier", is_unusual=False, word_count_delta=10),
+                _dim("regulatory", is_unusual=False, word_count_delta=10),
+            ]
+        )
         alert = _check_contradictory_drift(ISSUER, THEME, 60.0, drift, NOW)
         assert alert is None
 
     def test_no_alert_small_magnitude(self) -> None:
-        drift = _make_drift(dimensions=[
-            _dim("strategy", magnitude=0.05, word_count_delta=-50),
-            _dim("risk", is_unusual=False, word_count_delta=10),
-            _dim("capex", is_unusual=False, word_count_delta=10),
-            _dim("customer_supplier", is_unusual=False, word_count_delta=10),
-            _dim("regulatory", is_unusual=False, word_count_delta=10),
-        ])
+        drift = _make_drift(
+            dimensions=[
+                _dim("strategy", magnitude=0.05, word_count_delta=-50),
+                _dim("risk", is_unusual=False, word_count_delta=10),
+                _dim("capex", is_unusual=False, word_count_delta=10),
+                _dim("customer_supplier", is_unusual=False, word_count_delta=10),
+                _dim("regulatory", is_unusual=False, word_count_delta=10),
+            ]
+        )
         alert = _check_contradictory_drift(ISSUER, THEME, 60.0, drift, NOW)
         assert alert is None
 
     def test_no_alert_risk_shrinking(self) -> None:
         """Risk section shrinking is not contradictory — only strategy/capex."""
-        drift = _make_drift(dimensions=[
-            _dim("strategy", is_unusual=False, word_count_delta=10),
-            _dim("risk", magnitude=0.3, word_count_delta=-500),
-            _dim("capex", is_unusual=False, word_count_delta=10),
-            _dim("customer_supplier", is_unusual=False, word_count_delta=10),
-            _dim("regulatory", is_unusual=False, word_count_delta=10),
-        ])
+        drift = _make_drift(
+            dimensions=[
+                _dim("strategy", is_unusual=False, word_count_delta=10),
+                _dim("risk", magnitude=0.3, word_count_delta=-500),
+                _dim("capex", is_unusual=False, word_count_delta=10),
+                _dim("customer_supplier", is_unusual=False, word_count_delta=10),
+                _dim("regulatory", is_unusual=False, word_count_delta=10),
+            ]
+        )
         alert = _check_contradictory_drift(ISSUER, THEME, 60.0, drift, NOW)
         assert alert is None
 
@@ -429,8 +499,10 @@ class TestLaggingAdoption:
 
     def test_lagging_alert(self) -> None:
         adoption = _make_adoption(
-            score=0.15, temporal_consistency=0.5,
-            period_count=4, periods_with_signal=2,
+            score=0.15,
+            temporal_consistency=0.5,
+            period_count=4,
+            periods_with_signal=2,
         )
         alert = _check_lagging_adoption(ISSUER, THEME, 55.0, adoption, NOW)
         assert alert is not None
@@ -450,8 +522,10 @@ class TestLaggingAdoption:
     def test_no_alert_low_temporal(self) -> None:
         """Below LAGGING_TEMPORAL_MIN → not growing enough."""
         adoption = _make_adoption(
-            score=0.1, temporal_consistency=0.2,
-            period_count=5, periods_with_signal=1,
+            score=0.1,
+            temporal_consistency=0.2,
+            period_count=5,
+            periods_with_signal=1,
         )
         alert = _check_lagging_adoption(ISSUER, THEME, 55.0, adoption, NOW)
         assert alert is None
@@ -459,8 +533,10 @@ class TestLaggingAdoption:
     def test_no_alert_high_temporal(self) -> None:
         """Above LAGGING_TEMPORAL_MAX → already adopted, not lagging."""
         adoption = _make_adoption(
-            score=0.15, temporal_consistency=0.8,
-            period_count=5, periods_with_signal=4,
+            score=0.15,
+            temporal_consistency=0.8,
+            period_count=5,
+            periods_with_signal=4,
         )
         alert = _check_lagging_adoption(ISSUER, THEME, 55.0, adoption, NOW)
         assert alert is None
@@ -468,16 +544,20 @@ class TestLaggingAdoption:
     def test_no_alert_single_period(self) -> None:
         """Need at least 2 periods to assess temporal trend."""
         adoption = _make_adoption(
-            score=0.1, temporal_consistency=0.5,
-            period_count=1, periods_with_signal=1,
+            score=0.1,
+            temporal_consistency=0.5,
+            period_count=1,
+            periods_with_signal=1,
         )
         alert = _check_lagging_adoption(ISSUER, THEME, 55.0, adoption, NOW)
         assert alert is None
 
     def test_evidence_contains_temporal_info(self) -> None:
         adoption = _make_adoption(
-            score=0.12, temporal_consistency=0.5,
-            period_count=4, periods_with_signal=2,
+            score=0.12,
+            temporal_consistency=0.5,
+            period_count=4,
+            periods_with_signal=2,
         )
         alert = _check_lagging_adoption(ISSUER, THEME, 60.0, adoption, NOW)
         assert alert is not None
@@ -495,7 +575,9 @@ class TestCheckDivergence:
     def test_hype_scenario(self) -> None:
         """Strong narrative, weak adoption, no temporal growth."""
         alerts = check_divergence(
-            ISSUER, THEME, 75.0,
+            ISSUER,
+            THEME,
+            75.0,
             _make_adoption(score=0.05, temporal_consistency=0.1, period_count=1),
             now=NOW,
         )
@@ -505,7 +587,9 @@ class TestCheckDivergence:
     def test_under_appreciated_scenario(self) -> None:
         """Weak narrative, strong adoption."""
         alerts = check_divergence(
-            ISSUER, THEME, 10.0,
+            ISSUER,
+            THEME,
+            10.0,
             _make_adoption(score=0.7),
             now=NOW,
         )
@@ -515,7 +599,9 @@ class TestCheckDivergence:
     def test_no_divergence(self) -> None:
         """Moderate narrative, moderate adoption — no alerts."""
         alerts = check_divergence(
-            ISSUER, THEME, 40.0,
+            ISSUER,
+            THEME,
+            40.0,
             _make_adoption(score=0.4),
             now=NOW,
         )
@@ -523,15 +609,19 @@ class TestCheckDivergence:
 
     def test_multiple_alerts(self) -> None:
         """Hype + adverse drift can fire together."""
-        drift = _make_drift(dimensions=[
-            _dim("risk", magnitude=0.5, word_count_delta=300, z_score=2.5),
-            _dim("strategy", is_unusual=False, word_count_delta=10),
-            _dim("capex", is_unusual=False, word_count_delta=10),
-            _dim("customer_supplier", is_unusual=False, word_count_delta=10),
-            _dim("regulatory", is_unusual=False, word_count_delta=10),
-        ])
+        drift = _make_drift(
+            dimensions=[
+                _dim("risk", magnitude=0.5, word_count_delta=300, z_score=2.5),
+                _dim("strategy", is_unusual=False, word_count_delta=10),
+                _dim("capex", is_unusual=False, word_count_delta=10),
+                _dim("customer_supplier", is_unusual=False, word_count_delta=10),
+                _dim("regulatory", is_unusual=False, word_count_delta=10),
+            ]
+        )
         alerts = check_divergence(
-            ISSUER, THEME, 75.0,
+            ISSUER,
+            THEME,
+            75.0,
             _make_adoption(score=0.05, temporal_consistency=0.1, period_count=1),
             drift=drift,
             now=NOW,
@@ -543,7 +633,9 @@ class TestCheckDivergence:
     def test_drift_checks_skipped_without_drift(self) -> None:
         """No drift provided → no adverse/contradictory checks."""
         alerts = check_divergence(
-            ISSUER, THEME, 75.0,
+            ISSUER,
+            THEME,
+            75.0,
             _make_adoption(score=0.05, temporal_consistency=0.1, period_count=1),
             drift=None,
             now=NOW,
@@ -554,7 +646,9 @@ class TestCheckDivergence:
 
     def test_all_alerts_have_correct_ids(self) -> None:
         alerts = check_divergence(
-            ISSUER, THEME, 75.0,
+            ISSUER,
+            THEME,
+            75.0,
             _make_adoption(score=0.05, temporal_consistency=0.1, period_count=1),
             now=NOW,
         )
@@ -566,7 +660,9 @@ class TestCheckDivergence:
     def test_confirmed_scenario_no_alerts(self) -> None:
         """Strong narrative + strong adoption → no divergence."""
         alerts = check_divergence(
-            ISSUER, THEME, 70.0,
+            ISSUER,
+            THEME,
+            70.0,
             _make_adoption(score=0.7),
             now=NOW,
         )
@@ -575,11 +671,17 @@ class TestCheckDivergence:
     def test_lagging_suppresses_hype(self) -> None:
         """When lagging adoption fires, narrative_without_filing is suppressed."""
         adoption = _make_adoption(
-            score=0.05, temporal_consistency=0.5,
-            period_count=4, periods_with_signal=2,
+            score=0.05,
+            temporal_consistency=0.5,
+            period_count=4,
+            periods_with_signal=2,
         )
         alerts = check_divergence(
-            ISSUER, THEME, 75.0, adoption, now=NOW,
+            ISSUER,
+            THEME,
+            75.0,
+            adoption,
+            now=NOW,
         )
         reasons = {a.reason for a in alerts}
         assert DivergenceReason.LAGGING_ADOPTION.value in reasons
@@ -587,7 +689,9 @@ class TestCheckDivergence:
 
     def test_to_dict(self) -> None:
         alerts = check_divergence(
-            ISSUER, THEME, 75.0,
+            ISSUER,
+            THEME,
+            75.0,
             _make_adoption(score=0.05, temporal_consistency=0.1, period_count=1),
             now=NOW,
         )

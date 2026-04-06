@@ -32,8 +32,7 @@ def _check_contract_version(v: str) -> str:
     cv = ContractVersion.parse(v)
     if not ContractRegistry.is_supported(cv):
         raise ValueError(
-            f"Contract version {v} is not supported. "
-            f"Minimum: {ContractRegistry.MINIMUM_SUPPORTED}"
+            f"Contract version {v} is not supported. Minimum: {ContractRegistry.MINIMUM_SUPPORTED}"
         )
     return v
 
@@ -137,8 +136,7 @@ class Lineage(BaseModel):
             and self.valid_to < self.valid_from
         ):
             raise ValueError(
-                f"valid_to ({self.valid_to}) must not be before "
-                f"valid_from ({self.valid_from})"
+                f"valid_to ({self.valid_to}) must not be before valid_from ({self.valid_from})"
             )
         return self
 

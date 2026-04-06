@@ -25,9 +25,7 @@ VALID_CONCEPT_TYPES = frozenset(
     }
 )
 
-VALID_ALIAS_TYPES = frozenset(
-    {"name", "ticker", "abbreviation", "former_name", "local_name"}
-)
+VALID_ALIAS_TYPES = frozenset({"name", "ticker", "abbreviation", "former_name", "local_name"})
 
 VALID_ISSUER_SECURITY_RELATIONSHIPS = frozenset(
     {"primary", "adr", "subsidiary_listing", "preferred", "warrant"}
@@ -51,9 +49,7 @@ VALID_RELATIONSHIP_TYPES = frozenset(
     }
 )
 
-VALID_THEME_LINK_TYPES = frozenset(
-    {"covers", "driven_by", "impacts", "monitors"}
-)
+VALID_THEME_LINK_TYPES = frozenset({"covers", "driven_by", "impacts", "monitors"})
 
 
 def make_concept_id(concept_type: str, canonical_name: str) -> str:

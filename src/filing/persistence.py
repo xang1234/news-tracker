@@ -65,9 +65,7 @@ class FilingRecord:
     status: str = "fetched"
     error_message: str | None = None
     source_published_at: datetime | None = None
-    ingested_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    ingested_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -151,9 +149,7 @@ def filing_result_to_records(
     # Compute content hash over all section content
     all_content = "\n".join(s.content for s in result.sections)
     content_hash = (
-        f"sha256:{hashlib.sha256(all_content.encode()).hexdigest()}"
-        if all_content
-        else None
+        f"sha256:{hashlib.sha256(all_content.encode()).hexdigest()}" if all_content else None
     )
 
     filing = FilingRecord(
@@ -179,9 +175,7 @@ def filing_result_to_records(
     sections = []
     for i, s in enumerate(result.sections):
         section_hash = (
-            f"sha256:{hashlib.sha256(s.content.encode()).hexdigest()}"
-            if s.content
-            else None
+            f"sha256:{hashlib.sha256(s.content.encode()).hexdigest()}" if s.content else None
         )
         sections.append(
             FilingSectionRecord(
@@ -343,9 +337,7 @@ class FilingRepository:
         )
         return _row_to_filing(row)
 
-    async def get_filing(
-        self, accession_number: str
-    ) -> FilingRecord | None:
+    async def get_filing(self, accession_number: str) -> FilingRecord | None:
         """Fetch a filing by accession number."""
         row = await self._db.fetchrow(
             "SELECT * FROM filings WHERE accession_number = $1",
@@ -392,9 +384,7 @@ class FilingRepository:
 
     # -- Sections ----------------------------------------------------------
 
-    async def upsert_section(
-        self, section: FilingSectionRecord
-    ) -> FilingSectionRecord:
+    async def upsert_section(self, section: FilingSectionRecord) -> FilingSectionRecord:
         """Insert or update a filing section."""
         row = await self._db.fetchrow(
             """
@@ -422,9 +412,7 @@ class FilingRepository:
         )
         return _row_to_section(row)
 
-    async def get_sections(
-        self, accession_number: str
-    ) -> list[FilingSectionRecord]:
+    async def get_sections(self, accession_number: str) -> list[FilingSectionRecord]:
         """Get all sections for a filing, ordered by index."""
         rows = await self._db.fetch(
             """
@@ -438,9 +426,7 @@ class FilingRepository:
 
     # -- Attachments -------------------------------------------------------
 
-    async def upsert_attachment(
-        self, attachment: FilingAttachmentRecord
-    ) -> FilingAttachmentRecord:
+    async def upsert_attachment(self, attachment: FilingAttachmentRecord) -> FilingAttachmentRecord:
         """Insert or update a filing attachment."""
         row = await self._db.fetchrow(
             """
@@ -470,9 +456,7 @@ class FilingRepository:
         )
         return _row_to_attachment(row)
 
-    async def get_attachments(
-        self, accession_number: str
-    ) -> list[FilingAttachmentRecord]:
+    async def get_attachments(self, accession_number: str) -> list[FilingAttachmentRecord]:
         """Get all attachments for a filing."""
         rows = await self._db.fetch(
             """
@@ -486,9 +470,7 @@ class FilingRepository:
 
     # -- XBRL facts --------------------------------------------------------
 
-    async def insert_xbrl_fact(
-        self, fact: XBRLFactRecord
-    ) -> XBRLFactRecord:
+    async def insert_xbrl_fact(self, fact: XBRLFactRecord) -> XBRLFactRecord:
         """Insert an XBRL fact."""
         row = await self._db.fetchrow(
             """

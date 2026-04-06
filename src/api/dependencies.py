@@ -550,9 +550,7 @@ async def get_publish_service() -> PublishService:
                     _database = Database()
                     await _database.connect()
 
-                _publish_service = PublishService(
-                    repository=PublishRepository(_database)
-                )
+                _publish_service = PublishService(repository=PublishRepository(_database))
 
     return _publish_service
 

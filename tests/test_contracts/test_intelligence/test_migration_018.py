@@ -9,9 +9,7 @@ import pathlib
 import pytest
 
 MIGRATION_PATH = (
-    pathlib.Path(__file__).resolve().parents[3]
-    / "migrations"
-    / "018_intelligence_schemas.sql"
+    pathlib.Path(__file__).resolve().parents[3] / "migrations" / "018_intelligence_schemas.sql"
 )
 
 

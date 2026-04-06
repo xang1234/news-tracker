@@ -39,9 +39,7 @@ def validate_lane(lane: str) -> str:
         ValueError: If the lane name is not in the canonical set.
     """
     if lane not in VALID_LANES:
-        raise ValueError(
-            f"Unknown lane {lane!r}. Must be one of {sorted(VALID_LANES)}"
-        )
+        raise ValueError(f"Unknown lane {lane!r}. Must be one of {sorted(VALID_LANES)}")
     return lane
 
 

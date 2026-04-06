@@ -122,9 +122,7 @@ class TestSectionWeight:
         assert _get_section_weight("Risk Factors") == 0.9
 
     def test_mda(self) -> None:
-        assert _get_section_weight(
-            "Item 7. Management's Discussion and Analysis"
-        ) == 1.0
+        assert _get_section_weight("Item 7. Management's Discussion and Analysis") == 1.0
 
     def test_business(self) -> None:
         assert _get_section_weight("Item 1. Business") == 0.8
@@ -198,9 +196,7 @@ class TestSectionSignals:
         assert signal.strength <= 1.0
 
     def test_multiple_keywords(self) -> None:
-        section = _make_section(
-            content="HBM memory in GPU accelerators for AI workloads"
-        )
+        section = _make_section(content="HBM memory in GPU accelerators for AI workloads")
         signals = _compute_section_signals([section], ["HBM", "GPU", "AI"])
         assert len(signals) == 1
         assert set(signals[0].matched_terms) == {"AI", "GPU", "HBM"}
@@ -215,17 +211,13 @@ class TestFactSignals:
 
     def test_basic_match(self) -> None:
         facts = [_make_fact("ResearchAndDevelopmentExpense", "1.5B")]
-        signals = _compute_fact_signals(
-            facts, ["ResearchAndDevelopmentExpense"]
-        )
+        signals = _compute_fact_signals(facts, ["ResearchAndDevelopmentExpense"])
         assert len(signals) == 1
         assert signals[0].matched_theme_concept == "ResearchAndDevelopmentExpense"
 
     def test_case_insensitive(self) -> None:
         facts = [_make_fact("researchanddevelopmentexpense", "1.5B")]
-        signals = _compute_fact_signals(
-            facts, ["ResearchAndDevelopmentExpense"]
-        )
+        signals = _compute_fact_signals(facts, ["ResearchAndDevelopmentExpense"])
         assert len(signals) == 1
 
     def test_no_match(self) -> None:
@@ -304,9 +296,9 @@ class TestSectionDepth:
     """Average strength across matching sections."""
 
     def test_single_signal(self) -> None:
-        depth = _compute_section_depth([
-            SectionSignal(section_id="s1", section_name="RF", strength=0.6)
-        ])
+        depth = _compute_section_depth(
+            [SectionSignal(section_id="s1", section_name="RF", strength=0.6)]
+        )
         assert depth == 0.6
 
     def test_no_signals(self) -> None:
@@ -314,17 +306,21 @@ class TestSectionDepth:
 
     def test_caps_at_one(self) -> None:
         """If all signals have strength 1.0, depth is exactly 1.0."""
-        depth = _compute_section_depth([
-            SectionSignal(section_id="s1", section_name="RF", strength=1.0),
-            SectionSignal(section_id="s2", section_name="B", strength=1.0),
-        ])
+        depth = _compute_section_depth(
+            [
+                SectionSignal(section_id="s1", section_name="RF", strength=1.0),
+                SectionSignal(section_id="s2", section_name="B", strength=1.0),
+            ]
+        )
         assert depth == 1.0
 
     def test_average(self) -> None:
-        depth = _compute_section_depth([
-            SectionSignal(section_id="s1", section_name="RF", strength=0.4),
-            SectionSignal(section_id="s2", section_name="B", strength=0.2),
-        ])
+        depth = _compute_section_depth(
+            [
+                SectionSignal(section_id="s1", section_name="RF", strength=0.4),
+                SectionSignal(section_id="s2", section_name="B", strength=0.2),
+            ]
+        )
         assert abs(depth - 0.3) < 0.001
 
 
@@ -393,7 +389,10 @@ class TestComputeFilingAdoption:
         ]
         facts = [_make_fact("ResearchAndDevelopmentExpense", "1.5B")]
         result = compute_filing_adoption(
-            ISSUER, THEME, sections, facts,
+            ISSUER,
+            THEME,
+            sections,
+            facts,
             keywords=["HBM"],
             xbrl_concepts=["ResearchAndDevelopmentExpense"],
             filing_count=1,
@@ -408,8 +407,13 @@ class TestComputeFilingAdoption:
 
     def test_empty_inputs(self) -> None:
         result = compute_filing_adoption(
-            ISSUER, THEME, [], [],
-            keywords=[], xbrl_concepts=[], now=NOW,
+            ISSUER,
+            THEME,
+            [],
+            [],
+            keywords=[],
+            xbrl_concepts=[],
+            now=NOW,
         )
         assert result.score == 0.0
         assert result.breakdown.section_coverage == 0.0
@@ -422,8 +426,13 @@ class TestComputeFilingAdoption:
         sections = [_make_section()]
         facts = [_make_fact()]
         result = compute_filing_adoption(
-            ISSUER, THEME, sections, facts,
-            keywords=[], xbrl_concepts=[], now=NOW,
+            ISSUER,
+            THEME,
+            sections,
+            facts,
+            keywords=[],
+            xbrl_concepts=[],
+            now=NOW,
         )
         assert result.score == 0.0
 
@@ -439,8 +448,13 @@ class TestComputeFilingAdoption:
             ),
         ]
         result = compute_filing_adoption(
-            ISSUER, THEME, sections, [],
-            keywords=["HBM"], xbrl_concepts=[], now=NOW,
+            ISSUER,
+            THEME,
+            sections,
+            [],
+            keywords=["HBM"],
+            xbrl_concepts=[],
+            now=NOW,
         )
         assert result.score > 0
         assert result.breakdown.section_coverage > 0
@@ -455,7 +469,10 @@ class TestComputeFilingAdoption:
             _make_fact("CapitalExpenditures", "3B"),
         ]
         result = compute_filing_adoption(
-            ISSUER, THEME, [], facts,
+            ISSUER,
+            THEME,
+            [],
+            facts,
             keywords=[],
             xbrl_concepts=["ResearchAndDevelopmentExpense", "CapitalExpenditures"],
             now=NOW,
@@ -472,8 +489,13 @@ class TestComputeFilingAdoption:
             _make_section(section_id="s3", content="No topic match", filing_period="2025-Q3"),
         ]
         result = compute_filing_adoption(
-            ISSUER, THEME, sections, [],
-            keywords=["HBM"], xbrl_concepts=[], now=NOW,
+            ISSUER,
+            THEME,
+            sections,
+            [],
+            keywords=["HBM"],
+            xbrl_concepts=[],
+            now=NOW,
         )
         assert result.periods_with_signal == 2
         assert result.period_count == 3
@@ -502,7 +524,10 @@ class TestComputeFilingAdoption:
         ]
         facts = [_make_fact("RnDExpense", "1B")]
         result = compute_filing_adoption(
-            ISSUER, THEME, sections, facts,
+            ISSUER,
+            THEME,
+            sections,
+            facts,
             keywords=["HBM"],
             xbrl_concepts=["RnDExpense"],
             filing_count=1,
@@ -516,14 +541,20 @@ class TestComputeFilingAdoption:
     def test_score_bounded_zero_to_one(self) -> None:
         sections = [_make_section(content="HBM " * 200, word_count=200)]
         result = compute_filing_adoption(
-            ISSUER, THEME, sections, [],
-            keywords=["HBM"], xbrl_concepts=[], now=NOW,
+            ISSUER,
+            THEME,
+            sections,
+            [],
+            keywords=["HBM"],
+            xbrl_concepts=[],
+            now=NOW,
         )
         assert 0.0 <= result.score <= 1.0
 
     def test_to_dict(self) -> None:
         result = compute_filing_adoption(
-            ISSUER, THEME,
+            ISSUER,
+            THEME,
             [_make_section(content="HBM test")],
             [_make_fact("RnD", "1B")],
             keywords=["HBM"],
@@ -568,28 +599,48 @@ class TestComputeFilingAdoption:
             ),
         ]
         score_relevant = compute_filing_adoption(
-            ISSUER, THEME, relevant, [],
-            keywords=["HBM"], xbrl_concepts=[], now=NOW,
+            ISSUER,
+            THEME,
+            relevant,
+            [],
+            keywords=["HBM"],
+            xbrl_concepts=[],
+            now=NOW,
         ).score
         score_irrelevant = compute_filing_adoption(
-            ISSUER, THEME, irrelevant, [],
-            keywords=["HBM"], xbrl_concepts=[], now=NOW,
+            ISSUER,
+            THEME,
+            irrelevant,
+            [],
+            keywords=["HBM"],
+            xbrl_concepts=[],
+            now=NOW,
         ).score
         assert score_relevant > score_irrelevant
         assert score_irrelevant == 0.0
 
     def test_computed_at_uses_now(self) -> None:
         result = compute_filing_adoption(
-            ISSUER, THEME, [], [],
-            keywords=[], xbrl_concepts=[], now=NOW,
+            ISSUER,
+            THEME,
+            [],
+            [],
+            keywords=[],
+            xbrl_concepts=[],
+            now=NOW,
         )
         assert result.computed_at == NOW
 
     def test_filing_count_passthrough(self) -> None:
         result = compute_filing_adoption(
-            ISSUER, THEME, [], [],
-            keywords=[], xbrl_concepts=[],
-            filing_count=5, now=NOW,
+            ISSUER,
+            THEME,
+            [],
+            [],
+            keywords=[],
+            xbrl_concepts=[],
+            filing_count=5,
+            now=NOW,
         )
         assert result.filing_count == 5
 
@@ -618,8 +669,13 @@ class TestDataclasses:
 
     def test_adoption_score_frozen(self) -> None:
         result = compute_filing_adoption(
-            ISSUER, THEME, [], [],
-            keywords=[], xbrl_concepts=[], now=NOW,
+            ISSUER,
+            THEME,
+            [],
+            [],
+            keywords=[],
+            xbrl_concepts=[],
+            now=NOW,
         )
         try:
             result.score = 0.5  # type: ignore[misc]

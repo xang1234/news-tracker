@@ -12,9 +12,7 @@ from src.security_master.concept_schemas import (
 )
 
 MIGRATION_PATH = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "migrations"
-    / "020_concept_relationships.sql"
+    pathlib.Path(__file__).resolve().parents[2] / "migrations" / "020_concept_relationships.sql"
 )
 
 

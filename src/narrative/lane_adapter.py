@@ -31,9 +31,7 @@ from src.narrative.schemas import NarrativeRun, NarrativeSignalState
 
 # Must match OwnershipPolicy.PUBLISHABLE_OBJECT_TYPES in
 # src/contracts/intelligence/ownership.py
-NARRATIVE_OBJECT_TYPES = frozenset(
-    {"narrative_run", "signal"}
-)
+NARRATIVE_OBJECT_TYPES = frozenset({"narrative_run", "signal"})
 
 
 # -- Payload dataclasses ---------------------------------------------------
@@ -93,9 +91,7 @@ class NarrativeRunPayload:
             "ticker_counts": self.ticker_counts,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "last_document_at": (
-                self.last_document_at.isoformat()
-                if self.last_document_at
-                else None
+                self.last_document_at.isoformat() if self.last_document_at else None
             ),
         }
 
@@ -175,9 +171,7 @@ class NarrativeLaneAdapter:
             "metadata": metadata or {},
         }
 
-    def extract_run_payload(
-        self, narrative_run: NarrativeRun
-    ) -> NarrativeRunPayload:
+    def extract_run_payload(self, narrative_run: NarrativeRun) -> NarrativeRunPayload:
         """Extract a publishable payload from a narrative run."""
         return NarrativeRunPayload(
             run_id=narrative_run.run_id,
@@ -195,15 +189,11 @@ class NarrativeLaneAdapter:
             last_document_at=narrative_run.last_document_at,
         )
 
-    def extract_run_payloads(
-        self, narrative_runs: list[NarrativeRun]
-    ) -> list[NarrativeRunPayload]:
+    def extract_run_payloads(self, narrative_runs: list[NarrativeRun]) -> list[NarrativeRunPayload]:
         """Extract publishable payloads from multiple narrative runs."""
         return [self.extract_run_payload(r) for r in narrative_runs]
 
-    def extract_signal_payload(
-        self, signal: NarrativeSignalState
-    ) -> NarrativeSignalPayload:
+    def extract_signal_payload(self, signal: NarrativeSignalState) -> NarrativeSignalPayload:
         """Extract a publishable payload from a signal state."""
         return NarrativeSignalPayload(
             run_id=signal.run_id,
@@ -213,9 +203,7 @@ class NarrativeLaneAdapter:
             metadata=signal.metadata,
         )
 
-    def make_source_ids(
-        self, narrative_run: NarrativeRun
-    ) -> list[str]:
+    def make_source_ids(self, narrative_run: NarrativeRun) -> list[str]:
         """Build source ID list for a published object's lineage.
 
         Links back to the narrative run and its theme for traceability.

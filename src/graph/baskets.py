@@ -113,9 +113,7 @@ class ThematicBasket:
     at_risk: list[BasketMember] = field(default_factory=list)
     first_order_count: int = 0
     second_order_count: int = 0
-    computed_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    computed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def member_count(self) -> int:

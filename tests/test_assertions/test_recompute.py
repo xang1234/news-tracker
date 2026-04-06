@@ -89,7 +89,9 @@ class TestRecomputeAssertion:
         claim = _make_claim(confidence=0.8)
         link = _make_link()
         assertion, delta = recompute_assertion(
-            None, [claim], [link],
+            None,
+            [claim],
+            [link],
             subject_concept_id="concept_tsmc",
             predicate="supplies_to",
             object_concept_id="concept_nvda",
@@ -108,7 +110,9 @@ class TestRecomputeAssertion:
 
         # First compute to get the actual confidence
         first, _ = recompute_assertion(
-            None, [claim], [link],
+            None,
+            [claim],
+            [link],
             subject_concept_id="concept_tsmc",
             predicate="supplies_to",
             object_concept_id="concept_nvda",
@@ -117,7 +121,9 @@ class TestRecomputeAssertion:
 
         # Recompute with same inputs against the first result
         _, delta = recompute_assertion(
-            first, [claim], [link],
+            first,
+            [claim],
+            [link],
             subject_concept_id="concept_tsmc",
             predicate="supplies_to",
             object_concept_id="concept_nvda",
@@ -136,7 +142,9 @@ class TestRecomputeAssertion:
         link2 = _make_link("c2")
 
         assertion, delta = recompute_assertion(
-            existing, [claim1, claim2], [link1, link2],
+            existing,
+            [claim1, claim2],
+            [link1, link2],
             subject_concept_id="concept_tsmc",
             predicate="supplies_to",
             object_concept_id="concept_nvda",
@@ -153,7 +161,9 @@ class TestRecomputeAssertion:
 
         existing = _make_existing(confidence=0.85, support_count=2)
         assertion, delta = recompute_assertion(
-            existing, [claim1, claim2], links,
+            existing,
+            [claim1, claim2],
+            links,
             subject_concept_id="concept_tsmc",
             predicate="supplies_to",
             object_concept_id="concept_nvda",
@@ -175,7 +185,9 @@ class TestRecomputeAssertion:
         existing = _make_existing(status="active")
 
         assertion, delta = recompute_assertion(
-            existing, [support, contra1, contra2], links,
+            existing,
+            [support, contra1, contra2],
+            links,
             subject_concept_id="concept_tsmc",
             predicate="supplies_to",
             object_concept_id="concept_nvda",
@@ -192,7 +204,9 @@ class TestRecomputeAssertion:
         link = _make_link()
 
         assertion, delta = recompute_assertion(
-            None, [claim], [link],
+            None,
+            [claim],
+            [link],
             subject_concept_id="concept_tsmc",
             predicate="supplies_to",
             object_concept_id="concept_nvda",
@@ -210,14 +224,18 @@ class TestRecomputeAssertion:
         link_plain = _make_link()
 
         _, with_review = recompute_assertion(
-            None, [claim], [link_approved],
+            None,
+            [claim],
+            [link_approved],
             subject_concept_id="concept_tsmc",
             predicate="supplies_to",
             object_concept_id="concept_nvda",
             now=NOW,
         )
         _, without_review = recompute_assertion(
-            None, [claim], [link_plain],
+            None,
+            [claim],
+            [link_plain],
             subject_concept_id="concept_tsmc",
             predicate="supplies_to",
             object_concept_id="concept_nvda",
@@ -229,7 +247,9 @@ class TestRecomputeAssertion:
         claim = _make_claim(confidence=0.8)
         link = _make_link()
         _, delta = recompute_assertion(
-            None, [claim], [link],
+            None,
+            [claim],
+            [link],
             subject_concept_id="concept_tsmc",
             predicate="supplies_to",
             object_concept_id="concept_nvda",
@@ -253,9 +273,7 @@ class TestBuildRecomputeResult:
             previous_status="active",
             new_status="active",
         )
-        result = build_recompute_result(
-            "review_resolved", {"review_task_id": "rt_1"}, [delta]
-        )
+        result = build_recompute_result("review_resolved", {"review_task_id": "rt_1"}, [delta])
         assert result.assertions_updated == 0
         assert result.had_changes is False
 
@@ -288,15 +306,21 @@ class TestBuildRecomputeResult:
         from src.assertions.edges import DerivedEdge
 
         edge = DerivedEdge(
-            source_concept_id="c_a", target_concept_id="c_b",
-            predicate="supplies_to", confidence=0.8,
-            assertion_id="asrt_1", is_current=True,
+            source_concept_id="c_a",
+            target_concept_id="c_b",
+            predicate="supplies_to",
+            confidence=0.8,
+            assertion_id="asrt_1",
+            is_current=True,
         )
         delta = AssertionDelta(
             assertion_id="asrt_1",
-            previous_confidence=0.0, new_confidence=0.8,
-            previous_status="active", new_status="active",
-            edge_before=None, edge_after=edge,
+            previous_confidence=0.0,
+            new_confidence=0.8,
+            previous_status="active",
+            new_status="active",
+            edge_before=None,
+            edge_after=edge,
         )
         result = build_recompute_result("new_claim", {}, [delta])
         assert result.edges_added == 1
@@ -306,15 +330,21 @@ class TestBuildRecomputeResult:
         from src.assertions.edges import DerivedEdge
 
         edge = DerivedEdge(
-            source_concept_id="c_a", target_concept_id="c_b",
-            predicate="supplies_to", confidence=0.8,
-            assertion_id="asrt_1", is_current=True,
+            source_concept_id="c_a",
+            target_concept_id="c_b",
+            predicate="supplies_to",
+            confidence=0.8,
+            assertion_id="asrt_1",
+            is_current=True,
         )
         delta = AssertionDelta(
             assertion_id="asrt_1",
-            previous_confidence=0.8, new_confidence=0.1,
-            previous_status="active", new_status="active",
-            edge_before=edge, edge_after=None,
+            previous_confidence=0.8,
+            new_confidence=0.1,
+            previous_status="active",
+            new_status="active",
+            edge_before=edge,
+            edge_after=None,
         )
         result = build_recompute_result("claim_retracted", {}, [delta])
         assert result.edges_removed == 1

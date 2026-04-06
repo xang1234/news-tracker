@@ -116,10 +116,7 @@ def check_compatibility(version: ContractVersion | str) -> CompatibilityResult:
         compatible=True,
         current=current,
         checked=version,
-        message=(
-            f"Version {version} is compatible with current {current} "
-            f"(same major version)."
-        ),
+        message=(f"Version {version} is compatible with current {current} (same major version)."),
     )
 
 
@@ -134,9 +131,7 @@ class OwnershipPolicy:
 
     # Paths within the owner repo that constitute the contract surface.
     # Contract tests verify that only these paths define publishable types.
-    CONTRACT_PATHS: ClassVar[tuple[str, ...]] = (
-        "src/contracts/intelligence/",
-    )
+    CONTRACT_PATHS: ClassVar[tuple[str, ...]] = ("src/contracts/intelligence/",)
 
     # Object types that may appear in published manifests.
     # Lane-specific modules may define working types, but only these

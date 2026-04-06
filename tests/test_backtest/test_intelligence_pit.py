@@ -193,7 +193,8 @@ class TestLaneRunsPIT:
 
     def test_failed_hidden(self) -> None:
         result = filter_lane_runs_pit(
-            [_run(status="failed", completed_at=PAST)], NOW,
+            [_run(status="failed", completed_at=PAST)],
+            NOW,
         )
         assert len(result) == 0
 
@@ -204,8 +205,13 @@ class TestLaneRunsPIT:
         assert result[0].lane == "narrative"
 
     def test_no_completed_at(self) -> None:
-        run = LaneRun(run_id="r", lane="narrative", status="completed",
-                      contract_version="0.1.0", completed_at=None)
+        run = LaneRun(
+            run_id="r",
+            lane="narrative",
+            status="completed",
+            contract_version="0.1.0",
+            completed_at=None,
+        )
         result = filter_lane_runs_pit([run], NOW)
         assert len(result) == 0
 
@@ -294,7 +300,10 @@ class TestBuildSnapshot:
     def test_active_manifests_populated(self) -> None:
         snap = build_intelligence_snapshot(
             NOW,
-            claims=[], assertions=[], filings=[], lane_runs=[],
+            claims=[],
+            assertions=[],
+            filings=[],
+            lane_runs=[],
             manifests=[
                 _manifest("m_n", lane="narrative", published_at=PAST),
                 _manifest("m_f", lane="filing", published_at=PAST),
@@ -305,8 +314,12 @@ class TestBuildSnapshot:
 
     def test_empty_inputs(self) -> None:
         snap = build_intelligence_snapshot(
-            NOW, claims=[], assertions=[], filings=[],
-            lane_runs=[], manifests=[],
+            NOW,
+            claims=[],
+            assertions=[],
+            filings=[],
+            lane_runs=[],
+            manifests=[],
         )
         assert snap.claims == []
         assert snap.active_manifests == {}
@@ -314,8 +327,11 @@ class TestBuildSnapshot:
     def test_to_dict(self) -> None:
         snap = build_intelligence_snapshot(
             NOW,
-            claims=[_claim()], assertions=[], filings=[],
-            lane_runs=[], manifests=[],
+            claims=[_claim()],
+            assertions=[],
+            filings=[],
+            lane_runs=[],
+            manifests=[],
         )
         d = snap.to_dict()
         assert d["claim_count"] == 1
@@ -407,8 +423,12 @@ class TestDataclasses:
 
     def test_snapshot_frozen(self) -> None:
         snap = build_intelligence_snapshot(
-            NOW, claims=[], assertions=[], filings=[],
-            lane_runs=[], manifests=[],
+            NOW,
+            claims=[],
+            assertions=[],
+            filings=[],
+            lane_runs=[],
+            manifests=[],
         )
         try:
             snap.as_of = FUTURE  # type: ignore[misc]

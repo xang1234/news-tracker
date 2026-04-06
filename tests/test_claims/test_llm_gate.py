@@ -71,24 +71,18 @@ class TestPassageLength:
 
     def test_too_short_denied(self) -> None:
         gate = _make_gate(min_passage_length=100)
-        decision = gate.evaluate(
-            "TSMC", passage_length=50, predicate="supplies_to"
-        )
+        decision = gate.evaluate("TSMC", passage_length=50, predicate="supplies_to")
         assert not decision.approved
         assert decision.deny_reason == DenyReason.PASSAGE_TOO_SHORT
 
     def test_exactly_at_threshold(self) -> None:
         gate = _make_gate(min_passage_length=80)
-        decision = gate.evaluate(
-            "TSMC", passage_length=80, predicate="supplies_to"
-        )
+        decision = gate.evaluate("TSMC", passage_length=80, predicate="supplies_to")
         assert decision.approved
 
     def test_above_threshold(self) -> None:
         gate = _make_gate(min_passage_length=80)
-        decision = gate.evaluate(
-            "TSMC", passage_length=200, predicate="supplies_to"
-        )
+        decision = gate.evaluate("TSMC", passage_length=200, predicate="supplies_to")
         assert decision.approved
 
     def test_zero_length_denied(self) -> None:
@@ -105,37 +99,25 @@ class TestPredicateFilter:
     """Gate only approves high-value predicates."""
 
     def test_high_value_predicate_approved(self) -> None:
-        gate = _make_gate(
-            high_value_predicates=["supplies_to", "competes_with"]
-        )
-        decision = gate.evaluate(
-            "TSMC", passage_length=200, predicate="supplies_to"
-        )
+        gate = _make_gate(high_value_predicates=["supplies_to", "competes_with"])
+        decision = gate.evaluate("TSMC", passage_length=200, predicate="supplies_to")
         assert decision.approved
 
     def test_low_value_predicate_denied(self) -> None:
-        gate = _make_gate(
-            high_value_predicates=["supplies_to", "competes_with"]
-        )
-        decision = gate.evaluate(
-            "TSMC", passage_length=200, predicate="mentions"
-        )
+        gate = _make_gate(high_value_predicates=["supplies_to", "competes_with"])
+        decision = gate.evaluate("TSMC", passage_length=200, predicate="mentions")
         assert not decision.approved
         assert decision.deny_reason == DenyReason.PREDICATE_NOT_HIGH_VALUE
 
     def test_unknown_predicate_allowed_when_list_empty(self) -> None:
         """Empty high_value_predicates means all predicates qualify."""
         gate = _make_gate(high_value_predicates=[])
-        decision = gate.evaluate(
-            "TSMC", passage_length=200, predicate="random_pred"
-        )
+        decision = gate.evaluate("TSMC", passage_length=200, predicate="random_pred")
         assert decision.approved
 
     def test_no_predicate_skips_check(self) -> None:
         """When predicate is None, the check is skipped."""
-        gate = _make_gate(
-            high_value_predicates=["supplies_to"]
-        )
+        gate = _make_gate(high_value_predicates=["supplies_to"])
         decision = gate.evaluate("TSMC", passage_length=200)
         assert decision.approved
 
@@ -150,18 +132,14 @@ class TestBudgetCaps:
         gate = _make_gate(daily_llm_budget=2)
         gate.record_invocation()
         gate.record_invocation()
-        decision = gate.evaluate(
-            "TSMC", passage_length=200, predicate="supplies_to"
-        )
+        decision = gate.evaluate("TSMC", passage_length=200, predicate="supplies_to")
         assert not decision.approved
         assert decision.deny_reason == DenyReason.DAILY_BUDGET_EXHAUSTED
 
     def test_daily_budget_not_exhausted(self) -> None:
         gate = _make_gate(daily_llm_budget=5)
         gate.record_invocation()
-        decision = gate.evaluate(
-            "TSMC", passage_length=200, predicate="supplies_to"
-        )
+        decision = gate.evaluate("TSMC", passage_length=200, predicate="supplies_to")
         assert decision.approved
 
     def test_per_run_budget_exhausted(self) -> None:
@@ -191,9 +169,7 @@ class TestBudgetCaps:
 
     def test_zero_daily_budget_blocks_all(self) -> None:
         gate = _make_gate(daily_llm_budget=0)
-        decision = gate.evaluate(
-            "TSMC", passage_length=200, predicate="supplies_to"
-        )
+        decision = gate.evaluate("TSMC", passage_length=200, predicate="supplies_to")
         assert not decision.approved
         assert decision.deny_reason == DenyReason.DAILY_BUDGET_EXHAUSTED
 
@@ -239,9 +215,7 @@ class TestGateDecision:
     """GateDecision dataclass properties."""
 
     def test_approved_property(self) -> None:
-        d = GateDecision(
-            verdict=GateVerdict.APPROVED, mention="TSMC"
-        )
+        d = GateDecision(verdict=GateVerdict.APPROVED, mention="TSMC")
         assert d.approved is True
 
     def test_denied_property(self) -> None:
@@ -276,9 +250,7 @@ class TestFallbackProvenance:
             llm_proposed_confidence=0.45,
             auto_approve_threshold=0.85,
         )
-        decision = gate.evaluate(
-            "TSMC", passage_length=200, predicate="supplies_to"
-        )
+        decision = gate.evaluate("TSMC", passage_length=200, predicate="supplies_to")
         prov = gate.make_provenance(
             decision,
             model_id="gpt-4o-mini",
@@ -294,9 +266,7 @@ class TestFallbackProvenance:
             llm_proposed_confidence=0.90,
             auto_approve_threshold=0.85,
         )
-        decision = gate.evaluate(
-            "TSMC", passage_length=200, predicate="supplies_to"
-        )
+        decision = gate.evaluate("TSMC", passage_length=200, predicate="supplies_to")
         prov = gate.make_provenance(
             decision,
             model_id="gpt-4o-mini",
@@ -308,19 +278,13 @@ class TestFallbackProvenance:
     def test_llm_confidence_caps_effective(self) -> None:
         """Effective confidence is the min of policy and LLM-reported."""
         gate = _make_gate(llm_proposed_confidence=0.45)
-        decision = gate.evaluate(
-            "TSMC", passage_length=200, predicate="supplies_to"
-        )
-        prov = gate.make_provenance(
-            decision, llm_confidence=0.30
-        )
+        decision = gate.evaluate("TSMC", passage_length=200, predicate="supplies_to")
+        prov = gate.make_provenance(decision, llm_confidence=0.30)
         assert prov.effective_confidence == 0.30
 
     def test_to_metadata_serialization(self) -> None:
         gate = _make_gate()
-        decision = gate.evaluate(
-            "Samsung", passage_length=500, predicate="competes_with"
-        )
+        decision = gate.evaluate("Samsung", passage_length=500, predicate="competes_with")
         prov = gate.make_provenance(
             decision,
             model_id="claude-sonnet",
@@ -368,9 +332,7 @@ class TestResolverGateIntegration:
         assert not result.resolved
         assert result.tier == ResolverTier.UNRESOLVED
 
-    async def test_gate_denied_returns_unresolved_with_metadata(
-        self, repo
-    ) -> None:
+    async def test_gate_denied_returns_unresolved_with_metadata(self, repo) -> None:
         """Gate denial produces unresolved result with denial info."""
         from src.claims.resolver import EntityResolver, ResolverTier
 
@@ -404,16 +366,12 @@ class TestResolverGateIntegration:
 
         gate = FallbackGate(_make_config())
         resolver = EntityResolver(repo, fallback_gate=gate)
-        result = await resolver.resolve(
-            "NVDA", passage_length=200, predicate="supplies_to"
-        )
+        result = await resolver.resolve("NVDA", passage_length=200, predicate="supplies_to")
         assert result.resolved
         assert result.tier == ResolverTier.EXACT
         assert result.concept_id == "concept_issuer_nvda"
 
-    async def test_gate_passage_too_short_returns_unresolved(
-        self, repo
-    ) -> None:
+    async def test_gate_passage_too_short_returns_unresolved(self, repo) -> None:
         """Short passage denied by gate produces unresolved."""
         from src.claims.resolver import EntityResolver
 

@@ -5,9 +5,7 @@ import pathlib
 import pytest
 
 MIGRATION_PATH = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "migrations"
-    / "019_concept_registry.sql"
+    pathlib.Path(__file__).resolve().parents[2] / "migrations" / "019_concept_registry.sql"
 )
 
 

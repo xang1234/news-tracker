@@ -143,7 +143,10 @@ def check_lane_failure_rate(
 
     rate = summary.failure_rate
     severity = _classify(
-        rate, warning_threshold, critical_threshold, higher_is_better=False,
+        rate,
+        warning_threshold,
+        critical_threshold,
+        higher_is_better=False,
     )
 
     return QualityMetric(
@@ -164,9 +167,7 @@ def check_lane_failure_rate(
             "cancelled": summary.cancelled,
             "window_hours": summary.window_hours,
             "last_failed_at": (
-                summary.last_failed_at.isoformat()
-                if summary.last_failed_at
-                else None
+                summary.last_failed_at.isoformat() if summary.last_failed_at else None
             ),
         },
         measured_at=now,
@@ -216,7 +217,10 @@ def check_lane_freshness_budget(
     critical_at = budget_hours * critical_fraction
 
     severity = _classify(
-        hours_since, warning_at, critical_at, higher_is_better=False,
+        hours_since,
+        warning_at,
+        critical_at,
+        higher_is_better=False,
     )
 
     return QualityMetric(
@@ -241,11 +245,7 @@ def check_lane_freshness_budget(
             ),
             "budget_hours": budget_hours,
             "utilization": round(utilization, 4) if utilization != float("inf") else None,
-            "last_completed_at": (
-                last_completed_at.isoformat()
-                if last_completed_at
-                else None
-            ),
+            "last_completed_at": (last_completed_at.isoformat() if last_completed_at else None),
         },
         measured_at=now,
     )
@@ -298,7 +298,8 @@ def check_all_lanes(
         last = last_completions.get(lane)
         metrics.append(
             check_lane_freshness_budget(
-                lane, last,
+                lane,
+                last,
                 warning_fraction=budget_warning_fraction,
                 critical_fraction=budget_critical_fraction,
                 now=now,

@@ -111,7 +111,5 @@ class TestContractRegistry:
 
     def test_unregistered_version_not_supported(self) -> None:
         """Versions not in ALL_VERSIONS are rejected even if same major."""
-        unregistered = ContractVersion(
-            ContractRegistry.CURRENT.major, 99, 0
-        )
+        unregistered = ContractVersion(ContractRegistry.CURRENT.major, 99, 0)
         assert not ContractRegistry.is_supported(unregistered)

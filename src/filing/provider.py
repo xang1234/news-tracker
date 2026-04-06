@@ -43,17 +43,13 @@ class SECRateLimiter:
         async with self._lock:
             now = time.monotonic()
             # Prune timestamps older than 1 second
-            self._timestamps = [
-                t for t in self._timestamps if now - t < 1.0
-            ]
+            self._timestamps = [t for t in self._timestamps if now - t < 1.0]
             if len(self._timestamps) >= self._rps:
                 # Wait until the oldest request falls outside the window
                 sleep_time = 1.0 - (now - self._timestamps[0])
                 if sleep_time > 0:
                     await asyncio.sleep(sleep_time)
-                self._timestamps = [
-                    t for t in self._timestamps if time.monotonic() - t < 1.0
-                ]
+                self._timestamps = [t for t in self._timestamps if time.monotonic() - t < 1.0]
             self._timestamps.append(time.monotonic())
 
 
@@ -73,9 +69,7 @@ class FilingProvider(ABC):
 
     def __init__(self, policy: SECPolicy | None = None) -> None:
         self._policy = policy or SECPolicy()
-        self._rate_limiter = SECRateLimiter(
-            requests_per_second=self._policy.rate_limit_per_second
-        )
+        self._rate_limiter = SECRateLimiter(requests_per_second=self._policy.rate_limit_per_second)
 
     @property
     @abstractmethod
@@ -84,9 +78,7 @@ class FilingProvider(ABC):
         ...
 
     @abstractmethod
-    async def fetch_filing(
-        self, accession_number: str
-    ) -> FilingResult:
+    async def fetch_filing(self, accession_number: str) -> FilingResult:
         """Fetch and parse a single filing by accession number.
 
         Args:

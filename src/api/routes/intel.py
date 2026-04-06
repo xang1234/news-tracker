@@ -256,9 +256,7 @@ async def get_run(
 )
 async def list_runs(
     lane: str | None = Query(default=None, description="Filter by lane"),
-    run_status: str | None = Query(
-        default=None, alias="status", description="Filter by status"
-    ),
+    run_status: str | None = Query(default=None, alias="status", description="Filter by status"),
     limit: int = Query(default=50, ge=1, le=200, description="Max results"),
     api_key: str = Depends(verify_api_key),  # noqa: B008
     service: PublishService = Depends(get_publish_service),  # noqa: B008
@@ -273,9 +271,7 @@ async def list_runs(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Invalid status {run_status!r}. Must be one of {sorted(VALID_RUN_STATUSES)}",
         )
-    runs = await service.list_runs(
-        lane=lane, status=run_status, limit=limit
-    )
+    runs = await service.list_runs(lane=lane, status=run_status, limit=limit)
     return [_run_to_response(r) for r in runs]
 
 
@@ -404,9 +400,7 @@ async def submit_review(
     service: PublishService = Depends(get_publish_service),  # noqa: B008
 ) -> ReviewResponse:
     try:
-        previous_state, updated = await service.transition_object(
-            object_id, body.target_state
-        )
+        previous_state, updated = await service.transition_object(object_id, body.target_state)
     except ValueError as e:
         detail = str(e)
         code = (

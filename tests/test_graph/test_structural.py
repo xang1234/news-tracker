@@ -63,11 +63,22 @@ class TestPredicateSigns:
     """Sign mapping for propagation direction."""
 
     def test_positive_predicates(self) -> None:
-        for pred in ("supplies_to", "customer_of", "depends_on", "drives",
-                      "uses_technology", "develops_technology", "produces",
-                      "consumes", "component_of", "contains_component",
-                      "subsidiary_of", "parent_of", "operates_facility",
-                      "located_at"):
+        for pred in (
+            "supplies_to",
+            "customer_of",
+            "depends_on",
+            "drives",
+            "uses_technology",
+            "develops_technology",
+            "produces",
+            "consumes",
+            "component_of",
+            "contains_component",
+            "subsidiary_of",
+            "parent_of",
+            "operates_facility",
+            "located_at",
+        ):
             assert get_predicate_sign(pred) == 1, f"{pred} should be positive"
 
     def test_negative_predicates(self) -> None:
@@ -85,12 +96,14 @@ class TestPredicateSigns:
     def test_signs_cover_concept_relationship_types(self) -> None:
         """All valid concept relationship types should have signs."""
         from src.security_master.concept_schemas import VALID_RELATIONSHIP_TYPES
+
         for rt in VALID_RELATIONSHIP_TYPES:
             assert rt in PREDICATE_SIGNS, f"{rt} missing from PREDICATE_SIGNS"
 
     def test_signs_cover_graph_relation_types(self) -> None:
         """All manual graph relation types should have signs."""
         from src.graph.schemas import VALID_RELATION_TYPES
+
         for rt in VALID_RELATION_TYPES:
             assert rt in PREDICATE_SIGNS, f"{rt} missing from PREDICATE_SIGNS"
 
@@ -180,8 +193,13 @@ class TestBuildStructuralSnapshot:
         edges = [
             _make_edge(source="A", target="B", predicate="supplies_to", is_current=True),
             _make_edge(source="B", target="C", predicate="customer_of", is_current=True),
-            _make_edge(source="A", target="C", predicate="competes_with",
-                       is_current=False, assertion_status="retracted"),
+            _make_edge(
+                source="A",
+                target="C",
+                predicate="competes_with",
+                is_current=False,
+                assertion_status="retracted",
+            ),
         ]
         snap = build_structural_snapshot(edges, now=NOW)
         assert len(snap.current) == 2
@@ -190,12 +208,9 @@ class TestBuildStructuralSnapshot:
 
     def test_predicate_counts(self) -> None:
         edges = [
-            _make_edge(source="A", target="B", predicate="supplies_to",
-                       assertion_id="a1"),
-            _make_edge(source="C", target="D", predicate="supplies_to",
-                       assertion_id="a2"),
-            _make_edge(source="E", target="F", predicate="competes_with",
-                       assertion_id="a3"),
+            _make_edge(source="A", target="B", predicate="supplies_to", assertion_id="a1"),
+            _make_edge(source="C", target="D", predicate="supplies_to", assertion_id="a2"),
+            _make_edge(source="E", target="F", predicate="competes_with", assertion_id="a3"),
         ]
         snap = build_structural_snapshot(edges, now=NOW)
         assert snap.predicate_counts["supplies_to"] == 2
@@ -236,10 +251,8 @@ class TestBuildStructuralSnapshot:
 
     def test_all_history(self) -> None:
         edges = [
-            _make_edge(is_current=False, assertion_status="retracted",
-                       assertion_id="a1"),
-            _make_edge(is_current=False, assertion_status="superseded",
-                       assertion_id="a2"),
+            _make_edge(is_current=False, assertion_status="retracted", assertion_id="a1"),
+            _make_edge(is_current=False, assertion_status="superseded", assertion_id="a2"),
         ]
         snap = build_structural_snapshot(edges, now=NOW)
         assert snap.total_current == 0
@@ -249,11 +262,17 @@ class TestBuildStructuralSnapshot:
     def test_history_excluded_from_metadata(self) -> None:
         """Predicate counts and concept count only include current edges."""
         edges = [
-            _make_edge(source="A", target="B", predicate="supplies_to",
-                       is_current=True, assertion_id="a1"),
-            _make_edge(source="C", target="D", predicate="competes_with",
-                       is_current=False, assertion_status="retracted",
-                       assertion_id="a2"),
+            _make_edge(
+                source="A", target="B", predicate="supplies_to", is_current=True, assertion_id="a1"
+            ),
+            _make_edge(
+                source="C",
+                target="D",
+                predicate="competes_with",
+                is_current=False,
+                assertion_status="retracted",
+                assertion_id="a2",
+            ),
         ]
         snap = build_structural_snapshot(edges, now=NOW)
         assert snap.predicate_counts == {"supplies_to": 1}
@@ -272,8 +291,7 @@ class TestBuildStructuralSnapshot:
     def test_to_dict_summary(self) -> None:
         edges = [
             _make_edge(assertion_id="a1"),
-            _make_edge(is_current=False, assertion_status="retracted",
-                       assertion_id="a2"),
+            _make_edge(is_current=False, assertion_status="retracted", assertion_id="a2"),
         ]
         snap = build_structural_snapshot(edges, now=NOW)
         d = snap.to_dict()
@@ -285,8 +303,7 @@ class TestBuildStructuralSnapshot:
         edges = [
             _make_edge(assertion_id="a1"),
             _make_edge(assertion_id="a2"),
-            _make_edge(is_current=False, assertion_status="retracted",
-                       assertion_id="a3"),
+            _make_edge(is_current=False, assertion_status="retracted", assertion_id="a3"),
         ]
         snap = build_structural_snapshot(edges, now=NOW)
         assert snap.total_current == 2

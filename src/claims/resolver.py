@@ -235,24 +235,18 @@ class EntityResolver:
             )
 
         # Gate denied — return unresolved with denial info
-        logger.debug(
-            "LLM gate denied for %r: %s", mention, decision.deny_reason
-        )
+        logger.debug("LLM gate denied for %r: %s", mention, decision.deny_reason)
         return ResolverResult(
             mention=mention,
             metadata={
                 "gate_verdict": decision.verdict.value,
-                "gate_deny_reason": (
-                    decision.deny_reason.value if decision.deny_reason else None
-                ),
+                "gate_deny_reason": (decision.deny_reason.value if decision.deny_reason else None),
             },
         )
 
     # -- Tier 1: Exact lookup ----------------------------------------------
 
-    async def _resolve_exact(
-        self, mention: str, concept_type: str | None
-    ) -> ResolverResult:
+    async def _resolve_exact(self, mention: str, concept_type: str | None) -> ResolverResult:
         """Try exact ticker or concept_id lookup."""
         # Try as ticker → security concept (US exchange first, then
         # try with exchange suffix like "005930.KS")
@@ -264,20 +258,16 @@ class EntityResolver:
             # as exchange and log for visibility.
             parts = ticker.rsplit(".", 1)
             ticker, exchange = parts[0], parts[1]
-        concept = await self._repo.get_concept_for_security(
-            ticker=ticker, exchange=exchange
-        )
-        if concept is not None and (
-            concept_type is None or concept.concept_type == concept_type
-        ):
-                return ResolverResult(
-                    mention=mention,
-                    concept=concept,
-                    concept_id=concept.concept_id,
-                    tier=ResolverTier.EXACT,
-                    confidence=1.0,
-                    metadata={"match_type": "ticker"},
-                )
+        concept = await self._repo.get_concept_for_security(ticker=ticker, exchange=exchange)
+        if concept is not None and (concept_type is None or concept.concept_type == concept_type):
+            return ResolverResult(
+                mention=mention,
+                concept=concept,
+                concept_id=concept.concept_id,
+                tier=ResolverTier.EXACT,
+                confidence=1.0,
+                metadata={"match_type": "ticker"},
+            )
 
         # Try direct concept lookup by ID (for pre-resolved references)
         if mention.startswith("concept_"):
@@ -312,9 +302,7 @@ class EntityResolver:
 
     # -- Tier 3: Fuzzy matching --------------------------------------------
 
-    async def _resolve_fuzzy(
-        self, mention: str, concept_type: str | None
-    ) -> ResolverResult:
+    async def _resolve_fuzzy(self, mention: str, concept_type: str | None) -> ResolverResult:
         """Try fuzzy matching via pg_trgm similarity."""
         candidates = await self._repo.search_concepts(
             mention,
@@ -326,9 +314,7 @@ class EntityResolver:
 
         # Filter by concept_type if specified
         if concept_type is not None:
-            candidates = [
-                c for c in candidates if c.concept_type == concept_type
-            ]
+            candidates = [c for c in candidates if c.concept_type == concept_type]
             if not candidates:
                 return ResolverResult(mention=mention)
 

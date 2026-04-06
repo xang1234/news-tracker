@@ -175,8 +175,7 @@ class ReviewRepository:
         """
         if resolution is not None and resolution not in VALID_RESOLUTIONS:
             raise ValueError(
-                f"Invalid resolution {resolution!r}. "
-                f"Must be one of {sorted(VALID_RESOLUTIONS)}"
+                f"Invalid resolution {resolution!r}. Must be one of {sorted(VALID_RESOLUTIONS)}"
             )
 
         current = await self.get_task(task_id)
@@ -187,9 +186,7 @@ class ReviewRepository:
 
         # Resolved tasks must have a resolution
         if target_status == "resolved" and resolution is None:
-            raise ValueError(
-                "Resolution is required when transitioning to 'resolved'"
-            )
+            raise ValueError("Resolution is required when transitioning to 'resolved'")
 
         row = await self._db.fetchrow(
             """
@@ -225,14 +222,11 @@ class ReviewRepository:
             )
         else:
             row = await self._db.fetchrow(
-                "SELECT COUNT(*) AS cnt FROM news_intel.review_tasks "
-                "WHERE status = 'pending'"
+                "SELECT COUNT(*) AS cnt FROM news_intel.review_tasks WHERE status = 'pending'"
             )
         return row["cnt"] if row else 0
 
-    async def get_tasks_for_claim(
-        self, claim_id: str
-    ) -> list[ReviewTask]:
+    async def get_tasks_for_claim(self, claim_id: str) -> list[ReviewTask]:
         """Get all review tasks linked to a specific claim."""
         rows = await self._db.fetch(
             """
@@ -244,9 +238,7 @@ class ReviewRepository:
         )
         return [_row_to_task(row) for row in rows]
 
-    async def get_tasks_for_concept(
-        self, concept_id: str
-    ) -> list[ReviewTask]:
+    async def get_tasks_for_concept(self, concept_id: str) -> list[ReviewTask]:
         """Get all review tasks linked to a specific concept."""
         rows = await self._db.fetch(
             """

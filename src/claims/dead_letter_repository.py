@@ -55,9 +55,7 @@ class DeadLetterRepository:
     def __init__(self, database: Database) -> None:
         self._db = database
 
-    async def upsert_record(
-        self, record: DeadLetterRecord
-    ) -> DeadLetterRecord:
+    async def upsert_record(self, record: DeadLetterRecord) -> DeadLetterRecord:
         """Insert or update a dead-letter record (idempotent on record_id).
 
         On conflict, updates error details and metadata but preserves
@@ -91,9 +89,7 @@ class DeadLetterRepository:
         )
         return _row_to_record(row)
 
-    async def get_record(
-        self, record_id: str
-    ) -> DeadLetterRecord | None:
+    async def get_record(self, record_id: str) -> DeadLetterRecord | None:
         """Fetch a dead-letter record by ID."""
         row = await self._db.fetchrow(
             "SELECT * FROM news_intel.claim_dead_letters WHERE record_id = $1",
@@ -139,19 +135,15 @@ class DeadLetterRepository:
     async def count_by_run(self, run_id: str) -> int:
         """Count dead-letter records for a specific run."""
         row = await self._db.fetchrow(
-            "SELECT COUNT(*) AS cnt FROM news_intel.claim_dead_letters "
-            "WHERE run_id = $1",
+            "SELECT COUNT(*) AS cnt FROM news_intel.claim_dead_letters WHERE run_id = $1",
             run_id,
         )
         return row["cnt"] if row else 0
 
-    async def count_by_reason(
-        self, reason: str
-    ) -> int:
+    async def count_by_reason(self, reason: str) -> int:
         """Count dead-letter records by reason."""
         row = await self._db.fetchrow(
-            "SELECT COUNT(*) AS cnt FROM news_intel.claim_dead_letters "
-            "WHERE reason = $1",
+            "SELECT COUNT(*) AS cnt FROM news_intel.claim_dead_letters WHERE reason = $1",
             reason,
         )
         return row["cnt"] if row else 0

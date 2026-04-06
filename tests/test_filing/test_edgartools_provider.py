@@ -251,9 +251,7 @@ class TestEdgarToolsProvider:
     async def test_search_filings_success(self, mock_edgar) -> None:
         mock_module = MagicMock()
         mock_company = MagicMock()
-        mock_filing_obj = _mock_filing(
-            accession="acc-001", form_type="10-K", filed="2024-06-15"
-        )
+        mock_filing_obj = _mock_filing(accession="acc-001", form_type="10-K", filed="2024-06-15")
         mock_company.get_filings.return_value = [mock_filing_obj]
         mock_company.cik = "0001234567"
         mock_module.Company.return_value = mock_company

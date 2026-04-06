@@ -35,12 +35,14 @@ LAYER_FILING = "filing"
 LAYER_STRUCTURAL = "structural"
 LAYER_DIVERGENCE = "divergence"
 
-ALL_LAYERS = frozenset({
-    LAYER_NARRATIVE,
-    LAYER_FILING,
-    LAYER_STRUCTURAL,
-    LAYER_DIVERGENCE,
-})
+ALL_LAYERS = frozenset(
+    {
+        LAYER_NARRATIVE,
+        LAYER_FILING,
+        LAYER_STRUCTURAL,
+        LAYER_DIVERGENCE,
+    }
+)
 
 
 # -- Ablation configuration ---------------------------------------------------
@@ -107,8 +109,7 @@ def build_standard_suite(
         AblationConfig(
             name="narrative_v2",
             description=(
-                "New narrative component scores"
-                " (attention, corroboration, confirmation, novelty)"
+                "New narrative component scores (attention, corroboration, confirmation, novelty)"
             ),
             enabled_layers=frozenset({LAYER_NARRATIVE}),
             contract_version=version,
@@ -189,9 +190,7 @@ class AblationResult:
     snapshot_summary: dict[str, Any] = field(default_factory=dict)
     metrics: dict[str, float] = field(default_factory=dict)
     run_id: str = ""
-    evaluated_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    evaluated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -228,9 +227,7 @@ class LayerContribution:
             "layer_added": self.layer_added,
             "baseline_name": self.baseline_name,
             "variant_name": self.variant_name,
-            "metric_deltas": {
-                k: round(v, 6) for k, v in self.metric_deltas.items()
-            },
+            "metric_deltas": {k: round(v, 6) for k, v in self.metric_deltas.items()},
         }
 
 
@@ -246,9 +243,7 @@ class AblationComparison:
 
     results: dict[str, AblationResult] = field(default_factory=dict)
     contributions: list[LayerContribution] = field(default_factory=list)
-    compared_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    compared_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         return {

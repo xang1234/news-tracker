@@ -19,9 +19,7 @@ from typing import Any
 
 # -- Valid state sets -------------------------------------------------------
 
-VALID_ASSERTION_STATUSES = frozenset(
-    {"active", "disputed", "retracted", "superseded"}
-)
+VALID_ASSERTION_STATUSES = frozenset({"active", "disputed", "retracted", "superseded"})
 
 VALID_LINK_TYPES = frozenset({"support", "contradiction"})
 
@@ -83,12 +81,8 @@ class ResolvedAssertion:
     last_evidence_at: datetime | None = None
     source_diversity: int = 0
     metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
-    updated_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.status not in VALID_ASSERTION_STATUSES:
@@ -102,8 +96,7 @@ class ResolvedAssertion:
             and self.valid_from > self.valid_to
         ):
             raise ValueError(
-                f"valid_from ({self.valid_from}) must be <= "
-                f"valid_to ({self.valid_to})"
+                f"valid_from ({self.valid_from}) must be <= valid_to ({self.valid_to})"
             )
 
     @property
@@ -142,18 +135,12 @@ class AssertionClaimLink:
     link_type: str
     contribution_weight: float = 1.0
     metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.link_type not in VALID_LINK_TYPES:
             raise ValueError(
-                f"Invalid link_type {self.link_type!r}. "
-                f"Must be one of {sorted(VALID_LINK_TYPES)}"
+                f"Invalid link_type {self.link_type!r}. Must be one of {sorted(VALID_LINK_TYPES)}"
             )
         if not 0.0 <= self.contribution_weight <= 1.0:
-            raise ValueError(
-                f"contribution_weight must be 0-1, got "
-                f"{self.contribution_weight}"
-            )
+            raise ValueError(f"contribution_weight must be 0-1, got {self.contribution_weight}")

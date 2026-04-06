@@ -94,15 +94,12 @@ class DivergenceAlert:
     title: str
     summary: str
     evidence: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.severity not in VALID_SEVERITIES:
             raise ValueError(
-                f"Invalid severity {self.severity!r}. "
-                f"Must be one of {sorted(VALID_SEVERITIES)}"
+                f"Invalid severity {self.severity!r}. Must be one of {sorted(VALID_SEVERITIES)}"
             )
 
     def to_dict(self) -> dict[str, Any]:
@@ -139,10 +136,7 @@ def _check_narrative_without_filing(
     if adoption.score >= WEAK_ADOPTION:
         return None
 
-    if (
-        narrative_strength >= VERY_STRONG_NARRATIVE
-        and adoption.score < VERY_WEAK_ADOPTION
-    ):
+    if narrative_strength >= VERY_STRONG_NARRATIVE and adoption.score < VERY_WEAK_ADOPTION:
         severity = "critical"
     else:
         severity = "warning"
@@ -229,21 +223,21 @@ def _check_adverse_drift(
             continue
         if dim.word_count_delta < ADVERSE_WORD_INCREASE:
             continue
-        adverse_hits.append({
-            "dimension": dim.dimension,
-            "magnitude": dim.magnitude,
-            "z_score": dim.z_score,
-            "word_count_delta": dim.word_count_delta,
-            "section_names": dim.section_names,
-        })
+        adverse_hits.append(
+            {
+                "dimension": dim.dimension,
+                "magnitude": dim.magnitude,
+                "z_score": dim.z_score,
+                "word_count_delta": dim.word_count_delta,
+                "section_names": dim.section_names,
+            }
+        )
 
     if not adverse_hits:
         return None
 
     dims = ", ".join(h["dimension"] for h in adverse_hits)
-    severity = "critical" if any(
-        h["z_score"] >= 2.5 for h in adverse_hits
-    ) else "warning"
+    severity = "critical" if any(h["z_score"] >= 2.5 for h in adverse_hits) else "warning"
 
     return DivergenceAlert(
         issuer_concept_id=issuer_concept_id,
@@ -289,12 +283,14 @@ def _check_contradictory_drift(
             continue
         if dim.word_count_delta >= 0:
             continue
-        shrinking.append({
-            "dimension": dim.dimension,
-            "magnitude": dim.magnitude,
-            "word_count_delta": dim.word_count_delta,
-            "section_names": dim.section_names,
-        })
+        shrinking.append(
+            {
+                "dimension": dim.dimension,
+                "magnitude": dim.magnitude,
+                "word_count_delta": dim.word_count_delta,
+                "section_names": dim.section_names,
+            }
+        )
 
     if not shrinking:
         return None
@@ -404,22 +400,31 @@ def check_divergence(
     # without-filing (same preconditions plus temporal growth signal).
     # Check it first; if it fires, skip the blunter hype-risk alert.
     lagging = _check_lagging_adoption(
-        issuer_concept_id, theme_concept_id,
-        narrative_strength, adoption, now,
+        issuer_concept_id,
+        theme_concept_id,
+        narrative_strength,
+        adoption,
+        now,
     )
     if lagging is not None:
         alerts.append(lagging)
     else:
         alert = _check_narrative_without_filing(
-            issuer_concept_id, theme_concept_id,
-            narrative_strength, adoption, now,
+            issuer_concept_id,
+            theme_concept_id,
+            narrative_strength,
+            adoption,
+            now,
         )
         if alert is not None:
             alerts.append(alert)
 
     alert = _check_filing_without_narrative(
-        issuer_concept_id, theme_concept_id,
-        narrative_strength, adoption, now,
+        issuer_concept_id,
+        theme_concept_id,
+        narrative_strength,
+        adoption,
+        now,
     )
     if alert is not None:
         alerts.append(alert)
@@ -427,14 +432,20 @@ def check_divergence(
     # Drift-based checks (require consecutive filings)
     if drift is not None:
         alert = _check_adverse_drift(
-            issuer_concept_id, theme_concept_id, drift, now,
+            issuer_concept_id,
+            theme_concept_id,
+            drift,
+            now,
         )
         if alert is not None:
             alerts.append(alert)
 
         alert = _check_contradictory_drift(
-            issuer_concept_id, theme_concept_id,
-            narrative_strength, drift, now,
+            issuer_concept_id,
+            theme_concept_id,
+            narrative_strength,
+            drift,
+            now,
         )
         if alert is not None:
             alerts.append(alert)

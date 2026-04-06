@@ -87,9 +87,7 @@ class TestConceptAlias:
 
     def test_all_alias_types_accepted(self) -> None:
         for at in VALID_ALIAS_TYPES:
-            a = ConceptAlias(
-                alias="test", concept_id="c1", alias_type=at
-            )
+            a = ConceptAlias(alias="test", concept_id="c1", alias_type=at)
             assert a.alias_type == at
 
     def test_invalid_type_rejected(self) -> None:

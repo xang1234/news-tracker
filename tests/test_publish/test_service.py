@@ -109,20 +109,14 @@ class InMemoryPublishRepository:
         self.pointers[lane] = ptr
         return ptr
 
-    async def create_published_object(
-        self, obj: PublishedObject
-    ) -> PublishedObject:
+    async def create_published_object(self, obj: PublishedObject) -> PublishedObject:
         self.objects[obj.object_id] = obj
         return obj
 
-    async def get_published_object(
-        self, object_id: str
-    ) -> PublishedObject | None:
+    async def get_published_object(self, object_id: str) -> PublishedObject | None:
         return self.objects.get(object_id)
 
-    async def update_publish_state(
-        self, object_id: str, new_state: str
-    ) -> PublishedObject | None:
+    async def update_publish_state(self, object_id: str, new_state: str) -> PublishedObject | None:
         obj = self.objects.get(object_id)
         if obj is None:
             return None
@@ -136,9 +130,7 @@ class InMemoryPublishRepository:
         *,
         publish_state: str | None = None,
     ) -> list[PublishedObject]:
-        results = [
-            o for o in self.objects.values() if o.manifest_id == manifest_id
-        ]
+        results = [o for o in self.objects.values() if o.manifest_id == manifest_id]
         if publish_state is not None:
             results = [o for o in results if o.publish_state == publish_state]
         return sorted(results, key=lambda o: o.created_at)
@@ -169,24 +161,18 @@ class TestLaneRunLifecycle:
         assert run.status == "pending"
         assert run.run_id.startswith("run_")
 
-    async def test_full_lifecycle_success(
-        self, service: PublishService
-    ) -> None:
+    async def test_full_lifecycle_success(self, service: PublishService) -> None:
         run = await service.create_run(LANE_NARRATIVE)
         started = await service.start_run(run.run_id)
         assert started.status == "running"
         assert started.started_at is not None
 
-        completed = await service.complete_run(
-            run.run_id, metrics={"docs_processed": 42}
-        )
+        completed = await service.complete_run(run.run_id, metrics={"docs_processed": 42})
         assert completed.status == "completed"
         assert completed.completed_at is not None
         assert completed.metrics["docs_processed"] == 42
 
-    async def test_full_lifecycle_failure(
-        self, service: PublishService
-    ) -> None:
+    async def test_full_lifecycle_failure(self, service: PublishService) -> None:
         run = await service.create_run(LANE_FILING)
         await service.start_run(run.run_id)
         failed = await service.fail_run(run.run_id, "connection timeout")
@@ -198,31 +184,23 @@ class TestLaneRunLifecycle:
         cancelled = await service.cancel_run(run.run_id)
         assert cancelled.status == "cancelled"
 
-    async def test_cannot_start_completed_run(
-        self, service: PublishService
-    ) -> None:
+    async def test_cannot_start_completed_run(self, service: PublishService) -> None:
         run = await service.create_run(LANE_NARRATIVE)
         await service.start_run(run.run_id)
         await service.complete_run(run.run_id)
         with pytest.raises(ValueError, match="Invalid run transition"):
             await service.start_run(run.run_id)
 
-    async def test_cannot_complete_pending_run(
-        self, service: PublishService
-    ) -> None:
+    async def test_cannot_complete_pending_run(self, service: PublishService) -> None:
         run = await service.create_run(LANE_NARRATIVE)
         with pytest.raises(ValueError, match="Invalid run transition"):
             await service.complete_run(run.run_id)
 
-    async def test_nonexistent_run_raises(
-        self, service: PublishService
-    ) -> None:
+    async def test_nonexistent_run_raises(self, service: PublishService) -> None:
         with pytest.raises(ValueError, match="not found"):
             await service.start_run("run_does_not_exist")
 
-    async def test_invalid_lane_rejected(
-        self, service: PublishService
-    ) -> None:
+    async def test_invalid_lane_rejected(self, service: PublishService) -> None:
         with pytest.raises(ValueError, match="Unknown lane"):
             await service.create_run("nonexistent_lane")
 
@@ -232,9 +210,7 @@ class TestLaneRunLifecycle:
         assert fetched is not None
         assert fetched.run_id == run.run_id
 
-    async def test_get_nonexistent_run(
-        self, service: PublishService
-    ) -> None:
+    async def test_get_nonexistent_run(self, service: PublishService) -> None:
         assert await service.get_run("nope") is None
 
 
@@ -279,9 +255,7 @@ class TestManifestLifecycle:
         sealed = await service.seal_manifest(m.manifest_id)
         assert sealed.object_count == 1
 
-    async def test_seal_rejects_non_published_objects(
-        self, service: PublishService
-    ) -> None:
+    async def test_seal_rejects_non_published_objects(self, service: PublishService) -> None:
         run_id, m = await _make_manifest(service)
         await service.add_object(
             m.manifest_id,
@@ -292,27 +266,19 @@ class TestManifestLifecycle:
         with pytest.raises(ValueError, match="still in"):
             await service.seal_manifest(m.manifest_id)
 
-    async def test_seal_nonexistent_manifest_raises(
-        self, service: PublishService
-    ) -> None:
+    async def test_seal_nonexistent_manifest_raises(self, service: PublishService) -> None:
         with pytest.raises(ValueError, match="not found"):
             await service.seal_manifest("nope")
 
-    async def test_create_manifest_invalid_lane(
-        self, service: PublishService
-    ) -> None:
+    async def test_create_manifest_invalid_lane(self, service: PublishService) -> None:
         with pytest.raises(ValueError, match="Unknown lane"):
             await service.create_manifest("bad_lane", "run_001")
 
-    async def test_create_manifest_run_not_found(
-        self, service: PublishService
-    ) -> None:
+    async def test_create_manifest_run_not_found(self, service: PublishService) -> None:
         with pytest.raises(ValueError, match="Lane run not found"):
             await service.create_manifest(LANE_NARRATIVE, "nonexistent")
 
-    async def test_create_manifest_run_lane_mismatch(
-        self, service: PublishService
-    ) -> None:
+    async def test_create_manifest_run_lane_mismatch(self, service: PublishService) -> None:
         run_id = await _make_run(service, LANE_FILING)
         with pytest.raises(ValueError, match="belongs to lane"):
             await service.create_manifest(LANE_NARRATIVE, run_id)
@@ -344,9 +310,7 @@ class TestPointerAdvancement:
         assert ptr.manifest_id == m.manifest_id
         assert ptr.previous_manifest_id is None
 
-    async def test_pointer_tracks_previous(
-        self, service: PublishService
-    ) -> None:
+    async def test_pointer_tracks_previous(self, service: PublishService) -> None:
         m1 = await _create_and_seal(service, LANE_NARRATIVE)
         m2 = await _create_and_seal(service, LANE_NARRATIVE)
 
@@ -356,9 +320,7 @@ class TestPointerAdvancement:
         assert ptr.manifest_id == m2.manifest_id
         assert ptr.previous_manifest_id == m1.manifest_id
 
-    async def test_pointer_per_lane_isolation(
-        self, service: PublishService
-    ) -> None:
+    async def test_pointer_per_lane_isolation(self, service: PublishService) -> None:
         m_narr = await _create_and_seal(service, LANE_NARRATIVE)
         m_file = await _create_and_seal(service, LANE_FILING)
 
@@ -373,31 +335,23 @@ class TestPointerAdvancement:
         assert ptr_narr.manifest_id == m_narr.manifest_id
         assert ptr_file.manifest_id == m_file.manifest_id
 
-    async def test_pointer_nonexistent_manifest_raises(
-        self, service: PublishService
-    ) -> None:
+    async def test_pointer_nonexistent_manifest_raises(self, service: PublishService) -> None:
         with pytest.raises(ValueError, match="not found"):
             await service.advance_pointer(LANE_NARRATIVE, "nope")
 
-    async def test_pointer_lane_mismatch_raises(
-        self, service: PublishService
-    ) -> None:
+    async def test_pointer_lane_mismatch_raises(self, service: PublishService) -> None:
         m = await _create_and_seal(service, LANE_FILING)
         with pytest.raises(ValueError, match="belongs to lane"):
             await service.advance_pointer(LANE_NARRATIVE, m.manifest_id)
 
-    async def test_pointer_unsealed_manifest_rejected(
-        self, service: PublishService
-    ) -> None:
+    async def test_pointer_unsealed_manifest_rejected(self, service: PublishService) -> None:
         """Cannot publish an unsealed manifest."""
         run_id = await _make_run(service, LANE_NARRATIVE)
         m = await service.create_manifest(LANE_NARRATIVE, run_id)
         with pytest.raises(ValueError, match="not been sealed"):
             await service.advance_pointer(LANE_NARRATIVE, m.manifest_id)
 
-    async def test_pointer_incomplete_run_rejected(
-        self, service: PublishService
-    ) -> None:
+    async def test_pointer_incomplete_run_rejected(self, service: PublishService) -> None:
         """Cannot publish from a run that hasn't completed."""
         run_id = await _make_run(service, LANE_NARRATIVE)
         m = await service.create_manifest(LANE_NARRATIVE, run_id)
@@ -408,9 +362,7 @@ class TestPointerAdvancement:
     async def test_get_pointer_empty(self, service: PublishService) -> None:
         assert await service.get_pointer(LANE_NARRATIVE) is None
 
-    async def test_three_advances_track_history(
-        self, service: PublishService
-    ) -> None:
+    async def test_three_advances_track_history(self, service: PublishService) -> None:
         """Third pointer advance should reference the second manifest."""
         m1 = await _create_and_seal(service, LANE_NARRATIVE)
         m2 = await _create_and_seal(service, LANE_NARRATIVE)
@@ -454,9 +406,7 @@ class TestPublishedObjectTransitions:
         assert obj.payload["text"] == "TSMC capacity expansion"
         assert obj.source_ids == ["doc_1", "doc_2"]
 
-    async def test_add_object_nonexistent_manifest_raises(
-        self, service: PublishService
-    ) -> None:
+    async def test_add_object_nonexistent_manifest_raises(self, service: PublishService) -> None:
         with pytest.raises(ValueError, match="Manifest not found"):
             await service.add_object(
                 "nope",
@@ -465,9 +415,7 @@ class TestPublishedObjectTransitions:
                 run_id="run_001",
             )
 
-    async def test_add_object_lane_mismatch_raises(
-        self, service: PublishService
-    ) -> None:
+    async def test_add_object_lane_mismatch_raises(self, service: PublishService) -> None:
         run_id, m = await _make_manifest(service, LANE_FILING)
         with pytest.raises(ValueError, match="does not match manifest lane"):
             await service.add_object(
@@ -477,9 +425,7 @@ class TestPublishedObjectTransitions:
                 run_id=run_id,
             )
 
-    async def test_add_object_run_mismatch_raises(
-        self, service: PublishService
-    ) -> None:
+    async def test_add_object_run_mismatch_raises(self, service: PublishService) -> None:
         run_id, m = await _make_manifest(service)
         other_run_id = await _make_run(service, LANE_NARRATIVE)
         with pytest.raises(ValueError, match="does not match manifest run_id"):
@@ -490,9 +436,7 @@ class TestPublishedObjectTransitions:
                 run_id=other_run_id,
             )
 
-    async def test_add_object_to_sealed_manifest_raises(
-        self, service: PublishService
-    ) -> None:
+    async def test_add_object_to_sealed_manifest_raises(self, service: PublishService) -> None:
         run_id, m = await _make_manifest(service)
         await service.seal_manifest(m.manifest_id)
         with pytest.raises(ValueError, match="sealed manifest"):
@@ -535,9 +479,7 @@ class TestPublishedObjectTransitions:
         with pytest.raises(ValueError, match="sealed"):
             await service.transition_object(obj.object_id, "review")
 
-    async def test_add_object_invalid_type_raises(
-        self, service: PublishService
-    ) -> None:
+    async def test_add_object_invalid_type_raises(self, service: PublishService) -> None:
         run_id, m = await _make_manifest(service)
         with pytest.raises(ValueError, match="not publishable"):
             await service.add_object(
@@ -547,9 +489,7 @@ class TestPublishedObjectTransitions:
                 run_id=run_id,
             )
 
-    async def test_draft_to_review_to_published(
-        self, service: PublishService
-    ) -> None:
+    async def test_draft_to_review_to_published(self, service: PublishService) -> None:
         run_id, m = await _make_manifest(service)
         obj = await service.add_object(
             m.manifest_id,
@@ -563,9 +503,7 @@ class TestPublishedObjectTransitions:
         _, published = await service.transition_object(obj.object_id, "published")
         assert published.publish_state == "published"
 
-    async def test_draft_direct_to_published(
-        self, service: PublishService
-    ) -> None:
+    async def test_draft_direct_to_published(self, service: PublishService) -> None:
         run_id, m = await _make_manifest(service)
         obj = await service.add_object(
             m.manifest_id,
@@ -576,9 +514,7 @@ class TestPublishedObjectTransitions:
         _, published = await service.transition_object(obj.object_id, "published")
         assert published.publish_state == "published"
 
-    async def test_published_to_retracted(
-        self, service: PublishService
-    ) -> None:
+    async def test_published_to_retracted(self, service: PublishService) -> None:
         run_id, m = await _make_manifest(service)
         obj = await service.add_object(
             m.manifest_id,
@@ -590,9 +526,7 @@ class TestPublishedObjectTransitions:
         _, retracted = await service.transition_object(obj.object_id, "retracted")
         assert retracted.publish_state == "retracted"
 
-    async def test_retracted_is_terminal(
-        self, service: PublishService
-    ) -> None:
+    async def test_retracted_is_terminal(self, service: PublishService) -> None:
         run_id, m = await _make_manifest(service)
         obj = await service.add_object(
             m.manifest_id,
@@ -604,9 +538,7 @@ class TestPublishedObjectTransitions:
         with pytest.raises(ValueError, match="Invalid publish transition"):
             await service.transition_object(obj.object_id, "draft")
 
-    async def test_published_cannot_go_to_draft(
-        self, service: PublishService
-    ) -> None:
+    async def test_published_cannot_go_to_draft(self, service: PublishService) -> None:
         run_id, m = await _make_manifest(service)
         obj = await service.add_object(
             m.manifest_id,
@@ -618,9 +550,7 @@ class TestPublishedObjectTransitions:
         with pytest.raises(ValueError, match="Invalid publish transition"):
             await service.transition_object(obj.object_id, "draft")
 
-    async def test_review_back_to_draft(
-        self, service: PublishService
-    ) -> None:
+    async def test_review_back_to_draft(self, service: PublishService) -> None:
         """Review → draft is allowed (revise workflow)."""
         run_id, m = await _make_manifest(service)
         obj = await service.add_object(
@@ -633,15 +563,11 @@ class TestPublishedObjectTransitions:
         _, revised = await service.transition_object(obj.object_id, "draft")
         assert revised.publish_state == "draft"
 
-    async def test_transition_nonexistent_raises(
-        self, service: PublishService
-    ) -> None:
+    async def test_transition_nonexistent_raises(self, service: PublishService) -> None:
         with pytest.raises(ValueError, match="not found"):
             await service.transition_object("nope", "published")
 
-    async def test_list_manifest_objects(
-        self, service: PublishService
-    ) -> None:
+    async def test_list_manifest_objects(self, service: PublishService) -> None:
         run_id, m = await _make_manifest(service)
         await service.add_object(
             m.manifest_id,
@@ -658,9 +584,7 @@ class TestPublishedObjectTransitions:
         objects = await service.list_manifest_objects(m.manifest_id)
         assert len(objects) == 2
 
-    async def test_list_manifest_objects_filtered(
-        self, service: PublishService
-    ) -> None:
+    async def test_list_manifest_objects_filtered(self, service: PublishService) -> None:
         run_id, m = await _make_manifest(service)
         obj = await service.add_object(
             m.manifest_id,
@@ -676,9 +600,7 @@ class TestPublishedObjectTransitions:
         )
         await service.transition_object(obj.object_id, "published")
 
-        published = await service.list_manifest_objects(
-            m.manifest_id, publish_state="published"
-        )
+        published = await service.list_manifest_objects(m.manifest_id, publish_state="published")
         assert len(published) == 1
         assert published[0].object_id == obj.object_id
 

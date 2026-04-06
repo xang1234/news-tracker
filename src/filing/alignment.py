@@ -153,12 +153,8 @@ def align_sections(
         List of SectionAlignment objects (matched, added, removed).
     """
     # Build normalized names
-    base_names = [
-        normalize_section_name(s.section_name) for s in base_sections
-    ]
-    target_names = [
-        normalize_section_name(s.section_name) for s in target_sections
-    ]
+    base_names = [normalize_section_name(s.section_name) for s in base_sections]
+    target_names = [normalize_section_name(s.section_name) for s in target_sections]
 
     # Score all candidate pairs, then assign best-first to avoid
     # greedy order-dependent mismatch (where an early mediocre match
@@ -166,9 +162,7 @@ def align_sections(
     candidates: list[tuple[float, int, int]] = []
     for i, base_name in enumerate(base_names):
         for j, target_name in enumerate(target_names):
-            sim = difflib.SequenceMatcher(
-                None, base_name, target_name
-            ).ratio()
+            sim = difflib.SequenceMatcher(None, base_name, target_name).ratio()
             if sim >= min_similarity:
                 candidates.append((sim, i, j))
     candidates.sort(reverse=True)
@@ -213,9 +207,7 @@ def align_sections(
                     base_section=None,
                     target_section=target_sec,
                     similarity=0.0,
-                    normalized_name=normalize_section_name(
-                        target_sec.section_name
-                    ),
+                    normalized_name=normalize_section_name(target_sec.section_name),
                 )
             )
 
@@ -322,9 +314,7 @@ def compare_filings(
     Returns:
         FilingComparison with alignments, diffs, and summary stats.
     """
-    alignments = align_sections(
-        base_sections, target_sections, min_similarity=min_similarity
-    )
+    alignments = align_sections(base_sections, target_sections, min_similarity=min_similarity)
     diffs = diff_aligned_sections(alignments)
 
     added = sum(1 for a in alignments if a.is_added)

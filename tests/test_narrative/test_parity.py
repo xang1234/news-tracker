@@ -252,10 +252,6 @@ class TestValidateRunParity:
             doc_count=30,
             platform_count=4,
         )
-        components, checks = validate_run_parity(
-            run, signal_triggered=True, now=NOW
-        )
-        coverage_check = next(
-            c for c in checks if c.check_name == "replay_coverage"
-        )
+        components, checks = validate_run_parity(run, signal_triggered=True, now=NOW)
+        coverage_check = next(c for c in checks if c.check_name == "replay_coverage")
         assert coverage_check.details["signal_triggered"] is True

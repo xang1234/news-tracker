@@ -142,7 +142,9 @@ class TestCoverageDrift:
     def test_custom_expected_lanes(self) -> None:
         counts = {"narrative": 10}
         m = check_coverage_drift(
-            counts, expected_lanes=("narrative",), now=NOW,
+            counts,
+            expected_lanes=("narrative",),
+            now=NOW,
         )
         assert m.severity == SEVERITY_OK
         assert m.value == 1.0

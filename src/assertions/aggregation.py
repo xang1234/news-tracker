@@ -109,9 +109,7 @@ def aggregate_assertion(
     if now is None:
         now = datetime.now(UTC)
 
-    assertion_id = make_assertion_id(
-        subject_concept_id, predicate, object_concept_id
-    )
+    assertion_id = make_assertion_id(subject_concept_id, predicate, object_concept_id)
 
     # Build claim lookup
     claim_map: dict[str, EvidenceClaim] = {c.claim_id: c for c in claims}
@@ -136,10 +134,7 @@ def aggregate_assertion(
 
     # -- Base confidence: weighted mean of supporting claim confidences --
     if support_claims:
-        weighted_sum = sum(
-            c.confidence * lnk.contribution_weight
-            for c, lnk in support_claims
-        )
+        weighted_sum = sum(c.confidence * lnk.contribution_weight for c, lnk in support_claims)
         weight_sum = sum(lnk.contribution_weight for _, lnk in support_claims)
         base = weighted_sum / weight_sum if weight_sum > 0 else 0.0
     else:
@@ -147,9 +142,7 @@ def aggregate_assertion(
 
     # -- Freshness: exponential decay from most recent evidence --
     timestamps = [
-        c.source_published_at
-        for c, _ in all_evidence
-        if c.source_published_at is not None
+        c.source_published_at for c, _ in all_evidence if c.source_published_at is not None
     ]
     if timestamps:
         latest = max(timestamps)
@@ -172,8 +165,7 @@ def aggregate_assertion(
 
     # -- Review bonus: any review-approved claim adds a bonus --
     has_review_approval = any(
-        lnk.metadata.get("review_approved", False)
-        for _, lnk in support_claims
+        lnk.metadata.get("review_approved", False) for _, lnk in support_claims
     )
     actual_review_bonus = review_bonus if has_review_approval else 0.0
 
@@ -199,14 +191,8 @@ def aggregate_assertion(
         status = "active"
 
     # -- Compute validity window from claims --
-    valid_froms = [
-        c.claim_valid_from for c, _ in support_claims
-        if c.claim_valid_from is not None
-    ]
-    valid_tos = [
-        c.claim_valid_to for c, _ in support_claims
-        if c.claim_valid_to is not None
-    ]
+    valid_froms = [c.claim_valid_from for c, _ in support_claims if c.claim_valid_from is not None]
+    valid_tos = [c.claim_valid_to for c, _ in support_claims if c.claim_valid_to is not None]
     valid_from = min(valid_froms) if valid_froms else None
     valid_to = max(valid_tos) if valid_tos else None
 

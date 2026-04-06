@@ -64,9 +64,7 @@ class PassageMapping:
     narrative_run_id: str | None = None
     confidence: float = 1.0
     metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 def make_mapping_id(

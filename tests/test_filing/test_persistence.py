@@ -14,9 +14,7 @@ from src.filing.persistence import (
 from src.filing.schemas import FilingIdentity, FilingResult, FilingSection
 
 MIGRATION_PATH = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "migrations"
-    / "022_filing_artifacts.sql"
+    pathlib.Path(__file__).resolve().parents[2] / "migrations" / "022_filing_artifacts.sql"
 )
 
 

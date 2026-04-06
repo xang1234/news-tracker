@@ -246,12 +246,16 @@ class TestCompositeMetadata:
         outputs = [_output(manifest_id="m_n")]
         result = assemble_composite_manifest(outputs, {}, now=NOW)
         from src.contracts.intelligence.version import ContractRegistry
+
         assert result.composite.contract_version == str(ContractRegistry.CURRENT)
 
     def test_contract_version_override(self) -> None:
         outputs = [_output(manifest_id="m_n")]
         result = assemble_composite_manifest(
-            outputs, {}, contract_version="1.2.3", now=NOW,
+            outputs,
+            {},
+            contract_version="1.2.3",
+            now=NOW,
         )
         assert result.composite.contract_version == "1.2.3"
 
@@ -293,9 +297,7 @@ class TestCompositeMetadata:
             _output(lane="filing", manifest_id="m_f", health=_warn()),
         ]
         result = assemble_composite_manifest(outputs, {}, now=NOW)
-        readiness = {
-            c.lane: c.readiness for c in result.composite.contributions
-        }
+        readiness = {c.lane: c.readiness for c in result.composite.contributions}
         assert readiness["narrative"] == PublishReadiness.READY
         assert readiness["filing"] == PublishReadiness.WARN
 
@@ -310,11 +312,13 @@ class TestRealisticScenario:
         """Narrative ready, filing warn, structural blocked."""
         outputs = [
             _output(lane="narrative", manifest_id="m_n", object_count=15),
-            _output(lane="filing", manifest_id="m_f", object_count=8,
-                    health=_warn()),
-            _output(lane="structural", published=False,
-                    block_reason="Lane structural is blocked",
-                    health=_blocked()),
+            _output(lane="filing", manifest_id="m_f", object_count=8, health=_warn()),
+            _output(
+                lane="structural",
+                published=False,
+                block_reason="Lane structural is blocked",
+                health=_blocked(),
+            ),
         ]
         pointers = {"narrative": "m_n_old", "filing": "m_f_old"}
         result = assemble_composite_manifest(outputs, pointers, now=NOW)

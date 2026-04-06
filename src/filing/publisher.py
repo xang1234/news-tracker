@@ -183,9 +183,7 @@ class FilingPublicationResult:
     lane_health: LaneHealthStatus
     adoption_payloads: list[AdoptionPayload] = field(default_factory=list)
     divergence_payloads: list[DivergencePayload] = field(default_factory=list)
-    issuer_summaries: list[IssuerDivergenceSummary] = field(
-        default_factory=list
-    )
+    issuer_summaries: list[IssuerDivergenceSummary] = field(default_factory=list)
     object_count: int = 0
     block_reason: str | None = None
 
@@ -242,6 +240,7 @@ def build_issuer_summaries(
 
     Groups adoption scores and alerts by issuer, aggregates metrics.
     """
+
     def _new_entry() -> dict[str, Any]:
         return {
             "themes": set(),
@@ -269,9 +268,7 @@ def build_issuer_summaries(
             d["critical_count"] += 1
         elif alert.severity == "warning":
             d["warning_count"] += 1
-        d["reason_counts"][alert.reason] = (
-            d["reason_counts"].get(alert.reason, 0) + 1
-        )
+        d["reason_counts"][alert.reason] = d["reason_counts"].get(alert.reason, 0) + 1
 
     summaries: list[IssuerDivergenceSummary] = []
     for iid, d in sorted(issuer_data.items()):
@@ -333,11 +330,7 @@ def prepare_filing_publication(
     divergence_payloads = [build_divergence_payload(a) for a in alerts]
     issuer_summaries = build_issuer_summaries(adoptions, alerts)
 
-    object_count = (
-        len(adoption_payloads)
-        + len(divergence_payloads)
-        + len(issuer_summaries)
-    )
+    object_count = len(adoption_payloads) + len(divergence_payloads) + len(issuer_summaries)
 
     return FilingPublicationResult(
         published=True,

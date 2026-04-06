@@ -26,11 +26,7 @@ from src.filing.alignment import (
 from src.filing.persistence import FilingSectionRecord
 
 CORPUS_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "src"
-    / "filing"
-    / "data"
-    / "regression_corpus.json"
+    Path(__file__).resolve().parents[2] / "src" / "filing" / "data" / "regression_corpus.json"
 )
 
 
@@ -82,9 +78,7 @@ class TestNormalizeSectionName:
         assert normalize_section_name("  Risk Factors  ") == "risk factors"
 
     def test_complex_real_world(self) -> None:
-        result = normalize_section_name(
-            "Item 7. Management's Discussion and Analysis"
-        )
+        result = normalize_section_name("Item 7. Management's Discussion and Analysis")
         assert "management" in result
         assert "discussion" in result
 
@@ -177,9 +171,7 @@ class TestDiffAlignedSections:
     def test_identical_content(self) -> None:
         base = _section("Risk Factors", "We face significant risks.")
         target = _section("Risk Factors", "We face significant risks.", accession="acc-002")
-        alignment = SectionAlignment(
-            base_section=base, target_section=target, similarity=1.0
-        )
+        alignment = SectionAlignment(base_section=base, target_section=target, similarity=1.0)
         diffs = diff_aligned_sections([alignment])
         assert len(diffs) == 1
         assert diffs[0].content_changed is False
@@ -188,9 +180,7 @@ class TestDiffAlignedSections:
     def test_content_changed(self) -> None:
         base = _section("Risk Factors", "We face risks.")
         target = _section("Risk Factors", "We face significant new risks.", accession="acc-002")
-        alignment = SectionAlignment(
-            base_section=base, target_section=target, similarity=1.0
-        )
+        alignment = SectionAlignment(base_section=base, target_section=target, similarity=1.0)
         diffs = diff_aligned_sections([alignment])
         assert len(diffs) == 1
         assert diffs[0].content_changed is True
@@ -199,9 +189,7 @@ class TestDiffAlignedSections:
     def test_content_removed(self) -> None:
         base = _section("Risk Factors", "Line one.\nLine two.\nLine three.")
         target = _section("Risk Factors", "Line one.", accession="acc-002")
-        alignment = SectionAlignment(
-            base_section=base, target_section=target, similarity=1.0
-        )
+        alignment = SectionAlignment(base_section=base, target_section=target, similarity=1.0)
         diffs = diff_aligned_sections([alignment])
         assert diffs[0].removed_lines > 0
         assert diffs[0].word_count_delta < 0
@@ -215,9 +203,7 @@ class TestDiffAlignedSections:
     def test_diff_ratio_range(self) -> None:
         base = _section("S", "Hello world.")
         target = _section("S", "Hello universe.", accession="acc-002")
-        alignment = SectionAlignment(
-            base_section=base, target_section=target, similarity=1.0
-        )
+        alignment = SectionAlignment(base_section=base, target_section=target, similarity=1.0)
         diffs = diff_aligned_sections([alignment])
         assert 0 <= diffs[0].diff_ratio <= 1
 
@@ -256,10 +242,10 @@ class TestCompareFilings:
             _section("Cybersecurity", "Added.", index=2, accession="acc-002"),
         ]
         result = compare_filings("acc-001", "acc-002", base, target)
-        assert result.sections_changed == 1   # Business changed
+        assert result.sections_changed == 1  # Business changed
         assert result.sections_unchanged == 1  # Risk Factors same
-        assert result.sections_added == 1      # Cybersecurity
-        assert result.sections_removed == 1    # Legal Proceedings
+        assert result.sections_added == 1  # Cybersecurity
+        assert result.sections_removed == 1  # Legal Proceedings
 
     def test_empty_filings(self) -> None:
         result = compare_filings("acc-001", "acc-002", [], [])
@@ -297,6 +283,7 @@ class TestRegressionCorpus:
 
     def test_cases_have_valid_filing_types(self, corpus: dict) -> None:
         from src.filing.schemas import VALID_FILING_TYPES
+
         for case in corpus["cases"]:
             assert case["filing_type"] in VALID_FILING_TYPES, (
                 f"Case {case['id']} has invalid type: {case['filing_type']}"
@@ -324,7 +311,6 @@ class TestRegressionCorpus:
 
     def test_non_narrative_cases_present(self, corpus: dict) -> None:
         non_narrative = [
-            c for c in corpus["cases"]
-            if c["filing_type"] in ("8-K", "SC 13D", "SC 13G", "4")
+            c for c in corpus["cases"] if c["filing_type"] in ("8-K", "SC 13D", "SC 13G", "4")
         ]
         assert len(non_narrative) >= 1

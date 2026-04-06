@@ -187,9 +187,5 @@ class ReadModelBuilder:
             "contract_version": manifest.contract_version,
             "total_records": len(records),
             "by_object_type": type_counts,
-            "published_at": (
-                manifest.published_at.isoformat()
-                if manifest.published_at
-                else None
-            ),
+            "published_at": (manifest.published_at.isoformat() if manifest.published_at else None),
         }

@@ -125,8 +125,7 @@ class TestBasicAggregation:
     def test_retracted_claims_excluded(self) -> None:
         claims = [
             _make_claim("c1", confidence=0.8, source_published_at=NOW),
-            _make_claim("c2", confidence=0.9, status="retracted",
-                        source_published_at=NOW),
+            _make_claim("c2", confidence=0.9, status="retracted", source_published_at=NOW),
         ]
         links = [_make_link("c1"), _make_link("c2")]
         assertion, breakdown = _aggregate(claims, links)
@@ -283,9 +282,7 @@ class TestSourceDiversity:
     def test_custom_diversity_target(self) -> None:
         claim = _make_claim(source_published_at=NOW)
         link = _make_link()
-        _, breakdown = _aggregate(
-            [claim], [link], diversity_target=1
-        )
+        _, breakdown = _aggregate([claim], [link], diversity_target=1)
         assert breakdown.diversity == 1.0
 
 
@@ -310,9 +307,7 @@ class TestReviewBonus:
     def test_custom_review_bonus(self) -> None:
         claim = _make_claim(confidence=0.5, source_published_at=NOW)
         link = _make_link(review_approved=True)
-        _, breakdown = _aggregate(
-            [claim], [link], review_bonus=0.2
-        )
+        _, breakdown = _aggregate([claim], [link], review_bonus=0.2)
         assert breakdown.review_bonus == 0.2
 
 
@@ -347,10 +342,8 @@ class TestValidityWindow:
         t2 = datetime(2025, 6, 1, tzinfo=UTC)
         t3 = datetime(2025, 12, 31, tzinfo=UTC)
         claims = [
-            _make_claim("c1", source_published_at=NOW,
-                        claim_valid_from=t1, claim_valid_to=t2),
-            _make_claim("c2", source_published_at=NOW,
-                        claim_valid_from=t2, claim_valid_to=t3),
+            _make_claim("c1", source_published_at=NOW, claim_valid_from=t1, claim_valid_to=t2),
+            _make_claim("c2", source_published_at=NOW, claim_valid_from=t2, claim_valid_to=t3),
         ]
         links = [_make_link("c1"), _make_link("c2")]
         assertion, _ = _aggregate(claims, links)
@@ -385,7 +378,8 @@ class TestMetadata:
         claim = _make_claim(confidence=1.0, source_published_at=NOW)
         link = _make_link(review_approved=True)
         _, breakdown = _aggregate(
-            [claim], [link],
+            [claim],
+            [link],
             review_bonus=0.5,
             diversity_target=1,
         )

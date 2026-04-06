@@ -75,7 +75,8 @@ class TestFreshness:
 
     def test_at_half_life(self) -> None:
         factor = compute_freshness_factor(
-            NOW - timedelta(days=DEFAULT_FRESHNESS_HALF_LIFE_DAYS), NOW,
+            NOW - timedelta(days=DEFAULT_FRESHNESS_HALF_LIFE_DAYS),
+            NOW,
         )
         assert abs(factor - 0.5) < 0.01
 
@@ -94,7 +95,9 @@ class TestFreshness:
 
     def test_custom_half_life(self) -> None:
         factor = compute_freshness_factor(
-            NOW - timedelta(days=30), NOW, half_life_days=30.0,
+            NOW - timedelta(days=30),
+            NOW,
+            half_life_days=30.0,
         )
         assert abs(factor - 0.5) < 0.01
 
@@ -111,13 +114,17 @@ class TestCorroboration:
 
     def test_perfect_corroboration(self) -> None:
         factor = compute_corroboration_factor(
-            support_count=5, contradiction_count=0, source_diversity=3,
+            support_count=5,
+            contradiction_count=0,
+            source_diversity=3,
         )
         assert factor == 1.0
 
     def test_no_evidence(self) -> None:
         factor = compute_corroboration_factor(
-            support_count=0, contradiction_count=0, source_diversity=0,
+            support_count=0,
+            contradiction_count=0,
+            source_diversity=0,
         )
         assert factor == 0.0
 
@@ -143,8 +150,11 @@ class TestCorroboration:
 
     def test_custom_ceilings(self) -> None:
         factor = compute_corroboration_factor(
-            10, 0, 5,
-            diversity_ceiling=5, volume_ceiling=10,
+            10,
+            0,
+            5,
+            diversity_ceiling=5,
+            volume_ceiling=10,
         )
         assert factor == 1.0
 
@@ -165,8 +175,13 @@ class TestScoreEdge:
 
     def test_score_components(self) -> None:
         """edge_score = confidence * freshness * corroboration."""
-        rel = _rel(confidence=1.0, valid_from=NOW, support_count=5,
-                   contradiction_count=0, source_diversity=3)
+        rel = _rel(
+            confidence=1.0,
+            valid_from=NOW,
+            support_count=5,
+            contradiction_count=0,
+            source_diversity=3,
+        )
         se = score_edge(rel, NOW)
         # confidence=1.0, freshness=1.0 (just now), corroboration=1.0 (perfect)
         assert se.edge_score == 1.0
@@ -204,20 +219,24 @@ class TestOneHopPaths:
         assert paths == []
 
     def test_multiple_targets(self) -> None:
-        snap = _snap([
-            _rel("A", "B", assertion_id="a1"),
-            _rel("A", "C", assertion_id="a2"),
-        ])
+        snap = _snap(
+            [
+                _rel("A", "B", assertion_id="a1"),
+                _rel("A", "C", assertion_id="a2"),
+            ]
+        )
         paths = score_paths_from(snap, "A", now=NOW)
         assert len(paths) == 2
         targets = {p.target_concept_id for p in paths}
         assert targets == {"B", "C"}
 
     def test_sorted_by_score_descending(self) -> None:
-        snap = _snap([
-            _rel("A", "B", confidence=0.3, assertion_id="a1"),
-            _rel("A", "C", confidence=0.9, assertion_id="a2"),
-        ])
+        snap = _snap(
+            [
+                _rel("A", "B", confidence=0.3, assertion_id="a1"),
+                _rel("A", "C", confidence=0.9, assertion_id="a2"),
+            ]
+        )
         paths = score_paths_from(snap, "A", now=NOW)
         assert paths[0].target_concept_id == "C"
         assert paths[0].path_score >= paths[1].path_score
@@ -234,8 +253,7 @@ class TestOneHopPaths:
         assert paths[0].breakdown.hop_decay == 1.0
 
     def test_min_score_filter(self) -> None:
-        snap = _snap([_rel("A", "B", confidence=0.01, support_count=1,
-                          source_diversity=1)])
+        snap = _snap([_rel("A", "B", confidence=0.01, support_count=1, source_diversity=1)])
         paths = score_paths_from(snap, "A", min_path_score=0.5, now=NOW)
         assert paths == []
 
@@ -247,10 +265,12 @@ class TestTwoHopPaths:
     """Score 2-hop paths from a source concept."""
 
     def test_basic_2hop(self) -> None:
-        snap = _snap([
-            _rel("A", "B", assertion_id="a1"),
-            _rel("B", "C", assertion_id="a2"),
-        ])
+        snap = _snap(
+            [
+                _rel("A", "B", assertion_id="a1"),
+                _rel("B", "C", assertion_id="a2"),
+            ]
+        )
         paths = score_paths_from(snap, "A", now=NOW)
         two_hop = [p for p in paths if p.hops == 2]
         assert len(two_hop) == 1
@@ -259,21 +279,25 @@ class TestTwoHopPaths:
         assert two_hop[0].intermediate_concept_id == "B"
 
     def test_2hop_has_decay(self) -> None:
-        snap = _snap([
-            _rel("A", "B", assertion_id="a1"),
-            _rel("B", "C", assertion_id="a2"),
-        ])
+        snap = _snap(
+            [
+                _rel("A", "B", assertion_id="a1"),
+                _rel("B", "C", assertion_id="a2"),
+            ]
+        )
         paths = score_paths_from(snap, "A", now=NOW)
         two_hop = [p for p in paths if p.hops == 2]
         assert two_hop[0].breakdown.hop_decay == DEFAULT_HOP_DECAY
 
     def test_2hop_lower_than_1hop(self) -> None:
         """2-hop paths score lower due to decay and compounding."""
-        snap = _snap([
-            _rel("A", "B", confidence=0.8, assertion_id="a1"),
-            _rel("A", "C", confidence=0.8, assertion_id="a2"),
-            _rel("B", "C", confidence=0.8, assertion_id="a3"),
-        ])
+        snap = _snap(
+            [
+                _rel("A", "B", confidence=0.8, assertion_id="a1"),
+                _rel("A", "C", confidence=0.8, assertion_id="a2"),
+                _rel("B", "C", confidence=0.8, assertion_id="a3"),
+            ]
+        )
         paths = score_paths_from(snap, "A", now=NOW)
         one_hop_to_c = next(p for p in paths if p.target_concept_id == "C" and p.hops == 1)
         two_hop_to_c = next(p for p in paths if p.target_concept_id == "C" and p.hops == 2)
@@ -281,58 +305,70 @@ class TestTwoHopPaths:
 
     def test_sign_compounds(self) -> None:
         """positive * negative = negative."""
-        snap = _snap([
-            _rel("A", "B", sign=1, assertion_id="a1"),
-            _rel("B", "C", sign=-1, predicate="competes_with", assertion_id="a2"),
-        ])
+        snap = _snap(
+            [
+                _rel("A", "B", sign=1, assertion_id="a1"),
+                _rel("B", "C", sign=-1, predicate="competes_with", assertion_id="a2"),
+            ]
+        )
         paths = score_paths_from(snap, "A", now=NOW)
         two_hop = [p for p in paths if p.hops == 2]
         assert two_hop[0].path_sign == -1
 
     def test_double_negative_is_positive(self) -> None:
         """negative * negative = positive."""
-        snap = _snap([
-            _rel("A", "B", sign=-1, predicate="competes_with", assertion_id="a1"),
-            _rel("B", "C", sign=-1, predicate="blocks", assertion_id="a2"),
-        ])
+        snap = _snap(
+            [
+                _rel("A", "B", sign=-1, predicate="competes_with", assertion_id="a1"),
+                _rel("B", "C", sign=-1, predicate="blocks", assertion_id="a2"),
+            ]
+        )
         paths = score_paths_from(snap, "A", now=NOW)
         two_hop = [p for p in paths if p.hops == 2]
         assert two_hop[0].path_sign == 1
 
     def test_no_loops_to_source(self) -> None:
         """2-hop paths don't loop back to the source."""
-        snap = _snap([
-            _rel("A", "B", assertion_id="a1"),
-            _rel("B", "A", assertion_id="a2"),
-        ])
+        snap = _snap(
+            [
+                _rel("A", "B", assertion_id="a1"),
+                _rel("B", "A", assertion_id="a2"),
+            ]
+        )
         paths = score_paths_from(snap, "A", now=NOW)
         two_hop = [p for p in paths if p.hops == 2]
         assert two_hop == []
 
     def test_no_loops_to_intermediate(self) -> None:
         """2-hop paths don't loop back to the intermediate."""
-        snap = _snap([
-            _rel("A", "B", assertion_id="a1"),
-            _rel("B", "B", assertion_id="a2"),
-        ])
+        snap = _snap(
+            [
+                _rel("A", "B", assertion_id="a1"),
+                _rel("B", "B", assertion_id="a2"),
+            ]
+        )
         paths = score_paths_from(snap, "A", now=NOW)
         two_hop = [p for p in paths if p.hops == 2]
         assert two_hop == []
 
     def test_max_hops_1(self) -> None:
         """max_hops=1 excludes 2-hop paths."""
-        snap = _snap([
-            _rel("A", "B", assertion_id="a1"),
-            _rel("B", "C", assertion_id="a2"),
-        ])
+        snap = _snap(
+            [
+                _rel("A", "B", assertion_id="a1"),
+                _rel("B", "C", assertion_id="a2"),
+            ]
+        )
         paths = score_paths_from(snap, "A", max_hops=1, now=NOW)
         assert all(p.hops == 1 for p in paths)
 
     def test_custom_hop_decay(self) -> None:
-        snap = _snap([
-            _rel("A", "B", assertion_id="a1"),
-            _rel("B", "C", assertion_id="a2"),
-        ])
+        snap = _snap(
+            [
+                _rel("A", "B", assertion_id="a1"),
+                _rel("B", "C", assertion_id="a2"),
+            ]
+        )
         paths = score_paths_from(snap, "A", hop_decay=0.5, now=NOW)
         two_hop = [p for p in paths if p.hops == 2]
         assert two_hop[0].breakdown.hop_decay == 0.5
@@ -346,12 +382,14 @@ class TestPathScoringIntegration:
 
     def test_diamond_graph(self) -> None:
         """A → B, A → C, B → D, C → D. Two 2-hop paths to D."""
-        snap = _snap([
-            _rel("A", "B", assertion_id="a1"),
-            _rel("A", "C", assertion_id="a2"),
-            _rel("B", "D", assertion_id="a3"),
-            _rel("C", "D", assertion_id="a4"),
-        ])
+        snap = _snap(
+            [
+                _rel("A", "B", assertion_id="a1"),
+                _rel("A", "C", assertion_id="a2"),
+                _rel("B", "D", assertion_id="a3"),
+                _rel("C", "D", assertion_id="a4"),
+            ]
+        )
         paths = score_paths_from(snap, "A", now=NOW)
         two_hop_to_d = [p for p in paths if p.target_concept_id == "D" and p.hops == 2]
         assert len(two_hop_to_d) == 2

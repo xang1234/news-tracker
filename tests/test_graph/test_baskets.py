@@ -64,9 +64,13 @@ class TestBasketMember:
         assert basket.at_risk[0].role == ROLE_AT_RISK
 
     def test_is_second_order(self) -> None:
-        basket = build_thematic_basket(THEME, [
-            _path(target="A", hops=2, intermediate="B"),
-        ], now=NOW)
+        basket = build_thematic_basket(
+            THEME,
+            [
+                _path(target="A", hops=2, intermediate="B"),
+            ],
+            now=NOW,
+        )
         assert basket.beneficiaries[0].is_second_order is True
 
     def test_is_first_order(self) -> None:
@@ -259,8 +263,7 @@ class TestRealisticScenario:
         paths = [
             _path(target="sk_hynix", hops=1, path_score=0.72, path_sign=1),
             _path(target="samsung", hops=1, path_score=0.65, path_sign=1),
-            _path(target="asml", hops=2, path_score=0.35, path_sign=1,
-                  intermediate="sk_hynix"),
+            _path(target="asml", hops=2, path_score=0.35, path_sign=1, intermediate="sk_hynix"),
             _path(target="dram_vendors", hops=1, path_score=0.45, path_sign=-1),
         ]
         basket = build_thematic_basket(THEME, paths, now=NOW)

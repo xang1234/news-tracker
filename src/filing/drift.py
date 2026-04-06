@@ -42,33 +42,43 @@ DRIFT_DIMENSIONS: list[str] = [
 # Each section maps to at most one dimension. Unmapped sections are
 # excluded from decomposition but still available in raw comparison.
 DIMENSION_SECTIONS: dict[str, frozenset[str]] = {
-    "strategy": frozenset({
-        "business",
-        "overview",
-        "corporate strategy",
-    }),
-    "risk": frozenset({
-        "risk factors",
-    }),
-    "capex": frozenset({
-        "management's discussion and analysis",
-        "capital expenditures",
-        "liquidity and capital resources",
-    }),
-    "customer_supplier": frozenset({
-        "customers",
-        "major customers",
-        "suppliers",
-        "supply chain",
-        "customer concentration",
-    }),
-    "regulatory": frozenset({
-        "legal proceedings",
-        "quantitative and qualitative disclosures about market risk",
-        "government regulation",
-        "regulatory matters",
-        "compliance",
-    }),
+    "strategy": frozenset(
+        {
+            "business",
+            "overview",
+            "corporate strategy",
+        }
+    ),
+    "risk": frozenset(
+        {
+            "risk factors",
+        }
+    ),
+    "capex": frozenset(
+        {
+            "management's discussion and analysis",
+            "capital expenditures",
+            "liquidity and capital resources",
+        }
+    ),
+    "customer_supplier": frozenset(
+        {
+            "customers",
+            "major customers",
+            "suppliers",
+            "supply chain",
+            "customer concentration",
+        }
+    ),
+    "regulatory": frozenset(
+        {
+            "legal proceedings",
+            "quantitative and qualitative disclosures about market risk",
+            "government regulation",
+            "regulatory matters",
+            "compliance",
+        }
+    ),
 }
 
 # Z-score caps and thresholds
@@ -156,9 +166,7 @@ class DriftDecomposition:
     target_accession: str
     dimensions: list[DimensionDrift] = field(default_factory=list)
     unusual_dimensions: list[str] = field(default_factory=list)
-    computed_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    computed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for publication payloads."""
@@ -227,44 +235,52 @@ def extract_section_changes(
     for diff in diffs:
         name = diff.alignment.normalized_name
         if diff.content_changed:
-            changes.append(SectionChange(
-                section_name=name,
-                change_magnitude=round(1.0 - diff.diff_ratio, 4),
-                word_count_delta=diff.word_count_delta,
-                change_type="modified",
-                diff_ratio=diff.diff_ratio,
-            ))
+            changes.append(
+                SectionChange(
+                    section_name=name,
+                    change_magnitude=round(1.0 - diff.diff_ratio, 4),
+                    word_count_delta=diff.word_count_delta,
+                    change_type="modified",
+                    diff_ratio=diff.diff_ratio,
+                )
+            )
         else:
-            changes.append(SectionChange(
-                section_name=name,
-                change_magnitude=0.0,
-                word_count_delta=0,
-                change_type="unchanged",
-                diff_ratio=1.0,
-            ))
+            changes.append(
+                SectionChange(
+                    section_name=name,
+                    change_magnitude=0.0,
+                    word_count_delta=0,
+                    change_type="unchanged",
+                    diff_ratio=1.0,
+                )
+            )
 
     # From unmatched alignments (added/removed)
     for alignment in alignments:
         if alignment.is_added:
             target = alignment.target_section
             assert target is not None
-            changes.append(SectionChange(
-                section_name=alignment.normalized_name,
-                change_magnitude=1.0,
-                word_count_delta=target.word_count,
-                change_type="added",
-                diff_ratio=0.0,
-            ))
+            changes.append(
+                SectionChange(
+                    section_name=alignment.normalized_name,
+                    change_magnitude=1.0,
+                    word_count_delta=target.word_count,
+                    change_type="added",
+                    diff_ratio=0.0,
+                )
+            )
         elif alignment.is_removed:
             base = alignment.base_section
             assert base is not None
-            changes.append(SectionChange(
-                section_name=alignment.normalized_name,
-                change_magnitude=1.0,
-                word_count_delta=-base.word_count,
-                change_type="removed",
-                diff_ratio=0.0,
-            ))
+            changes.append(
+                SectionChange(
+                    section_name=alignment.normalized_name,
+                    change_magnitude=1.0,
+                    word_count_delta=-base.word_count,
+                    change_type="removed",
+                    diff_ratio=0.0,
+                )
+            )
 
     return changes
 
@@ -362,9 +378,7 @@ def compute_drift_decomposition(
     for peer_changes in peer_changes_list:
         peer_classified = classify_by_dimension(peer_changes)
         for dim in DRIFT_DIMENSIONS:
-            peer_by_dim[dim].append(
-                compute_dimension_magnitude(peer_classified[dim])
-            )
+            peer_by_dim[dim].append(compute_dimension_magnitude(peer_classified[dim]))
 
     # Compute per-dimension drift
     dimensions: list[DimensionDrift] = []
@@ -383,16 +397,18 @@ def compute_drift_decomposition(
         if is_unusual:
             unusual.append(dim)
 
-        dimensions.append(DimensionDrift(
-            dimension=dim,
-            magnitude=round(magnitude, 4),
-            word_count_delta=word_delta,
-            peer_mean=round(peer_mean, 4),
-            peer_std=round(peer_std, 4),
-            z_score=round(z, 4),
-            is_unusual=is_unusual,
-            section_names=section_names,
-        ))
+        dimensions.append(
+            DimensionDrift(
+                dimension=dim,
+                magnitude=round(magnitude, 4),
+                word_count_delta=word_delta,
+                peer_mean=round(peer_mean, 4),
+                peer_std=round(peer_std, 4),
+                z_score=round(z, 4),
+                is_unusual=is_unusual,
+                section_names=section_names,
+            )
+        )
 
     return DriftDecomposition(
         issuer_concept_id=issuer_concept_id,

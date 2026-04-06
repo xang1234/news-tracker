@@ -148,33 +148,26 @@ def run_quality_checks(
     ):
         quarantine_codes.append(CheckCode.SELF_REFERENCING)
         quarantine_msgs.append(
-            f"Subject and object resolve to the same concept: "
-            f"{claim.subject_concept_id}"
+            f"Subject and object resolve to the same concept: {claim.subject_concept_id}"
         )
 
     if claim.confidence < confidence_floor:
         quarantine_codes.append(CheckCode.CONFIDENCE_BELOW_FLOOR)
         quarantine_msgs.append(
-            f"Confidence {claim.confidence:.3f} is below floor "
-            f"{confidence_floor:.3f}"
+            f"Confidence {claim.confidence:.3f} is below floor {confidence_floor:.3f}"
         )
 
-    if (
-        claim.source_text
-        and len(claim.source_text) > max_source_text_length
-    ):
+    if claim.source_text and len(claim.source_text) > max_source_text_length:
         quarantine_codes.append(CheckCode.SOURCE_TEXT_TOO_LONG)
         quarantine_msgs.append(
-            f"Source text length {len(claim.source_text)} exceeds "
-            f"limit {max_source_text_length}"
+            f"Source text length {len(claim.source_text)} exceeds limit {max_source_text_length}"
         )
 
     metadata_bytes = len(json.dumps(claim.metadata).encode())
     if metadata_bytes > max_metadata_size:
         quarantine_codes.append(CheckCode.METADATA_TOO_LARGE)
         quarantine_msgs.append(
-            f"Metadata size {metadata_bytes} bytes exceeds "
-            f"limit {max_metadata_size}"
+            f"Metadata size {metadata_bytes} bytes exceeds limit {max_metadata_size}"
         )
 
     if quarantine_codes:
@@ -244,9 +237,7 @@ class DeadLetterRecord:
     source_text: str | None = None
     claim_snapshot: dict[str, Any] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.reason not in VALID_DL_REASONS:
@@ -273,9 +264,7 @@ def capture_dead_letter(
     claim_snapshot for later inspection. The source_text is
     preserved for replay.
     """
-    error_hash = hashlib.sha256(
-        error_message.encode()
-    ).hexdigest()[:8]
+    error_hash = hashlib.sha256(error_message.encode()).hexdigest()[:8]
 
     claim_snapshot = None
     if claim is not None:

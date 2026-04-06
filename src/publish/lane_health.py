@@ -24,44 +24,44 @@ from typing import Any
 class FreshnessLevel(str, Enum):
     """How fresh a lane's data is."""
 
-    FRESH = "fresh"          # Within expected cadence
-    AGING = "aging"          # Approaching staleness threshold
-    STALE = "stale"          # Past staleness threshold
-    UNKNOWN = "unknown"      # No completed runs
+    FRESH = "fresh"  # Within expected cadence
+    AGING = "aging"  # Approaching staleness threshold
+    STALE = "stale"  # Past staleness threshold
+    UNKNOWN = "unknown"  # No completed runs
 
 
 class QualityLevel(str, Enum):
     """Overall quality assessment for a lane."""
 
-    HEALTHY = "healthy"      # Quality rate above threshold
-    DEGRADED = "degraded"    # Quality rate below threshold but above critical
-    CRITICAL = "critical"    # Quality rate below critical threshold
-    UNKNOWN = "unknown"      # No quality data available
+    HEALTHY = "healthy"  # Quality rate above threshold
+    DEGRADED = "degraded"  # Quality rate below threshold but above critical
+    CRITICAL = "critical"  # Quality rate below critical threshold
+    UNKNOWN = "unknown"  # No quality data available
 
 
 class QuarantineState(str, Enum):
     """Whether a lane is quarantined from publication."""
 
-    CLEAR = "clear"          # No quarantine — publishable
+    CLEAR = "clear"  # No quarantine — publishable
     QUARANTINED = "quarantined"  # Blocked from publication
-    WATCH = "watch"          # Not blocked but under observation
+    WATCH = "watch"  # Not blocked but under observation
 
 
 class PublishReadiness(str, Enum):
     """Whether a lane is ready for manifest inclusion."""
 
-    READY = "ready"          # Fresh + healthy + not quarantined
-    WARN = "warn"            # Publishable with caveats (aging/degraded)
-    BLOCKED = "blocked"      # Not publishable (stale/critical/quarantined)
+    READY = "ready"  # Fresh + healthy + not quarantined
+    WARN = "warn"  # Publishable with caveats (aging/degraded)
+    BLOCKED = "blocked"  # Not publishable (stale/critical/quarantined)
 
 
 # -- Configuration defaults ------------------------------------------------
 
-DEFAULT_FRESH_HOURS = 6       # Max hours for "fresh"
-DEFAULT_AGING_HOURS = 24      # Max hours for "aging" (beyond = stale)
-DEFAULT_QUALITY_THRESHOLD = 0.9    # Min quality rate for "healthy"
-DEFAULT_QUALITY_CRITICAL = 0.7     # Min quality rate to avoid "critical"
-DEFAULT_MIN_QUALITY_SAMPLE = 10    # Min objects to compute quality rate
+DEFAULT_FRESH_HOURS = 6  # Max hours for "fresh"
+DEFAULT_AGING_HOURS = 24  # Max hours for "aging" (beyond = stale)
+DEFAULT_QUALITY_THRESHOLD = 0.9  # Min quality rate for "healthy"
+DEFAULT_QUALITY_CRITICAL = 0.7  # Min quality rate to avoid "critical"
+DEFAULT_MIN_QUALITY_SAMPLE = 10  # Min objects to compute quality rate
 
 
 # -- LaneHealthStatus ------------------------------------------------------
@@ -125,9 +125,7 @@ class QuarantineRecord:
 
     lane: str
     reason: str
-    quarantined_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    quarantined_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     quarantined_by: str = "system"
     state: QuarantineState = QuarantineState.QUARANTINED
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -240,11 +238,14 @@ def compute_lane_health(
     LaneHealthStatus with readiness verdict.
     """
     freshness, hours = compute_freshness(
-        last_completed_at, now=now,
-        fresh_hours=fresh_hours, aging_hours=aging_hours,
+        last_completed_at,
+        now=now,
+        fresh_hours=fresh_hours,
+        aging_hours=aging_hours,
     )
     quality, rate = compute_quality(
-        passed, total,
+        passed,
+        total,
         quality_threshold=quality_threshold,
         quality_critical=quality_critical,
         min_sample=min_sample,

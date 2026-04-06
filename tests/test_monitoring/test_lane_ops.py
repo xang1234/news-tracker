@@ -120,7 +120,8 @@ class TestFailureRate:
 
     def test_ok(self) -> None:
         m = check_lane_failure_rate(
-            _summary(total=20, failed=1), now=NOW,
+            _summary(total=20, failed=1),
+            now=NOW,
         )
         assert m.severity == SEVERITY_OK
         assert m.metric_type == "lane_failure_rate"
@@ -128,38 +129,44 @@ class TestFailureRate:
 
     def test_warning(self) -> None:
         m = check_lane_failure_rate(
-            _summary(total=20, failed=3), now=NOW,
+            _summary(total=20, failed=3),
+            now=NOW,
         )
         assert m.severity == SEVERITY_WARNING
 
     def test_critical(self) -> None:
         m = check_lane_failure_rate(
-            _summary(total=20, failed=6), now=NOW,
+            _summary(total=20, failed=6),
+            now=NOW,
         )
         assert m.severity == SEVERITY_CRITICAL
 
     def test_zero_runs_ok(self) -> None:
         m = check_lane_failure_rate(
-            _summary(total=0, completed=0, failed=0), now=NOW,
+            _summary(total=0, completed=0, failed=0),
+            now=NOW,
         )
         assert m.severity == SEVERITY_OK
         assert m.value == 0.0
 
     def test_boundary_warning(self) -> None:
         m = check_lane_failure_rate(
-            _summary(total=100, failed=10), now=NOW,
+            _summary(total=100, failed=10),
+            now=NOW,
         )
         assert m.severity == SEVERITY_OK  # 10% == threshold, <=
 
     def test_boundary_critical(self) -> None:
         m = check_lane_failure_rate(
-            _summary(total=100, failed=25), now=NOW,
+            _summary(total=100, failed=25),
+            now=NOW,
         )
         assert m.severity == SEVERITY_WARNING  # 25% == threshold, <=
 
     def test_details(self) -> None:
         m = check_lane_failure_rate(
-            _summary(total=20, failed=3, cancelled=1), now=NOW,
+            _summary(total=20, failed=3, cancelled=1),
+            now=NOW,
         )
         assert m.details["total_runs"] == 20
         assert m.details["failed"] == 3
@@ -285,22 +292,17 @@ class TestCheckAllLanes:
     def test_freshness_for_all_lanes(self) -> None:
         """Freshness budget checked for ALL canonical lanes."""
         report = check_all_lanes({}, {}, now=NOW)
-        budget_metrics = [
-            m for m in report.metrics
-            if m.metric_type == "lane_freshness_budget"
-        ]
+        budget_metrics = [m for m in report.metrics if m.metric_type == "lane_freshness_budget"]
         lanes = {m.lane for m in budget_metrics}
         from src.contracts.intelligence.lanes import ALL_LANES
+
         assert lanes == set(ALL_LANES)
 
     def test_failure_only_for_provided_summaries(self) -> None:
         """Failure rate only checked for lanes with summaries."""
         summaries = {"narrative": _summary(lane="narrative")}
         report = check_all_lanes(summaries, {}, now=NOW)
-        failure_metrics = [
-            m for m in report.metrics
-            if m.metric_type == "lane_failure_rate"
-        ]
+        failure_metrics = [m for m in report.metrics if m.metric_type == "lane_failure_rate"]
         assert len(failure_metrics) == 1
         assert failure_metrics[0].lane == "narrative"
 

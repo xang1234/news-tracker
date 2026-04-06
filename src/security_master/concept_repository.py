@@ -263,9 +263,7 @@ class ConceptRepository:
 
     # -- Issuer/security crosswalk -----------------------------------------
 
-    async def link_issuer_security(
-        self, link: IssuerSecurityLink
-    ) -> IssuerSecurityLink:
+    async def link_issuer_security(self, link: IssuerSecurityLink) -> IssuerSecurityLink:
         """Link an issuer concept to a security concept (upsert)."""
         row = await self._db.fetchrow(
             """
@@ -284,9 +282,7 @@ class ConceptRepository:
         )
         return _row_to_link(row)
 
-    async def get_securities_for_issuer(
-        self, issuer_concept_id: str
-    ) -> list[IssuerSecurityLink]:
+    async def get_securities_for_issuer(self, issuer_concept_id: str) -> list[IssuerSecurityLink]:
         """Get all securities linked to an issuer."""
         rows = await self._db.fetch(
             """
@@ -298,9 +294,7 @@ class ConceptRepository:
         )
         return [_row_to_link(row) for row in rows]
 
-    async def get_issuer_for_security(
-        self, security_concept_id: str
-    ) -> IssuerSecurityLink | None:
+    async def get_issuer_for_security(self, security_concept_id: str) -> IssuerSecurityLink | None:
         """Get the issuer linked to a security (primary first)."""
         row = await self._db.fetchrow(
             """
@@ -315,9 +309,7 @@ class ConceptRepository:
 
     # -- Security concept_id linkage ---------------------------------------
 
-    async def link_security_to_concept(
-        self, ticker: str, exchange: str, concept_id: str
-    ) -> bool:
+    async def link_security_to_concept(self, ticker: str, exchange: str, concept_id: str) -> bool:
         """Set the concept_id on an existing securities row."""
         result = await self._db.execute(
             """
@@ -330,9 +322,7 @@ class ConceptRepository:
         )
         return "UPDATE 1" in (result or "")
 
-    async def get_concept_for_security(
-        self, ticker: str, exchange: str = "US"
-    ) -> Concept | None:
+    async def get_concept_for_security(self, ticker: str, exchange: str = "US") -> Concept | None:
         """Resolve a ticker+exchange to its concept."""
         row = await self._db.fetchrow(
             """
@@ -348,9 +338,7 @@ class ConceptRepository:
 
     # -- Concept relationships ---------------------------------------------
 
-    async def upsert_relationship(
-        self, rel: ConceptRelationship
-    ) -> ConceptRelationship:
+    async def upsert_relationship(self, rel: ConceptRelationship) -> ConceptRelationship:
         """Insert or update a concept relationship."""
         row = await self._db.fetchrow(
             """
@@ -422,9 +410,7 @@ class ConceptRepository:
 
     # -- Theme/narrative links ---------------------------------------------
 
-    async def upsert_theme_link(
-        self, link: ConceptThemeLink
-    ) -> ConceptThemeLink:
+    async def upsert_theme_link(self, link: ConceptThemeLink) -> ConceptThemeLink:
         """Insert or update a theme/narrative link."""
         row = await self._db.fetchrow(
             """
@@ -474,9 +460,7 @@ class ConceptRepository:
             )
         return [_row_to_theme_link(row) for row in rows]
 
-    async def get_themes_for_concept(
-        self, concept_id: str
-    ) -> list[ConceptThemeLink]:
+    async def get_themes_for_concept(self, concept_id: str) -> list[ConceptThemeLink]:
         """Get all themes/narratives that cover a concept."""
         rows = await self._db.fetch(
             """

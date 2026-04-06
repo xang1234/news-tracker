@@ -57,10 +57,7 @@ def _objects(lanes: list[str] | None = None) -> dict[str, list[dict[str, Any]]]:
     if lanes is None:
         lanes = ["narrative", "filing"]
     return {
-        lane: [
-            {"object_id": f"{lane}_obj_{i}", "type": "test", "lane": lane}
-            for i in range(3)
-        ]
+        lane: [{"object_id": f"{lane}_obj_{i}", "type": "test", "lane": lane} for i in range(3)]
         for lane in lanes
     }
 
@@ -111,6 +108,7 @@ class TestObjectsArtifact:
 
     def test_sorted_by_object_id(self) -> None:
         import json
+
         art = build_objects_artifact(_objects(["narrative", "filing"]))
         ids = [json.loads(line)["object_id"] for line in art.lines]
         assert ids == sorted(ids)
@@ -160,6 +158,7 @@ class TestManifestArtifact:
 
     def test_contains_composite_metadata(self) -> None:
         import json
+
         checksums = {"objects.jsonl": "sha256:abc"}
         art = build_manifest_artifact(_composite(), checksums, NOW)
         data = json.loads(art.lines[0])
@@ -170,6 +169,7 @@ class TestManifestArtifact:
 
     def test_includes_artifact_checksums(self) -> None:
         import json
+
         checksums = {"objects.jsonl": "sha256:abc", "rollups.jsonl": "sha256:def"}
         art = build_manifest_artifact(_composite(), checksums, NOW)
         data = json.loads(art.lines[0])
@@ -177,6 +177,7 @@ class TestManifestArtifact:
 
     def test_includes_contributions(self) -> None:
         import json
+
         art = build_manifest_artifact(_composite(), {}, NOW)
         data = json.loads(art.lines[0])
         assert len(data["contributions"]) == 2
@@ -191,7 +192,10 @@ class TestBuildCompositeBundle:
 
     def test_basic_bundle(self) -> None:
         bundle = build_composite_bundle(
-            _composite(), _objects(), _rollups(), now=NOW,
+            _composite(),
+            _objects(),
+            _rollups(),
+            now=NOW,
         )
         assert bundle.composite_id == "composite_abc123"
         assert bundle.contract_version == "0.1.0"
@@ -201,26 +205,38 @@ class TestBuildCompositeBundle:
 
     def test_three_artifacts(self) -> None:
         bundle = build_composite_bundle(
-            _composite(), _objects(), _rollups(), now=NOW,
+            _composite(),
+            _objects(),
+            _rollups(),
+            now=NOW,
         )
         assert len(bundle.artifacts) == 3
 
     def test_overall_checksum_is_manifestcompute_bundle_checksum(self) -> None:
         bundle = build_composite_bundle(
-            _composite(), _objects(), _rollups(), now=NOW,
+            _composite(),
+            _objects(),
+            _rollups(),
+            now=NOW,
         )
         assert bundle.overall_checksum == bundle.artifacts["manifest.json"].checksum
 
     def test_total_records(self) -> None:
         bundle = build_composite_bundle(
-            _composite(), _objects(), _rollups(3), now=NOW,
+            _composite(),
+            _objects(),
+            _rollups(3),
+            now=NOW,
         )
         # 6 objects + 3 rollups + 1 manifest = 10
         assert bundle.total_records == 10
 
     def test_empty_inputs(self) -> None:
         bundle = build_composite_bundle(
-            _composite(lanes=[]), {}, [], now=NOW,
+            _composite(lanes=[]),
+            {},
+            [],
+            now=NOW,
         )
         assert bundle.artifacts["objects.jsonl"].record_count == 0
         assert bundle.artifacts["rollups.jsonl"].record_count == 0
@@ -228,22 +244,34 @@ class TestBuildCompositeBundle:
 
     def test_deterministic(self) -> None:
         b1 = build_composite_bundle(
-            _composite(), _objects(), _rollups(), now=NOW,
+            _composite(),
+            _objects(),
+            _rollups(),
+            now=NOW,
         )
         b2 = build_composite_bundle(
-            _composite(), _objects(), _rollups(), now=NOW,
+            _composite(),
+            _objects(),
+            _rollups(),
+            now=NOW,
         )
         assert b1.overall_checksum == b2.overall_checksum
 
     def test_created_at(self) -> None:
         bundle = build_composite_bundle(
-            _composite(), _objects(), _rollups(), now=NOW,
+            _composite(),
+            _objects(),
+            _rollups(),
+            now=NOW,
         )
         assert bundle.created_at == NOW
 
     def test_to_dict(self) -> None:
         bundle = build_composite_bundle(
-            _composite(), _objects(), _rollups(), now=NOW,
+            _composite(),
+            _objects(),
+            _rollups(),
+            now=NOW,
         )
         d = bundle.to_dict()
         assert d["composite_id"] == "composite_abc123"
@@ -259,13 +287,19 @@ class TestVerifyIntegrity:
 
     def test_valid_bundle(self) -> None:
         bundle = build_composite_bundle(
-            _composite(), _objects(), _rollups(), now=NOW,
+            _composite(),
+            _objects(),
+            _rollups(),
+            now=NOW,
         )
         assert verify_bundle_integrity(bundle) is True
 
     def test_tampered_bundle(self) -> None:
         bundle = build_composite_bundle(
-            _composite(), _objects(), _rollups(), now=NOW,
+            _composite(),
+            _objects(),
+            _rollups(),
+            now=NOW,
         )
         # Tamper by replacing an artifact with wrong checksum
         tampered = BundleArtifact(
@@ -296,14 +330,20 @@ class TestBundleParity:
         objects = _objects()
         rollups = _rollups()
         bundle = build_composite_bundle(
-            _composite(), objects, rollups, now=NOW,
+            _composite(),
+            objects,
+            rollups,
+            now=NOW,
         )
         mismatches = check_bundle_parity(bundle, objects, rollups)
         assert mismatches == []
 
     def test_object_mismatch(self) -> None:
         bundle = build_composite_bundle(
-            _composite(), _objects(), _rollups(), now=NOW,
+            _composite(),
+            _objects(),
+            _rollups(),
+            now=NOW,
         )
         different_objects = {"narrative": [{"object_id": "different", "type": "x"}]}
         mismatches = check_bundle_parity(bundle, different_objects, _rollups())
@@ -312,7 +352,10 @@ class TestBundleParity:
 
     def test_rollup_mismatch(self) -> None:
         bundle = build_composite_bundle(
-            _composite(), _objects(), _rollups(2), now=NOW,
+            _composite(),
+            _objects(),
+            _rollups(2),
+            now=NOW,
         )
         mismatches = check_bundle_parity(bundle, _objects(), _rollups(3))
         assert len(mismatches) == 1
@@ -320,7 +363,10 @@ class TestBundleParity:
 
     def test_both_mismatches(self) -> None:
         bundle = build_composite_bundle(
-            _composite(), _objects(), _rollups(), now=NOW,
+            _composite(),
+            _objects(),
+            _rollups(),
+            now=NOW,
         )
         mismatches = check_bundle_parity(
             bundle,
@@ -346,7 +392,10 @@ class TestDataclasses:
 
     def test_bundle_frozen(self) -> None:
         bundle = build_composite_bundle(
-            _composite(), _objects(), _rollups(), now=NOW,
+            _composite(),
+            _objects(),
+            _rollups(),
+            now=NOW,
         )
         try:
             bundle.overall_checksum = "tampered"  # type: ignore[misc]

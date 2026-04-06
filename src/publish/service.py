@@ -151,9 +151,7 @@ class PublishService:
         if run is None:
             raise ValueError(f"Lane run not found: {run_id}")
         _validate_run_transition(run.status, "completed")
-        result = await self._repo.update_lane_run_status(
-            run_id, "completed", metrics=metrics
-        )
+        result = await self._repo.update_lane_run_status(run_id, "completed", metrics=metrics)
         if result is None:
             raise ValueError(f"Failed to complete run: {run_id}")
         logger.info("Lane run completed: %s (lane=%s)", run_id, result.lane)
@@ -207,9 +205,7 @@ class PublishService:
         limit: int = 50,
     ) -> list[LaneRun]:
         """List lane runs with optional filters."""
-        return await self._repo.list_lane_runs(
-            lane=lane, status=status, limit=limit
-        )
+        return await self._repo.list_lane_runs(lane=lane, status=status, limit=limit)
 
     # -- Manifest lifecycle ------------------------------------------------
 
@@ -242,9 +238,7 @@ class PublishService:
         if run is None:
             raise ValueError(f"Lane run not found: {run_id}")
         if run.lane != lane:
-            raise ValueError(
-                f"Run {run_id} belongs to lane {run.lane!r}, not {lane!r}"
-            )
+            raise ValueError(f"Run {run_id} belongs to lane {run.lane!r}, not {lane!r}")
         manifest = Manifest(
             manifest_id=_generate_id("manifest"),
             lane=lane,
@@ -285,9 +279,7 @@ class PublishService:
 
         # Verify all objects are published
         all_objects = await self._repo.list_objects_by_manifest(manifest_id)
-        non_published = [
-            o for o in all_objects if o.publish_state != "published"
-        ]
+        non_published = [o for o in all_objects if o.publish_state != "published"]
         if non_published:
             states = {o.publish_state for o in non_published}
             raise ValueError(
@@ -347,13 +339,10 @@ class PublishService:
         validate_lane(lane)
         manifest = await self._repo.get_manifest(manifest_id)
         if manifest is None:
-            raise ValueError(
-                f"Cannot advance pointer: manifest {manifest_id} not found"
-            )
+            raise ValueError(f"Cannot advance pointer: manifest {manifest_id} not found")
         if manifest.lane != lane:
             raise ValueError(
-                f"Manifest {manifest_id} belongs to lane {manifest.lane!r}, "
-                f"not {lane!r}"
+                f"Manifest {manifest_id} belongs to lane {manifest.lane!r}, not {lane!r}"
             )
         if manifest.published_at is None:
             raise ValueError(
@@ -367,9 +356,7 @@ class PublishService:
                 f"Cannot advance pointer: lane run {manifest.run_id} "
                 f"is {run_status!r}, not 'completed'"
             )
-        pointer = await self._repo.advance_pointer(
-            lane, manifest_id, metadata=metadata
-        )
+        pointer = await self._repo.advance_pointer(lane, manifest_id, metadata=metadata)
         logger.info(
             "Pointer advanced: lane=%s → manifest=%s (previous=%s)",
             lane,
@@ -423,9 +410,7 @@ class PublishService:
         if manifest is None:
             raise ValueError(f"Manifest not found: {manifest_id}")
         if manifest.published_at is not None:
-            raise ValueError(
-                f"Cannot add objects to sealed manifest {manifest_id}"
-            )
+            raise ValueError(f"Cannot add objects to sealed manifest {manifest_id}")
         if manifest.lane != lane:
             raise ValueError(
                 f"Object lane {lane!r} does not match manifest lane "
@@ -486,18 +471,16 @@ class PublishService:
             and manifest.published_at is not None
             and (target_state != "retracted" or previous_state != "published")
         ):
-                raise ValueError(
-                    f"Cannot transition object {object_id}: manifest "
-                    f"{obj.manifest_id} is sealed "
-                    f"(only published→retracted allowed, "
-                    f"current state is {previous_state!r})"
-                )
+            raise ValueError(
+                f"Cannot transition object {object_id}: manifest "
+                f"{obj.manifest_id} is sealed "
+                f"(only published→retracted allowed, "
+                f"current state is {previous_state!r})"
+            )
         _validate_publish_transition(previous_state, target_state)
         result = await self._repo.update_publish_state(object_id, target_state)
         if result is None:
-            raise ValueError(
-                f"Failed to transition object {object_id} to {target_state}"
-            )
+            raise ValueError(f"Failed to transition object {object_id} to {target_state}")
         logger.info(
             "Object %s transitioned: %s → %s",
             object_id,
@@ -517,9 +500,7 @@ class PublishService:
         publish_state: str | None = None,
     ) -> list[PublishedObject]:
         """List objects within a manifest, optionally filtered by state."""
-        return await self._repo.list_objects_by_manifest(
-            manifest_id, publish_state=publish_state
-        )
+        return await self._repo.list_objects_by_manifest(manifest_id, publish_state=publish_state)
 
     # -- Convenience: compute manifest checksum ----------------------------
 

@@ -48,9 +48,7 @@ class _MockConceptRepo:
     async def get_concept(self, concept_id: str) -> Concept | None:
         return self.concepts.get(concept_id)
 
-    async def get_concept_for_security(
-        self, ticker: str, exchange: str = "US"
-    ) -> Concept | None:
+    async def get_concept_for_security(self, ticker: str, exchange: str = "US") -> Concept | None:
         return self.ticker_map.get(ticker.upper())
 
     async def resolve_alias(self, alias: str) -> Concept | None:
@@ -61,11 +59,7 @@ class _MockConceptRepo:
     ) -> list[Concept]:
         """Simple substring match for testing fuzzy tier."""
         query_lower = query.lower()
-        matches = [
-            c
-            for c in self.concepts.values()
-            if query_lower in c.canonical_name.lower()
-        ]
+        matches = [c for c in self.concepts.values() if query_lower in c.canonical_name.lower()]
         return matches[:limit]
 
 
@@ -106,34 +100,26 @@ def resolver(repo: _MockConceptRepo) -> EntityResolver:
 class TestExactTier:
     """Tier 1: exact ticker/CIK/concept_id resolution."""
 
-    async def test_resolve_by_ticker(
-        self, resolver: EntityResolver
-    ) -> None:
+    async def test_resolve_by_ticker(self, resolver: EntityResolver) -> None:
         result = await resolver.resolve("NVDA")
         assert result.resolved
         assert result.concept_id == "concept_issuer_nvda"
         assert result.tier == ResolverTier.EXACT
         assert result.confidence == 1.0
 
-    async def test_resolve_by_ticker_case_insensitive(
-        self, resolver: EntityResolver
-    ) -> None:
+    async def test_resolve_by_ticker_case_insensitive(self, resolver: EntityResolver) -> None:
         result = await resolver.resolve("nvda")
         assert result.resolved
         assert result.concept_id == "concept_issuer_nvda"
         assert result.tier == ResolverTier.EXACT
 
-    async def test_resolve_by_concept_id(
-        self, resolver: EntityResolver
-    ) -> None:
+    async def test_resolve_by_concept_id(self, resolver: EntityResolver) -> None:
         result = await resolver.resolve("concept_issuer_tsmc")
         assert result.resolved
         assert result.concept_id == "concept_issuer_tsmc"
         assert result.tier == ResolverTier.EXACT
 
-    async def test_exact_miss_falls_through(
-        self, resolver: EntityResolver
-    ) -> None:
+    async def test_exact_miss_falls_through(self, resolver: EntityResolver) -> None:
         """Unknown ticker falls through to later tiers."""
         result = await resolver.resolve("UNKNOWN_TICKER_XYZ")
         # Will fall through to alias and fuzzy
@@ -146,32 +132,24 @@ class TestExactTier:
 class TestAliasTier:
     """Tier 2: case-insensitive alias dictionary resolution."""
 
-    async def test_resolve_by_alias(
-        self, resolver: EntityResolver
-    ) -> None:
+    async def test_resolve_by_alias(self, resolver: EntityResolver) -> None:
         result = await resolver.resolve("TSMC")
         assert result.resolved
         assert result.concept_id == "concept_issuer_tsmc"
         assert result.tier in (ResolverTier.EXACT, ResolverTier.ALIAS)
         assert result.confidence >= 0.95
 
-    async def test_resolve_by_full_name(
-        self, resolver: EntityResolver
-    ) -> None:
+    async def test_resolve_by_full_name(self, resolver: EntityResolver) -> None:
         result = await resolver.resolve("Taiwan Semiconductor Manufacturing")
         assert result.resolved
         assert result.concept_id == "concept_issuer_tsmc"
 
-    async def test_resolve_by_abbreviation(
-        self, resolver: EntityResolver
-    ) -> None:
+    async def test_resolve_by_abbreviation(self, resolver: EntityResolver) -> None:
         result = await resolver.resolve("HBM")
         assert result.resolved
         assert result.concept_id == "concept_tech_hbm"
 
-    async def test_resolve_case_insensitive(
-        self, resolver: EntityResolver
-    ) -> None:
+    async def test_resolve_case_insensitive(self, resolver: EntityResolver) -> None:
         result = await resolver.resolve("tsmc")
         assert result.resolved
         assert result.concept_id == "concept_issuer_tsmc"
@@ -188,9 +166,7 @@ class TestAliasTier:
 class TestFuzzyTier:
     """Tier 3: fuzzy matching via substring/similarity."""
 
-    async def test_fuzzy_partial_match(
-        self, resolver: EntityResolver
-    ) -> None:
+    async def test_fuzzy_partial_match(self, resolver: EntityResolver) -> None:
         """Substring match finds the concept."""
         result = await resolver.resolve("Bandwidth Memory")
         assert result.resolved
@@ -198,18 +174,12 @@ class TestFuzzyTier:
         assert result.tier == ResolverTier.FUZZY
         assert result.confidence > 0
 
-    async def test_fuzzy_with_type_filter(
-        self, resolver: EntityResolver
-    ) -> None:
-        result = await resolver.resolve(
-            "Semiconductor", concept_type="issuer"
-        )
+    async def test_fuzzy_with_type_filter(self, resolver: EntityResolver) -> None:
+        result = await resolver.resolve("Semiconductor", concept_type="issuer")
         assert result.resolved
         assert result.concept.concept_type == "issuer"
 
-    async def test_fuzzy_no_match(
-        self, resolver: EntityResolver
-    ) -> None:
+    async def test_fuzzy_no_match(self, resolver: EntityResolver) -> None:
         result = await resolver.resolve("Quantum Computing Startup XYZ")
         assert not result.resolved
         assert result.tier == ResolverTier.UNRESOLVED
@@ -225,9 +195,7 @@ class TestFullCascade:
         result = await resolver.resolve("")
         assert not result.resolved
 
-    async def test_whitespace_mention(
-        self, resolver: EntityResolver
-    ) -> None:
+    async def test_whitespace_mention(self, resolver: EntityResolver) -> None:
         result = await resolver.resolve("   ")
         assert not result.resolved
 
@@ -238,9 +206,7 @@ class TestFullCascade:
         assert results[1].resolved
         assert not results[2].resolved
 
-    async def test_confidence_ordering(
-        self, resolver: EntityResolver
-    ) -> None:
+    async def test_confidence_ordering(self, resolver: EntityResolver) -> None:
         """Exact match has higher confidence than alias."""
         exact = await resolver.resolve("NVDA")  # ticker → exact
         # "Jensen Huang" is an alias, not a ticker
@@ -251,9 +217,7 @@ class TestFullCascade:
         result = await resolver.resolve("TSM")
         assert "match_type" in result.metadata
 
-    async def test_unresolved_has_no_concept(
-        self, resolver: EntityResolver
-    ) -> None:
+    async def test_unresolved_has_no_concept(self, resolver: EntityResolver) -> None:
         result = await resolver.resolve("zzz_nonexistent_zzz")
         assert result.concept is None
         assert result.concept_id is None

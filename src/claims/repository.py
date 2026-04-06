@@ -175,9 +175,7 @@ class ClaimRepository:
         )
         return [_row_to_claim(row) for row in rows]
 
-    async def update_status(
-        self, claim_id: str, new_status: str
-    ) -> EvidenceClaim | None:
+    async def update_status(self, claim_id: str, new_status: str) -> EvidenceClaim | None:
         """Update a claim's status."""
         if new_status not in VALID_CLAIM_STATUSES:
             raise ValueError(

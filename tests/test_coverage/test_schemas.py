@@ -14,9 +14,7 @@ from src.coverage.schemas import (
 )
 
 MIGRATION_PATH = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "migrations"
-    / "021_coverage_profiles.sql"
+    pathlib.Path(__file__).resolve().parents[2] / "migrations" / "021_coverage_profiles.sql"
 )
 
 

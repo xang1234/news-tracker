@@ -189,9 +189,7 @@ def build_basket_payload(
         at_risk_count=len(basket.at_risk),
         first_order_count=basket.first_order_count,
         second_order_count=basket.second_order_count,
-        top_beneficiaries=[
-            m.to_dict() for m in basket.beneficiaries[:top_n]
-        ],
+        top_beneficiaries=[m.to_dict() for m in basket.beneficiaries[:top_n]],
         top_at_risk=[m.to_dict() for m in basket.at_risk[:top_n]],
     )
 
@@ -234,9 +232,7 @@ def prepare_structural_publication(
         )
 
     path_explanations = [build_path_explanation(p) for p in paths]
-    basket_payloads = [
-        build_basket_payload(b, top_n=top_n) for b in baskets
-    ]
+    basket_payloads = [build_basket_payload(b, top_n=top_n) for b in baskets]
 
     return StructuralPublicationResult(
         published=True,

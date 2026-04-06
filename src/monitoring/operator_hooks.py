@@ -54,9 +54,7 @@ class ReplayPlan:
     config_snapshot: dict[str, Any]
     reason: str
     requested_by: str = "operator"
-    requested_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    requested_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -92,9 +90,7 @@ class QuarantineAction:
     action: str
     reason: str
     actor: str = "operator"
-    acted_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    acted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -112,9 +108,7 @@ class QuarantineAction:
         if self.action == "lift":
             return None
         state = (
-            QuarantineState.QUARANTINED
-            if self.action == "quarantine"
-            else QuarantineState.WATCH
+            QuarantineState.QUARANTINED if self.action == "quarantine" else QuarantineState.WATCH
         )
         return QuarantineRecord(
             lane=self.lane,
@@ -187,9 +181,7 @@ class InspectionReport:
     manifest_ids: list[str] = field(default_factory=list)
     quality_issues: list[str] = field(default_factory=list)
     replay_plan: ReplayPlan | None = None
-    inspected_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    inspected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -239,8 +231,7 @@ def build_replay_plan(
 
     if run.status not in TERMINAL_RUN_STATUSES:
         raise ValueError(
-            f"Cannot replay run {run.run_id}: status is {run.status!r}, "
-            f"not a terminal state"
+            f"Cannot replay run {run.run_id}: status is {run.status!r}, not a terminal state"
         )
 
     return ReplayPlan(
@@ -302,7 +293,9 @@ def build_inspection_report(
     replay = None
     if include_replay_plan and run.status in TERMINAL_RUN_STATUSES:
         replay = build_replay_plan(
-            run, reason="Operator inspection replay", now=now,
+            run,
+            reason="Operator inspection replay",
+            now=now,
         )
 
     return InspectionReport(

@@ -88,7 +88,12 @@ class _InMemoryRepo:
         return self.manifests.get(manifest_id)
 
     async def update_manifest(
-        self, manifest_id, *, object_count=None, checksum=None, published_at=None,
+        self,
+        manifest_id,
+        *,
+        object_count=None,
+        checksum=None,
+        published_at=None,
     ):
         m = self.manifests.get(manifest_id)
         if m and object_count is not None:
@@ -105,7 +110,8 @@ class _InMemoryRepo:
     async def advance_pointer(self, lane, manifest_id, *, metadata=None):
         old = self.pointers.get(lane)
         ptr = ManifestPointer(
-            lane=lane, manifest_id=manifest_id,
+            lane=lane,
+            manifest_id=manifest_id,
             previous_manifest_id=old.manifest_id if old else None,
             metadata=metadata or {},
         )
@@ -183,13 +189,10 @@ class TestRunEndpoints:
         resp = client.get("/intel/runs/nonexistent")
         assert resp.status_code == 404
 
-    def test_get_run_found(
-        self, client: TestClient, service: PublishService
-    ) -> None:
+    def test_get_run_found(self, client: TestClient, service: PublishService) -> None:
         import asyncio
-        run = asyncio.get_event_loop().run_until_complete(
-            service.create_run(LANE_NARRATIVE)
-        )
+
+        run = asyncio.get_event_loop().run_until_complete(service.create_run(LANE_NARRATIVE))
         resp = client.get(f"/intel/runs/{run.run_id}")
         assert resp.status_code == 200
         data = resp.json()
@@ -216,15 +219,12 @@ class TestManifestEndpoints:
         resp = client.get("/intel/manifests/nonexistent")
         assert resp.status_code == 404
 
-    def test_get_manifest_found(
-        self, client: TestClient, service: PublishService
-    ) -> None:
+    def test_get_manifest_found(self, client: TestClient, service: PublishService) -> None:
         import asyncio
+
         loop = asyncio.get_event_loop()
         run = loop.run_until_complete(service.create_run(LANE_NARRATIVE))
-        m = loop.run_until_complete(
-            service.create_manifest(LANE_NARRATIVE, run.run_id)
-        )
+        m = loop.run_until_complete(service.create_manifest(LANE_NARRATIVE, run.run_id))
         resp = client.get(f"/intel/manifests/{m.manifest_id}")
         assert resp.status_code == 200
         assert resp.json()["manifest_id"] == m.manifest_id
@@ -244,23 +244,16 @@ class TestPointerEndpoints:
         resp = client.get("/intel/pointers/bad_lane")
         assert resp.status_code == 422
 
-    def test_get_pointer_after_advance(
-        self, client: TestClient, service: PublishService
-    ) -> None:
+    def test_get_pointer_after_advance(self, client: TestClient, service: PublishService) -> None:
         import asyncio
+
         loop = asyncio.get_event_loop()
         run = loop.run_until_complete(service.create_run(LANE_NARRATIVE))
         loop.run_until_complete(service.start_run(run.run_id))
         loop.run_until_complete(service.complete_run(run.run_id))
-        m = loop.run_until_complete(
-            service.create_manifest(LANE_NARRATIVE, run.run_id)
-        )
-        loop.run_until_complete(
-            service.seal_manifest(m.manifest_id)
-        )
-        loop.run_until_complete(
-            service.advance_pointer(LANE_NARRATIVE, m.manifest_id)
-        )
+        m = loop.run_until_complete(service.create_manifest(LANE_NARRATIVE, run.run_id))
+        loop.run_until_complete(service.seal_manifest(m.manifest_id))
+        loop.run_until_complete(service.advance_pointer(LANE_NARRATIVE, m.manifest_id))
         resp = client.get("/intel/pointers/narrative")
         assert resp.status_code == 200
         assert resp.json()["manifest_id"] == m.manifest_id
@@ -279,15 +272,12 @@ class TestReviewEndpoints:
         )
         assert resp.status_code == 404
 
-    def test_review_valid_transition(
-        self, client: TestClient, service: PublishService
-    ) -> None:
+    def test_review_valid_transition(self, client: TestClient, service: PublishService) -> None:
         import asyncio
+
         loop = asyncio.get_event_loop()
         run = loop.run_until_complete(service.create_run(LANE_NARRATIVE))
-        m = loop.run_until_complete(
-            service.create_manifest(LANE_NARRATIVE, run.run_id)
-        )
+        m = loop.run_until_complete(service.create_manifest(LANE_NARRATIVE, run.run_id))
         obj = loop.run_until_complete(
             service.add_object(
                 m.manifest_id,
@@ -305,15 +295,12 @@ class TestReviewEndpoints:
         assert data["previous_state"] == "draft"
         assert data["new_state"] == "published"
 
-    def test_review_invalid_transition(
-        self, client: TestClient, service: PublishService
-    ) -> None:
+    def test_review_invalid_transition(self, client: TestClient, service: PublishService) -> None:
         import asyncio
+
         loop = asyncio.get_event_loop()
         run = loop.run_until_complete(service.create_run(LANE_NARRATIVE))
-        m = loop.run_until_complete(
-            service.create_manifest(LANE_NARRATIVE, run.run_id)
-        )
+        m = loop.run_until_complete(service.create_manifest(LANE_NARRATIVE, run.run_id))
         obj = loop.run_until_complete(
             service.add_object(
                 m.manifest_id,
@@ -323,24 +310,19 @@ class TestReviewEndpoints:
             )
         )
         # Transition to retracted (terminal)
-        loop.run_until_complete(
-            service.transition_object(obj.object_id, "retracted")
-        )
+        loop.run_until_complete(service.transition_object(obj.object_id, "retracted"))
         resp = client.post(
             f"/intel/objects/{obj.object_id}/review",
             json={"target_state": "published"},
         )
         assert resp.status_code == 422
 
-    def test_get_object(
-        self, client: TestClient, service: PublishService
-    ) -> None:
+    def test_get_object(self, client: TestClient, service: PublishService) -> None:
         import asyncio
+
         loop = asyncio.get_event_loop()
         run = loop.run_until_complete(service.create_run(LANE_NARRATIVE))
-        m = loop.run_until_complete(
-            service.create_manifest(LANE_NARRATIVE, run.run_id)
-        )
+        m = loop.run_until_complete(service.create_manifest(LANE_NARRATIVE, run.run_id))
         obj = loop.run_until_complete(
             service.add_object(
                 m.manifest_id,

@@ -186,9 +186,7 @@ class FilingAdoptionScore:
     filing_count: int = 0
     period_count: int = 0
     periods_with_signal: int = 0
-    computed_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    computed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for publication payloads."""
@@ -200,9 +198,7 @@ class FilingAdoptionScore:
                 "section_coverage": round(self.breakdown.section_coverage, 4),
                 "section_depth": round(self.breakdown.section_depth, 4),
                 "fact_alignment": round(self.breakdown.fact_alignment, 4),
-                "temporal_consistency": round(
-                    self.breakdown.temporal_consistency, 4
-                ),
+                "temporal_consistency": round(self.breakdown.temporal_consistency, 4),
             },
             "section_signal_count": len(self.section_signals),
             "fact_signal_count": len(self.fact_signals),
@@ -373,9 +369,7 @@ def _compute_temporal_consistency(
 
     signal_section_ids = {s.section_id for s in signals}
     periods_with = {
-        s.filing_period
-        for s in sections
-        if s.section_id in signal_section_ids and s.filing_period
+        s.filing_period for s in sections if s.section_id in signal_section_ids and s.filing_period
     }
     return len(periods_with), len(all_periods)
 
@@ -421,12 +415,8 @@ def compute_filing_adoption(
     section_coverage = _compute_section_coverage(sections, section_signals)
     section_depth = _compute_section_depth(section_signals)
     fact_alignment = _compute_fact_alignment(xbrl_concepts, fact_signals)
-    periods_with, period_count = _compute_temporal_consistency(
-        sections, section_signals
-    )
-    temporal_consistency = (
-        periods_with / period_count if period_count > 0 else 0.0
-    )
+    periods_with, period_count = _compute_temporal_consistency(sections, section_signals)
+    temporal_consistency = periods_with / period_count if period_count > 0 else 0.0
 
     breakdown = AdoptionBreakdown(
         section_coverage=section_coverage,

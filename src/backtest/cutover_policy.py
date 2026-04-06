@@ -91,7 +91,9 @@ class QuarantineTrigger:
     def format_reason(self, lane: str, value: float) -> str:
         """Format the quarantine reason with current values."""
         return self.reason_template.format(
-            lane=lane, value=value, threshold=self.threshold,
+            lane=lane,
+            value=value,
+            threshold=self.threshold,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -121,9 +123,7 @@ class CutoverChecklist:
 
     gates: list[PublishGate] = field(default_factory=list)
     triggered_quarantines: list[dict[str, Any]] = field(default_factory=list)
-    evaluated_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    evaluated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def all_passed(self) -> bool:
@@ -325,15 +325,17 @@ def evaluate_quarantine_triggers(
         if value is None:
             continue
         if trigger.evaluate(value):
-            fired.append({
-                "trigger": trigger.name,
-                "action": trigger.action,
-                "lane": lane,
-                "reason": trigger.format_reason(lane, value),
-                "metric_type": trigger.metric_type,
-                "value": value,
-                "threshold": trigger.threshold,
-            })
+            fired.append(
+                {
+                    "trigger": trigger.name,
+                    "action": trigger.action,
+                    "lane": lane,
+                    "reason": trigger.format_reason(lane, value),
+                    "metric_type": trigger.metric_type,
+                    "value": value,
+                    "threshold": trigger.threshold,
+                }
+            )
     return fired
 
 
@@ -382,17 +384,21 @@ def evaluate_cutover_checklist(
         else:
             passed = value >= threshold if higher else value <= threshold
 
-        evaluated_gates.append(PublishGate(
-            name=name,
-            description=gate_def["description"],
-            threshold=threshold,
-            current_value=value,
-            passed=passed,
-            higher_is_better=higher,
-        ))
+        evaluated_gates.append(
+            PublishGate(
+                name=name,
+                description=gate_def["description"],
+                threshold=threshold,
+                current_value=value,
+                passed=passed,
+                higher_is_better=higher,
+            )
+        )
 
     triggered = evaluate_quarantine_triggers(
-        metric_values, lane, triggers=triggers,
+        metric_values,
+        lane,
+        triggers=triggers,
     )
 
     return CutoverChecklist(

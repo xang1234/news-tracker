@@ -33,10 +33,7 @@ def _filter_dicts_pit(
     as_of: datetime,
 ) -> list[dict[str, Any]]:
     """Filter dicts by a timestamp field <= as_of."""
-    return [
-        d for d in items
-        if d.get(ts_field) is not None and d[ts_field] <= as_of
-    ]
+    return [d for d in items if d.get(ts_field) is not None and d[ts_field] <= as_of]
 
 
 def filter_claims_pit(
@@ -96,7 +93,8 @@ def filter_lane_runs_pit(
         lane: Optional lane filter.
     """
     return [
-        r for r in runs
+        r
+        for r in runs
         if r.status == "completed"
         and r.completed_at is not None
         and r.completed_at <= as_of
@@ -122,7 +120,8 @@ def filter_manifests_pit(
         lane: Optional lane filter.
     """
     return [
-        m for m in manifests
+        m
+        for m in manifests
         if m.published_at is not None
         and m.published_at <= as_of
         and (lane is None or m.lane == lane)
@@ -141,11 +140,7 @@ def filter_pointers_pit(
     manifest's published_at. A sealed-but-never-activated manifest
     was never served in production and should not appear in PIT.
     """
-    return [
-        p for p in pointers
-        if p.activated_at <= as_of
-        and (lane is None or p.lane == lane)
-    ]
+    return [p for p in pointers if p.activated_at <= as_of and (lane is None or p.lane == lane)]
 
 
 def get_active_manifest_pit(
@@ -218,7 +213,10 @@ class IntelligenceSnapshot:
             active: dict[str, Manifest] = {}
             for lane in {p.lane for p in self.pointers}:
                 m = get_active_manifest_pit(
-                    self.manifests, self.as_of, lane, pointers=self.pointers,
+                    self.manifests,
+                    self.as_of,
+                    lane,
+                    pointers=self.pointers,
                 )
                 if m is not None:
                     active[lane] = m
@@ -276,9 +274,7 @@ def build_intelligence_snapshot(
     Returns:
         IntelligenceSnapshot with only data known at as_of.
     """
-    pit_pointers = (
-        filter_pointers_pit(pointers, as_of) if pointers else []
-    )
+    pit_pointers = filter_pointers_pit(pointers, as_of) if pointers else []
     return IntelligenceSnapshot(
         as_of=as_of,
         claims=filter_claims_pit(claims, as_of),
@@ -306,15 +302,13 @@ def validate_no_lookahead(
     for c in snapshot.claims:
         if c.get("created_at") and c["created_at"] > as_of:
             violations.append(
-                f"Claim {c.get('claim_id', '?')} created_at "
-                f"{c['created_at']} > as_of {as_of}"
+                f"Claim {c.get('claim_id', '?')} created_at {c['created_at']} > as_of {as_of}"
             )
 
     for a in snapshot.assertions:
         if a.created_at > as_of:
             violations.append(
-                f"Assertion {a.assertion_id} created_at "
-                f"{a.created_at} > as_of {as_of}"
+                f"Assertion {a.assertion_id} created_at {a.created_at} > as_of {as_of}"
             )
 
     for f in snapshot.filings:
@@ -326,16 +320,12 @@ def validate_no_lookahead(
 
     for r in snapshot.lane_runs:
         if r.completed_at and r.completed_at > as_of:
-            violations.append(
-                f"LaneRun {r.run_id} completed_at "
-                f"{r.completed_at} > as_of {as_of}"
-            )
+            violations.append(f"LaneRun {r.run_id} completed_at {r.completed_at} > as_of {as_of}")
 
     for m in snapshot.manifests:
         if m.published_at and m.published_at > as_of:
             violations.append(
-                f"Manifest {m.manifest_id} published_at "
-                f"{m.published_at} > as_of {as_of}"
+                f"Manifest {m.manifest_id} published_at {m.published_at} > as_of {as_of}"
             )
 
     return violations

@@ -43,14 +43,12 @@ def _ensure_edgartools() -> Any:
     """Import edgartools lazily, raising a clear error if missing."""
     try:
         import edgar
+
         return edgar
     except ImportError as e:
         raise ImportError(
-            "edgartools is required for EdgarToolsProvider. "
-            "Install it with: pip install edgartools"
+            "edgartools is required for EdgarToolsProvider. Install it with: pip install edgartools"
         ) from e
-
-
 
 
 def _extract_sections(filing: Any, accession: str) -> list[FilingSection]:
@@ -104,9 +102,7 @@ def _extract_sections(filing: Any, accession: str) -> list[FilingSection]:
     return sections
 
 
-def _filing_to_result(
-    filing: Any, provider_name: str
-) -> FilingResult:
+def _filing_to_result(filing: Any, provider_name: str) -> FilingResult:
     """Convert an edgartools Filing to our FilingResult schema."""
     header = filing.header if hasattr(filing, "header") else None
 
@@ -114,11 +110,7 @@ def _filing_to_result(
     cik = str(getattr(header, "cik", "") or getattr(filing, "cik", "") or "")
     accession = str(filing.accession_number) if filing.accession_number else ""
     form_type = str(getattr(header, "form_type", "") or "")
-    company_name = str(
-        getattr(header, "company_name", "")
-        or getattr(header, "company", "")
-        or ""
-    )
+    company_name = str(getattr(header, "company_name", "") or getattr(header, "company", "") or "")
 
     # Parse dates
     filed_date = parse_filing_date(
@@ -252,9 +244,7 @@ class EdgarToolsProvider(FilingProvider):
             )
             return results
         except Exception as e:
-            logger.error(
-                "EdgarToolsProvider.search_filings failed: %s", e
-            )
+            logger.error("EdgarToolsProvider.search_filings failed: %s", e)
             return []
 
     def _search_filings_sync(
@@ -286,8 +276,7 @@ class EdgarToolsProvider(FilingProvider):
 
             header = filing.header if hasattr(filing, "header") else None
             filed = parse_filing_date(
-                getattr(header, "filed", None)
-                or getattr(header, "filing_date", None)
+                getattr(header, "filed", None) or getattr(header, "filing_date", None)
             )
 
             # Date range filtering
@@ -300,9 +289,7 @@ class EdgarToolsProvider(FilingProvider):
             normalized = normalize_filing_type(form_type)
             accession = str(filing.accession_number) if filing.accession_number else ""
             company_name = str(
-                getattr(header, "company_name", "")
-                or getattr(header, "company", "")
-                or ""
+                getattr(header, "company_name", "") or getattr(header, "company", "") or ""
             )
 
             results.append(

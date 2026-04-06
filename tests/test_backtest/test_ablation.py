@@ -83,7 +83,8 @@ class TestAblationConfig:
 
     def test_all_layers(self) -> None:
         config = AblationConfig(
-            name="full", description="All",
+            name="full",
+            description="All",
             enabled_layers=ALL_LAYERS,
         )
         assert config.layer_count == 4
@@ -91,13 +92,15 @@ class TestAblationConfig:
     def test_invalid_layer(self) -> None:
         with pytest.raises(ValueError, match="Unknown layers"):
             AblationConfig(
-                name="bad", description="Bad",
+                name="bad",
+                description="Bad",
                 enabled_layers=frozenset({"nonexistent"}),
             )
 
     def test_to_dict(self) -> None:
         config = AblationConfig(
-            name="test", description="Desc",
+            name="test",
+            description="Desc",
             enabled_layers=frozenset({LAYER_NARRATIVE}),
             contract_version="0.1.0",
         )
@@ -126,8 +129,11 @@ class TestStandardSuite:
         suite = build_standard_suite()
         names = {c.name for c in suite}
         assert names == {
-            "baseline", "narrative_v2", "narrative_filing",
-            "narrative_structural", "full",
+            "baseline",
+            "narrative_v2",
+            "narrative_filing",
+            "narrative_structural",
+            "full",
         }
 
     def test_baseline_has_no_layers(self) -> None:
@@ -166,14 +172,16 @@ class TestFilterSnapshot:
     def test_no_filing_layer_removes_filings(self) -> None:
         snap = _snapshot(filings=4)
         filtered = filter_snapshot_by_layers(
-            snap, frozenset({LAYER_NARRATIVE}),
+            snap,
+            frozenset({LAYER_NARRATIVE}),
         )
         assert len(filtered.filings) == 0
 
     def test_filing_layer_preserves_filings(self) -> None:
         snap = _snapshot(filings=4)
         filtered = filter_snapshot_by_layers(
-            snap, frozenset({LAYER_FILING}),
+            snap,
+            frozenset({LAYER_FILING}),
         )
         assert len(filtered.filings) == 4
 
@@ -207,7 +215,8 @@ class TestAblationResult:
 
     def test_to_dict(self) -> None:
         result = _result(
-            "test", frozenset({LAYER_NARRATIVE}),
+            "test",
+            frozenset({LAYER_NARRATIVE}),
             metrics={"hit_rate": 0.65},
         )
         d = result.to_dict()
@@ -230,8 +239,9 @@ class TestCompareResults:
     def test_basic_comparison(self) -> None:
         results = [
             _result("baseline", frozenset(), {"hit_rate": 0.50, "sharpe": 0.8}),
-            _result("narrative_v2", frozenset({LAYER_NARRATIVE}),
-                    {"hit_rate": 0.55, "sharpe": 0.9}),
+            _result(
+                "narrative_v2", frozenset({LAYER_NARRATIVE}), {"hit_rate": 0.55, "sharpe": 0.9}
+            ),
         ]
         comp = compare_ablation_results(results, now=NOW)
         assert len(comp.contributions) == 1
@@ -252,8 +262,7 @@ class TestCompareResults:
 
     def test_no_baseline_no_contributions(self) -> None:
         results = [
-            _result("narrative_v2", frozenset({LAYER_NARRATIVE}),
-                    {"hit_rate": 0.55}),
+            _result("narrative_v2", frozenset({LAYER_NARRATIVE}), {"hit_rate": 0.55}),
         ]
         comp = compare_ablation_results(results, now=NOW)
         assert comp.contributions == []
@@ -278,8 +287,9 @@ class TestCompareResults:
         """Metrics absent from one config default to 0."""
         results = [
             _result("baseline", frozenset(), {"hit_rate": 0.50}),
-            _result("narrative_v2", frozenset({LAYER_NARRATIVE}),
-                    {"hit_rate": 0.55, "sharpe": 1.0}),
+            _result(
+                "narrative_v2", frozenset({LAYER_NARRATIVE}), {"hit_rate": 0.55, "sharpe": 1.0}
+            ),
         ]
         comp = compare_ablation_results(results, now=NOW)
         c = comp.contributions[0]
@@ -290,8 +300,7 @@ class TestCompareResults:
         """A layer can make things worse."""
         results = [
             _result("baseline", frozenset(), {"hit_rate": 0.60}),
-            _result("narrative_v2", frozenset({LAYER_NARRATIVE}),
-                    {"hit_rate": 0.55}),
+            _result("narrative_v2", frozenset({LAYER_NARRATIVE}), {"hit_rate": 0.55}),
         ]
         comp = compare_ablation_results(results, now=NOW)
         assert comp.contributions[0].metric_deltas["hit_rate"] < 0
@@ -329,7 +338,9 @@ class TestLayerContribution:
 
     def test_frozen(self) -> None:
         c = LayerContribution(
-            layer_added="x", baseline_name="b", variant_name="v",
+            layer_added="x",
+            baseline_name="b",
+            variant_name="v",
         )
         with pytest.raises(AttributeError):
             c.layer_added = "y"  # type: ignore[misc]

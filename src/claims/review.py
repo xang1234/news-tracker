@@ -21,13 +21,9 @@ from typing import Any
 
 # -- Valid state sets -------------------------------------------------------
 
-VALID_TASK_TYPES = frozenset(
-    {"entity_review", "claim_review", "merge_proposal", "split_proposal"}
-)
+VALID_TASK_TYPES = frozenset({"entity_review", "claim_review", "merge_proposal", "split_proposal"})
 
-VALID_TASK_STATUSES = frozenset(
-    {"pending", "assigned", "resolved", "dismissed"}
-)
+VALID_TASK_STATUSES = frozenset({"pending", "assigned", "resolved", "dismissed"})
 
 VALID_TRIGGER_REASONS = frozenset(
     {
@@ -40,9 +36,7 @@ VALID_TRIGGER_REASONS = frozenset(
     }
 )
 
-VALID_RESOLUTIONS = frozenset(
-    {"approved", "rejected", "merged", "split", "deferred"}
-)
+VALID_RESOLUTIONS = frozenset({"approved", "rejected", "merged", "split", "deferred"})
 
 # State machine: from → set of allowed targets
 REVIEW_TRANSITIONS: dict[str, frozenset[str]] = {
@@ -108,23 +102,17 @@ class ReviewTask:
     payload: dict[str, Any] = field(default_factory=dict)
     lineage: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
-    updated_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.task_type not in VALID_TASK_TYPES:
             raise ValueError(
-                f"Invalid task_type {self.task_type!r}. "
-                f"Must be one of {sorted(VALID_TASK_TYPES)}"
+                f"Invalid task_type {self.task_type!r}. Must be one of {sorted(VALID_TASK_TYPES)}"
             )
         if self.status not in VALID_TASK_STATUSES:
             raise ValueError(
-                f"Invalid task status {self.status!r}. "
-                f"Must be one of {sorted(VALID_TASK_STATUSES)}"
+                f"Invalid task status {self.status!r}. Must be one of {sorted(VALID_TASK_STATUSES)}"
             )
         if self.trigger_reason not in VALID_TRIGGER_REASONS:
             raise ValueError(

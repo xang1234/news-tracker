@@ -96,9 +96,7 @@ class FallbackProvenance:
 
     gate_decision: GateDecision
     model_id: str = ""
-    invoked_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    invoked_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     proposed_concept_id: str | None = None
     proposed_name: str | None = None
     llm_confidence: float | None = None

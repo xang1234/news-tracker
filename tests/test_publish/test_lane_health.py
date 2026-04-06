@@ -31,22 +31,16 @@ class TestFreshness:
     """Lane freshness from last completed run."""
 
     def test_fresh(self) -> None:
-        level, hours = compute_freshness(
-            NOW - timedelta(hours=2), now=NOW
-        )
+        level, hours = compute_freshness(NOW - timedelta(hours=2), now=NOW)
         assert level == FreshnessLevel.FRESH
         assert hours is not None and hours < DEFAULT_FRESH_HOURS
 
     def test_aging(self) -> None:
-        level, hours = compute_freshness(
-            NOW - timedelta(hours=12), now=NOW
-        )
+        level, hours = compute_freshness(NOW - timedelta(hours=12), now=NOW)
         assert level == FreshnessLevel.AGING
 
     def test_stale(self) -> None:
-        level, hours = compute_freshness(
-            NOW - timedelta(hours=48), now=NOW
-        )
+        level, hours = compute_freshness(NOW - timedelta(hours=48), now=NOW)
         assert level == FreshnessLevel.STALE
 
     def test_unknown(self) -> None:
@@ -55,21 +49,19 @@ class TestFreshness:
         assert hours is None
 
     def test_exactly_fresh_boundary(self) -> None:
-        level, _ = compute_freshness(
-            NOW - timedelta(hours=DEFAULT_FRESH_HOURS), now=NOW
-        )
+        level, _ = compute_freshness(NOW - timedelta(hours=DEFAULT_FRESH_HOURS), now=NOW)
         assert level == FreshnessLevel.FRESH
 
     def test_just_past_fresh(self) -> None:
-        level, _ = compute_freshness(
-            NOW - timedelta(hours=DEFAULT_FRESH_HOURS + 0.1), now=NOW
-        )
+        level, _ = compute_freshness(NOW - timedelta(hours=DEFAULT_FRESH_HOURS + 0.1), now=NOW)
         assert level == FreshnessLevel.AGING
 
     def test_custom_thresholds(self) -> None:
         level, _ = compute_freshness(
-            NOW - timedelta(hours=3), now=NOW,
-            fresh_hours=1.0, aging_hours=2.0,
+            NOW - timedelta(hours=3),
+            now=NOW,
+            fresh_hours=1.0,
+            aging_hours=2.0,
         )
         assert level == FreshnessLevel.STALE
 
@@ -108,7 +100,8 @@ class TestQuality:
 
     def test_custom_thresholds(self) -> None:
         level, _ = compute_quality(
-            85, 100,
+            85,
+            100,
             quality_threshold=0.95,
             quality_critical=0.90,
         )

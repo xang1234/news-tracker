@@ -288,7 +288,9 @@ class TestPrepareFilingPublication:
         adoptions = [_make_adoption()]
         alerts = [_make_alert()]
         result = prepare_filing_publication(
-            adoptions, alerts, _healthy_status(),
+            adoptions,
+            alerts,
+            _healthy_status(),
         )
         assert result.published is True
         assert len(result.adoption_payloads) == 1
@@ -299,7 +301,9 @@ class TestPrepareFilingPublication:
 
     def test_blocked_publication(self) -> None:
         result = prepare_filing_publication(
-            [_make_adoption()], [_make_alert()], _blocked_status(),
+            [_make_adoption()],
+            [_make_alert()],
+            _blocked_status(),
         )
         assert result.published is False
         assert result.block_reason is not None
@@ -324,7 +328,9 @@ class TestPrepareFilingPublication:
             _make_alert(issuer=ISSUER_B, theme=THEME_1),
         ]
         result = prepare_filing_publication(
-            adoptions, alerts, _healthy_status(),
+            adoptions,
+            alerts,
+            _healthy_status(),
         )
         # 3 adoption + 2 divergence + 2 issuer summaries = 7
         assert result.object_count == 7
@@ -338,13 +344,17 @@ class TestPrepareFilingPublication:
             readiness=PublishReadiness.WARN,
         )
         result = prepare_filing_publication(
-            [_make_adoption()], [], warn_health,
+            [_make_adoption()],
+            [],
+            warn_health,
         )
         assert result.published is True
 
     def test_block_reason_includes_health_details(self) -> None:
         result = prepare_filing_publication(
-            [], [], _blocked_status(),
+            [],
+            [],
+            _blocked_status(),
         )
         assert result.block_reason is not None
         assert "stale" in result.block_reason.lower() or "blocked" in result.block_reason.lower()
@@ -355,7 +365,9 @@ class TestPrepareFilingPublication:
             _make_adoption(issuer=ISSUER_B, score=0.8),
         ]
         result = prepare_filing_publication(
-            adoptions, [], _healthy_status(),
+            adoptions,
+            [],
+            _healthy_status(),
         )
         assert len(result.issuer_summaries) == 2
         ids = {s.issuer_concept_id for s in result.issuer_summaries}
@@ -364,7 +376,9 @@ class TestPrepareFilingPublication:
     def test_divergence_payloads_preserve_evidence(self) -> None:
         alert = _make_alert()
         result = prepare_filing_publication(
-            [], [alert], _healthy_status(),
+            [],
+            [alert],
+            _healthy_status(),
         )
         assert len(result.divergence_payloads) == 1
         assert result.divergence_payloads[0].evidence == {"test": True}

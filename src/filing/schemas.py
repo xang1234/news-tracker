@@ -27,9 +27,7 @@ VALID_FILING_TYPES = frozenset(
     }
 )
 
-VALID_FILING_STATUSES = frozenset(
-    {"pending", "fetched", "parsed", "failed", "skipped"}
-)
+VALID_FILING_STATUSES = frozenset({"pending", "fetched", "parsed", "failed", "skipped"})
 
 
 @dataclass

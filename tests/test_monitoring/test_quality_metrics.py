@@ -104,8 +104,11 @@ class TestLineageCompleteness:
 
     def test_custom_thresholds(self) -> None:
         m = check_lineage_completeness(
-            100, 92, "narrative",
-            warning_threshold=0.99, critical_threshold=0.95,
+            100,
+            92,
+            "narrative",
+            warning_threshold=0.99,
+            critical_threshold=0.95,
             now=NOW,
         )
         assert m.severity == SEVERITY_CRITICAL
@@ -301,15 +304,19 @@ class TestDataclasses:
     def test_invalid_metric_type(self) -> None:
         with pytest.raises(ValueError, match="Invalid metric_type"):
             QualityMetric(
-                metric_type="bogus", lane="narrative",
-                value=0.5, severity="ok",
+                metric_type="bogus",
+                lane="narrative",
+                value=0.5,
+                severity="ok",
             )
 
     def test_invalid_severity(self) -> None:
         with pytest.raises(ValueError, match="Invalid severity"):
             QualityMetric(
-                metric_type="lineage_completeness", lane="narrative",
-                value=0.5, severity="fatal",
+                metric_type="lineage_completeness",
+                lane="narrative",
+                value=0.5,
+                severity="fatal",
             )
 
     def test_valid_metric_types_complete(self) -> None:

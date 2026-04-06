@@ -14,9 +14,7 @@ from src.claims.schemas import (
 )
 
 MIGRATION_PATH = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "migrations"
-    / "023_evidence_claims.sql"
+    pathlib.Path(__file__).resolve().parents[2] / "migrations" / "023_evidence_claims.sql"
 )
 
 

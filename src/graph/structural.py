@@ -112,12 +112,8 @@ class StructuralRelation:
             "assertion_id": self.assertion_id,
             "is_current": self.is_current,
             "assertion_status": self.assertion_status,
-            "valid_from": (
-                self.valid_from.isoformat() if self.valid_from else None
-            ),
-            "valid_to": (
-                self.valid_to.isoformat() if self.valid_to else None
-            ),
+            "valid_from": (self.valid_from.isoformat() if self.valid_from else None),
+            "valid_to": (self.valid_to.isoformat() if self.valid_to else None),
             "support_count": self.support_count,
             "contradiction_count": self.contradiction_count,
             "source_diversity": self.source_diversity,
@@ -147,9 +143,7 @@ class StructuralSnapshot:
     history: list[StructuralRelation] = field(default_factory=list)
     predicate_counts: dict[str, int] = field(default_factory=dict)
     concept_count: int = 0
-    computed_at: datetime = field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    computed_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def total_current(self) -> int:
@@ -238,9 +232,7 @@ def build_structural_snapshot(
         relation = translate_derived_edge(edge)
         if relation.is_current:
             current.append(relation)
-            predicate_counts[relation.predicate] = (
-                predicate_counts.get(relation.predicate, 0) + 1
-            )
+            predicate_counts[relation.predicate] = predicate_counts.get(relation.predicate, 0) + 1
             concepts.add(relation.source_concept_id)
             concepts.add(relation.target_concept_id)
         else:

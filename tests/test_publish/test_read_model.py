@@ -229,19 +229,28 @@ class TestBuildSummary:
         manifest = _make_manifest()
         records = [
             ReadModelRecord(
-                record_id="rm_1", manifest_id="mfst_001",
-                object_id="obj_1", object_type="claim",
-                lane="narrative", contract_version="0.1.0",
+                record_id="rm_1",
+                manifest_id="mfst_001",
+                object_id="obj_1",
+                object_type="claim",
+                lane="narrative",
+                contract_version="0.1.0",
             ),
             ReadModelRecord(
-                record_id="rm_2", manifest_id="mfst_001",
-                object_id="obj_2", object_type="claim",
-                lane="narrative", contract_version="0.1.0",
+                record_id="rm_2",
+                manifest_id="mfst_001",
+                object_id="obj_2",
+                object_type="claim",
+                lane="narrative",
+                contract_version="0.1.0",
             ),
             ReadModelRecord(
-                record_id="rm_3", manifest_id="mfst_001",
-                object_id="obj_3", object_type="assertion",
-                lane="narrative", contract_version="0.1.0",
+                record_id="rm_3",
+                manifest_id="mfst_001",
+                object_id="obj_3",
+                object_type="assertion",
+                lane="narrative",
+                contract_version="0.1.0",
             ),
         ]
         summary = builder.build_summary(manifest, records)

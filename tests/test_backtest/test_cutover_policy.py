@@ -120,40 +120,52 @@ class TestQuarantineTrigger:
 
     def test_higher_is_worse_fires(self) -> None:
         trigger = QuarantineTrigger(
-            name="test", metric_type="failure_rate",
-            threshold=0.25, action="quarantine",
+            name="test",
+            metric_type="failure_rate",
+            threshold=0.25,
+            action="quarantine",
             reason_template="{lane}: rate {value:.1%}",
         )
         assert trigger.evaluate(0.30) is True
 
     def test_higher_is_worse_safe(self) -> None:
         trigger = QuarantineTrigger(
-            name="test", metric_type="failure_rate",
-            threshold=0.25, action="quarantine",
+            name="test",
+            metric_type="failure_rate",
+            threshold=0.25,
+            action="quarantine",
             reason_template="",
         )
         assert trigger.evaluate(0.10) is False
 
     def test_lower_is_worse_fires(self) -> None:
         trigger = QuarantineTrigger(
-            name="test", metric_type="integrity",
-            threshold=0.95, action="quarantine",
-            reason_template="", higher_is_worse=False,
+            name="test",
+            metric_type="integrity",
+            threshold=0.95,
+            action="quarantine",
+            reason_template="",
+            higher_is_worse=False,
         )
         assert trigger.evaluate(0.90) is True
 
     def test_lower_is_worse_safe(self) -> None:
         trigger = QuarantineTrigger(
-            name="test", metric_type="integrity",
-            threshold=0.95, action="quarantine",
-            reason_template="", higher_is_worse=False,
+            name="test",
+            metric_type="integrity",
+            threshold=0.95,
+            action="quarantine",
+            reason_template="",
+            higher_is_worse=False,
         )
         assert trigger.evaluate(0.99) is False
 
     def test_format_reason(self) -> None:
         trigger = QuarantineTrigger(
-            name="test", metric_type="failure_rate",
-            threshold=0.25, action="quarantine",
+            name="test",
+            metric_type="failure_rate",
+            threshold=0.25,
+            action="quarantine",
             reason_template="{lane}: rate {value:.1%} > {threshold:.0%}",
         )
         reason = trigger.format_reason("narrative", 0.30)
@@ -217,7 +229,8 @@ class TestCutoverChecklist:
 
     def test_all_passing_go(self) -> None:
         checklist = evaluate_cutover_checklist(
-            _passing_values(), now=NOW,
+            _passing_values(),
+            now=NOW,
         )
         assert checklist.all_passed is True
         assert checklist.recommendation == "go"
@@ -225,7 +238,8 @@ class TestCutoverChecklist:
 
     def test_some_failing_nogo(self) -> None:
         checklist = evaluate_cutover_checklist(
-            _failing_values(), now=NOW,
+            _failing_values(),
+            now=NOW,
         )
         assert checklist.all_passed is False
         assert "no-go" in checklist.recommendation
@@ -250,13 +264,15 @@ class TestCutoverChecklist:
 
     def test_no_quarantines_when_healthy(self) -> None:
         checklist = evaluate_cutover_checklist(
-            _passing_values(), now=NOW,
+            _passing_values(),
+            now=NOW,
         )
         assert checklist.triggered_quarantines == []
 
     def test_to_dict(self) -> None:
         checklist = evaluate_cutover_checklist(
-            _passing_values(), now=NOW,
+            _passing_values(),
+            now=NOW,
         )
         d = checklist.to_dict()
         assert d["all_passed"] is True
@@ -277,7 +293,9 @@ class TestCutoverChecklist:
     def test_custom_gates(self) -> None:
         custom = [{"name": "custom", "description": "Test", "threshold": 0.5}]
         checklist = evaluate_cutover_checklist(
-            {"custom": 0.6}, gates=custom, now=NOW,
+            {"custom": 0.6},
+            gates=custom,
+            now=NOW,
         )
         assert checklist.all_passed is True
 
@@ -296,7 +314,8 @@ class TestRealisticScenario:
     def test_production_ready(self) -> None:
         """All metrics healthy → go recommendation."""
         checklist = evaluate_cutover_checklist(
-            _passing_values(), now=NOW,
+            _passing_values(),
+            now=NOW,
         )
         assert checklist.recommendation == "go"
         assert len(checklist.gates) == 10

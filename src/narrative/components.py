@@ -158,9 +158,7 @@ def compute_attention(
     acceleration = _clamp01(current_acceleration / MAX_ACCELERATION)
     doc_mass = _clamp01(doc_count / MAX_DOC_COUNT)
 
-    score = _clamp01(
-        velocity * 0.5 + acceleration * 0.3 + doc_mass * 0.2
-    )
+    score = _clamp01(velocity * 0.5 + acceleration * 0.3 + doc_mass * 0.2)
     return AttentionScore(
         velocity=round(velocity, 4),
         acceleration=round(acceleration, 4),
@@ -179,17 +177,11 @@ def compute_corroboration(
     source_diversity = _clamp01(source_type_count / DIVERSITY_TARGET)
 
     if spread_hours is not None and spread_hours > 0:
-        cross_platform_speed = _clamp01(
-            1.0 - (spread_hours / MAX_SPREAD_HOURS)
-        )
+        cross_platform_speed = _clamp01(1.0 - (spread_hours / MAX_SPREAD_HOURS))
     else:
         cross_platform_speed = 0.0
 
-    score = _clamp01(
-        platform_spread * 0.4
-        + source_diversity * 0.35
-        + cross_platform_speed * 0.25
-    )
+    score = _clamp01(platform_spread * 0.4 + source_diversity * 0.35 + cross_platform_speed * 0.25)
     return CorroborationScore(
         platform_spread=round(platform_spread, 4),
         source_diversity=round(source_diversity, 4),
@@ -212,11 +204,7 @@ def compute_confirmation(
     authority_alignment = _clamp01(avg_authority)
     authority_weight = _clamp01(high_authority_doc_ratio)
 
-    score = _clamp01(
-        authority_alignment * 0.45
-        + crowd_agreement * 0.30
-        + authority_weight * 0.25
-    )
+    score = _clamp01(authority_alignment * 0.45 + crowd_agreement * 0.30 + authority_weight * 0.25)
     return ConfirmationScore(
         authority_alignment=round(authority_alignment, 4),
         crowd_agreement=round(crowd_agreement, 4),
@@ -239,23 +227,15 @@ def compute_novelty_persistence(
     if now is None:
         now = datetime.now(UTC)
 
-    hours_since_last = max(
-        0.0, (now - last_document_at).total_seconds() / 3600
-    )
+    hours_since_last = max(0.0, (now - last_document_at).total_seconds() / 3600)
     recency = math.exp(-RECENCY_DECAY * hours_since_last)
 
-    duration_hours = max(
-        0.0, (now - started_at).total_seconds() / 3600
-    )
-    persistence = _clamp01(
-        math.log1p(duration_hours) / math.log1p(PERSISTENCE_HALFLIFE_HOURS)
-    )
+    duration_hours = max(0.0, (now - started_at).total_seconds() / 3600)
+    persistence = _clamp01(math.log1p(duration_hours) / math.log1p(PERSISTENCE_HALFLIFE_HOURS))
 
     novelty_ratio = _clamp01(recency * (1.0 - 0.3 * persistence))
 
-    score = _clamp01(
-        recency * 0.5 + persistence * 0.25 + novelty_ratio * 0.25
-    )
+    score = _clamp01(recency * 0.5 + persistence * 0.25 + novelty_ratio * 0.25)
     return NoveltyPersistenceScore(
         recency=round(recency, 4),
         persistence=round(persistence, 4),
@@ -301,18 +281,10 @@ def compute_narrative_components(
     Returns:
         NarrativeComponents with all four sub-scores and composite.
     """
-    attention = compute_attention(
-        current_rate_per_hour, current_acceleration, doc_count
-    )
-    corroboration = compute_corroboration(
-        platform_count, source_type_count, spread_hours
-    )
-    confirmation = compute_confirmation(
-        avg_sentiment, avg_authority, high_authority_doc_ratio
-    )
-    novelty_persistence = compute_novelty_persistence(
-        last_document_at, started_at, now=now
-    )
+    attention = compute_attention(current_rate_per_hour, current_acceleration, doc_count)
+    corroboration = compute_corroboration(platform_count, source_type_count, spread_hours)
+    confirmation = compute_confirmation(avg_sentiment, avg_authority, high_authority_doc_ratio)
+    novelty_persistence = compute_novelty_persistence(last_document_at, started_at, now=now)
 
     composite = (
         attention.score * ATTENTION_WEIGHT

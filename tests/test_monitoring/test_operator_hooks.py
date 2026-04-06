@@ -91,8 +91,9 @@ class TestReplayPlan:
         assert plan.source_run_id == "run_002"
 
     def test_cancelled_run_replayable(self) -> None:
-        run = LaneRun(run_id="run_c", lane="narrative", status="cancelled",
-                      contract_version="0.1.0")
+        run = LaneRun(
+            run_id="run_c", lane="narrative", status="cancelled", contract_version="0.1.0"
+        )
         plan = build_replay_plan(run, "Cancelled too early", now=NOW)
         assert plan.source_run_id == "run_c"
 
@@ -101,8 +102,7 @@ class TestReplayPlan:
             build_replay_plan(_running_run(), "impatient", now=NOW)
 
     def test_pending_run_not_replayable(self) -> None:
-        run = LaneRun(run_id="run_p", lane="narrative", status="pending",
-                      contract_version="0.1.0")
+        run = LaneRun(run_id="run_p", lane="narrative", status="pending", contract_version="0.1.0")
         with pytest.raises(ValueError, match="not a terminal state"):
             build_replay_plan(run, "too early", now=NOW)
 
@@ -113,8 +113,10 @@ class TestReplayPlan:
 
     def test_custom_requester(self) -> None:
         plan = build_replay_plan(
-            _failed_run(), "automated retry",
-            requested_by="retry_worker", now=NOW,
+            _failed_run(),
+            "automated retry",
+            requested_by="retry_worker",
+            now=NOW,
         )
         assert plan.requested_by == "retry_worker"
 
@@ -139,7 +141,8 @@ class TestQuarantineAction:
 
     def test_quarantine(self) -> None:
         action = QuarantineAction(
-            lane="narrative", action="quarantine",
+            lane="narrative",
+            action="quarantine",
             reason="Dead-letter rate too high",
         )
         assert action.action == "quarantine"
@@ -150,7 +153,8 @@ class TestQuarantineAction:
 
     def test_watch(self) -> None:
         action = QuarantineAction(
-            lane="filing", action="watch",
+            lane="filing",
+            action="watch",
             reason="Provider intermittent",
         )
         record = action.to_quarantine_record()
@@ -159,7 +163,8 @@ class TestQuarantineAction:
 
     def test_lift(self) -> None:
         action = QuarantineAction(
-            lane="narrative", action="lift",
+            lane="narrative",
+            action="lift",
             reason="Issue resolved",
         )
         record = action.to_quarantine_record()
@@ -168,7 +173,8 @@ class TestQuarantineAction:
     def test_invalid_action(self) -> None:
         with pytest.raises(ValueError, match="Invalid quarantine action"):
             QuarantineAction(
-                lane="narrative", action="pause",
+                lane="narrative",
+                action="pause",
                 reason="not a valid action",
             )
 
@@ -179,8 +185,10 @@ class TestQuarantineAction:
 
     def test_custom_actor(self) -> None:
         action = QuarantineAction(
-            lane="filing", action="quarantine",
-            reason="test", actor="admin_user",
+            lane="filing",
+            action="quarantine",
+            reason="test",
+            actor="admin_user",
         )
         record = action.to_quarantine_record()
         assert record is not None
@@ -188,8 +196,10 @@ class TestQuarantineAction:
 
     def test_metadata_passed_through(self) -> None:
         action = QuarantineAction(
-            lane="narrative", action="quarantine",
-            reason="test", metadata={"ticket": "INC-123"},
+            lane="narrative",
+            action="quarantine",
+            reason="test",
+            metadata={"ticket": "INC-123"},
         )
         record = action.to_quarantine_record()
         assert record is not None
@@ -197,8 +207,10 @@ class TestQuarantineAction:
 
     def test_to_dict(self) -> None:
         action = QuarantineAction(
-            lane="narrative", action="quarantine",
-            reason="high error rate", actor="ops",
+            lane="narrative",
+            action="quarantine",
+            reason="high error rate",
+            actor="ops",
             acted_at=NOW,
         )
         d = action.to_dict()
@@ -208,7 +220,9 @@ class TestQuarantineAction:
 
     def test_frozen(self) -> None:
         action = QuarantineAction(
-            lane="narrative", action="quarantine", reason="test",
+            lane="narrative",
+            action="quarantine",
+            reason="test",
         )
         with pytest.raises(AttributeError):
             action.reason = "changed"  # type: ignore[misc]
@@ -244,14 +258,18 @@ class TestInspectionReport:
 
     def test_skip_replay_plan(self) -> None:
         report = build_inspection_report(
-            _failed_run(), include_replay_plan=False, now=NOW,
+            _failed_run(),
+            include_replay_plan=False,
+            now=NOW,
         )
         assert report.replay_plan is None
 
     def test_running_run_no_replay(self) -> None:
         """Running runs can be inspected but not replayed."""
         report = build_inspection_report(
-            _running_run(), include_replay_plan=True, now=NOW,
+            _running_run(),
+            include_replay_plan=True,
+            now=NOW,
         )
         assert report.replay_plan is None
 
@@ -262,7 +280,8 @@ class TestInspectionReport:
 
     def test_context_preserves_config(self) -> None:
         report = build_inspection_report(
-            _failed_run(config={"key": "value"}), now=NOW,
+            _failed_run(config={"key": "value"}),
+            now=NOW,
         )
         assert report.run_context.config_snapshot == {"key": "value"}
 
@@ -332,7 +351,8 @@ class TestRealisticScenarios:
 
         # 4. Lift quarantine
         lift = QuarantineAction(
-            lane="narrative", action="lift",
+            lane="narrative",
+            action="lift",
             reason="Provider recovered, replay successful",
             actor="oncall_sre",
         )

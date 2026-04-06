@@ -197,10 +197,12 @@ class TestComputeExposures:
 
     def test_multiple_assertions(self) -> None:
         assertions = [
-            _make_assertion("a1", subject="c_a", obj="c_b",
-                            confidence=0.8, predicate="supplies_to"),
-            _make_assertion("a2", subject="c_a", obj="c_c",
-                            confidence=0.6, predicate="competes_with"),
+            _make_assertion(
+                "a1", subject="c_a", obj="c_b", confidence=0.8, predicate="supplies_to"
+            ),
+            _make_assertion(
+                "a2", subject="c_a", obj="c_c", confidence=0.6, predicate="competes_with"
+            ),
         ]
         exposures = compute_exposures(assertions)
         a = exposures["c_a"]
@@ -300,8 +302,7 @@ class TestBuildPathCache:
         """Only current edges feed into path cache."""
         assertions = [
             _make_assertion("a1", confidence=0.8, status="active"),
-            _make_assertion("a2", confidence=0.7, status="retracted",
-                            subject="c_x", obj="c_y"),
+            _make_assertion("a2", confidence=0.7, status="retracted", subject="c_x", obj="c_y"),
         ]
         current, history = derive_edges(assertions)
         cache = build_path_cache(current)
