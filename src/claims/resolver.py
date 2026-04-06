@@ -338,6 +338,20 @@ class EntityResolver:
         # based on position (best candidate gets highest confidence).
         confidence = 0.7 if len(candidates) == 1 else 0.6
 
+        # Check against fuzzy_threshold — if the confidence is below
+        # the configured threshold, reject this match so callers can
+        # tighten fuzzy matching behavior.
+        if confidence < self._fuzzy_threshold:
+            return ResolverResult(
+                mention=mention,
+                metadata={
+                    "match_type": "fuzzy_below_threshold",
+                    "candidate_count": len(candidates),
+                    "confidence": confidence,
+                    "threshold": self._fuzzy_threshold,
+                },
+            )
+
         return ResolverResult(
             mention=mention,
             concept=best,

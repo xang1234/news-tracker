@@ -94,7 +94,8 @@ class SecApiProvider(FilingProvider):
 
             # EDGAR archive paths use integer CIK (no leading zeros).
             # The first 10 digits of the accession number are the CIK.
-            cik_dir = str(int(acc_clean[:10]))
+            cik_raw = acc_clean[:10]
+            cik_dir = cik_raw.lstrip("0") or "0"
             text_url = (
                 f"{self._policy.archives_url}/"
                 f"{cik_dir}/{acc_clean}/{accession_number}.txt"
@@ -122,7 +123,7 @@ class SecApiProvider(FilingProvider):
 
             return FilingResult(
                 identity=FilingIdentity(
-                    cik=acc_clean[:10],
+                    cik=cik_dir,
                     accession_number=accession_number,
                     filing_type="8-K",  # Unknown from this path
                     filed_date=date.today(),
