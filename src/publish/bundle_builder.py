@@ -260,10 +260,7 @@ def verify_bundle_integrity(bundle: CompositeBundle) -> bool:
 
     # Verify overall checksum matches manifest artifact
     manifest_art = bundle.artifacts.get("manifest.json")
-    if manifest_art is not None and bundle.overall_checksum != manifest_art.checksum:
-        return False
-
-    return True
+    return not (manifest_art is not None and bundle.overall_checksum != manifest_art.checksum)
 
 
 def check_bundle_parity(
