@@ -247,15 +247,22 @@ def build_composite_bundle(
 
 
 def verify_bundle_integrity(bundle: CompositeBundle) -> bool:
-    """Verify all artifact checksums match their content.
+    """Verify all artifact and bundle-level checksums match.
 
-    Recomputes checksums from artifact lines and compares against
-    stored checksums. Returns True only if all match.
+    Recomputes per-artifact checksums from content and verifies
+    the overall_checksum matches the manifest artifact's checksum
+    (the integrity root). Returns True only if all match.
     """
     for artifact in bundle.artifacts.values():
         recomputed = compute_bundle_checksum(artifact.lines)
         if recomputed != artifact.checksum:
             return False
+
+    # Verify overall checksum matches manifest artifact
+    manifest_art = bundle.artifacts.get("manifest.json")
+    if manifest_art is not None and bundle.overall_checksum != manifest_art.checksum:
+        return False
+
     return True
 
 

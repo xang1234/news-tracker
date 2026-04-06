@@ -184,8 +184,11 @@ class BundleExporter:
                 f"Manifest {manifest_id} is not sealed. Call seal_manifest() before exporting."
             )
 
-        # Fetch only published objects
-        objects = await self._repo.list_objects_by_manifest(manifest_id, publish_state="published")
+        # Fetch ALL objects sealed in this manifest, regardless of
+        # current publish_state. Post-seal retractions must not change
+        # what gets exported — the bundle reflects the immutable
+        # sealed state, not the live mutable state.
+        objects = await self._repo.list_objects_by_manifest(manifest_id)
 
         lines = build_bundle_lines(manifest, objects)
         checksum = compute_bundle_checksum(lines)
