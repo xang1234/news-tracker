@@ -85,18 +85,30 @@ class DisagreementSet:
     Attributes:
         disagreements: All identified disagreements.
         total_comparisons: How many keys were compared.
-        category_counts: Disagreements per category.
-        severity_counts: Disagreements per severity level.
         computed_at: When the comparison was performed.
     """
 
     disagreements: list[Disagreement] = field(default_factory=list)
     total_comparisons: int = 0
-    category_counts: dict[str, int] = field(default_factory=dict)
-    severity_counts: dict[str, int] = field(default_factory=dict)
     computed_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
+
+    @property
+    def category_counts(self) -> dict[str, int]:
+        """Disagreements per category."""
+        counts: dict[str, int] = {}
+        for d in self.disagreements:
+            counts[d.category] = counts.get(d.category, 0) + 1
+        return counts
+
+    @property
+    def severity_counts(self) -> dict[str, int]:
+        """Disagreements per severity level."""
+        counts: dict[str, int] = {}
+        for d in self.disagreements:
+            counts[d.severity] = counts.get(d.severity, 0) + 1
+        return counts
 
     @property
     def agreement_rate(self) -> float:
@@ -249,7 +261,7 @@ def build_disagreement_set(
     *,
     now: datetime | None = None,
 ) -> DisagreementSet:
-    """Build a DisagreementSet with computed statistics.
+    """Build a DisagreementSet from disagreements.
 
     Args:
         disagreements: All disagreements from comparison.
@@ -257,22 +269,14 @@ def build_disagreement_set(
         now: Computation timestamp.
 
     Returns:
-        DisagreementSet with category and severity counts.
+        DisagreementSet (category/severity counts derived via properties).
     """
     if now is None:
         now = datetime.now(timezone.utc)
 
-    category_counts: dict[str, int] = {}
-    severity_counts: dict[str, int] = {}
-    for d in disagreements:
-        category_counts[d.category] = category_counts.get(d.category, 0) + 1
-        severity_counts[d.severity] = severity_counts.get(d.severity, 0) + 1
-
     return DisagreementSet(
         disagreements=disagreements,
         total_comparisons=total_comparisons,
-        category_counts=category_counts,
-        severity_counts=severity_counts,
         computed_at=now,
     )
 
