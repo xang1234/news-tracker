@@ -317,7 +317,9 @@ class EntityResolver:
     ) -> ResolverResult:
         """Try fuzzy matching via pg_trgm similarity."""
         candidates = await self._repo.search_concepts(
-            mention, limit=self._fuzzy_limit
+            mention,
+            limit=self._fuzzy_limit,
+            min_similarity=self._fuzzy_threshold,
         )
         if not candidates:
             return ResolverResult(mention=mention)

@@ -57,7 +57,7 @@ class _MockConceptRepo:
         return self.aliases.get(alias.lower())
 
     async def search_concepts(
-        self, query: str, limit: int = 10
+        self, query: str, limit: int = 10, *, min_similarity: float = 0.2
     ) -> list[Concept]:
         """Simple substring match for testing fuzzy tier."""
         query_lower = query.lower()

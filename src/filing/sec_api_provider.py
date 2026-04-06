@@ -92,10 +92,12 @@ class SecApiProvider(FilingProvider):
                     f"Index fetch failed: HTTP {index_resp.status_code}",
                 )
 
-            # Fetch the full text submission
+            # EDGAR archive paths use integer CIK (no leading zeros).
+            # The first 10 digits of the accession number are the CIK.
+            cik_dir = str(int(acc_clean[:10]))
             text_url = (
                 f"{self._policy.archives_url}/"
-                f"{acc_clean[:10]}/{acc_clean}/{accession_number}.txt"
+                f"{cik_dir}/{acc_clean}/{accession_number}.txt"
             )
             await self._acquire_rate_limit()
             text_resp = await client.get(text_url)

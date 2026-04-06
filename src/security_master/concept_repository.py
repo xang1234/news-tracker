@@ -168,6 +168,8 @@ class ConceptRepository:
         self,
         query: str,
         limit: int = 10,
+        *,
+        min_similarity: float = 0.2,
     ) -> list[Concept]:
         """Fuzzy search concepts by canonical name using pg_trgm."""
         rows = await self._db.fetch(
@@ -175,12 +177,13 @@ class ConceptRepository:
             SELECT *, similarity(canonical_name, $1) AS sim
             FROM concepts
             WHERE is_active = TRUE
-              AND similarity(canonical_name, $1) > 0.2
+              AND similarity(canonical_name, $1) > $3
             ORDER BY sim DESC
             LIMIT $2
             """,
             query,
             limit,
+            min_similarity,
         )
         return [_row_to_concept(row) for row in rows]
 

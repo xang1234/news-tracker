@@ -22,7 +22,7 @@ from datetime import datetime
 from typing import Any
 
 from src.assertions.schemas import ResolvedAssertion
-from src.contracts.intelligence.db_schemas import LaneRun, Manifest
+from src.contracts.intelligence.db_schemas import LaneRun, Manifest, ManifestPointer
 
 # -- Point-in-time filter functions -------------------------------------------
 
@@ -129,18 +129,50 @@ def filter_manifests_pit(
     ]
 
 
+def filter_pointers_pit(
+    pointers: list[ManifestPointer],
+    as_of: datetime,
+    *,
+    lane: str | None = None,
+) -> list[ManifestPointer]:
+    """Filter pointer activations to those that happened by as_of.
+
+    Uses activated_at (when the pointer was advanced), NOT the
+    manifest's published_at. A sealed-but-never-activated manifest
+    was never served in production and should not appear in PIT.
+    """
+    return [
+        p for p in pointers
+        if p.activated_at <= as_of
+        and (lane is None or p.lane == lane)
+    ]
+
+
 def get_active_manifest_pit(
     manifests: list[Manifest],
     as_of: datetime,
     lane: str,
+    pointers: list[ManifestPointer] | None = None,
 ) -> Manifest | None:
-    """Get the most recently sealed manifest for a lane at as_of.
+    """Get the manifest that was actively served for a lane at as_of.
 
-    This reconstructs which manifest the pointer would have been
-    pointing to at as_of — the latest sealed manifest for the lane.
+    If pointer history is available, uses pointer activations to
+    determine which manifest was actually served (not just sealed).
+    Falls back to latest sealed manifest if no pointers are provided.
 
-    Returns None if no manifest was sealed for this lane by as_of.
+    Returns None if no manifest was active for this lane by as_of.
     """
+    if pointers is not None:
+        lane_pointers = filter_pointers_pit(pointers, as_of, lane=lane)
+        if lane_pointers:
+            latest = max(lane_pointers, key=lambda p: p.activated_at)
+            return next(
+                (m for m in manifests if m.manifest_id == latest.manifest_id),
+                None,
+            )
+        return None
+
+    # Fallback: no pointer history — use latest sealed manifest
     visible = filter_manifests_pit(manifests, as_of, lane=lane)
     if not visible:
         return None
@@ -172,11 +204,28 @@ class IntelligenceSnapshot:
     filings: list[dict[str, Any]] = field(default_factory=list)
     lane_runs: list[LaneRun] = field(default_factory=list)
     manifests: list[Manifest] = field(default_factory=list)
+    pointers: list[ManifestPointer] = field(default_factory=list)
 
     @property
     def active_manifests(self) -> dict[str, Manifest]:
-        """Most recent sealed manifest per lane."""
-        active: dict[str, Manifest] = {}
+        """Manifest that was actively served per lane at as_of.
+
+        Uses pointer activations if available (accurate: reflects
+        what was actually served). Falls back to latest sealed
+        manifest if no pointer history exists.
+        """
+        if self.pointers:
+            active: dict[str, Manifest] = {}
+            for lane in {p.lane for p in self.pointers}:
+                m = get_active_manifest_pit(
+                    self.manifests, self.as_of, lane, pointers=self.pointers,
+                )
+                if m is not None:
+                    active[lane] = m
+            return active
+
+        # Fallback: no pointer history
+        active = {}
         for m in self.manifests:
             if m.published_at is None:
                 continue
@@ -207,11 +256,13 @@ def build_intelligence_snapshot(
     filings: list[dict[str, Any]],
     lane_runs: list[LaneRun],
     manifests: list[Manifest],
+    pointers: list[ManifestPointer] | None = None,
 ) -> IntelligenceSnapshot:
     """Build a point-in-time snapshot from pre-fetched data.
 
     Applies PIT filters to all entity types. The active_manifests
-    property on the snapshot derives the latest per-lane manifest.
+    property on the snapshot uses pointer activations (if provided)
+    to determine which manifests were actually served.
 
     Args:
         as_of: Evaluation timestamp.
@@ -220,10 +271,14 @@ def build_intelligence_snapshot(
         filings: All filings (unfiltered).
         lane_runs: All lane runs (unfiltered).
         manifests: All manifests (unfiltered).
+        pointers: All pointer activations (unfiltered, optional).
 
     Returns:
         IntelligenceSnapshot with only data known at as_of.
     """
+    pit_pointers = (
+        filter_pointers_pit(pointers, as_of) if pointers else []
+    )
     return IntelligenceSnapshot(
         as_of=as_of,
         claims=filter_claims_pit(claims, as_of),
@@ -231,6 +286,7 @@ def build_intelligence_snapshot(
         filings=filter_filings_pit(filings, as_of),
         lane_runs=filter_lane_runs_pit(lane_runs, as_of),
         manifests=filter_manifests_pit(manifests, as_of),
+        pointers=pit_pointers,
     )
 
 
