@@ -1,0 +1,70 @@
+{
+  "pack": {
+    "pack_id": "semiconductors_pack_1",
+    "name": "Semiconductors Pack 1",
+    "description": "Core semiconductor issuers, technologies, and themes with the highest structural coverage confidence.",
+    "version": "1.0"
+  },
+  "issuers": [
+    {"canonical_name": "NVIDIA Corporation", "ticker": "NVDA", "sector": "GPU/AI Chips", "role": "anchor", "coverage_tier": "full", "aliases": ["NVIDIA", "NVDA", "Jensen Huang"]},
+    {"canonical_name": "Advanced Micro Devices", "ticker": "AMD", "sector": "GPU/AI Chips", "role": "anchor", "coverage_tier": "full", "aliases": ["AMD", "Lisa Su", "Radeon", "Ryzen", "EPYC", "Xilinx"]},
+    {"canonical_name": "Intel Corporation", "ticker": "INTC", "sector": "IDM", "role": "anchor", "coverage_tier": "full", "aliases": ["Intel", "INTC", "Xeon", "Altera"]},
+    {"canonical_name": "Taiwan Semiconductor Manufacturing", "ticker": "TSM", "sector": "Foundry", "role": "anchor", "coverage_tier": "full", "aliases": ["TSMC", "TSM", "Taiwan Semi", "Morris Chang", "C.C. Wei"]},
+    {"canonical_name": "Samsung Electronics", "ticker": "005930.KS", "exchange": "KRX", "sector": "Memory/Foundry", "role": "anchor", "coverage_tier": "partial", "aliases": ["Samsung", "Samsung Semiconductor", "Samsung Memory"]},
+    {"canonical_name": "SK Hynix", "ticker": "000660.KS", "exchange": "KRX", "sector": "Memory", "role": "anchor", "coverage_tier": "partial", "aliases": ["SK Hynix", "Hynix"]},
+    {"canonical_name": "Micron Technology", "ticker": "MU", "sector": "Memory", "role": "anchor", "coverage_tier": "full", "aliases": ["Micron", "MU", "Crucial"]},
+    {"canonical_name": "ASML Holding", "ticker": "ASML", "sector": "Equipment", "role": "anchor", "coverage_tier": "full", "aliases": ["ASML", "EUV"]},
+    {"canonical_name": "Applied Materials", "ticker": "AMAT", "sector": "Equipment", "role": "member", "coverage_tier": "full", "aliases": ["Applied Materials", "AMAT"]},
+    {"canonical_name": "Lam Research", "ticker": "LRCX", "sector": "Equipment", "role": "member", "coverage_tier": "full", "aliases": ["Lam Research", "Lam", "LRCX"]},
+    {"canonical_name": "KLA Corporation", "ticker": "KLAC", "sector": "Equipment", "role": "member", "coverage_tier": "partial", "aliases": ["KLA", "KLAC"]},
+    {"canonical_name": "Qualcomm", "ticker": "QCOM", "sector": "Mobile/Wireless", "role": "member", "coverage_tier": "full", "aliases": ["Qualcomm", "QCOM", "Snapdragon"]},
+    {"canonical_name": "Broadcom", "ticker": "AVGO", "sector": "Networking", "role": "member", "coverage_tier": "full", "aliases": ["Broadcom", "AVGO", "Hock Tan"]},
+    {"canonical_name": "Texas Instruments", "ticker": "TXN", "sector": "Analog", "role": "member", "coverage_tier": "partial", "aliases": ["Texas Instruments", "TI", "TXN"]},
+    {"canonical_name": "Marvell Technology", "ticker": "MRVL", "sector": "Networking", "role": "member", "coverage_tier": "partial", "aliases": ["Marvell", "MRVL"]},
+    {"canonical_name": "Analog Devices", "ticker": "ADI", "sector": "Analog", "role": "member", "coverage_tier": "partial", "aliases": ["Analog Devices", "ADI"]},
+    {"canonical_name": "NXP Semiconductors", "ticker": "NXPI", "sector": "Automotive", "role": "member", "coverage_tier": "partial", "aliases": ["NXP", "NXPI"]},
+    {"canonical_name": "ON Semiconductor", "ticker": "ON", "sector": "Power", "role": "member", "coverage_tier": "partial", "aliases": ["ON Semiconductor", "ON Semi", "onsemi"]},
+    {"canonical_name": "ARM Holdings", "ticker": "ARM", "sector": "IP/Licensing", "role": "member", "coverage_tier": "partial", "aliases": ["ARM", "ARM Holdings"]},
+    {"canonical_name": "Synopsys", "ticker": "SNPS", "sector": "EDA", "role": "peripheral", "coverage_tier": "stub", "aliases": ["Synopsys", "SNPS"]},
+    {"canonical_name": "Cadence Design Systems", "ticker": "CDNS", "sector": "EDA", "role": "peripheral", "coverage_tier": "stub", "aliases": ["Cadence", "CDNS"]},
+    {"canonical_name": "GlobalFoundries", "ticker": "GFS", "sector": "Foundry", "role": "member", "coverage_tier": "partial", "aliases": ["GlobalFoundries", "GFS", "GF"]},
+    {"canonical_name": "Wolfspeed", "ticker": "WOLF", "sector": "SiC", "role": "peripheral", "coverage_tier": "stub", "aliases": ["Wolfspeed", "WOLF", "Cree"]}
+  ],
+  "technologies": [
+    {"canonical_name": "EUV Lithography", "aliases": ["EUV", "extreme ultraviolet"], "description": "Extreme ultraviolet lithography for sub-7nm nodes"},
+    {"canonical_name": "High Bandwidth Memory", "aliases": ["HBM", "HBM3", "HBM3E", "HBM4"], "description": "Stacked DRAM for AI accelerators"},
+    {"canonical_name": "CoWoS Packaging", "aliases": ["CoWoS", "Chip-on-Wafer-on-Substrate"], "description": "TSMC advanced packaging for chiplet integration"},
+    {"canonical_name": "GAAFET", "aliases": ["GAA", "gate-all-around", "nanosheet"], "description": "Next-gen transistor architecture replacing FinFET"},
+    {"canonical_name": "Chiplet Architecture", "aliases": ["chiplet", "chiplets", "disaggregated compute"], "description": "Multi-die modular chip design"},
+    {"canonical_name": "Silicon Carbide", "aliases": ["SiC", "silicon carbide"], "description": "Wide-bandgap semiconductor for power/automotive"},
+    {"canonical_name": "DDR5 Memory", "aliases": ["DDR5", "DDR5 DRAM"], "description": "Latest-generation server/desktop memory standard"}
+  ],
+  "themes": [
+    {"canonical_name": "AI Chip Demand", "description": "Demand dynamics for AI training and inference accelerators"},
+    {"canonical_name": "HBM Shortage", "description": "Supply constraints in high-bandwidth memory for AI workloads"},
+    {"canonical_name": "Advanced Packaging Capacity", "description": "CoWoS and other advanced packaging supply limitations"},
+    {"canonical_name": "Semiconductor Equipment Cycle", "description": "Capital expenditure and order cycle for wafer fab equipment"},
+    {"canonical_name": "China Export Controls", "description": "US/allied restrictions on semiconductor technology exports to China"},
+    {"canonical_name": "Foundry Capacity Expansion", "description": "New fab construction and capacity ramp timelines"}
+  ],
+  "supply_chain": [
+    {"source": "Taiwan Semiconductor Manufacturing", "target": "NVIDIA Corporation", "type": "supplies_to"},
+    {"source": "Taiwan Semiconductor Manufacturing", "target": "Advanced Micro Devices", "type": "supplies_to"},
+    {"source": "Taiwan Semiconductor Manufacturing", "target": "Qualcomm", "type": "supplies_to"},
+    {"source": "Taiwan Semiconductor Manufacturing", "target": "Broadcom", "type": "supplies_to"},
+    {"source": "Taiwan Semiconductor Manufacturing", "target": "ARM Holdings", "type": "supplies_to"},
+    {"source": "ASML Holding", "target": "Taiwan Semiconductor Manufacturing", "type": "supplies_to"},
+    {"source": "ASML Holding", "target": "Samsung Electronics", "type": "supplies_to"},
+    {"source": "ASML Holding", "target": "Intel Corporation", "type": "supplies_to"},
+    {"source": "Applied Materials", "target": "Taiwan Semiconductor Manufacturing", "type": "supplies_to"},
+    {"source": "Applied Materials", "target": "Samsung Electronics", "type": "supplies_to"},
+    {"source": "Lam Research", "target": "Taiwan Semiconductor Manufacturing", "type": "supplies_to"},
+    {"source": "SK Hynix", "target": "NVIDIA Corporation", "type": "supplies_to"},
+    {"source": "Micron Technology", "target": "NVIDIA Corporation", "type": "supplies_to"},
+    {"source": "NVIDIA Corporation", "target": "Advanced Micro Devices", "type": "competes_with"},
+    {"source": "Intel Corporation", "target": "Advanced Micro Devices", "type": "competes_with"},
+    {"source": "Taiwan Semiconductor Manufacturing", "target": "Samsung Electronics", "type": "competes_with"},
+    {"source": "SK Hynix", "target": "Micron Technology", "type": "competes_with"},
+    {"source": "SK Hynix", "target": "Samsung Electronics", "type": "competes_with"}
+  ]
+}

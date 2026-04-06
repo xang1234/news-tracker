@@ -24,6 +24,8 @@ from src.keywords.service import KeywordsService
 from src.narrative.repository import NarrativeRepository
 from src.ner.config import NERConfig
 from src.ner.service import NERService
+from src.publish.repository import PublishRepository
+from src.publish.service import PublishService
 from src.security_master.repository import SecurityMasterRepository
 from src.sentiment.aggregation import SentimentAggregator
 from src.sentiment.config import SentimentConfig
@@ -60,6 +62,7 @@ _keywords_service: KeywordsService | None = None
 _pattern_extractor: PatternExtractor | None = None
 _security_master_repository: SecurityMasterRepository | None = None
 _sources_repository: SourcesRepository | None = None
+_publish_service: PublishService | None = None
 
 
 async def get_database() -> Database:
@@ -536,13 +539,31 @@ async def get_sources_repository() -> SourcesRepository:
     return _sources_repository
 
 
+async def get_publish_service() -> PublishService:
+    """Get publish service instance (singleton)."""
+    global _publish_service, _database
+
+    if _publish_service is None:
+        async with _init_lock:
+            if _publish_service is None:
+                if _database is None:
+                    _database = Database()
+                    await _database.connect()
+
+                _publish_service = PublishService(repository=PublishRepository(_database))
+
+    return _publish_service
+
+
 async def cleanup_dependencies() -> None:
     """Clean up global dependencies on shutdown."""
     global _embedding_service, _sentiment_service, _redis_client, _vector_store_manager, _database
     global _theme_repository, _document_repository, _sentiment_aggregator, _ranking_service
-    global _alert_repository, _feedback_repository, _causal_graph, _propagation_service, _alert_broadcaster
-    global _graph_repository, _ner_service, _keywords_service, _pattern_extractor, _security_master_repository
-    global _sources_repository
+    global _alert_repository, _feedback_repository, _causal_graph
+    global _propagation_service, _alert_broadcaster
+    global _graph_repository, _ner_service, _keywords_service
+    global _pattern_extractor, _security_master_repository
+    global _sources_repository, _publish_service
 
     _vector_store_manager = None
     _theme_repository = None
@@ -559,6 +580,7 @@ async def cleanup_dependencies() -> None:
     _graph_repository = None
     _security_master_repository = None
     _sources_repository = None
+    _publish_service = None
 
     if _alert_broadcaster is not None:
         await _alert_broadcaster.stop()

@@ -12,9 +12,28 @@ Components:
 - GraphConfig: Pydantic settings with GRAPH_ prefix
 """
 
+from src.graph.baskets import (
+    BasketMember,
+    ThematicBasket,
+    build_thematic_basket,
+)
 from src.graph.causal_graph import CausalGraph
 from src.graph.config import GraphConfig
+from src.graph.path_scoring import (
+    ScoredEdge,
+    ScoredPath,
+    score_edge,
+    score_paths_from,
+)
 from src.graph.propagation import PropagationImpact, SentimentPropagation
+from src.graph.publisher import (
+    BasketPayload,
+    PathExplanation,
+    StructuralPublicationResult,
+    build_basket_payload,
+    build_path_explanation,
+    prepare_structural_publication,
+)
 from src.graph.schemas import (
     VALID_NODE_TYPES,
     VALID_RELATION_TYPES,
@@ -23,17 +42,42 @@ from src.graph.schemas import (
 )
 from src.graph.seed_data import SEED_VERSION, seed_graph
 from src.graph.storage import GraphRepository
+from src.graph.structural import (
+    StructuralRelation,
+    StructuralSnapshot,
+    build_structural_snapshot,
+    get_predicate_sign,
+    translate_derived_edge,
+)
 
 __all__ = [
+    "BasketMember",
+    "BasketPayload",
     "CausalEdge",
     "CausalGraph",
     "CausalNode",
     "GraphConfig",
     "GraphRepository",
+    "PathExplanation",
     "PropagationImpact",
     "SEED_VERSION",
+    "ScoredEdge",
+    "ScoredPath",
     "SentimentPropagation",
+    "StructuralPublicationResult",
+    "StructuralRelation",
+    "StructuralSnapshot",
+    "ThematicBasket",
     "VALID_NODE_TYPES",
     "VALID_RELATION_TYPES",
+    "build_basket_payload",
+    "build_path_explanation",
+    "build_structural_snapshot",
+    "build_thematic_basket",
+    "get_predicate_sign",
+    "score_edge",
+    "score_paths_from",
+    "prepare_structural_publication",
     "seed_graph",
+    "translate_derived_edge",
 ]

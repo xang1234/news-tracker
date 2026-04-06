@@ -23,6 +23,9 @@ dependencies = [
     "readability-lxml>=0.8.0",
     "curl_cffi>=0.6.0",
 
+    # SEC Filings
+    "edgartools>=3.0.0",
+
     # Queue & Cache
     "redis[hiredis]>=5.0.0",
 

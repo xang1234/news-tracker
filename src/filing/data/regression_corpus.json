@@ -1,0 +1,93 @@
+{
+  "_description": "Parser regression corpus for tricky issuer/form combinations. Each entry documents a known parsing challenge with expected section structure. Use in tests to verify parser changes don't regress on hard cases.",
+  "cases": [
+    {
+      "id": "nvda_10k_2024",
+      "issuer": "NVIDIA Corporation",
+      "ticker": "NVDA",
+      "cik": "0001045810",
+      "filing_type": "10-K",
+      "description": "Standard 10-K with well-structured sections. Baseline reference.",
+      "expected_sections": ["Business", "Risk Factors", "Properties", "Legal Proceedings", "MD&A", "Financial Statements"],
+      "known_issues": [],
+      "min_sections": 6
+    },
+    {
+      "id": "tsm_20f_2024",
+      "issuer": "Taiwan Semiconductor Manufacturing",
+      "ticker": "TSM",
+      "cik": "0001046179",
+      "filing_type": "20-F",
+      "description": "Foreign private issuer 20-F with non-standard section numbering (uses 'Item' numbering different from 10-K).",
+      "expected_sections": ["Business Overview", "Risk Factors", "Operating and Financial Review"],
+      "known_issues": ["20-F section numbering differs from 10-K", "Some sections use different names than US domestic filers"],
+      "min_sections": 3
+    },
+    {
+      "id": "samsung_6k_2024",
+      "issuer": "Samsung Electronics",
+      "ticker": "005930.KS",
+      "cik": "0000835403",
+      "filing_type": "6-K",
+      "description": "Korean issuer 6-K. Minimal structured sections, often a single exhibit.",
+      "expected_sections": [],
+      "known_issues": ["6-K filings often lack standard section structure", "Content may be a single press release attachment"],
+      "min_sections": 0
+    },
+    {
+      "id": "intc_10k_2024",
+      "issuer": "Intel Corporation",
+      "ticker": "INTC",
+      "cik": "0000050863",
+      "filing_type": "10-K",
+      "description": "Large 10-K with extensive risk factors and complex financial statements.",
+      "expected_sections": ["Business", "Risk Factors", "Properties", "MD&A", "Financial Statements"],
+      "known_issues": ["Very long Risk Factors section (>15K words)", "Nested sub-sections within MD&A"],
+      "min_sections": 5
+    },
+    {
+      "id": "asml_20f_2024",
+      "issuer": "ASML Holding",
+      "ticker": "ASML",
+      "cik": "0000937966",
+      "filing_type": "20-F",
+      "description": "Dutch company 20-F with EU-style reporting structure.",
+      "expected_sections": ["Business Overview", "Risk Factors", "Operating Results"],
+      "known_issues": ["EU reporting conventions may differ from US section names", "May include IFRS-specific sections"],
+      "min_sections": 3
+    },
+    {
+      "id": "mu_10k_amended",
+      "issuer": "Micron Technology",
+      "ticker": "MU",
+      "cik": "0000723125",
+      "filing_type": "10-K",
+      "description": "Amended 10-K (10-K/A). Tests that amendment suffix stripping works correctly.",
+      "expected_sections": ["Business", "Risk Factors", "MD&A"],
+      "known_issues": ["10-K/A may have fewer sections than original", "Some sections may reference the original filing"],
+      "min_sections": 3
+    },
+    {
+      "id": "qcom_8k_2024",
+      "issuer": "Qualcomm",
+      "ticker": "QCOM",
+      "cik": "0000804328",
+      "filing_type": "8-K",
+      "description": "Current report (8-K). Typically has few sections, mostly Item references.",
+      "expected_sections": [],
+      "known_issues": ["8-K sections are Item-numbered, not named", "Often just 1-2 items with brief content"],
+      "min_sections": 0
+    },
+    {
+      "id": "avgo_sc13d",
+      "issuer": "Broadcom",
+      "ticker": "AVGO",
+      "cik": "0001649338",
+      "filing_type": "SC 13D",
+      "description": "Schedule 13D ownership filing. Non-standard structure for narrative parsing.",
+      "expected_sections": [],
+      "known_issues": ["SC 13D has a tabular structure, not narrative sections", "Parser should not expect standard section names"],
+      "min_sections": 0
+    }
+  ]
+}
