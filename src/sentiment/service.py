@@ -119,6 +119,7 @@ class SentimentService:
                 device=self._config.device,
                 execution_provider=self._config.execution_provider,
             )
+            self._runtime = runtime
 
         model_source = onnx_path or self._config.model_name
 

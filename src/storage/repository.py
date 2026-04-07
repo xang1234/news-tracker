@@ -243,7 +243,8 @@ class DocumentRepository:
         ALTER TABLE documents ADD COLUMN IF NOT EXISTS authority_score REAL;
 
         -- Add entities_mentioned column if it doesn't exist
-        ALTER TABLE documents ADD COLUMN IF NOT EXISTS entities_mentioned JSONB NOT NULL DEFAULT '[]';
+        ALTER TABLE documents
+            ADD COLUMN IF NOT EXISTS entities_mentioned JSONB NOT NULL DEFAULT '[]';
 
         -- Add index for authority_score filtering
         CREATE INDEX IF NOT EXISTS idx_documents_authority_score
@@ -260,7 +261,8 @@ class DocumentRepository:
             ON documents USING GIN(entities_mentioned);
 
         -- Add keywords_extracted column if it doesn't exist
-        ALTER TABLE documents ADD COLUMN IF NOT EXISTS keywords_extracted JSONB NOT NULL DEFAULT '[]';
+        ALTER TABLE documents
+            ADD COLUMN IF NOT EXISTS keywords_extracted JSONB NOT NULL DEFAULT '[]';
 
         -- GIN index for keyword queries
         CREATE INDEX IF NOT EXISTS idx_documents_keywords
