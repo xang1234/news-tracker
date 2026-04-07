@@ -271,9 +271,11 @@ class SentimentService:
         if not texts:
             return np.empty((0, len(LABEL_MAPPING)), dtype=np.float32)
 
-        runtime = self._resolve_runtime()
         tokenizer = self.tokenizer
         model = self.model
+        # Read runtime AFTER property access to ensure _initialize() has run,
+        # which may override self._runtime (e.g. ONNX→torch fallback).
+        runtime = self._resolve_runtime()
 
         if runtime.backend == "torch":
             assert TORCH_AVAILABLE
