@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, FileSearch, Scale } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { cn } from '@/lib/utils';
@@ -15,12 +15,15 @@ import {
 const PAGE_SIZE = 20;
 
 export default function EvidencePage() {
+  const [searchParams] = useSearchParams();
   const [conceptId, setConceptId] = useState('');
   const [predicate, setPredicate] = useState('');
   const [status, setStatus] = useState('');
   const [minConfidence, setMinConfidence] = useState('');
   const [offset, setOffset] = useState(0);
-  const [selectedId, setSelectedId] = useState<string>();
+  const [selectedId, setSelectedId] = useState<string | undefined>(
+    searchParams.get('assertion') ?? undefined,
+  );
 
   const filters: AssertionFilters = {
     concept_id: conceptId || undefined,
