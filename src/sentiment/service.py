@@ -114,6 +114,12 @@ class SentimentService:
 
         # Force torch backend when ONNX was selected but exported models are missing
         if runtime.backend == "onnx" and not onnx_path:
+            if not TORCH_AVAILABLE:
+                raise RuntimeError(
+                    f"ONNX model path '{self._config.onnx_model_path}' not found and "
+                    "torch is not available as a fallback. Please provide a valid "
+                    "onnx_model_path or install torch."
+                )
             runtime = resolve_runtime(
                 backend="torch",
                 device=self._config.device,
