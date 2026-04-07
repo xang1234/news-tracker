@@ -607,15 +607,15 @@ async def list_divergence(
         params.append(severity)
         idx += 1
     if reason_code is not None:
-        conditions.append(f"payload->>'reason_code' = ${idx}")
+        conditions.append(f"payload->>'reason' = ${idx}")
         params.append(reason_code)
         idx += 1
     if issuer is not None:
-        conditions.append(f"payload->>'issuer_id' = ${idx}")
+        conditions.append(f"payload->>'issuer_concept_id' = ${idx}")
         params.append(issuer)
         idx += 1
     if theme is not None:
-        conditions.append(f"payload->>'theme_id' = ${idx}")
+        conditions.append(f"payload->>'theme_concept_id' = ${idx}")
         params.append(theme)
         idx += 1
 
@@ -681,7 +681,7 @@ async def get_issuer_divergence(
         SELECT * FROM intel_pub.published_objects
         WHERE object_type IN ('divergence', 'adoption', 'drift')
           AND publish_state = 'published'
-          AND payload->>'issuer_id' = $1
+          AND payload->>'issuer_concept_id' = $1
         ORDER BY created_at DESC
         LIMIT $2
         """,
