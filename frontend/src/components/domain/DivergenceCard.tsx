@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
-import { timeAgo, truncate } from '@/lib/formatters';
+import { timeAgo, truncate, humanize } from '@/lib/formatters';
+import { SEVERITY_COLORS, DIVERGENCE_REASON_COLORS } from '@/lib/constants';
 
 interface Divergence {
   id: string;
@@ -26,27 +27,6 @@ const SEVERITY_BORDER: Record<string, string> = {
   warning: 'border-l-amber-500',
   info: 'border-l-sky-500',
 };
-
-const SEVERITY_BADGE: Record<string, string> = {
-  critical: 'bg-red-500/20 text-red-400',
-  warning: 'bg-amber-500/20 text-amber-400',
-  info: 'bg-sky-500/20 text-sky-400',
-};
-
-const REASON_COLORS: Record<string, string> = {
-  narrative_without_filing: 'bg-amber-500/20 text-amber-400',
-  filing_without_narrative: 'bg-sky-500/20 text-sky-400',
-  adverse_drift: 'bg-red-500/20 text-red-400',
-  contradictory_drift: 'bg-rose-500/20 text-rose-400',
-  lagging_adoption: 'bg-yellow-500/20 text-yellow-400',
-};
-
-function humanizeReason(reason: string): string {
-  return reason
-    .split('_')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
 
 function scoreBar(label: string, value: number | null) {
   const pctValue = value != null ? Math.round(value * 100) : null;
@@ -80,8 +60,8 @@ function scoreBar(label: string, value: number | null) {
 
 export function DivergenceCard({ divergence, onClick }: DivergenceCardProps) {
   const borderColor = SEVERITY_BORDER[divergence.severity] ?? 'border-l-slate-500';
-  const severityBadge = SEVERITY_BADGE[divergence.severity] ?? 'bg-slate-500/20 text-slate-400';
-  const reasonColor = REASON_COLORS[divergence.reason] ?? 'bg-secondary text-muted-foreground';
+  const severityBadge = SEVERITY_COLORS[divergence.severity] ?? 'bg-slate-500/20 text-slate-400';
+  const reasonColor = DIVERGENCE_REASON_COLORS[divergence.reason] ?? 'bg-secondary text-muted-foreground';
 
   return (
     <div
@@ -110,7 +90,7 @@ export function DivergenceCard({ divergence, onClick }: DivergenceCardProps) {
       {/* Reason badge */}
       <div className="mt-2">
         <span className={cn('rounded-full px-2 py-0.5 text-xs', reasonColor)}>
-          {humanizeReason(divergence.reason)}
+          {humanize(divergence.reason)}
         </span>
       </div>
 

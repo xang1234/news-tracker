@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { humanize } from '@/lib/formatters';
 
 interface DriftDimension {
   dimension: string;
@@ -9,13 +10,6 @@ interface DriftDimension {
 
 interface DriftRadarProps {
   dimensions: DriftDimension[];
-}
-
-function humanize(snakeCase: string): string {
-  return snakeCase
-    .split('_')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
 }
 
 export function DriftRadar({ dimensions }: DriftRadarProps) {

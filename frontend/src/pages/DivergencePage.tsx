@@ -5,21 +5,8 @@ import { Header } from '@/components/layout/Header';
 import { MetricCard, MetricCardSkeleton } from '@/components/domain/MetricCard';
 import { cn } from '@/lib/utils';
 import { timeAgo, latency } from '@/lib/formatters';
+import { SEVERITY_COLORS, DIVERGENCE_REASON_COLORS } from '@/lib/constants';
 import { useDivergences, type DivergenceFilters, type DivergenceItem } from '@/api/hooks/useDivergence';
-
-const REASON_COLORS: Record<string, string> = {
-  narrative_without_filing: 'bg-amber-500/20 text-amber-400',
-  filing_without_narrative: 'bg-sky-500/20 text-sky-400',
-  adverse_drift: 'bg-red-500/20 text-red-400',
-  contradictory_drift: 'bg-red-500/20 text-red-400',
-  lagging_adoption: 'bg-yellow-500/20 text-yellow-400',
-};
-
-const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'bg-red-500/20 text-red-400',
-  warning: 'bg-yellow-500/20 text-yellow-400',
-  info: 'bg-blue-500/20 text-blue-400',
-};
 
 const PAGE_SIZE = 20;
 
@@ -256,7 +243,7 @@ export default function DivergencePage() {
 
 function DivergenceCard({ divergence }: { divergence: DivergenceItem }) {
   const d = divergence;
-  const reasonClass = REASON_COLORS[d.reason] ?? 'bg-slate-500/20 text-slate-400';
+  const reasonClass = DIVERGENCE_REASON_COLORS[d.reason] ?? 'bg-slate-500/20 text-slate-400';
   const severityClass = SEVERITY_COLORS[d.severity] ?? 'bg-slate-500/20 text-slate-400';
 
   const narrativeScore = d.narrative_score;

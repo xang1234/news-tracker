@@ -1,11 +1,12 @@
 import { cn } from '@/lib/utils';
 import { pct, timeAgo } from '@/lib/formatters';
+import { ASSERTION_STATUS_COLORS } from '@/lib/constants';
 
 interface Assertion {
   assertion_id: string;
   subject_concept_id: string;
   predicate: string;
-  object_concept_id: string;
+  object_concept_id: string | null;
   confidence: number;
   status: string;
   support_count: number;
@@ -15,18 +16,11 @@ interface Assertion {
   last_evidence_at: string;
 }
 
-interface AssertionCardProps {
+export interface AssertionCardProps {
   assertion: Assertion;
   isSelected?: boolean;
   onClick?: () => void;
 }
-
-const STATUS_COLORS: Record<string, string> = {
-  active: 'bg-emerald-500/20 text-emerald-400',
-  disputed: 'bg-amber-500/20 text-amber-400',
-  retracted: 'bg-red-500/20 text-red-400',
-  superseded: 'bg-slate-500/20 text-slate-400',
-};
 
 const PREDICATE_COLORS: Record<string, string> = {
   supplies_to: 'bg-sky-500/20 text-sky-400',
@@ -40,7 +34,7 @@ const PREDICATE_COLORS: Record<string, string> = {
 };
 
 export function AssertionCard({ assertion, isSelected, onClick }: AssertionCardProps) {
-  const statusColor = STATUS_COLORS[assertion.status] ?? 'bg-slate-500/20 text-slate-400';
+  const statusColor = ASSERTION_STATUS_COLORS[assertion.status] ?? 'bg-slate-500/20 text-slate-400';
   const predicateColor = PREDICATE_COLORS[assertion.predicate] ?? 'bg-secondary text-muted-foreground';
   const confidencePct = Math.round(assertion.confidence * 100);
 

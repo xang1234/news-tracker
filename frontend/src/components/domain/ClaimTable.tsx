@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
 import { timeAgo } from '@/lib/formatters';
+import { LANE_COLORS, LINK_TYPE_COLORS } from '@/lib/constants';
 
 interface Claim {
   claim_id: string;
@@ -24,18 +25,6 @@ interface ClaimLink {
 interface ClaimTableProps {
   links: ClaimLink[];
 }
-
-const LANE_COLORS: Record<string, string> = {
-  narrative: 'bg-sky-500/20 text-sky-400',
-  filing: 'bg-violet-500/20 text-violet-400',
-  structural: 'bg-emerald-500/20 text-emerald-400',
-  backtest: 'bg-amber-500/20 text-amber-400',
-};
-
-const LINK_TYPE_COLORS: Record<string, string> = {
-  support: 'text-emerald-400',
-  contradiction: 'text-red-400',
-};
 
 export function ClaimTable({ links }: ClaimTableProps) {
   if (links.length === 0) {

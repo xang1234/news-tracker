@@ -47,6 +47,53 @@ export const RELATION_COLORS: Record<string, string> = {
   derived_from: '#fbbf24',
 };
 
+/** Assertion status colors */
+export const ASSERTION_STATUS_COLORS: Record<string, string> = {
+  active: 'bg-emerald-500/20 text-emerald-400',
+  disputed: 'bg-amber-500/20 text-amber-400',
+  retracted: 'bg-red-500/20 text-red-400',
+  superseded: 'bg-slate-500/20 text-slate-400',
+};
+
+/** Divergence reason code colors */
+export const DIVERGENCE_REASON_COLORS: Record<string, string> = {
+  narrative_without_filing: 'bg-amber-500/20 text-amber-400',
+  filing_without_narrative: 'bg-sky-500/20 text-sky-400',
+  adverse_drift: 'bg-red-500/20 text-red-400',
+  contradictory_drift: 'bg-red-500/20 text-red-400',
+  lagging_adoption: 'bg-amber-500/20 text-amber-400',
+};
+
+/** Lane colors for claim tables */
+export const LANE_COLORS: Record<string, string> = {
+  narrative: 'bg-sky-500/20 text-sky-400',
+  filing: 'bg-emerald-500/20 text-emerald-400',
+  structural: 'bg-violet-500/20 text-violet-400',
+  backtest: 'bg-amber-500/20 text-amber-400',
+};
+
+/** Freshness level colors */
+export const FRESHNESS_COLORS: Record<string, string> = {
+  FRESH: 'bg-emerald-500/20 text-emerald-400',
+  AGING: 'bg-amber-500/20 text-amber-400',
+  STALE: 'bg-red-500/20 text-red-400',
+  UNKNOWN: 'bg-slate-500/20 text-slate-400',
+};
+
+/** Quality level colors */
+export const QUALITY_COLORS: Record<string, string> = {
+  HEALTHY: 'bg-emerald-500/20 text-emerald-400',
+  DEGRADED: 'bg-amber-500/20 text-amber-400',
+  CRITICAL: 'bg-red-500/20 text-red-400',
+  UNKNOWN: 'bg-slate-500/20 text-slate-400',
+};
+
+/** Claim link type colors */
+export const LINK_TYPE_COLORS: Record<string, string> = {
+  support: 'bg-emerald-500/20 text-emerald-400',
+  contradiction: 'bg-red-500/20 text-red-400',
+};
+
 /** Alert trigger type display labels */
 export const TRIGGER_TYPE_LABELS: Record<string, string> = {
   volume_surge: 'Volume Surge',

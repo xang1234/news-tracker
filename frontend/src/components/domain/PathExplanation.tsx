@@ -1,6 +1,7 @@
 import { ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { pct } from '@/lib/formatters';
+import { FRESHNESS_COLORS } from '@/lib/constants';
 
 interface PathHop {
   from_concept: string;
@@ -19,12 +20,6 @@ interface Path {
 interface PathExplanationProps {
   paths: Path[];
 }
-
-const FRESHNESS_COLORS: Record<string, string> = {
-  FRESH: 'bg-emerald-500/20 text-emerald-400',
-  AGING: 'bg-amber-500/20 text-amber-400',
-  STALE: 'bg-red-500/20 text-red-400',
-};
 
 export function PathExplanation({ paths }: PathExplanationProps) {
   if (paths.length === 0) {

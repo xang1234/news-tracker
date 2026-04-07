@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils';
-import { pct } from '@/lib/formatters';
+import { pct, humanize } from '@/lib/formatters';
+import { SEVERITY_COLORS } from '@/lib/constants';
 
 interface QualityMetric {
   metric_type: string;
@@ -18,19 +19,6 @@ const SEVERITY_BANNER: Record<string, string> = {
   warning: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
   critical: 'bg-red-500/20 text-red-400 border-red-500/30',
 };
-
-const SEVERITY_BADGE: Record<string, string> = {
-  ok: 'bg-emerald-500/20 text-emerald-400',
-  warning: 'bg-amber-500/20 text-amber-400',
-  critical: 'bg-red-500/20 text-red-400',
-};
-
-function humanize(snakeCase: string): string {
-  return snakeCase
-    .split('_')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
 
 export function QualityScorecard({ metrics, overallSeverity }: QualityScorecardProps) {
   const bannerColor =
@@ -51,7 +39,7 @@ export function QualityScorecard({ metrics, overallSeverity }: QualityScorecardP
       {/* Metrics table */}
       <div className="divide-y divide-border">
         {metrics.map((m) => {
-          const badgeColor = SEVERITY_BADGE[m.severity] ?? 'bg-slate-500/20 text-slate-400';
+          const badgeColor = SEVERITY_COLORS[m.severity] ?? 'bg-slate-500/20 text-slate-400';
 
           return (
             <div
