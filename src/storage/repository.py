@@ -982,10 +982,7 @@ class DocumentRepository:
 
         rows = await self._db.fetch(sql, *params)
 
-        return [
-            (self._row_to_document(row), float(row["similarity"]))
-            for row in rows
-        ]
+        return [(self._row_to_document(row), float(row["similarity"])) for row in rows]
 
     async def similarity_search_minilm(
         self,
@@ -1041,10 +1038,7 @@ class DocumentRepository:
 
         rows = await self._db.fetch(sql, *params)
 
-        return [
-            (self._row_to_document(row), float(row["similarity"]))
-            for row in rows
-        ]
+        return [(self._row_to_document(row), float(row["similarity"])) for row in rows]
 
     async def get_embedding_stats(self) -> dict[str, Any]:
         """
@@ -1190,14 +1184,16 @@ class DocumentRepository:
             if isinstance(sentiment, str):
                 sentiment = json.loads(sentiment)
 
-            results.append({
-                "id": row["id"],
-                "content": row["content"],
-                "embedding": self._parse_embedding(row["embedding"]),
-                "authority_score": row.get("authority_score"),
-                "sentiment": sentiment,
-                "theme_ids": list(row.get("theme_ids", [])),
-            })
+            results.append(
+                {
+                    "id": row["id"],
+                    "content": row["content"],
+                    "embedding": self._parse_embedding(row["embedding"]),
+                    "authority_score": row.get("authority_score"),
+                    "sentiment": sentiment,
+                    "theme_ids": list(row.get("theme_ids", [])),
+                }
+            )
 
         return results
 
@@ -1247,13 +1243,15 @@ class DocumentRepository:
             sentiment = row["sentiment"]
             if isinstance(sentiment, str):
                 sentiment = json.loads(sentiment)
-            results.append({
-                "document_id": row["document_id"],
-                "timestamp": row["timestamp"],
-                "platform": row["platform"],
-                "authority_score": row["authority_score"],
-                "sentiment": sentiment,
-            })
+            results.append(
+                {
+                    "document_id": row["document_id"],
+                    "timestamp": row["timestamp"],
+                    "platform": row["platform"],
+                    "authority_score": row["authority_score"],
+                    "sentiment": sentiment,
+                }
+            )
 
         return results
 
@@ -1300,13 +1298,15 @@ class DocumentRepository:
             sentiment = row["sentiment"]
             if isinstance(sentiment, str):
                 sentiment = json.loads(sentiment)
-            results.append({
-                "document_id": row["document_id"],
-                "timestamp": row["timestamp"],
-                "platform": row["platform"],
-                "authority_score": row["authority_score"],
-                "sentiment": sentiment,
-            })
+            results.append(
+                {
+                    "document_id": row["document_id"],
+                    "timestamp": row["timestamp"],
+                    "platform": row["platform"],
+                    "authority_score": row["authority_score"],
+                    "sentiment": sentiment,
+                }
+            )
 
         return results
 
@@ -1570,8 +1570,7 @@ class DocumentRepository:
         return {
             "total_count": summary_row["total"],
             "platform_counts": [
-                {"platform": r["platform"], "count": r["count"]}
-                for r in platform_rows
+                {"platform": r["platform"], "count": r["count"]} for r in platform_rows
             ],
             "embedding_coverage": {
                 "finbert_pct": round(summary_row["finbert_pct"], 4),
@@ -1585,9 +1584,7 @@ class DocumentRepository:
                 summary_row["latest"].isoformat() if summary_row["latest"] else None
             ),
             "latest_fetched_at": (
-                summary_row["latest_fetched"].isoformat()
-                if summary_row["latest_fetched"]
-                else None
+                summary_row["latest_fetched"].isoformat() if summary_row["latest_fetched"] else None
             ),
         }
 
@@ -1851,9 +1848,7 @@ class DocumentRepository:
             ORDER BY c.cooccurrence_count DESC
             LIMIT $5
         """
-        rows = await self._db.fetch(
-            sql, entity_filter, entity_type, normalized, min_count, limit
-        )
+        rows = await self._db.fetch(sql, entity_filter, entity_type, normalized, min_count, limit)
 
         return [
             {
@@ -1880,9 +1875,7 @@ class DocumentRepository:
 
         Returns the number of affected documents.
         """
-        entity_filter = json.dumps(
-            [{"type": from_type, "normalized": from_normalized}]
-        )
+        entity_filter = json.dumps([{"type": from_type, "normalized": from_normalized}])
 
         sql = """
             WITH target_docs AS (

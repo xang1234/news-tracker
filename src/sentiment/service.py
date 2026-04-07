@@ -483,14 +483,16 @@ class SentimentService:
         entity_sentiments: list[dict[str, Any]] = []
         for idx, (entity, context) in enumerate(contexts, start=1):
             ent_label, ent_confidence, ent_scores = self._scores_to_prediction(batched_scores[idx])
-            entity_sentiments.append({
-                "entity": entity.get("normalized") or entity.get("text", ""),
-                "type": entity.get("type", "UNKNOWN"),
-                "label": ent_label,
-                "confidence": round(ent_confidence, 4),
-                "scores": {k: round(v, 4) for k, v in ent_scores.items()},
-                "context": context[:200],
-            })
+            entity_sentiments.append(
+                {
+                    "entity": entity.get("normalized") or entity.get("text", ""),
+                    "type": entity.get("type", "UNKNOWN"),
+                    "label": ent_label,
+                    "confidence": round(ent_confidence, 4),
+                    "scores": {k: round(v, 4) for k, v in ent_scores.items()},
+                    "context": context[:200],
+                }
+            )
 
         latency = time.perf_counter() - start_time
         metrics.record_sentiment_latency("entity", latency)
@@ -542,7 +544,7 @@ class SentimentService:
 
         batch_size = self._config.batch_size
         for batch_start in range(0, len(uncached), batch_size):
-            batch = uncached[batch_start: batch_start + batch_size]
+            batch = uncached[batch_start : batch_start + batch_size]
             score_rows = self._predict_scores([clean_text for _, _, clean_text, _, _ in batch])
 
             for row_idx, (
