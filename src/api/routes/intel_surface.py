@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import Any
 
 import structlog
+from asyncpg.exceptions import UndefinedTableError
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
@@ -383,34 +384,35 @@ async def get_intel_health(
     api_key: str = Depends(verify_api_key),  # noqa: B008
     service: PublishService = Depends(get_publish_service),  # noqa: B008
 ) -> IntelHealthResponse:
-    lane_items: list[LaneHealthItem] = []
+    _empty = IntelHealthResponse(lanes=[], quality_metrics=[], overall_severity="ok")
+    try:
+        lane_items: list[LaneHealthItem] = []
 
-    for lane in ALL_LANES:
-        # Get the latest completed run for this lane
-        runs = await service.list_runs(lane=lane, status="completed", limit=1)
-        last_completed_at = runs[0].completed_at if runs else None
+        for lane in ALL_LANES:
+            runs = await service.list_runs(lane=lane, status="completed", limit=1)
+            last_completed_at = runs[0].completed_at if runs else None
 
-        health = compute_lane_health(
-            lane,
-            last_completed_at=last_completed_at,
-        )
-
-        lane_items.append(
-            LaneHealthItem(
-                lane=health.lane,
-                freshness=health.freshness.value.upper(),
-                quality=health.quality.value.upper(),
-                quarantine=health.quarantine.value.upper(),
-                readiness=health.readiness.value.upper(),
-                last_completed_at=health.last_completed_at,
+            health = compute_lane_health(
+                lane,
+                last_completed_at=last_completed_at,
             )
-        )
 
-    # Quality metrics require pre-aggregated DB counts that we do not
-    # have aggregation queries for yet. Return empty until those are wired.
+            lane_items.append(
+                LaneHealthItem(
+                    lane=health.lane,
+                    freshness=health.freshness.value.upper(),
+                    quality=health.quality.value.upper(),
+                    quarantine=health.quarantine.value.upper(),
+                    readiness=health.readiness.value.upper(),
+                    last_completed_at=health.last_completed_at,
+                )
+            )
+    except UndefinedTableError:
+        logger.warning("intel_schema_missing", endpoint="health")
+        return _empty
+
     quality_metrics: list[QualityMetricItem] = []
 
-    # Overall severity: worst of lane readiness states
     severity_map = {"READY": 0, "WARN": 1, "BLOCKED": 2}
     readiness_to_severity = {"READY": "ok", "WARN": "warning", "BLOCKED": "critical"}
     if lane_items:
@@ -449,7 +451,18 @@ async def list_assertions(
     api_key: str = Depends(verify_api_key),  # noqa: B008
     repo: AssertionRepository = Depends(get_assertion_repository),  # noqa: B008
 ) -> AssertionListResponse:
-    # Overfetch to get accurate total (repos don't have count methods)
+    try:
+        return await _list_assertions_impl(
+            concept_id, predicate, assertion_status, min_confidence, limit, offset, repo
+        )
+    except UndefinedTableError:
+        logger.warning("intel_schema_missing", endpoint="assertions")
+        return AssertionListResponse(assertions=[], total=0)
+
+
+async def _list_assertions_impl(
+    concept_id, predicate, assertion_status, min_confidence, limit, offset, repo
+):
     fetch_limit = max(500, (limit + offset) * 2)
     if concept_id is not None:
         assertions = await repo.list_for_concept(concept_id, limit=fetch_limit)
@@ -493,7 +506,13 @@ async def get_assertion_detail(
     assertion_repo: AssertionRepository = Depends(get_assertion_repository),  # noqa: B008
     claim_repo: ClaimRepository = Depends(get_claim_repository),  # noqa: B008
 ) -> AssertionDetailResponse:
-    assertion = await assertion_repo.get_assertion(assertion_id)
+    try:
+        assertion = await assertion_repo.get_assertion(assertion_id)
+    except UndefinedTableError:
+        logger.warning("intel_schema_missing", endpoint="assertion_detail")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Intelligence schema not initialized"
+        ) from None
     if assertion is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -549,6 +568,18 @@ async def list_claims(
     claim_repo: ClaimRepository = Depends(get_claim_repository),  # noqa: B008
     assertion_repo: AssertionRepository = Depends(get_assertion_repository),  # noqa: B008
 ) -> ClaimListResponse:
+    try:
+        return await _list_claims_impl(
+            assertion_id, lane, source_id, claim_status, limit, offset, claim_repo, assertion_repo
+        )
+    except UndefinedTableError:
+        logger.warning("intel_schema_missing", endpoint="claims")
+        return ClaimListResponse(claims=[], total=0)
+
+
+async def _list_claims_impl(
+    assertion_id, lane, source_id, claim_status, limit, offset, claim_repo, assertion_repo
+):
     if assertion_id is not None:
         links = await assertion_repo.get_links_for_assertion(assertion_id)
         claim_ids = [link.claim_id for link in links]
@@ -600,7 +631,14 @@ async def list_divergence(
     api_key: str = Depends(verify_api_key),  # noqa: B008
     db: Database = Depends(get_database),  # noqa: B008
 ) -> DivergenceListResponse:
-    # Push JSONB filters into SQL to fix pagination
+    try:
+        return await _list_divergence_impl(severity, reason_code, issuer, theme, limit, offset, db)
+    except UndefinedTableError:
+        logger.warning("intel_schema_missing", endpoint="divergence")
+        return DivergenceListResponse(divergences=[], total=0, severity_counts={})
+
+
+async def _list_divergence_impl(severity, reason_code, issuer, theme, limit, offset, db):
     conditions = ["object_type = $1", "publish_state = 'published'"]
     params: list[Any] = ["divergence"]
     idx = 2
@@ -679,39 +717,45 @@ async def get_issuer_divergence(
     api_key: str = Depends(verify_api_key),  # noqa: B008
     db: Database = Depends(get_database),  # noqa: B008
 ) -> IssuerDivergenceResponse:
-    rows = await db.fetch(
-        """
-        SELECT * FROM intel_pub.published_objects
-        WHERE object_type IN ('divergence', 'adoption', 'drift')
-          AND publish_state = 'published'
-          AND payload->>'issuer_concept_id' = $1
-        ORDER BY created_at DESC
-        LIMIT $2
-        """,
-        issuer_id,
-        limit * 3,
-    )
+    try:
+        rows = await db.fetch(
+            """
+            SELECT * FROM intel_pub.published_objects
+            WHERE object_type IN ('divergence', 'adoption', 'drift')
+              AND publish_state = 'published'
+              AND payload->>'issuer_concept_id' = $1
+            ORDER BY created_at DESC
+            LIMIT $2
+            """,
+            issuer_id,
+            limit * 3,
+        )
 
-    divergences: list[DivergenceItem] = []
-    adoptions: list[PublishedObjectItem] = []
-    drifts: list[PublishedObjectItem] = []
+        divergences: list[DivergenceItem] = []
+        adoptions: list[PublishedObjectItem] = []
+        drifts: list[PublishedObjectItem] = []
 
-    for row in rows:
-        payload = _parse_payload(row["payload"])
-        obj_type = row["object_type"]
-        if obj_type == "divergence" and len(divergences) < limit:
-            divergences.append(_row_to_divergence_item(row, payload))
-        elif obj_type == "adoption" and len(adoptions) < limit:
-            adoptions.append(_row_to_published_object(row, payload))
-        elif obj_type == "drift" and len(drifts) < limit:
-            drifts.append(_row_to_published_object(row, payload))
+        for row in rows:
+            payload = _parse_payload(row["payload"])
+            obj_type = row["object_type"]
+            if obj_type == "divergence" and len(divergences) < limit:
+                divergences.append(_row_to_divergence_item(row, payload))
+            elif obj_type == "adoption" and len(adoptions) < limit:
+                adoptions.append(_row_to_published_object(row, payload))
+            elif obj_type == "drift" and len(drifts) < limit:
+                drifts.append(_row_to_published_object(row, payload))
 
-    return IssuerDivergenceResponse(
-        issuer_id=issuer_id,
-        divergences=divergences,
-        adoptions=adoptions,
-        drifts=drifts,
-    )
+        return IssuerDivergenceResponse(
+            issuer_id=issuer_id,
+            divergences=divergences,
+            adoptions=adoptions,
+            drifts=drifts,
+        )
+    except UndefinedTableError:
+        logger.warning("intel_schema_missing", endpoint="issuer_divergence")
+        return IssuerDivergenceResponse(
+            issuer_id=issuer_id, divergences=[], adoptions=[], drifts=[]
+        )
 
 
 @router.get(
@@ -729,17 +773,21 @@ async def get_basket_members(
     api_key: str = Depends(verify_api_key),  # noqa: B008
     db: Database = Depends(get_database),  # noqa: B008
 ) -> BasketResponse:
-    rows = await db.fetch(
-        """
-        SELECT * FROM intel_pub.published_objects
-        WHERE object_type = 'basket' AND publish_state = 'published'
-          AND payload->>'theme_id' = $1
-        ORDER BY created_at DESC
-        LIMIT $2
-        """,
-        theme_id,
-        limit,
-    )
+    try:
+        rows = await db.fetch(
+            """
+            SELECT * FROM intel_pub.published_objects
+            WHERE object_type = 'basket' AND publish_state = 'published'
+              AND payload->>'theme_id' = $1
+            ORDER BY created_at DESC
+            LIMIT $2
+            """,
+            theme_id,
+            limit,
+        )
+    except UndefinedTableError:
+        logger.warning("intel_schema_missing", endpoint="baskets")
+        return BasketResponse(theme_id=theme_id, members=[])
 
     members: list[BasketMember] = []
     for row in rows:
@@ -778,16 +826,20 @@ async def get_basket_path(
     api_key: str = Depends(verify_api_key),  # noqa: B008
     db: Database = Depends(get_database),  # noqa: B008
 ) -> BasketPathResponse:
-    rows = await db.fetch(
-        """
-        SELECT * FROM intel_pub.published_objects
-        WHERE object_type = 'basket' AND publish_state = 'published'
-          AND payload->>'theme_id' = $1
-        ORDER BY created_at DESC
-        LIMIT 20
-        """,
-        theme_id,
-    )
+    try:
+        rows = await db.fetch(
+            """
+            SELECT * FROM intel_pub.published_objects
+            WHERE object_type = 'basket' AND publish_state = 'published'
+              AND payload->>'theme_id' = $1
+            ORDER BY created_at DESC
+            LIMIT 20
+            """,
+            theme_id,
+        )
+    except UndefinedTableError:
+        logger.warning("intel_schema_missing", endpoint="basket_paths")
+        return BasketPathResponse(theme_id=theme_id, concept_id=concept_id, paths=[])
 
     paths: list[dict[str, Any]] = []
     for row in rows:
