@@ -413,8 +413,11 @@ async def get_intel_health(
     # Overall severity: worst of lane readiness states
     severity_map = {"READY": 0, "WARN": 1, "BLOCKED": 2}
     readiness_to_severity = {"READY": "ok", "WARN": "warning", "BLOCKED": "critical"}
-    worst = max(lane_items, key=lambda li: severity_map.get(li.readiness, 0))
-    overall = readiness_to_severity.get(worst.readiness, "ok") if lane_items else "ok"
+    if lane_items:
+        worst = max(lane_items, key=lambda li: severity_map.get(li.readiness, 0))
+        overall = readiness_to_severity.get(worst.readiness, "ok")
+    else:
+        overall = "ok"
 
     return IntelHealthResponse(
         lanes=lane_items,
