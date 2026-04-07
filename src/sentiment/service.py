@@ -100,8 +100,34 @@ class SentimentService:
         if self._initialized:
             return
 
+        # Validate ONNX model path — fall back to HuggingFace if missing
+        onnx_path = self._config.onnx_model_path
+        if onnx_path and not Path(onnx_path).exists():
+            logger.warning(
+                "ONNX model path configured but not found, falling back to HuggingFace model",
+                onnx_path=onnx_path,
+                model_name=self._config.model_name,
+            )
+            onnx_path = None
+
         runtime = self._resolve_runtime()
-        model_source = self._config.onnx_model_path or self._config.model_name
+
+        # Force torch backend when ONNX was selected but exported models are missing
+        if runtime.backend == "onnx" and not onnx_path:
+            if not TORCH_AVAILABLE:
+                raise RuntimeError(
+                    f"ONNX model path '{self._config.onnx_model_path}' not found and "
+                    "torch is not available as a fallback. Please provide a valid "
+                    "onnx_model_path or install torch."
+                )
+            runtime = resolve_runtime(
+                backend="torch",
+                device=self._config.device,
+                execution_provider=self._config.execution_provider,
+            )
+            self._runtime = runtime
+
+        model_source = onnx_path or self._config.model_name
 
         logger.info(
             "Loading sentiment model",
@@ -127,7 +153,7 @@ class SentimentService:
                 self._model = self._model.half()
                 logger.info("FP16 inference enabled for sentiment analysis")
         else:
-            self._model = self._load_onnx_session(runtime)
+            self._model = self._load_onnx_session(runtime, onnx_path)
 
         self._initialized = True
 
@@ -138,16 +164,17 @@ class SentimentService:
             execution_provider=runtime.onnx_provider,
         )
 
-    def _load_onnx_session(self, runtime: RuntimeSelection) -> Any:
+    def _load_onnx_session(self, runtime: RuntimeSelection, onnx_path: str | None = None) -> Any:
         """Load an ONNX Runtime session for a pre-exported sentiment model."""
         if not ONNX_AVAILABLE:
             raise RuntimeError("ONNX backend selected but onnxruntime is not installed.")
-        if not self._config.onnx_model_path:
+        effective_path = onnx_path or self._config.onnx_model_path
+        if not effective_path:
             raise RuntimeError(
                 "ONNX backend selected for sentiment, but no exported model path is configured."
             )
 
-        model_dir = Path(self._config.onnx_model_path)
+        model_dir = Path(effective_path)
         model_file = model_dir / "model.onnx"
         if not model_file.exists():
             candidates = sorted(model_dir.glob("*.onnx"))
@@ -244,9 +271,11 @@ class SentimentService:
         if not texts:
             return np.empty((0, len(LABEL_MAPPING)), dtype=np.float32)
 
-        runtime = self._resolve_runtime()
         tokenizer = self.tokenizer
         model = self.model
+        # Read runtime AFTER property access to ensure _initialize() has run,
+        # which may override self._runtime (e.g. ONNX→torch fallback).
+        runtime = self._resolve_runtime()
 
         if runtime.backend == "torch":
             assert TORCH_AVAILABLE
@@ -462,14 +491,16 @@ class SentimentService:
         entity_sentiments: list[dict[str, Any]] = []
         for idx, (entity, context) in enumerate(contexts, start=1):
             ent_label, ent_confidence, ent_scores = self._scores_to_prediction(batched_scores[idx])
-            entity_sentiments.append({
-                "entity": entity.get("normalized") or entity.get("text", ""),
-                "type": entity.get("type", "UNKNOWN"),
-                "label": ent_label,
-                "confidence": round(ent_confidence, 4),
-                "scores": {k: round(v, 4) for k, v in ent_scores.items()},
-                "context": context[:200],
-            })
+            entity_sentiments.append(
+                {
+                    "entity": entity.get("normalized") or entity.get("text", ""),
+                    "type": entity.get("type", "UNKNOWN"),
+                    "label": ent_label,
+                    "confidence": round(ent_confidence, 4),
+                    "scores": {k: round(v, 4) for k, v in ent_scores.items()},
+                    "context": context[:200],
+                }
+            )
 
         latency = time.perf_counter() - start_time
         metrics.record_sentiment_latency("entity", latency)
@@ -521,7 +552,7 @@ class SentimentService:
 
         batch_size = self._config.batch_size
         for batch_start in range(0, len(uncached), batch_size):
-            batch = uncached[batch_start: batch_start + batch_size]
+            batch = uncached[batch_start : batch_start + batch_size]
             score_rows = self._predict_scores([clean_text for _, _, clean_text, _, _ in batch])
 
             for row_idx, (
