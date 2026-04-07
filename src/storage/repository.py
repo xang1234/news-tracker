@@ -166,7 +166,23 @@ class DocumentRepository:
         CREATE INDEX IF NOT EXISTS idx_themes_updated_at
             ON themes(updated_at DESC);
 
-        -- Auto-update updated_at on themes (reuses trigger function from documents)
+        -- Function to auto-update updated_at
+        CREATE OR REPLACE FUNCTION update_updated_at_column()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = NOW();
+            RETURN NEW;
+        END;
+        $$ language 'plpgsql';
+
+        -- Auto-update updated_at on documents
+        DROP TRIGGER IF EXISTS update_documents_updated_at ON documents;
+        CREATE TRIGGER update_documents_updated_at
+            BEFORE UPDATE ON documents
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+
+        -- Auto-update updated_at on themes
         DROP TRIGGER IF EXISTS update_themes_updated_at ON themes;
         CREATE TRIGGER update_themes_updated_at
             BEFORE UPDATE ON themes

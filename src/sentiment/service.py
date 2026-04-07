@@ -100,8 +100,27 @@ class SentimentService:
         if self._initialized:
             return
 
+        # Validate ONNX model path — fall back to HuggingFace if missing
+        onnx_path = self._config.onnx_model_path
+        if onnx_path and not Path(onnx_path).exists():
+            logger.warning(
+                "ONNX model path configured but not found, falling back to HuggingFace model",
+                onnx_path=onnx_path,
+                model_name=self._config.model_name,
+            )
+            onnx_path = None
+
         runtime = self._resolve_runtime()
-        model_source = self._config.onnx_model_path or self._config.model_name
+
+        # Force torch backend when ONNX was selected but exported models are missing
+        if runtime.backend == "onnx" and not onnx_path:
+            runtime = resolve_runtime(
+                backend="torch",
+                device=self._config.device,
+                execution_provider=self._config.execution_provider,
+            )
+
+        model_source = onnx_path or self._config.model_name
 
         logger.info(
             "Loading sentiment model",
@@ -127,7 +146,7 @@ class SentimentService:
                 self._model = self._model.half()
                 logger.info("FP16 inference enabled for sentiment analysis")
         else:
-            self._model = self._load_onnx_session(runtime)
+            self._model = self._load_onnx_session(runtime, onnx_path)
 
         self._initialized = True
 
@@ -138,16 +157,17 @@ class SentimentService:
             execution_provider=runtime.onnx_provider,
         )
 
-    def _load_onnx_session(self, runtime: RuntimeSelection) -> Any:
+    def _load_onnx_session(self, runtime: RuntimeSelection, onnx_path: str | None = None) -> Any:
         """Load an ONNX Runtime session for a pre-exported sentiment model."""
         if not ONNX_AVAILABLE:
             raise RuntimeError("ONNX backend selected but onnxruntime is not installed.")
-        if not self._config.onnx_model_path:
+        effective_path = onnx_path or self._config.onnx_model_path
+        if not effective_path:
             raise RuntimeError(
                 "ONNX backend selected for sentiment, but no exported model path is configured."
             )
 
-        model_dir = Path(self._config.onnx_model_path)
+        model_dir = Path(effective_path)
         model_file = model_dir / "model.onnx"
         if not model_file.exists():
             candidates = sorted(model_dir.glob("*.onnx"))
