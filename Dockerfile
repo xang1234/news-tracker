@@ -99,9 +99,9 @@ RUN apt-get update && \
 ARG XUI_INSTALL=true
 ARG CPU_RUNTIME_OPTIMIZED=false
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-ENV EMBEDDING_ONNX_MODEL_PATH=/app/models/embedding-finbert
-ENV EMBEDDING_ONNX_MINILM_MODEL_PATH=/app/models/embedding-minilm
-ENV SENTIMENT_ONNX_MODEL_PATH=/app/models/sentiment-finbert
+# ONNX model paths are set conditionally at container start.
+# When EXPORT_ONNX_MODELS=false the directories are empty and
+# services fall back to downloading from HuggingFace Hub.
 
 # Non-root user for security
 RUN useradd --create-home --shell /bin/bash appuser
