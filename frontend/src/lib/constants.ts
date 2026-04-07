@@ -59,6 +59,7 @@ export const TRIGGER_TYPE_LABELS: Record<string, string> = {
   cross_platform_breakout: 'Cross-Platform Breakout',
   authority_divergence: 'Authority Divergence',
   sentiment_regime_shift: 'Sentiment Regime Shift',
+  divergence: 'Divergence',
 };
 
 /** Source platform display names and colors (for source management) */

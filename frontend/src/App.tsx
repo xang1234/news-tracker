@@ -8,20 +8,16 @@ const SearchPage = lazy(() => import('@/pages/Search'));
 const CatalystsPage = lazy(() => import('@/pages/Catalysts'));
 const DocumentExplorer = lazy(() => import('@/pages/Documents'));
 const DocumentDetail = lazy(() => import('@/pages/DocumentDetail'));
-const EmbedPlayground = lazy(() => import('@/pages/EmbedPlayground'));
-const SentimentPlayground = lazy(() => import('@/pages/SentimentPlayground'));
-const NERPlayground = lazy(() => import('@/pages/NERPlayground'));
-const KeywordsPlayground = lazy(() => import('@/pages/KeywordsPlayground'));
-const EventsPlayground = lazy(() => import('@/pages/EventsPlayground'));
-const MonitoringPage = lazy(() => import('@/pages/Monitoring'));
+const PlaygroundPage = lazy(() => import('@/pages/PlaygroundPage'));
 const ThemeExplorer = lazy(() => import('@/pages/Themes'));
 const ThemeDetail = lazy(() => import('@/pages/ThemeDetail'));
 const AlertCenter = lazy(() => import('@/pages/Alerts'));
 const GraphViewer = lazy(() => import('@/pages/Graph'));
 const EntityExplorer = lazy(() => import('@/pages/Entities'));
 const EntityDetailPage = lazy(() => import('@/pages/EntityDetail'));
-const SecuritiesPage = lazy(() => import('@/pages/Securities'));
 const SettingsPage = lazy(() => import('@/pages/Settings'));
+const EvidencePage = lazy(() => import('@/pages/EvidencePage'));
+const DivergencePage = lazy(() => import('@/pages/DivergencePage'));
 
 function PageLoader() {
   return (
@@ -52,6 +48,22 @@ const router = createBrowserRouter([
         ),
       },
       {
+        path: 'evidence',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <EvidencePage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'divergence',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <DivergencePage />
+          </Suspense>
+        ),
+      },
+      {
         path: 'search',
         element: (
           <Suspense fallback={<PageLoader />}>
@@ -76,50 +88,18 @@ const router = createBrowserRouter([
         ),
       },
       {
-        path: 'playground/embed',
+        path: 'playground',
         element: (
           <Suspense fallback={<PageLoader />}>
-            <EmbedPlayground />
+            <PlaygroundPage />
           </Suspense>
         ),
       },
       {
-        path: 'playground/sentiment',
+        path: 'playground/:tab',
         element: (
           <Suspense fallback={<PageLoader />}>
-            <SentimentPlayground />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'playground/ner',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <NERPlayground />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'playground/keywords',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <KeywordsPlayground />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'playground/events',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <EventsPlayground />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'monitoring',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <MonitoringPage />
+            <PlaygroundPage />
           </Suspense>
         ),
       },
@@ -168,14 +148,6 @@ const router = createBrowserRouter([
         element: (
           <Suspense fallback={<PageLoader />}>
             <EntityDetailPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'securities',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <SecuritiesPage />
           </Suspense>
         ),
       },

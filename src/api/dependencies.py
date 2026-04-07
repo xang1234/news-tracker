@@ -9,6 +9,8 @@ import redis.asyncio as redis
 
 from src.alerts.broadcaster import AlertBroadcaster
 from src.alerts.repository import AlertRepository
+from src.assertions.repository import AssertionRepository
+from src.claims.repository import ClaimRepository
 from src.config.settings import get_settings
 from src.embedding.config import EmbeddingConfig
 from src.embedding.service import EmbeddingService
@@ -63,6 +65,8 @@ _pattern_extractor: PatternExtractor | None = None
 _security_master_repository: SecurityMasterRepository | None = None
 _sources_repository: SourcesRepository | None = None
 _publish_service: PublishService | None = None
+_assertion_repository: AssertionRepository | None = None
+_claim_repository: ClaimRepository | None = None
 
 
 async def get_database() -> Database:
@@ -555,6 +559,38 @@ async def get_publish_service() -> PublishService:
     return _publish_service
 
 
+async def get_assertion_repository() -> AssertionRepository:
+    """Get assertion repository instance (singleton)."""
+    global _assertion_repository, _database
+
+    if _assertion_repository is None:
+        async with _init_lock:
+            if _assertion_repository is None:
+                if _database is None:
+                    _database = Database()
+                    await _database.connect()
+
+                _assertion_repository = AssertionRepository(_database)
+
+    return _assertion_repository
+
+
+async def get_claim_repository() -> ClaimRepository:
+    """Get claim repository instance (singleton)."""
+    global _claim_repository, _database
+
+    if _claim_repository is None:
+        async with _init_lock:
+            if _claim_repository is None:
+                if _database is None:
+                    _database = Database()
+                    await _database.connect()
+
+                _claim_repository = ClaimRepository(_database)
+
+    return _claim_repository
+
+
 async def cleanup_dependencies() -> None:
     """Clean up global dependencies on shutdown."""
     global _embedding_service, _sentiment_service, _redis_client, _vector_store_manager, _database
@@ -564,8 +600,11 @@ async def cleanup_dependencies() -> None:
     global _graph_repository, _ner_service, _keywords_service
     global _pattern_extractor, _security_master_repository
     global _sources_repository, _publish_service
+    global _assertion_repository, _claim_repository
+    global _narrative_repository
 
     _vector_store_manager = None
+    _narrative_repository = None
     _theme_repository = None
     _ner_service = None
     _keywords_service = None
@@ -581,6 +620,8 @@ async def cleanup_dependencies() -> None:
     _security_master_repository = None
     _sources_repository = None
     _publish_service = None
+    _assertion_repository = None
+    _claim_repository = None
 
     if _alert_broadcaster is not None:
         await _alert_broadcaster.stop()
