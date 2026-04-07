@@ -419,7 +419,7 @@ function AssertionDetail({
                         <span
                           className={cn(
                             'rounded px-1.5 py-0.5 text-xs',
-                            link.link_type === 'supports'
+                            link.link_type === 'support'
                               ? 'bg-emerald-500/20 text-emerald-400'
                               : 'bg-red-500/20 text-red-400',
                           )}
