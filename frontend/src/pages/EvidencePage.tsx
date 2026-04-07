@@ -32,7 +32,7 @@ export default function EvidencePage() {
     concept_id: conceptId || undefined,
     predicate: predicate || undefined,
     status: status || undefined,
-    min_confidence: minConfidence ? parseFloat(minConfidence) : undefined,
+    min_confidence: minConfidence && !Number.isNaN(parseFloat(minConfidence)) ? parseFloat(minConfidence) : undefined,
     limit: PAGE_SIZE,
     offset,
   };
@@ -391,11 +391,11 @@ function AssertionDetail({
                 </tr>
               </thead>
               <tbody>
-                {data.claim_links.map((link) => {
-                  const c = link.claim;
+                {data.claim_links.filter((link) => link.claim != null).map((link) => {
+                  const c = link.claim!;
                   const isDocSource =
-                    c.source_id &&
-                    (c.source_id.length === 36 || c.source_id.startsWith('doc_'));
+                    c.source_type === 'document' ||
+                    (c.source_id && (c.source_id.length === 36 || c.source_id.startsWith('doc_')));
                   return (
                     <tr
                       key={link.claim_id}

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import { DashboardShell } from '@/components/layout/DashboardShell';
 
 // Lazy-loaded pages — each becomes a separate chunk
@@ -150,6 +150,14 @@ const router = createBrowserRouter([
             <EntityDetailPage />
           </Suspense>
         ),
+      },
+      {
+        path: 'securities',
+        element: <Navigate to="/settings" replace />,
+      },
+      {
+        path: 'monitoring',
+        element: <Navigate to="/" replace />,
       },
       {
         path: 'settings',

@@ -27,7 +27,7 @@ export default function Dashboard() {
   const { data: health, isLoading: healthLoading, isError: healthError, error: healthErr } = useHealth();
   const { data: stats, isLoading: statsLoading } = useDocumentStats({ refetchInterval: 30_000 });
   const { data: momentum, isLoading: momentumLoading } = useThemeMomentum();
-  const { data: intelHealth, isLoading: intelLoading } = useIntelHealth();
+  const { data: intelHealth, isLoading: intelLoading, isError: intelError } = useIntelHealth();
   const { data: divergences } = useDivergences({ limit: 3 });
 
   const topPlatform = stats?.platform_counts?.length
@@ -163,6 +163,12 @@ export default function Dashboard() {
             <h2 className="text-lg font-semibold text-foreground">Intelligence Layer</h2>
             <p className="text-xs text-muted-foreground">Lane health, quality metrics, and divergence alerts</p>
           </div>
+
+          {intelError && (
+            <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              Failed to fetch intelligence health data
+            </div>
+          )}
 
           {intelLoading ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

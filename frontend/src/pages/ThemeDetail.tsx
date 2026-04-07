@@ -697,6 +697,11 @@ export default function ThemeDetail() {
                       {selectedConceptId && basketPaths.isLoading && (
                         <div className="h-24 animate-pulse rounded-lg bg-secondary" />
                       )}
+                      {selectedConceptId && basketPaths.isError && (
+                        <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                          Failed to load path explanation
+                        </div>
+                      )}
                     </div>
                   )}
                 </>

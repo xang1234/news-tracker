@@ -8,7 +8,7 @@ export interface AssertionItem {
   assertion_id: string;
   subject_concept_id: string;
   predicate: string;
-  object_concept_id: string;
+  object_concept_id: string | null;
   confidence: number;
   status: string;
   support_count: number;
@@ -49,10 +49,11 @@ export interface ClaimSummary {
 }
 
 export interface ClaimLinkItem {
+  assertion_id: string;
   claim_id: string;
   link_type: string;
   contribution_weight: number;
-  claim: ClaimSummary;
+  claim: ClaimSummary | null;
 }
 
 export interface AssertionDetailResponse {

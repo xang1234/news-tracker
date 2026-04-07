@@ -206,6 +206,7 @@ class PublishedObjectItem(BaseModel):
     created_at: datetime
     lane: str
 
+
 class IssuerDivergenceResponse(BaseModel):
     """All divergence-related published objects for an issuer."""
 
@@ -358,6 +359,7 @@ async def _batch_fetch_claims(claim_repo: ClaimRepository, claim_ids: list[str])
     if hasattr(claim_repo, "get_claims_by_ids"):
         return await claim_repo.get_claims_by_ids(claim_ids)
     import asyncio
+
     results = await asyncio.gather(*(claim_repo.get_claim(cid) for cid in claim_ids))
     return [c for c in results if c is not None]
 
@@ -444,8 +446,10 @@ async def list_assertions(
     api_key: str = Depends(verify_api_key),  # noqa: B008
     repo: AssertionRepository = Depends(get_assertion_repository),  # noqa: B008
 ) -> AssertionListResponse:
+    # Overfetch to get accurate total (repos don't have count methods)
+    fetch_limit = max(500, (limit + offset) * 2)
     if concept_id is not None:
-        assertions = await repo.list_for_concept(concept_id, limit=limit + offset)
+        assertions = await repo.list_for_concept(concept_id, limit=fetch_limit)
         if predicate is not None:
             assertions = [a for a in assertions if a.predicate == predicate]
         if assertion_status is not None:
@@ -456,16 +460,16 @@ async def list_assertions(
         assertions = await repo.list_assertions(
             predicate=predicate,
             status=assertion_status,
-            limit=limit + offset,
+            limit=fetch_limit,
         )
         if min_confidence is not None:
             assertions = [a for a in assertions if a.confidence >= min_confidence]
 
     total = len(assertions)
-    assertions = assertions[offset : offset + limit]
+    page = assertions[offset : offset + limit]
 
     return AssertionListResponse(
-        assertions=[_assertion_to_response(a) for a in assertions],
+        assertions=[_assertion_to_response(a) for a in page],
         total=total,
     )
 
@@ -535,9 +539,7 @@ async def list_claims(
     ),
     lane: str | None = Query(default=None, description="Filter by lane"),
     source_id: str | None = Query(default=None, description="Filter by source ID"),
-    claim_status: str | None = Query(
-        default=None, alias="status", description="Filter by status"
-    ),
+    claim_status: str | None = Query(default=None, alias="status", description="Filter by status"),
     limit: int = Query(default=50, ge=1, le=200, description="Max results"),
     offset: int = Query(default=0, ge=0, description="Results offset"),
     api_key: str = Depends(verify_api_key),  # noqa: B008
@@ -556,11 +558,12 @@ async def list_claims(
         if claim_status is not None:
             claims = [c for c in claims if c.status == claim_status]
     else:
+        fetch_limit = max(500, (limit + offset) * 2)
         claims = await claim_repo.list_claims(
             lane=lane,
             source_id=source_id,
             status=claim_status,
-            limit=limit + offset,
+            limit=fetch_limit,
         )
 
     total = len(claims)
@@ -635,10 +638,7 @@ async def list_divergence(
         *params,
     )
 
-    items = [
-        _row_to_divergence_item(row, _parse_payload(row["payload"]))
-        for row in rows
-    ]
+    items = [_row_to_divergence_item(row, _parse_payload(row["payload"])) for row in rows]
 
     # Severity counts from full filtered set
     sev_rows = await db.fetch(
@@ -667,8 +667,7 @@ async def list_divergence(
     },
     summary="Issuer divergence detail",
     description=(
-        "Get all divergence, adoption, and drift published objects "
-        "for a specific issuer."
+        "Get all divergence, adoption, and drift published objects for a specific issuer."
     ),
 )
 async def get_issuer_divergence(
@@ -743,16 +742,18 @@ async def get_basket_members(
     for row in rows:
         payload = _parse_payload(row["payload"])
         for m in payload.get("members", []):
-            members.append(BasketMember(
-                concept_id=m.get("concept_id", ""),
-                concept_name=m.get("concept_name", ""),
-                role=m.get("role", ""),
-                best_score=m.get("best_score", 0.0),
-                best_sign=m.get("best_sign", 0.0),
-                min_hops=m.get("min_hops", 0),
-                path_count=m.get("path_count", 0),
-                has_mixed_signals=m.get("has_mixed_signals", False),
-            ))
+            members.append(
+                BasketMember(
+                    concept_id=m.get("concept_id", ""),
+                    concept_name=m.get("concept_name", ""),
+                    role=m.get("role", ""),
+                    best_score=m.get("best_score", 0.0),
+                    best_sign=m.get("best_sign", 0.0),
+                    min_hops=m.get("min_hops", 0),
+                    path_count=m.get("path_count", 0),
+                    has_mixed_signals=m.get("has_mixed_signals", False),
+                )
+            )
 
     return BasketResponse(theme_id=theme_id, members=members)
 
@@ -765,8 +766,7 @@ async def get_basket_members(
     },
     summary="Path explanation for a concept in a basket",
     description=(
-        "Get the path explanation for how a specific concept "
-        "is connected within a theme's basket."
+        "Get the path explanation for how a specific concept is connected within a theme's basket."
     ),
 )
 async def get_basket_path(
