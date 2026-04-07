@@ -38,3 +38,11 @@ export function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength) + '...';
 }
+
+/** Humanize a snake_case string: "adverse_drift" → "Adverse Drift" */
+export function humanize(snakeCase: string): string {
+  return snakeCase
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}

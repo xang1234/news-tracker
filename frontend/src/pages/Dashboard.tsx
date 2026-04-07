@@ -1,11 +1,20 @@
 import { Link } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
 import { MetricCard, MetricCardSkeleton } from '@/components/domain/MetricCard';
+import { LaneHealthCard, LaneHealthCardSkeleton } from '@/components/domain/LaneHealthCard';
+import { QualityScorecard } from '@/components/domain/QualityScorecard';
 import { useHealth } from '@/api/hooks/useHealth';
 import { useDocumentStats } from '@/api/hooks/useDocuments';
 import { useThemeMomentum } from '@/api/hooks/useThemes';
+import { useIntelHealth } from '@/api/hooks/useIntelligence';
+import { useDivergences } from '@/api/hooks/useDivergence';
 import { timeAgo, pct } from '@/lib/formatters';
-import { Wifi, WifiOff, Cpu, HardDrive, Database, BarChart3, Clock, Layers, CheckCircle2, Activity, ArrowUpRight } from 'lucide-react';
+import {
+  Wifi, WifiOff, Cpu, HardDrive, Database, BarChart3, Clock, Layers,
+  CheckCircle2, Activity, ArrowUpRight, AlertTriangle,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { SEVERITY_COLORS } from '@/lib/constants';
 
 const QUEUE_LABELS: Record<string, string> = {
   embedding_queue: 'Embedding',
@@ -18,10 +27,14 @@ export default function Dashboard() {
   const { data: health, isLoading: healthLoading, isError: healthError, error: healthErr } = useHealth();
   const { data: stats, isLoading: statsLoading } = useDocumentStats({ refetchInterval: 30_000 });
   const { data: momentum, isLoading: momentumLoading } = useThemeMomentum();
+  const { data: intelHealth, isLoading: intelLoading, isError: intelError } = useIntelHealth();
+  const { data: divergences } = useDivergences({ limit: 3 });
 
   const topPlatform = stats?.platform_counts?.length
     ? stats.platform_counts.reduce((a, b) => (b.count > a.count ? b : a))
     : null;
+
+  const hasIntelData = intelHealth && (intelHealth.lanes.length > 0 || intelHealth.quality_metrics.length > 0);
 
   return (
     <>
@@ -83,7 +96,6 @@ export default function Dashboard() {
 
         {/* Data Overview + Queue Depths */}
         <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Data Overview */}
           <div className="rounded-lg border border-border bg-card p-6">
             <h3 className="text-sm font-medium text-muted-foreground">Data Overview</h3>
             {statsLoading ? (
@@ -95,37 +107,16 @@ export default function Dashboard() {
               </div>
             ) : stats ? (
               <div className="mt-4 grid grid-cols-2 gap-3">
-                <MetricCard
-                  label="Total Documents"
-                  value={stats.total_count.toLocaleString()}
-                  icon={Database}
-                />
-                <MetricCard
-                  label="Top Platform"
-                  value={topPlatform?.platform ?? '—'}
-                  subtitle={topPlatform ? `${topPlatform.count.toLocaleString()} docs` : undefined}
-                  icon={BarChart3}
-                />
-                <MetricCard
-                  label="Embedding Coverage"
-                  value={pct(stats.embedding_coverage.finbert_pct)}
-                  subtitle={`MiniLM: ${pct(stats.embedding_coverage.minilm_pct)}`}
-                  icon={Cpu}
-                />
-                <MetricCard
-                  label="Latest Ingestion"
-                  value={timeAgo(stats.latest_fetched_at ?? stats.latest_document)}
-                  icon={Clock}
-                />
+                <MetricCard label="Total Documents" value={stats.total_count.toLocaleString()} icon={Database} />
+                <MetricCard label="Top Platform" value={topPlatform?.platform ?? '—'} subtitle={topPlatform ? `${topPlatform.count.toLocaleString()} docs` : undefined} icon={BarChart3} />
+                <MetricCard label="Embedding Coverage" value={pct(stats.embedding_coverage.finbert_pct)} subtitle={`MiniLM: ${pct(stats.embedding_coverage.minilm_pct)}`} icon={Cpu} />
+                <MetricCard label="Latest Ingestion" value={timeAgo(stats.latest_fetched_at ?? stats.latest_document)} icon={Clock} />
               </div>
             ) : (
-              <p className="mt-2 text-xs text-muted-foreground">
-                No data available — check that the API is running.
-              </p>
+              <p className="mt-2 text-xs text-muted-foreground">No data available.</p>
             )}
           </div>
 
-          {/* Queue Depths */}
           <div className="rounded-lg border border-border bg-card p-6">
             <h3 className="text-sm font-medium text-muted-foreground">Queue Status</h3>
             {healthLoading ? (
@@ -141,22 +132,13 @@ export default function Dashboard() {
                   const pending = metrics?.pending ?? 0;
                   const processed = metrics?.processed ?? 0;
                   return (
-                    <div
-                      key={key}
-                      className="flex items-center justify-between rounded-md border border-border bg-secondary/30 px-4 py-3"
-                    >
+                    <div key={key} className="flex items-center justify-between rounded-md border border-border bg-secondary/30 px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Layers className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm text-foreground">{label}</span>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span
-                          className={
-                            pending > 100
-                              ? 'text-sm font-semibold text-amber-400'
-                              : 'text-sm font-semibold text-foreground'
-                          }
-                        >
+                        <span className={pending > 100 ? 'text-sm font-semibold text-amber-400' : 'text-sm font-semibold text-foreground'}>
                           {pending.toLocaleString()} pending
                         </span>
                         <span className="text-muted-foreground">|</span>
@@ -170,13 +152,120 @@ export default function Dashboard() {
                 })}
               </div>
             ) : (
-              <p className="mt-2 text-xs text-muted-foreground">
-                No queue data available — check that Redis is running.
-              </p>
+              <p className="mt-2 text-xs text-muted-foreground">No queue data available.</p>
             )}
           </div>
         </div>
 
+        {/* Intelligence Layer: Lane Health */}
+        <div className="mt-8">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-foreground">Intelligence Layer</h2>
+            <p className="text-xs text-muted-foreground">Lane health, quality metrics, and divergence alerts</p>
+          </div>
+
+          {intelError && (
+            <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              Failed to fetch intelligence health data
+            </div>
+          )}
+
+          {intelLoading ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <LaneHealthCardSkeleton />
+              <LaneHealthCardSkeleton />
+              <LaneHealthCardSkeleton />
+              <LaneHealthCardSkeleton />
+            </div>
+          ) : hasIntelData ? (
+            <>
+              {/* Lane Health Strip */}
+              {intelHealth.lanes.length > 0 && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {intelHealth.lanes.map((lane) => (
+                    <LaneHealthCard
+                      key={lane.lane}
+                      lane={lane.lane}
+                      freshness={lane.freshness}
+                      quality={lane.quality}
+                      quarantine={lane.quarantine}
+                      readiness={lane.readiness}
+                      lastCompletedAt={lane.last_completed_at}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Quality Scorecard */}
+              {intelHealth.quality_metrics.length > 0 && (
+                <div className="mt-6">
+                  <QualityScorecard
+                    metrics={intelHealth.quality_metrics}
+                    overallSeverity={intelHealth.overall_severity}
+                  />
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="rounded-lg border border-border bg-card p-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                Intelligence layer not yet active. Run <code className="rounded bg-secondary px-1.5 py-0.5 text-xs">news-tracker init-db</code> and complete a lane run to see health data.
+              </p>
+            </div>
+          )}
+
+          {/* Active Divergences */}
+          {divergences && divergences.divergences.length > 0 && (
+            <div className="mt-6 rounded-lg border border-border bg-card p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-400" />
+                  <h3 className="text-sm font-medium text-foreground">Active Divergences</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  {divergences.severity_counts.critical > 0 && (
+                    <span className="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-400">
+                      {divergences.severity_counts.critical} critical
+                    </span>
+                  )}
+                  {divergences.severity_counts.warning > 0 && (
+                    <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-400">
+                      {divergences.severity_counts.warning} warning
+                    </span>
+                  )}
+                  {divergences.severity_counts.info > 0 && (
+                    <span className="rounded-full bg-sky-500/20 px-2 py-0.5 text-xs text-sky-400">
+                      {divergences.severity_counts.info} info
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="mt-4 space-y-3">
+                {divergences.divergences.slice(0, 3).map((d) => (
+                  <Link
+                    key={d.id}
+                    to="/divergence"
+                    className="block rounded-lg border border-border bg-secondary/20 p-3 transition-colors hover:border-primary/30"
+                  >
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-medium text-foreground">{d.issuer_name}</span>
+                      <span className="text-muted-foreground">{d.theme_name}</span>
+                      <span className={cn('ml-auto rounded-full px-2 py-0.5', SEVERITY_COLORS[d.severity] ?? SEVERITY_COLORS.info)}>
+                        {d.severity}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-foreground">{d.title}</p>
+                  </Link>
+                ))}
+              </div>
+              <Link to="/divergence" className="mt-3 inline-block text-xs text-primary hover:underline">
+                View all divergences →
+              </Link>
+            </div>
+          )}
+        </div>
+
+        {/* Live Narrative Momentum */}
         <div className="mt-8 rounded-lg border border-border bg-card p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -217,15 +306,11 @@ export default function Dashboard() {
                   <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
                     <div className="rounded border border-border bg-background/60 px-2 py-2">
                       <div className="text-muted-foreground">Rate</div>
-                      <div className="mt-1 font-medium text-foreground">
-                        {run.current_rate_per_hour.toFixed(1)}/hr
-                      </div>
+                      <div className="mt-1 font-medium text-foreground">{run.current_rate_per_hour.toFixed(1)}/hr</div>
                     </div>
                     <div className="rounded border border-border bg-background/60 px-2 py-2">
                       <div className="text-muted-foreground">Accel</div>
-                      <div className="mt-1 font-medium text-foreground">
-                        {run.current_acceleration > 0 ? '+' : ''}{run.current_acceleration.toFixed(1)}
-                      </div>
+                      <div className="mt-1 font-medium text-foreground">{run.current_acceleration > 0 ? '+' : ''}{run.current_acceleration.toFixed(1)}</div>
                     </div>
                     <div className="rounded border border-border bg-background/60 px-2 py-2">
                       <div className="text-muted-foreground">Platforms</div>
@@ -234,10 +319,7 @@ export default function Dashboard() {
                   </div>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {run.top_tickers.slice(0, 4).map((tickerCount) => (
-                      <span
-                        key={tickerCount.ticker}
-                        className="rounded bg-background/70 px-2 py-0.5 font-mono text-[11px] text-foreground"
-                      >
+                      <span key={tickerCount.ticker} className="rounded bg-background/70 px-2 py-0.5 font-mono text-[11px] text-foreground">
                         ${tickerCount.ticker} · {tickerCount.count}
                       </span>
                     ))}
@@ -252,9 +334,7 @@ export default function Dashboard() {
               ))}
             </div>
           ) : (
-            <p className="mt-4 text-xs text-muted-foreground">
-              No active narrative runs yet.
-            </p>
+            <p className="mt-4 text-xs text-muted-foreground">No active narrative runs yet.</p>
           )}
         </div>
       </div>

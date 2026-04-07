@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Merge,
+  Eye,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { MetricCard, MetricCardSkeleton } from '@/components/domain/MetricCard';
@@ -25,6 +26,8 @@ import {
   useEntitySentiment,
   useMergeEntity,
 } from '@/api/hooks/useEntities';
+import { useAssertions } from '@/api/hooks/useEvidence';
+import { AssertionCard } from '@/components/domain/AssertionCard';
 import { timeAgo, latency } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
 
@@ -36,7 +39,7 @@ const ENTITY_COLORS: Record<string, string> = {
   METRIC: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
 };
 
-type Tab = 'documents' | 'cooccurrence' | 'sentiment' | 'graph';
+type Tab = 'documents' | 'cooccurrence' | 'sentiment' | 'graph' | 'evidence';
 
 export default function EntityDetail() {
   const { type = '', normalized = '' } = useParams<{ type: string; normalized: string }>();
@@ -50,6 +53,7 @@ export default function EntityDetail() {
   const cooccurrence = useEntityCooccurrence(type, normalized);
   const sentiment = useEntitySentiment(type, normalized);
   const merge = useMergeEntity();
+  const entityAssertions = useAssertions(tab === 'evidence' ? { concept_id: normalized, limit: 50 } : undefined);
 
   const badgeColor = ENTITY_COLORS[type] ?? 'bg-slate-500/20 text-slate-300 border-slate-500/30';
 
@@ -80,6 +84,7 @@ export default function EntityDetail() {
     { key: 'documents', label: 'Documents', icon: FileText },
     { key: 'cooccurrence', label: 'Co-occurrence', icon: Users },
     { key: 'sentiment', label: 'Sentiment', icon: Activity },
+    { key: 'evidence', label: 'Evidence', icon: Eye },
     ...(detail.data?.graph_node_id
       ? [{ key: 'graph' as const, label: 'Graph', icon: GitBranch }]
       : []),
@@ -327,6 +332,56 @@ export default function EntityDetail() {
                   neu_count={sentiment.data.neu_count}
                   trend={sentiment.data.trend}
                 />
+              )}
+            </>
+          )}
+
+          {/* Evidence tab */}
+          {tab === 'evidence' && (
+            <>
+              {entityAssertions.isLoading && (
+                <div className="space-y-3">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-20 animate-pulse rounded-lg bg-secondary" />
+                  ))}
+                </div>
+              )}
+              {entityAssertions.isError && (
+                <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  Failed to load evidence
+                </div>
+              )}
+              {entityAssertions.data && entityAssertions.data.assertions.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                  <Eye className="h-10 w-10" />
+                  <p className="mt-3 text-sm">No assertions involving this entity</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Assertions appear when lane runs extract evidence about this entity.
+                  </p>
+                </div>
+              )}
+              {entityAssertions.data && entityAssertions.data.assertions.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span>{entityAssertions.data.total} assertion{entityAssertions.data.total !== 1 ? 's' : ''}</span>
+                    <span>
+                      {entityAssertions.data.assertions.filter((a) => a.status === 'active').length} active
+                    </span>
+                    <span>
+                      avg confidence: {Math.round(
+                        entityAssertions.data.assertions.reduce((s, a) => s + a.confidence, 0) /
+                        entityAssertions.data.assertions.length * 100,
+                      )}%
+                    </span>
+                  </div>
+                  {entityAssertions.data.assertions.map((a) => (
+                    <AssertionCard
+                      key={a.assertion_id}
+                      assertion={a}
+                      onClick={() => navigate(`/evidence?assertion=${a.assertion_id}`)}
+                    />
+                  ))}
+                </div>
               )}
             </>
           )}

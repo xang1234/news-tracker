@@ -19,11 +19,17 @@ export function AlertCard({ alert, onAcknowledge, isAcknowledging }: AlertCardPr
     narrative_run: 'Narrative Run',
     graph_node: 'Graph Node',
   }[alert.subject_type] ?? alert.subject_type;
-  const destination =
-    alert.subject_type === 'narrative_run'
+  const isDivergence = alert.trigger_type === 'divergence';
+  const destination = isDivergence
+    ? '/divergence'
+    : alert.subject_type === 'narrative_run'
       ? `/themes/${alert.theme_id}?tab=narratives&run=${alert.subject_id}`
       : `/themes/${alert.theme_id}`;
-  const destinationLabel = alert.subject_type === 'narrative_run' ? 'View Run' : 'View Theme';
+  const destinationLabel = isDivergence
+    ? 'View Divergence'
+    : alert.subject_type === 'narrative_run'
+      ? 'View Run'
+      : 'View Theme';
 
   return (
     <div

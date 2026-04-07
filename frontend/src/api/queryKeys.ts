@@ -57,4 +57,15 @@ export const queryKeys = {
   graphSubgraph: (nodeId: string, depth?: number) => ['graph', 'subgraph', nodeId, depth] as const,
 
   settings: () => ['settings'] as const,
+
+  // Intelligence layer
+  intelHealth: () => ['intel', 'health'] as const,
+  assertions: (filters?: Record<string, unknown>) => ['intel', 'assertions', filters] as const,
+  assertionDetail: (id: string) => ['intel', 'assertions', id] as const,
+  claims: (filters?: Record<string, unknown>) => ['intel', 'claims', filters] as const,
+  divergences: (filters?: Record<string, unknown>) => ['intel', 'divergence', filters] as const,
+  divergenceDetail: (issuerId: string) => ['intel', 'divergence', issuerId] as const,
+  baskets: (themeId: string) => ['intel', 'baskets', themeId] as const,
+  basketPaths: (themeId: string, conceptId: string) =>
+    ['intel', 'baskets', themeId, 'paths', conceptId] as const,
 } as const;

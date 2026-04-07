@@ -3,6 +3,9 @@ import ForceGraph2D from 'react-force-graph-2d';
 import { NODE_TYPE_COLORS, RELATION_COLORS } from '@/lib/constants';
 import type { GraphNodeItem, GraphEdgeItem } from '@/api/hooks/useGraph';
 
+const POSITIVE_PREDICATES = new Set(['supplies_to', 'depends_on', 'enables', 'derived_from', 'drives']);
+const NEGATIVE_PREDICATES = new Set(['competes_with', 'blocks']);
+
 interface GraphCanvasProps {
   nodes: GraphNodeItem[];
   edges: GraphEdgeItem[];
@@ -73,6 +76,8 @@ export function GraphCanvas({
   );
 
   const linkColor = useCallback((link: GraphLink) => {
+    if (NEGATIVE_PREDICATES.has(link.relation)) return '#f87171';
+    if (POSITIVE_PREDICATES.has(link.relation)) return '#34d399';
     return RELATION_COLORS[link.relation] ?? '#4b5563';
   }, []);
 
@@ -99,7 +104,7 @@ export function GraphCanvas({
         linkWidth={(link: GraphLink) => Math.max(1, link.confidence * 3)}
         linkDirectionalArrowLength={4}
         linkDirectionalArrowRelPos={0.9}
-        linkLabel={(link: GraphLink) => link.relation}
+        linkLabel={(link: GraphLink) => `${link.relation} (${Math.round(link.confidence * 100)}%)`}
         onNodeClick={handleNodeClick}
         cooldownTicks={100}
         backgroundColor="#0f1117"

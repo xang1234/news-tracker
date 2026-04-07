@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, FileText, Tag, Activity, Radar } from 'lucide-react';
+import { ArrowLeft, FileText, Tag, Activity, Radar, Building2, GitBranch } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { cn } from '@/lib/utils';
 import { LIFECYCLE_COLORS, SENTIMENT_COLORS } from '@/lib/constants';
 import { timeAgo, pct, truncate, latency as fmtLatency } from '@/lib/formatters';
 import { ThemeMetricsChart } from '@/components/domain/ThemeMetricsChart';
 import { ThemeSentimentPanel } from '@/components/domain/ThemeSentimentPanel';
+import { BasketColumns } from '@/components/domain/BasketColumns';
+import { PathExplanation } from '@/components/domain/PathExplanation';
 import {
   useThemeDetail,
   useThemeMetrics,
@@ -16,8 +18,10 @@ import {
   useThemeNarratives,
   useThemeNarrativeDetail,
 } from '@/api/hooks/useThemes';
+import { useDivergences } from '@/api/hooks/useDivergence';
+import { useThemeBasket, useBasketPaths } from '@/api/hooks/useThemeIntelligence';
 
-type Tab = 'metrics' | 'sentiment' | 'documents' | 'events' | 'narratives';
+type Tab = 'metrics' | 'sentiment' | 'documents' | 'events' | 'narratives' | 'filing' | 'structural';
 
 export default function ThemeDetail() {
   const { themeId } = useParams();
@@ -26,6 +30,8 @@ export default function ThemeDetail() {
   const [manualTab, setManualTab] = useState<Tab>(initialTab);
   const [docOffset, setDocOffset] = useState(0);
   const [manualSelectedRunId, setManualSelectedRunId] = useState<string | null>(searchParams.get('run'));
+
+  const activeTab: Tab = searchParams.get('tab') === 'narratives' ? 'narratives' : manualTab;
 
   const { data: detail, isLoading, isError } = useThemeDetail(themeId);
   const metrics = useThemeMetrics(activeTab === 'metrics' ? themeId : undefined);
@@ -36,7 +42,13 @@ export default function ThemeDetail() {
   );
   const events = useThemeEvents(activeTab === 'events' ? themeId : undefined);
   const narratives = useThemeNarratives(themeId);
-  const activeTab: Tab = searchParams.get('tab') === 'narratives' ? 'narratives' : manualTab;
+  const themeBasket = useThemeBasket(activeTab === 'structural' ? themeId : undefined);
+  const themeDivergences = useDivergences(activeTab === 'filing' ? { theme: themeId, limit: 20 } : undefined);
+  const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null);
+  const basketPaths = useBasketPaths(
+    activeTab === 'structural' && selectedConceptId ? themeId : undefined,
+    selectedConceptId ?? undefined,
+  );
   const selectedRunId =
     searchParams.get('run')
     ?? manualSelectedRunId
@@ -80,6 +92,8 @@ export default function ThemeDetail() {
     { key: 'documents', label: 'Documents' },
     { key: 'events', label: 'Events' },
     { key: 'narratives', label: 'Narratives' },
+    { key: 'filing', label: 'Filing Evidence' },
+    { key: 'structural', label: 'Structural' },
   ];
 
   return (
@@ -583,6 +597,111 @@ export default function ThemeDetail() {
                           </>
                         )}
                       </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Filing Evidence tab */}
+              {activeTab === 'filing' && (
+                <>
+                  {themeDivergences.isLoading && (
+                    <div className="space-y-3">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="h-24 animate-pulse rounded-lg bg-secondary" />
+                      ))}
+                    </div>
+                  )}
+                  {themeDivergences.isError && (
+                    <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                      Failed to load filing evidence
+                    </div>
+                  )}
+                  {themeDivergences.data && themeDivergences.data.divergences.length === 0 && (
+                    <div className="flex flex-col items-center py-12 text-muted-foreground">
+                      <Building2 className="h-10 w-10" />
+                      <p className="mt-2 text-sm">No filing evidence for this theme</p>
+                      <p className="mt-1 text-xs">Filing evidence appears when the filing lane processes SEC filings related to this theme.</p>
+                    </div>
+                  )}
+                  {themeDivergences.data && themeDivergences.data.divergences.length > 0 && (
+                    <div className="space-y-3">
+                      {themeDivergences.data.divergences.map((d) => (
+                        <Link
+                          key={d.id}
+                          to="/divergence"
+                          className="block rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/30"
+                        >
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="font-medium text-foreground">{d.issuer_name}</span>
+                            <span className={cn(
+                              'rounded-full px-2 py-0.5',
+                              d.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
+                              d.severity === 'warning' ? 'bg-amber-500/20 text-amber-400' :
+                              'bg-sky-500/20 text-sky-400',
+                            )}>
+                              {d.severity}
+                            </span>
+                            <span className="rounded-full bg-secondary px-2 py-0.5 text-muted-foreground">
+                              {d.reason.replaceAll('_', ' ')}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-foreground">{d.title}</p>
+                          {d.narrative_score != null && d.filing_adoption_score != null && (
+                            <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                              <span>Narrative: {pct(d.narrative_score, 0)}</span>
+                              <span>Filing: {pct(d.filing_adoption_score, 0)}</span>
+                            </div>
+                          )}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Structural tab */}
+              {activeTab === 'structural' && (
+                <>
+                  {themeBasket.isLoading && (
+                    <div className="space-y-3">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="h-24 animate-pulse rounded-lg bg-secondary" />
+                      ))}
+                    </div>
+                  )}
+                  {themeBasket.isError && (
+                    <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                      Failed to load structural data
+                    </div>
+                  )}
+                  {themeBasket.data && themeBasket.data.members.length === 0 && (
+                    <div className="flex flex-col items-center py-12 text-muted-foreground">
+                      <GitBranch className="h-10 w-10" />
+                      <p className="mt-2 text-sm">No structural relationships for this theme</p>
+                      <p className="mt-1 text-xs">Structural data appears when the graph lane builds causal paths connecting entities to this theme.</p>
+                    </div>
+                  )}
+                  {themeBasket.data && themeBasket.data.members.length > 0 && (
+                    <div className="space-y-6">
+                      <BasketColumns
+                        members={themeBasket.data.members}
+                        onMemberClick={(conceptId) => setSelectedConceptId(conceptId === selectedConceptId ? null : conceptId)}
+                      />
+                      {selectedConceptId && basketPaths.data && (
+                        <div className="rounded-lg border border-border bg-card p-4">
+                          <h4 className="mb-3 text-sm font-medium text-foreground">Path Explanation</h4>
+                          <PathExplanation paths={basketPaths.data.paths} />
+                        </div>
+                      )}
+                      {selectedConceptId && basketPaths.isLoading && (
+                        <div className="h-24 animate-pulse rounded-lg bg-secondary" />
+                      )}
+                      {selectedConceptId && basketPaths.isError && (
+                        <div className="rounded border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                          Failed to load path explanation
+                        </div>
+                      )}
                     </div>
                   )}
                 </>
