@@ -18,18 +18,19 @@ Usage:
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass, field
 from typing import Any
+
+import structlog
 
 from src.assertions.edges import DerivedEdge, derive_edges
 from src.assertions.repository import AssertionRepository
 from src.assertions.schemas import ResolvedAssertion
+from src.graph.causal_graph import CausalGraph
 from src.graph.schemas import VALID_RELATION_TYPES
-from src.graph.storage import GraphRepository
 from src.storage.database import Database
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 # Structural predicates that map to existing graph relation types
 _PREDICATE_TO_RELATION: dict[str, str] = {
@@ -88,7 +89,8 @@ class GraphSyncService:
         min_evidence: int = MIN_EVIDENCE_TO_SUPERSEDE,
     ) -> None:
         self._assertion_repo = AssertionRepository(database)
-        self._graph_repo = GraphRepository(database)
+        self._graph = CausalGraph(database)
+        self._graph_repo = self._graph.repository
         self._min_evidence = min_evidence
 
     def _map_predicate(self, predicate: str) -> str | None:
@@ -157,6 +159,15 @@ class GraphSyncService:
                 )
                 if removed:
                     result.edges_removed += 1
+                # competes_with: also remove the reverse edge
+                if relation == "competes_with":
+                    reverse_removed = await self._graph_repo.remove_edge(
+                        edge.target_concept_id,
+                        edge.source_concept_id,
+                        relation,
+                    )
+                    if reverse_removed:
+                        result.edges_removed += 1
             except Exception as e:
                 result.errors.append(
                     f"Error removing edge {edge.source_concept_id}→{edge.target_concept_id}: {e}"
@@ -196,6 +207,10 @@ class GraphSyncService:
             result.edges_skipped += 1
             return
 
+        # Ensure both nodes exist (prevents FK violations for non-seeded concepts)
+        await self._graph.ensure_node(edge.source_concept_id)
+        await self._graph.ensure_node(edge.target_concept_id)
+
         # Build source_doc_ids from assertion metadata
         source_doc_ids: list[str] = []
         if edge.assertion_id:
@@ -217,5 +232,16 @@ class GraphSyncService:
             source_doc_ids=source_doc_ids,
             metadata=metadata,
         )
+
+        # competes_with requires explicit bidirectional edges (A→B and B→A)
+        if relation == "competes_with":
+            await self._graph_repo.add_edge(
+                source=edge.target_concept_id,
+                target=edge.source_concept_id,
+                relation=relation,
+                confidence=edge.confidence,
+                source_doc_ids=source_doc_ids,
+                metadata=metadata,
+            )
 
         result.edges_synced += 1

@@ -55,10 +55,14 @@ def mock_database():
 @pytest.fixture
 def sync_service(mock_database):
     """Create a GraphSyncService with mocked internals."""
-    service = GraphSyncService(mock_database)
-    # Replace repos with mocks
+    service = GraphSyncService.__new__(GraphSyncService)
+    service._min_evidence = MIN_EVIDENCE_TO_SUPERSEDE
+    # Replace repos/graph with mocks
     service._assertion_repo = AsyncMock()
     service._graph_repo = AsyncMock()
+    service._graph = AsyncMock()
+    service._graph.repository = service._graph_repo
+    service._graph.ensure_node = AsyncMock()
     return service
 
 
@@ -231,3 +235,71 @@ class TestGraphSync:
         assert result.edges_synced == 0
         assert result.edges_removed == 0
         assert result.errors == []
+
+    @pytest.mark.asyncio
+    async def test_ensures_nodes_exist_before_edge(self, sync_service):
+        assertion = _make_assertion("NEW_TICKER", "supplies_to", "NVDA")
+
+        sync_service._assertion_repo.list_assertions = AsyncMock(
+            side_effect=lambda status, limit: (
+                [assertion] if status == "active" else []
+            )
+        )
+        sync_service._graph_repo.get_edge = AsyncMock(return_value=None)
+        sync_service._graph_repo.add_edge = AsyncMock()
+
+        await sync_service.sync()
+
+        # ensure_node called for both source and target
+        calls = sync_service._graph.ensure_node.call_args_list
+        ensured_ids = {c.args[0] for c in calls}
+        assert "NEW_TICKER" in ensured_ids
+        assert "NVDA" in ensured_ids
+
+    @pytest.mark.asyncio
+    async def test_competes_with_creates_bidirectional_edges(self, sync_service):
+        assertion = _make_assertion("AMD", "competes_with", "INTC", support_count=5)
+
+        sync_service._assertion_repo.list_assertions = AsyncMock(
+            side_effect=lambda status, limit: (
+                [assertion] if status == "active" else []
+            )
+        )
+        sync_service._graph_repo.get_edge = AsyncMock(return_value=None)
+        sync_service._graph_repo.add_edge = AsyncMock()
+
+        result = await sync_service.sync()
+
+        assert result.edges_synced == 1
+        # add_edge called twice: AMD→INTC and INTC→AMD
+        assert sync_service._graph_repo.add_edge.call_count == 2
+        call_pairs = [
+            (c.kwargs["source"], c.kwargs["target"])
+            for c in sync_service._graph_repo.add_edge.call_args_list
+        ]
+        assert ("AMD", "INTC") in call_pairs
+        assert ("INTC", "AMD") in call_pairs
+
+    @pytest.mark.asyncio
+    async def test_competes_with_retraction_removes_both_directions(self, sync_service):
+        retracted = _make_assertion(
+            "AMD", "competes_with", "INTC",
+            status="retracted", confidence=0.1,
+        )
+
+        sync_service._assertion_repo.list_assertions = AsyncMock(
+            side_effect=lambda status, limit: (
+                [retracted] if status == "retracted" else []
+            )
+        )
+        sync_service._graph_repo.remove_edge = AsyncMock(return_value=True)
+
+        result = await sync_service.sync()
+
+        assert result.edges_removed == 2
+        remove_calls = [
+            (c.args[0], c.args[1], c.args[2])
+            for c in sync_service._graph_repo.remove_edge.call_args_list
+        ]
+        assert ("AMD", "INTC", "competes_with") in remove_calls
+        assert ("INTC", "AMD", "competes_with") in remove_calls

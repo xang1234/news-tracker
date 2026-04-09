@@ -203,10 +203,12 @@ def extract_claims_from_cooccurrence(
             if abs(pos_a - pos_b) > _COOCCURRENCE_WINDOW:
                 continue
 
-            # Extract text window between the two entities
+            # Extract text window covering both entities and surrounding context.
+            # Extends to the full co-occurrence window so verbs appearing just
+            # after the later entity are still captured.
             window_start = min(pos_a, pos_b)
-            window_end = max(pos_a, pos_b) + max(len(entity_a), len(entity_b))
-            window_text = content[window_start : min(window_end, len(content))]
+            window_end = min(window_start + _COOCCURRENCE_WINDOW, len(content))
+            window_text = content[window_start:window_end]
 
             # Scan for supply-chain verbs
             for pattern, predicate in _VERB_TO_PREDICATE:

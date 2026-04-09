@@ -467,6 +467,13 @@ class ProcessingService:
         }
         stored_doc_ids: list[str] = []
 
+        # Initialize claim repo for run_once if extraction is enabled
+        claim_repo = None
+        if self._claim_extraction_enabled:
+            from src.claims.repository import ClaimRepository
+
+            claim_repo = ClaimRepository(self._database)
+
         try:
             for doc in docs:
                 try:
@@ -483,6 +490,29 @@ class ProcessingService:
                     await self._repository.insert(doc)
                     stats["processed"] += 1
                     stored_doc_ids.append(doc.id)
+
+                    # Stage 6: Extract narrative claims
+                    if self._claim_extraction_enabled and claim_repo is not None:
+                        try:
+                            from src.claims.narrative_extractor import (
+                                extract_claims_from_document,
+                            )
+
+                            claims = extract_claims_from_document(
+                                doc_id=doc.id,
+                                events=doc.events_extracted,
+                                entities=doc.entities_mentioned,
+                                content=doc.content,
+                                published_at=doc.timestamp,
+                            )
+                            for claim in claims:
+                                await claim_repo.upsert_claim(claim)
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to extract narrative claims in run_once",
+                                doc_id=doc.id,
+                                error=str(e),
+                            )
 
                 except Exception as e:
                     stats["errors"] += 1

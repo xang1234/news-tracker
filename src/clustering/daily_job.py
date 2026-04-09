@@ -697,8 +697,13 @@ async def _compute_propagation_impact(
     sentiment through the causal graph and records the total downstream
     impact magnitude as ``theme.metadata["propagation_impact"]``.
 
+    Reads sentiment from freshly computed ``theme_metrics`` (Phase 10)
+    rather than the stale ``theme.metadata`` snapshot.
+
     Only runs when ``propagation_enabled`` is True.
     """
+    from datetime import date, timedelta
+
     from src.config.settings import get_settings as _get_settings
 
     settings = _get_settings()
@@ -713,17 +718,32 @@ async def _compute_propagation_impact(
     graph = CausalGraph(database, config=GraphConfig())
     propagation = SentimentPropagation(graph)
 
+    # Fetch fresh sentiment from today's metrics (written by Phase 10)
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+
     updated = 0
     for theme in themes:
         if not theme.top_tickers:
             continue
 
-        # Use the theme's average sentiment if available
-        avg_sentiment = theme.metadata.get("avg_sentiment")
+        # Read sentiment from freshly computed metrics, not stale metadata
+        metrics_list = await theme_repo.get_metrics_range(
+            theme.theme_id, yesterday, today,
+        )
+        avg_sentiment = None
+        for m in reversed(metrics_list):
+            if m.sentiment_score is not None:
+                avg_sentiment = m.sentiment_score
+                break
+
         if avg_sentiment is None:
             continue
 
-        bias = "bullish" if avg_sentiment > 0.08 else ("bearish" if avg_sentiment < -0.08 else "mixed")
+        bias = (
+            "bullish" if avg_sentiment > 0.08
+            else ("bearish" if avg_sentiment < -0.08 else "mixed")
+        )
         delta = propagation_delta(avg_sentiment, bias)
         if abs(delta) < 0.01:
             continue
