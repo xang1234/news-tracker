@@ -6,17 +6,16 @@ seed-prior merging, and retraction handling.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.assertions.schemas import ResolvedAssertion
 from src.graph.sync import (
+    _PREDICATE_TO_RELATION,
     MIN_EVIDENCE_TO_SUPERSEDE,
     GraphSyncService,
     SyncResult,
-    _PREDICATE_TO_RELATION,
 )
 
 
@@ -99,9 +98,7 @@ class TestGraphSync:
         assertion = _make_assertion("TSMC", "supplies_to", "NVDA")
 
         sync_service._assertion_repo.list_assertions = AsyncMock(
-            side_effect=lambda status, limit: (
-                [assertion] if status == "active" else []
-            )
+            side_effect=lambda status, limit: ([assertion] if status == "active" else [])
         )
         sync_service._graph_repo.get_edge = AsyncMock(return_value=None)
         sync_service._graph_repo.add_edge = AsyncMock()
@@ -121,9 +118,7 @@ class TestGraphSync:
         assertion = _make_assertion("A", "totally_unknown", "B")
 
         sync_service._assertion_repo.list_assertions = AsyncMock(
-            side_effect=lambda status, limit: (
-                [assertion] if status == "active" else []
-            )
+            side_effect=lambda status, limit: ([assertion] if status == "active" else [])
         )
 
         result = await sync_service.sync()
@@ -136,7 +131,9 @@ class TestGraphSync:
         """Seed edges (no source_doc_ids) should not be overridden
         unless evidence has sufficient support."""
         assertion = _make_assertion(
-            "TSMC", "supplies_to", "NVDA",
+            "TSMC",
+            "supplies_to",
+            "NVDA",
             confidence=0.6,
             support_count=1,  # Below MIN_EVIDENCE_TO_SUPERSEDE
         )
@@ -146,9 +143,7 @@ class TestGraphSync:
         seed_edge.source_doc_ids = []  # Seed edge indicator
 
         sync_service._assertion_repo.list_assertions = AsyncMock(
-            side_effect=lambda status, limit: (
-                [assertion] if status == "active" else []
-            )
+            side_effect=lambda status, limit: ([assertion] if status == "active" else [])
         )
         sync_service._graph_repo.get_edge = AsyncMock(return_value=seed_edge)
 
@@ -160,7 +155,9 @@ class TestGraphSync:
     @pytest.mark.asyncio
     async def test_overrides_seed_with_sufficient_evidence(self, sync_service):
         assertion = _make_assertion(
-            "TSMC", "supplies_to", "NVDA",
+            "TSMC",
+            "supplies_to",
+            "NVDA",
             confidence=0.9,
             support_count=5,  # Above MIN_EVIDENCE_TO_SUPERSEDE
         )
@@ -169,9 +166,7 @@ class TestGraphSync:
         seed_edge.source_doc_ids = []
 
         sync_service._assertion_repo.list_assertions = AsyncMock(
-            side_effect=lambda status, limit: (
-                [assertion] if status == "active" else []
-            )
+            side_effect=lambda status, limit: ([assertion] if status == "active" else [])
         )
         sync_service._graph_repo.get_edge = AsyncMock(return_value=seed_edge)
         sync_service._graph_repo.add_edge = AsyncMock()
@@ -183,15 +178,15 @@ class TestGraphSync:
     @pytest.mark.asyncio
     async def test_removes_retracted_edges(self, sync_service):
         retracted = _make_assertion(
-            "TSMC", "supplies_to", "NVDA",
+            "TSMC",
+            "supplies_to",
+            "NVDA",
             status="retracted",
             confidence=0.1,
         )
 
         sync_service._assertion_repo.list_assertions = AsyncMock(
-            side_effect=lambda status, limit: (
-                [retracted] if status == "retracted" else []
-            )
+            side_effect=lambda status, limit: ([retracted] if status == "retracted" else [])
         )
         sync_service._graph_repo.remove_edge = AsyncMock(return_value=True)
 
@@ -199,20 +194,22 @@ class TestGraphSync:
 
         assert result.edges_removed == 1
         sync_service._graph_repo.remove_edge.assert_called_once_with(
-            "TSMC", "NVDA", "supplies_to",
+            "TSMC",
+            "NVDA",
+            "supplies_to",
         )
 
     @pytest.mark.asyncio
     async def test_maps_extended_predicate_during_sync(self, sync_service):
         assertion = _make_assertion(
-            "Apple", "customer_of", "TSMC",
+            "Apple",
+            "customer_of",
+            "TSMC",
             support_count=5,
         )
 
         sync_service._assertion_repo.list_assertions = AsyncMock(
-            side_effect=lambda status, limit: (
-                [assertion] if status == "active" else []
-            )
+            side_effect=lambda status, limit: ([assertion] if status == "active" else [])
         )
         sync_service._graph_repo.get_edge = AsyncMock(return_value=None)
         sync_service._graph_repo.add_edge = AsyncMock()
@@ -241,9 +238,7 @@ class TestGraphSync:
         assertion = _make_assertion("NEW_TICKER", "supplies_to", "NVDA")
 
         sync_service._assertion_repo.list_assertions = AsyncMock(
-            side_effect=lambda status, limit: (
-                [assertion] if status == "active" else []
-            )
+            side_effect=lambda status, limit: ([assertion] if status == "active" else [])
         )
         sync_service._graph_repo.get_edge = AsyncMock(return_value=None)
         sync_service._graph_repo.add_edge = AsyncMock()
@@ -261,9 +256,7 @@ class TestGraphSync:
         assertion = _make_assertion("AMD", "competes_with", "INTC", support_count=5)
 
         sync_service._assertion_repo.list_assertions = AsyncMock(
-            side_effect=lambda status, limit: (
-                [assertion] if status == "active" else []
-            )
+            side_effect=lambda status, limit: ([assertion] if status == "active" else [])
         )
         sync_service._graph_repo.get_edge = AsyncMock(return_value=None)
         sync_service._graph_repo.add_edge = AsyncMock()
@@ -283,14 +276,15 @@ class TestGraphSync:
     @pytest.mark.asyncio
     async def test_competes_with_retraction_removes_both_directions(self, sync_service):
         retracted = _make_assertion(
-            "AMD", "competes_with", "INTC",
-            status="retracted", confidence=0.1,
+            "AMD",
+            "competes_with",
+            "INTC",
+            status="retracted",
+            confidence=0.1,
         )
 
         sync_service._assertion_repo.list_assertions = AsyncMock(
-            side_effect=lambda status, limit: (
-                [retracted] if status == "retracted" else []
-            )
+            side_effect=lambda status, limit: ([retracted] if status == "retracted" else [])
         )
         sync_service._graph_repo.remove_edge = AsyncMock(return_value=True)
 

@@ -6,9 +6,7 @@ correctly amplifies scores for themes with causal graph impact.
 
 from __future__ import annotations
 
-import pytest
-
-from src.themes.ranking import RankingConfig, ThemeRankingService
+from src.themes.ranking import ThemeRankingService
 from src.themes.schemas import Theme, ThemeMetrics
 
 
@@ -112,16 +110,22 @@ class TestPropagationBonus:
         }
         # Hack: point metrics at the right theme_ids
         metrics_map["low"] = ThemeMetrics(
-            theme_id="low", date=metrics_map["low"].date,
-            document_count=10, volume_zscore=2.0,
+            theme_id="low",
+            date=metrics_map["low"].date,
+            document_count=10,
+            volume_zscore=2.0,
         )
         metrics_map["high"] = ThemeMetrics(
-            theme_id="high", date=metrics_map["high"].date,
-            document_count=10, volume_zscore=2.0,
+            theme_id="high",
+            date=metrics_map["high"].date,
+            document_count=10,
+            volume_zscore=2.0,
         )
 
         ranked = service.rank_themes(
-            [theme_low, theme_high], metrics_map, strategy="swing",
+            [theme_low, theme_high],
+            metrics_map,
+            strategy="swing",
         )
 
         assert ranked[0].theme_id == "high"

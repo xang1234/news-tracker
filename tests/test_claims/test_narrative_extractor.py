@@ -6,8 +6,6 @@ deduplication via claim_key.
 
 from __future__ import annotations
 
-import pytest
-
 from src.claims.narrative_extractor import (
     EVENT_TYPE_TO_PREDICATE,
     extract_claims_from_cooccurrence,
@@ -15,7 +13,6 @@ from src.claims.narrative_extractor import (
     extract_claims_from_events,
 )
 from src.contracts.intelligence.lanes import LANE_NARRATIVE
-
 
 # -- Event → Claim tests -----------------------------------------------------
 
@@ -244,7 +241,10 @@ class TestExtractClaimsFromDocument:
         ]
 
         claims = extract_claims_from_document(
-            "doc_1", events, entities, content,
+            "doc_1",
+            events,
+            entities,
+            content,
         )
 
         # 1 event claim + 1 co-occurrence claim

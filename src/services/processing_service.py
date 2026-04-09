@@ -12,7 +12,6 @@ Features:
 """
 
 import asyncio
-import logging
 import time
 from typing import Any
 
@@ -22,7 +21,7 @@ from src.config.settings import get_settings
 from src.embedding.queue import EmbeddingQueue
 from src.ingestion.deduplication import Deduplicator
 from src.ingestion.preprocessor import Preprocessor
-from src.ingestion.queue import DocumentQueue, QueueMessage
+from src.ingestion.queue import DocumentQueue
 from src.ingestion.schemas import NormalizedDocument
 from src.observability.metrics import get_metrics
 from src.sentiment.queue import SentimentQueue
@@ -114,6 +113,7 @@ class ProcessingService:
         if enable_ner:
             try:
                 from src.ner.service import NERService
+
                 ner_service = NERService()
                 logger.info("NER service auto-injected into preprocessor")
             except ImportError:
@@ -125,6 +125,7 @@ class ProcessingService:
         if enable_keywords:
             try:
                 from src.keywords.service import KeywordsService
+
                 keywords_service = KeywordsService()
                 logger.info("Keywords service auto-injected into preprocessor")
             except ImportError:
@@ -136,6 +137,7 @@ class ProcessingService:
         if enable_events:
             try:
                 from src.event_extraction.patterns import PatternExtractor
+
                 event_extractor = PatternExtractor()
                 logger.info("Event extractor auto-injected into preprocessor")
             except ImportError:
@@ -229,10 +231,7 @@ class ProcessingService:
             batch.append((msg.message_id, msg.document))
 
             # Process batch when full or timeout
-            if (
-                len(batch) >= self._batch_size
-                or (time.monotonic() - batch_start) > 5.0
-            ):
+            if len(batch) >= self._batch_size or (time.monotonic() - batch_start) > 5.0:
                 await self._process_batch(batch)
                 batch = []
                 batch_start = time.monotonic()
@@ -540,14 +539,10 @@ class ProcessingService:
         queue_healthy = await self._queue.health_check()
         db_healthy = await self._database.health_check()
         embedding_queue_healthy = (
-            await self._embedding_queue.health_check()
-            if self._embedding_queue
-            else None
+            await self._embedding_queue.health_check() if self._embedding_queue else None
         )
         sentiment_queue_healthy = (
-            await self._sentiment_queue.health_check()
-            if self._sentiment_queue
-            else None
+            await self._sentiment_queue.health_check() if self._sentiment_queue else None
         )
 
         return {

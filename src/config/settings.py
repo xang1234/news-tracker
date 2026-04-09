@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     )
     twitter_xui_command: str = Field(
         default="xui",
-        description="Command used to invoke xui CLI (for example: 'xui' or 'uv run --extra cli xui')",
+        description="Command to invoke xui CLI (e.g. 'xui' or 'uv run --extra cli xui')",
     )
     twitter_xui_config_path: str | None = Field(
         default=None,
@@ -151,22 +151,44 @@ class Settings(BaseSettings):
     cors_allow_credentials: bool = Field(default=True, description="Allow CORS credentials")
 
     # Request timeout
-    request_timeout_seconds: float = Field(default=30.0, ge=5.0, le=300.0, description="Request timeout in seconds (0 to disable)")
+    request_timeout_seconds: float = Field(
+        default=30.0, ge=5.0, le=300.0, description="Request timeout in seconds (0 to disable)"
+    )
 
     # API rate limiting (slowapi)
-    rate_limit_enabled: bool = Field(default=False, description="Enable API rate limiting via slowapi")
-    rate_limit_default: str = Field(default="60/minute", description="Default rate limit for all endpoints")
+    rate_limit_enabled: bool = Field(
+        default=False, description="Enable API rate limiting via slowapi"
+    )
+    rate_limit_default: str = Field(
+        default="60/minute", description="Default rate limit for all endpoints"
+    )
     rate_limit_embed: str = Field(default="30/minute", description="Rate limit for /embed endpoint")
-    rate_limit_sentiment: str = Field(default="30/minute", description="Rate limit for /sentiment endpoint")
-    rate_limit_search: str = Field(default="60/minute", description="Rate limit for /search/similar endpoint")
-    rate_limit_graph: str = Field(default="30/minute", description="Rate limit for graph subgraph endpoint")
-    rate_limit_entities: str = Field(default="60/minute", description="Rate limit for entity endpoints")
-    rate_limit_admin: str = Field(default="30/minute", description="Rate limit for admin write operations")
+    rate_limit_sentiment: str = Field(
+        default="30/minute", description="Rate limit for /sentiment endpoint"
+    )
+    rate_limit_search: str = Field(
+        default="60/minute", description="Rate limit for /search/similar endpoint"
+    )
+    rate_limit_graph: str = Field(
+        default="30/minute", description="Rate limit for graph subgraph endpoint"
+    )
+    rate_limit_entities: str = Field(
+        default="60/minute", description="Rate limit for entity endpoints"
+    )
+    rate_limit_admin: str = Field(
+        default="30/minute", description="Rate limit for admin write operations"
+    )
 
     # Worker resilience
-    worker_max_consecutive_failures: int = Field(default=10, ge=1, le=100, description="Max consecutive worker failures before exit")
-    worker_backoff_base_delay: float = Field(default=2.0, ge=0.5, le=30.0, description="Base delay for worker exponential backoff")
-    worker_backoff_max_delay: float = Field(default=120.0, ge=10.0, le=600.0, description="Max delay for worker exponential backoff")
+    worker_max_consecutive_failures: int = Field(
+        default=10, ge=1, le=100, description="Max consecutive worker failures before exit"
+    )
+    worker_backoff_base_delay: float = Field(
+        default=2.0, ge=0.5, le=30.0, description="Base delay for worker exponential backoff"
+    )
+    worker_backoff_max_delay: float = Field(
+        default=120.0, ge=10.0, le=600.0, description="Max delay for worker exponential backoff"
+    )
 
     # Observability
     metrics_port: int = 8000
@@ -184,86 +206,148 @@ class Settings(BaseSettings):
     ner_spacy_model: str = Field(default="en_core_web_trf", description="spaCy model for NER")
 
     # Keywords extraction
-    keywords_enabled: bool = Field(default=False, description="Enable keyword extraction in preprocessing")
+    keywords_enabled: bool = Field(
+        default=False, description="Enable keyword extraction in preprocessing"
+    )
 
     # Event extraction
-    events_enabled: bool = Field(default=False, description="Enable event extraction in preprocessing")
+    events_enabled: bool = Field(
+        default=False, description="Enable event extraction in preprocessing"
+    )
     keywords_top_n: int = Field(default=10, ge=1, le=50, description="Max keywords per document")
 
     # Volume Metrics
-    volume_metrics_enabled: bool = Field(default=False, description="Enable volume metrics computation for themes")
+    volume_metrics_enabled: bool = Field(
+        default=False, description="Enable volume metrics computation for themes"
+    )
 
     # Theme Ranking
-    ranking_enabled: bool = Field(default=False, description="Enable theme ranking engine for actionability scoring")
+    ranking_enabled: bool = Field(
+        default=False, description="Enable theme ranking engine for actionability scoring"
+    )
 
     # Alerts
-    alerts_enabled: bool = Field(default=False, description="Enable alert generation in daily clustering")
+    alerts_enabled: bool = Field(
+        default=False, description="Enable alert generation in daily clustering"
+    )
 
     # Notifications
-    notifications_enabled: bool = Field(default=False, description="Enable notification delivery for alerts")
+    notifications_enabled: bool = Field(
+        default=False, description="Enable notification delivery for alerts"
+    )
 
     # Causal Graph
-    graph_enabled: bool = Field(default=False, description="Enable causal graph for supply chain modeling")
+    graph_enabled: bool = Field(
+        default=False, description="Enable causal graph for supply chain modeling"
+    )
 
     # Sentiment Propagation
-    propagation_enabled: bool = Field(default=False, description="Enable sentiment propagation through causal graph")
+    propagation_enabled: bool = Field(
+        default=False, description="Enable sentiment propagation through causal graph"
+    )
 
     # Backtest
     backtest_enabled: bool = Field(default=False, description="Enable backtest data infrastructure")
 
     # Scoring (LLM compellingness)
-    scoring_enabled: bool = Field(default=False, description="Enable LLM compellingness scoring for themes")
+    scoring_enabled: bool = Field(
+        default=False, description="Enable LLM compellingness scoring for themes"
+    )
 
     # Security Master
-    security_master_enabled: bool = Field(default=False, description="Enable database-backed security master for tickers")
+    security_master_enabled: bool = Field(
+        default=False, description="Enable database-backed security master for tickers"
+    )
 
     # Sources
-    sources_enabled: bool = Field(default=False, description="Enable database-backed source management")
+    sources_enabled: bool = Field(
+        default=False, description="Enable database-backed source management"
+    )
 
     # Drift Detection
     drift_enabled: bool = Field(default=False, description="Enable drift detection and monitoring")
 
     # Feedback
-    feedback_enabled: bool = Field(default=False, description="Enable user feedback collection for quality calibration")
+    feedback_enabled: bool = Field(
+        default=False, description="Enable user feedback collection for quality calibration"
+    )
 
     # Authority Scoring
-    authority_enabled: bool = Field(default=False, description="Enable Bayesian authority scoring for content authors")
+    authority_enabled: bool = Field(
+        default=False, description="Enable Bayesian authority scoring for content authors"
+    )
 
     # Tracing (OpenTelemetry)
-    tracing_enabled: bool = Field(default=False, description="Enable OpenTelemetry distributed tracing")
+    tracing_enabled: bool = Field(
+        default=False, description="Enable OpenTelemetry distributed tracing"
+    )
 
     # WebSocket Alerts
-    ws_alerts_enabled: bool = Field(default=False, description="Enable WebSocket streaming for real-time alerts")
-    ws_alerts_max_connections: int = Field(default=100, ge=1, le=10000, description="Max concurrent WS connections")
-    ws_alerts_heartbeat_seconds: int = Field(default=30, ge=5, le=300, description="Heartbeat ping interval")
+    ws_alerts_enabled: bool = Field(
+        default=False, description="Enable WebSocket streaming for real-time alerts"
+    )
+    ws_alerts_max_connections: int = Field(
+        default=100, ge=1, le=10000, description="Max concurrent WS connections"
+    )
+    ws_alerts_heartbeat_seconds: int = Field(
+        default=30, ge=5, le=300, description="Heartbeat ping interval"
+    )
 
     # Clustering (BERTopic)
-    clustering_enabled: bool = Field(default=False, description="Enable BERTopic clustering in processing")
-    clustering_stream_name: str = Field(default="clustering_queue", description="Redis stream for clustering jobs")
-    clustering_consumer_group: str = Field(default="clustering_workers", description="Consumer group for clustering workers")
+    clustering_enabled: bool = Field(
+        default=False, description="Enable BERTopic clustering in processing"
+    )
+    clustering_stream_name: str = Field(
+        default="clustering_queue", description="Redis stream for clustering jobs"
+    )
+    clustering_consumer_group: str = Field(
+        default="clustering_workers", description="Consumer group for clustering workers"
+    )
 
     # Narrative momentum
-    narrative_enabled: bool = Field(default=False, description="Enable narrative momentum processing")
+    narrative_enabled: bool = Field(
+        default=False, description="Enable narrative momentum processing"
+    )
 
     # Narrative claim extraction (events/entities → evidence claims)
     narrative_claim_extraction_enabled: bool = Field(
         default=False,
-        description="Enable extraction of evidence claims from document events and entity co-occurrences",
+        description="Enable evidence claim extraction from document events and entities",
     )
 
     # Sentiment Analysis
-    sentiment_model_name: str = Field(default="ProsusAI/finbert", description="Model for sentiment analysis")
-    sentiment_batch_size: int = Field(default=16, ge=1, le=64, description="Batch size for sentiment analysis")
+    sentiment_model_name: str = Field(
+        default="ProsusAI/finbert", description="Model for sentiment analysis"
+    )
+    sentiment_batch_size: int = Field(
+        default=16, ge=1, le=64, description="Batch size for sentiment analysis"
+    )
     sentiment_use_fp16: bool = Field(default=True, description="Use FP16 for GPU acceleration")
-    sentiment_backend: str = Field(default="auto", description="Inference backend (auto, torch, onnx)")
-    sentiment_device: str = Field(default="auto", description="Device for inference (auto, cpu, cuda, mps)")
-    sentiment_execution_provider: str = Field(default="auto", description="ONNX execution provider override (auto, cpu, cuda, coreml)")
-    sentiment_onnx_model_path: str | None = Field(default=None, description="Path to exported ONNX sentiment model directory")
-    sentiment_stream_name: str = Field(default="sentiment_queue", description="Redis stream for sentiment jobs")
-    sentiment_consumer_group: str = Field(default="sentiment_workers", description="Consumer group for sentiment workers")
-    sentiment_cache_enabled: bool = Field(default=True, description="Enable Redis caching for sentiment")
+    sentiment_backend: str = Field(
+        default="auto", description="Inference backend (auto, torch, onnx)"
+    )
+    sentiment_device: str = Field(
+        default="auto", description="Device for inference (auto, cpu, cuda, mps)"
+    )
+    sentiment_execution_provider: str = Field(
+        default="auto", description="ONNX execution provider override (auto, cpu, cuda, coreml)"
+    )
+    sentiment_onnx_model_path: str | None = Field(
+        default=None, description="Path to exported ONNX sentiment model directory"
+    )
+    sentiment_stream_name: str = Field(
+        default="sentiment_queue", description="Redis stream for sentiment jobs"
+    )
+    sentiment_consumer_group: str = Field(
+        default="sentiment_workers", description="Consumer group for sentiment workers"
+    )
+    sentiment_cache_enabled: bool = Field(
+        default=True, description="Enable Redis caching for sentiment"
+    )
     sentiment_cache_ttl_hours: int = Field(default=168, description="Cache TTL in hours (1 week)")
-    sentiment_enable_entity_sentiment: bool = Field(default=True, description="Enable entity-level sentiment")
+    sentiment_enable_entity_sentiment: bool = Field(
+        default=True, description="Enable entity-level sentiment"
+    )
 
     # Queue reclaim configuration (applies to all Redis Streams queues)
     queue_idle_timeout_ms: int = Field(
@@ -297,22 +381,21 @@ class Settings(BaseSettings):
     @property
     def reddit_configured(self) -> bool:
         """Check if Reddit API is configured."""
-        return (
-            self.reddit_client_id is not None
-            and self.reddit_client_secret is not None
-        )
+        return self.reddit_client_id is not None and self.reddit_client_secret is not None
 
     @property
     def news_api_configured(self) -> bool:
         """Check if at least one news API is configured."""
-        return any([
-            self.finnhub_api_key,
-            self.newsapi_api_key,
-            self.alpha_vantage_api_key,
-            self.newsfilter_api_keys,
-            self.marketaux_api_keys,
-            self.finlight_api_keys,
-        ])
+        return any(
+            [
+                self.finnhub_api_key,
+                self.newsapi_api_key,
+                self.alpha_vantage_api_key,
+                self.newsfilter_api_keys,
+                self.marketaux_api_keys,
+                self.finlight_api_keys,
+            ]
+        )
 
 
 @lru_cache

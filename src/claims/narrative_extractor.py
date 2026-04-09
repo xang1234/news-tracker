@@ -215,7 +215,9 @@ def extract_claims_from_cooccurrence(
                 if not pattern.search(window_text):
                     continue
 
-                pair_key = (entity_a.lower(), entity_b.lower(), predicate)
+                # Normalize order so (A,B) and (B,A) are treated as the same pair
+                low_a, low_b = entity_a.lower(), entity_b.lower()
+                pair_key = (min(low_a, low_b), max(low_a, low_b), predicate)
                 if pair_key in seen_pairs:
                     continue
                 seen_pairs.add(pair_key)

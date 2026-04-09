@@ -172,26 +172,19 @@ class ThemeRankingService:
         raw_compellingness = theme.metadata.get(
             "compellingness", self._config.default_compellingness
         )
-        compellingness = math.pow(
-            max(0.0, float(raw_compellingness)), beta
-        ) if raw_compellingness > 0 else 0.0
+        compellingness = (
+            math.pow(max(0.0, float(raw_compellingness)), beta) if raw_compellingness > 0 else 0.0
+        )
 
         # Lifecycle multiplier
-        lifecycle_multiplier = LIFECYCLE_MULTIPLIERS.get(
-            theme.lifecycle_stage, 0.8
-        )
+        lifecycle_multiplier = LIFECYCLE_MULTIPLIERS.get(theme.lifecycle_stage, 0.8)
 
         # Propagation bonus: themes affecting many graph nodes get a boost.
         # Stored by daily clustering; clamped to [0, 0.5] to avoid dominating.
         raw_propagation = float(theme.metadata.get("propagation_impact", 0.0))
         propagation_bonus = min(max(raw_propagation, 0.0), 0.5)
 
-        score = (
-            volume_component
-            * compellingness
-            * lifecycle_multiplier
-            * (1.0 + propagation_bonus)
-        )
+        score = volume_component * compellingness * lifecycle_multiplier * (1.0 + propagation_bonus)
 
         components = {
             "volume_component": round(volume_component, 6),
@@ -303,9 +296,7 @@ class ThemeRankingService:
             RuntimeError: If theme_repo is not configured.
         """
         if self._theme_repo is None:
-            raise RuntimeError(
-                "theme_repo is required for get_actionable"
-            )
+            raise RuntimeError("theme_repo is required for get_actionable")
 
         effective_strategy: RankingStrategy = (
             strategy or self._config.default_strategy  # type: ignore[assignment]
