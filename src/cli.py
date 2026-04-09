@@ -1844,6 +1844,50 @@ def graph_seed() -> None:
     asyncio.run(run())
 
 
+@graph.command("sync")
+def graph_sync() -> None:
+    """Sync assertion-derived edges into the causal graph.
+
+    Reads resolved assertions from the intelligence layer, derives
+    graph edges, and persists them to causal_edges.  Seed edges are
+    treated as bootstrap priors; evidence-backed edges with sufficient
+    support override them.
+
+    Idempotent: safe to re-run (uses ON CONFLICT upserts).
+
+    Example:
+        news-tracker graph sync
+    """
+    from src.graph.sync import GraphSyncService
+    from src.storage.database import Database
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            service = GraphSyncService(db)
+            result = await service.sync()
+
+            click.echo("\nGraph Sync Results:")
+            click.echo(f"  Assertions read:  {result.assertions_read}")
+            click.echo(f"  Edges derived:    {result.edges_derived}")
+            click.echo(f"  Edges synced:     {result.edges_synced}")
+            click.echo(f"  Edges removed:    {result.edges_removed}")
+            click.echo(f"  Edges skipped:    {result.edges_skipped}")
+            if result.errors:
+                click.echo(f"  Errors:           {len(result.errors)}")
+                for err in result.errors[:5]:
+                    click.echo(f"    - {err}")
+
+            click.echo(click.style("\nGraph sync complete!", fg="green"))
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
 @main.group()
 def drift() -> None:
     """Drift detection and monitoring commands."""

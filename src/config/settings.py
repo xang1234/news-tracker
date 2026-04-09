@@ -245,6 +245,12 @@ class Settings(BaseSettings):
     # Narrative momentum
     narrative_enabled: bool = Field(default=False, description="Enable narrative momentum processing")
 
+    # Narrative claim extraction (events/entities → evidence claims)
+    narrative_claim_extraction_enabled: bool = Field(
+        default=False,
+        description="Enable extraction of evidence claims from document events and entity co-occurrences",
+    )
+
     # Sentiment Analysis
     sentiment_model_name: str = Field(default="ProsusAI/finbert", description="Model for sentiment analysis")
     sentiment_batch_size: int = Field(default=16, ge=1, le=64, description="Batch size for sentiment analysis")

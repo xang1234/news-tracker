@@ -136,11 +136,18 @@ class ThemeRankingService:
     ) -> tuple[float, dict[str, float]]:
         """Compute the ranking score for a single theme.
 
-        Formula: volume_component ** alpha * compellingness ** beta * lifecycle_multiplier
+        Formula:
+            volume_component ** alpha * compellingness ** beta
+            * lifecycle_multiplier * (1 + propagation_bonus)
 
         The volume component is ``max(0, volume_zscore + 2) ** alpha``,
         shifting the z-score by +2 so that mildly negative z-scores still
         produce small positive values instead of zero.
+
+        The propagation_bonus (0.0–0.5) rewards themes whose tickers
+        affect many supply-chain nodes via the causal graph.  It is
+        stored in ``theme.metadata["propagation_impact"]`` by the daily
+        clustering job and defaults to 0.0 when absent.
 
         Args:
             theme: Theme to score.
@@ -174,12 +181,23 @@ class ThemeRankingService:
             theme.lifecycle_stage, 0.8
         )
 
-        score = volume_component * compellingness * lifecycle_multiplier
+        # Propagation bonus: themes affecting many graph nodes get a boost.
+        # Stored by daily clustering; clamped to [0, 0.5] to avoid dominating.
+        raw_propagation = float(theme.metadata.get("propagation_impact", 0.0))
+        propagation_bonus = min(max(raw_propagation, 0.0), 0.5)
+
+        score = (
+            volume_component
+            * compellingness
+            * lifecycle_multiplier
+            * (1.0 + propagation_bonus)
+        )
 
         components = {
             "volume_component": round(volume_component, 6),
             "compellingness_component": round(compellingness, 6),
             "lifecycle_multiplier": lifecycle_multiplier,
+            "propagation_bonus": round(propagation_bonus, 6),
             "volume_zscore": zscore,
             "strategy": strategy,
         }

@@ -89,6 +89,10 @@ class ProcessingService:
         self._running = False
         self._metrics = get_metrics()
 
+        # Narrative claim extraction (events/entities → evidence claims)
+        self._claim_extraction_enabled = get_settings().narrative_claim_extraction_enabled
+        self._claim_repo: Any = None  # Lazy-initialized ClaimRepository
+
         logger.info(
             "Processing service initialized",
             batch_size=batch_size,
@@ -176,6 +180,12 @@ class ProcessingService:
         # Create repository
         self._repository = DocumentRepository(self._database)
         await self._repository.create_tables()
+
+        # Create claim repository if extraction is enabled
+        if self._claim_extraction_enabled:
+            from src.claims.repository import ClaimRepository
+
+            self._claim_repo = ClaimRepository(self._database)
 
         try:
             # Process messages from queue
@@ -358,6 +368,35 @@ class ProcessingService:
                         # Log but don't fail the document processing
                         logger.warning(
                             "Failed to queue sentiment job",
+                            doc_id=doc.id,
+                            error=str(e),
+                        )
+
+                # Stage 6: Extract narrative claims (events/entities → claims)
+                if self._claim_extraction_enabled:
+                    try:
+                        from src.claims.narrative_extractor import (
+                            extract_claims_from_document,
+                        )
+
+                        claims = extract_claims_from_document(
+                            doc_id=doc.id,
+                            events=doc.events_extracted,
+                            entities=doc.entities_mentioned,
+                            content=doc.content,
+                            published_at=doc.timestamp,
+                        )
+                        if claims and self._claim_repo is not None:
+                            for claim in claims:
+                                await self._claim_repo.upsert_claim(claim)
+                            logger.debug(
+                                "Extracted narrative claims",
+                                doc_id=doc.id,
+                                claim_count=len(claims),
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to extract narrative claims",
                             doc_id=doc.id,
                             error=str(e),
                         )

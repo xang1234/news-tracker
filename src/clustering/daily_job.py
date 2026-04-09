@@ -201,6 +201,13 @@ async def run_daily_clustering(
         logger.exception("Metrics computation failed")
         result.errors.append(f"metrics: {e}")
 
+    # Phase 10.5: Compute propagation impact for themes with sentiment
+    try:
+        await _compute_propagation_impact(themes, theme_repo, database)
+    except Exception as e:
+        logger.exception("Propagation impact computation failed")
+        result.errors.append(f"propagation: {e}")
+
     # Phase 11: Lifecycle classification
     try:
         transitions = await _classify_lifecycle_stages(
@@ -677,3 +684,71 @@ async def _generate_daily_alerts(
                 await redis_client.aclose()
             except Exception:
                 pass
+
+
+async def _compute_propagation_impact(
+    themes: list[Theme],
+    theme_repo: ThemeRepository,
+    database: Database,
+) -> None:
+    """Compute sentiment propagation impact for themes and store in metadata.
+
+    For each theme with top_tickers and a sentiment score, propagates the
+    sentiment through the causal graph and records the total downstream
+    impact magnitude as ``theme.metadata["propagation_impact"]``.
+
+    Only runs when ``propagation_enabled`` is True.
+    """
+    from src.config.settings import get_settings as _get_settings
+
+    settings = _get_settings()
+    if not settings.propagation_enabled:
+        return
+
+    from src.graph.causal_graph import CausalGraph
+    from src.graph.config import GraphConfig
+    from src.graph.propagation import SentimentPropagation
+    from src.themes.catalysts import propagation_delta
+
+    graph = CausalGraph(database, config=GraphConfig())
+    propagation = SentimentPropagation(graph)
+
+    updated = 0
+    for theme in themes:
+        if not theme.top_tickers:
+            continue
+
+        # Use the theme's average sentiment if available
+        avg_sentiment = theme.metadata.get("avg_sentiment")
+        if avg_sentiment is None:
+            continue
+
+        bias = "bullish" if avg_sentiment > 0.08 else ("bearish" if avg_sentiment < -0.08 else "mixed")
+        delta = propagation_delta(avg_sentiment, bias)
+        if abs(delta) < 0.01:
+            continue
+
+        # Propagate from each top ticker and sum impact magnitudes
+        total_impact = 0.0
+        affected_nodes = 0
+        for ticker in theme.top_tickers[:5]:
+            impacts = await propagation.propagate(ticker, delta)
+            for imp in impacts.values():
+                total_impact += abs(imp.impact)
+                affected_nodes += 1
+
+        if affected_nodes == 0:
+            continue
+
+        # Normalize: average impact per affected node, capped at 0.5
+        propagation_score = min(total_impact / max(affected_nodes, 1), 0.5)
+
+        # Store in theme metadata
+        metadata = dict(theme.metadata)
+        metadata["propagation_impact"] = round(propagation_score, 4)
+        metadata["propagation_affected_nodes"] = affected_nodes
+        await theme_repo.update(theme.theme_id, {"metadata": metadata})
+        updated += 1
+
+    if updated:
+        logger.info("Propagation impact computed for %d themes", updated)
