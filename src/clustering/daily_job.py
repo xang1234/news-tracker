@@ -203,7 +203,7 @@ async def run_daily_clustering(
 
     # Phase 10.5: Compute propagation impact for themes with sentiment
     try:
-        await _compute_propagation_impact(themes, theme_repo, database)
+        await _compute_propagation_impact(themes, theme_repo, database, target_date)
     except Exception as e:
         logger.exception("Propagation impact computation failed")
         result.errors.append(f"propagation: {e}")
@@ -690,6 +690,7 @@ async def _compute_propagation_impact(
     themes: list[Theme],
     theme_repo: ThemeRepository,
     database: Database,
+    target_date: date,
 ) -> None:
     """Compute sentiment propagation impact for themes and store in metadata.
 
@@ -702,7 +703,7 @@ async def _compute_propagation_impact(
 
     Only runs when ``propagation_enabled`` is True.
     """
-    from datetime import date, timedelta
+    from datetime import timedelta
 
     from src.config.settings import get_settings as _get_settings
 
@@ -718,9 +719,8 @@ async def _compute_propagation_impact(
     graph = CausalGraph(database, config=GraphConfig())
     propagation = SentimentPropagation(graph)
 
-    # Fetch fresh sentiment from today's metrics (written by Phase 10)
-    today = date.today()
-    yesterday = today - timedelta(days=1)
+    # Fetch fresh sentiment from target_date metrics (written by Phase 10)
+    yesterday = target_date - timedelta(days=1)
 
     updated = 0
     for theme in themes:
@@ -729,7 +729,7 @@ async def _compute_propagation_impact(
 
         # Read sentiment from freshly computed metrics, not stale metadata
         metrics_list = await theme_repo.get_metrics_range(
-            theme.theme_id, yesterday, today,
+            theme.theme_id, yesterday, target_date,
         )
         avg_sentiment = None
         for m in reversed(metrics_list):
