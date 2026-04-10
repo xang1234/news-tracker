@@ -110,7 +110,7 @@ def extract_claims_from_events(
             continue
 
         object_text = (event.get("object") or "").strip() or None
-        confidence = float(event.get("confidence", 0.7))
+        confidence = float(event.get("confidence") or 0.7)
         span_start = event.get("span_start")
         span_end = event.get("span_end")
 
