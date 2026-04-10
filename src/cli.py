@@ -15,7 +15,7 @@ Usage:
 import asyncio
 import signal
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import click
@@ -58,6 +58,7 @@ def main(debug: bool) -> None:
     """News Tracker - Multi-platform financial data ingestion."""
     if debug:
         import os
+
         os.environ["LOG_LEVEL"] = "DEBUG"
 
     setup_logging()
@@ -168,6 +169,7 @@ def worker(mock: bool, metrics_port: int) -> None:
 def init_db() -> None:
     """Initialize the database schema."""
     import pathlib
+
     from src.storage.database import Database
     from src.storage.repository import DocumentRepository
 
@@ -188,6 +190,7 @@ def init_db() -> None:
 
         # Also seed sources if feature is enabled
         from src.config.settings import get_settings
+
         settings = get_settings()
         if settings.sources_enabled:
             from src.sources.service import SourcesService
@@ -207,6 +210,7 @@ def init_db() -> None:
 def health() -> None:
     """Check health of all dependencies."""
     import structlog
+
     logger = structlog.get_logger()
 
     async def check():
@@ -215,6 +219,7 @@ def health() -> None:
         # Check Redis
         try:
             from src.ingestion.queue import DocumentQueue
+
             queue = DocumentQueue()
             await queue.connect()
             results["redis"] = await queue.health_check()
@@ -226,6 +231,7 @@ def health() -> None:
         # Check PostgreSQL
         try:
             from src.storage.database import Database
+
             db = Database()
             await db.connect()
             results["postgres"] = await db.health_check()
@@ -331,6 +337,7 @@ def run_once(mock: bool, with_embeddings: bool, with_sentiment: bool, verify: bo
 
         # Get documents from queue
         from src.ingestion.queue import DocumentQueue
+
         queue = DocumentQueue()
         await queue.connect()
 
@@ -383,7 +390,7 @@ def run_once(mock: bool, with_embeddings: bool, with_sentiment: bool, verify: bo
             click.echo(f"  skipped: {embedding_results['skipped']}")
             click.echo(f"  errors: {embedding_results['errors']}")
 
-            if embedding_results['errors'] > 0:
+            if embedding_results["errors"] > 0:
                 exit_code = 1
 
         # Sentiment stage (optional)
@@ -399,7 +406,7 @@ def run_once(mock: bool, with_embeddings: bool, with_sentiment: bool, verify: bo
             click.echo(f"  skipped: {sentiment_results['skipped']}")
             click.echo(f"  errors: {sentiment_results['errors']}")
 
-            if sentiment_results['errors'] > 0:
+            if sentiment_results["errors"] > 0:
                 exit_code = 1
 
         # Verification stage (optional)
@@ -430,21 +437,46 @@ def run_once(mock: bool, with_embeddings: bool, with_sentiment: bool, verify: bo
                 if total_count == len(stored_doc_ids):
                     click.echo(click.style(f"  ✓ {total_count} documents in database", fg="green"))
                 else:
-                    click.echo(click.style(f"  ✗ Only {total_count}/{len(stored_doc_ids)} documents in database", fg="red"))
+                    click.echo(
+                        click.style(
+                            f"  ✗ Only {total_count}/{len(stored_doc_ids)} documents in database",
+                            fg="red",
+                        )
+                    )
                     exit_code = 1
 
                 if with_embeddings:
                     if with_embedding_count == total_count:
-                        click.echo(click.style(f"  ✓ {with_embedding_count} documents have embeddings", fg="green"))
+                        click.echo(
+                            click.style(
+                                f"  ✓ {with_embedding_count} documents have embeddings", fg="green"
+                            )
+                        )
                     else:
-                        click.echo(click.style(f"  ✗ Only {with_embedding_count}/{total_count} documents have embeddings", fg="red"))
+                        click.echo(
+                            click.style(
+                                f"  ✗ Only {with_embedding_count}/{total_count}"
+                                " documents have embeddings",
+                                fg="red",
+                            )
+                        )
                         exit_code = 1
 
                 if with_sentiment:
                     if with_sentiment_count == total_count:
-                        click.echo(click.style(f"  ✓ {with_sentiment_count} documents have sentiment", fg="green"))
+                        click.echo(
+                            click.style(
+                                f"  ✓ {with_sentiment_count} documents have sentiment", fg="green"
+                            )
+                        )
                     else:
-                        click.echo(click.style(f"  ✗ Only {with_sentiment_count}/{total_count} documents have sentiment", fg="red"))
+                        click.echo(
+                            click.style(
+                                f"  ✗ Only {with_sentiment_count}/{total_count}"
+                                " documents have sentiment",
+                                fg="red",
+                            )
+                        )
                         exit_code = 1
 
                 if exit_code == 0:
@@ -472,7 +504,7 @@ def cleanup(days: int, dry_run: bool) -> None:
         news-tracker cleanup --days 30              # Delete docs older than 30 days
         news-tracker cleanup --days 30 --dry-run   # Preview without deleting
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     from src.storage.database import Database
 
@@ -481,7 +513,7 @@ def cleanup(days: int, dry_run: bool) -> None:
         await db.connect()
 
         try:
-            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+            cutoff = datetime.now(UTC) - timedelta(days=days)
 
             if dry_run:
                 # Count documents that would be deleted
@@ -609,8 +641,13 @@ def clustering_worker(batch_size: int | None, metrics: bool, metrics_port: int) 
 
 
 @main.command("daily-clustering")
-@click.option("--date", "target_date", default=None, type=click.DateTime(formats=["%Y-%m-%d"]),
-              help="Date to process (default: today UTC)")
+@click.option(
+    "--date",
+    "target_date",
+    default=None,
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    help="Date to process (default: today UTC)",
+)
 @click.option("--dry-run", is_flag=True, help="Preview document count without running")
 def daily_clustering(target_date: Any, dry_run: bool) -> None:
     """Run daily batch clustering for theme assignment and metrics.
@@ -625,7 +662,7 @@ def daily_clustering(target_date: Any, dry_run: bool) -> None:
         news-tracker daily-clustering --date 2026-02-05  # Process specific date
         news-tracker daily-clustering --dry-run          # Preview only
     """
-    from datetime import timedelta, timezone as tz
+    from datetime import timedelta
 
     from src.clustering.daily_job import run_daily_clustering
     from src.storage.database import Database
@@ -640,22 +677,24 @@ def daily_clustering(target_date: Any, dry_run: bool) -> None:
             if dry_run:
                 from src.storage.repository import DocumentRepository
 
-                d = d or datetime.now(tz.utc).date()
+                d = d or datetime.now(UTC).date()
                 repo = DocumentRepository(db)
-                since = datetime(d.year, d.month, d.day, tzinfo=tz.utc)
+                since = datetime(d.year, d.month, d.day, tzinfo=UTC)
                 until = since + timedelta(days=1)
                 docs = await repo.get_with_embeddings_since(since, until)
 
                 # Count existing themes
                 from src.themes.repository import ThemeRepository
+
                 theme_repo = ThemeRepository(db)
                 themes = await theme_repo.get_all(limit=500)
 
                 click.echo(f"\nDry run for {d}")
                 click.echo(f"  Documents with embeddings: {len(docs)}")
                 click.echo(f"  Existing themes: {len(themes)}")
-                click.echo(f"  Day of week: {d.strftime('%A')}"
-                           f"{' (merge day)' if d.weekday() == 0 else ''}")
+                click.echo(
+                    f"  Day of week: {d.strftime('%A')}{' (merge day)' if d.weekday() == 0 else ''}"
+                )
                 click.echo("\nRun without --dry-run to execute.")
             else:
                 result = await run_daily_clustering(db, target_date=d)
@@ -703,14 +742,14 @@ def vector_search(
         news-tracker vector-search "semiconductor supply chain" --platform twitter --ticker NVDA
     """
     import redis.asyncio as redis
+
     from src.embedding.config import EmbeddingConfig
     from src.embedding.service import EmbeddingService
     from src.storage.database import Database
     from src.storage.repository import DocumentRepository
-    from src.vectorstore.config import VectorStoreConfig
+    from src.vectorstore.base import VectorSearchFilter
     from src.vectorstore.manager import VectorStoreManager
     from src.vectorstore.pgvector_store import PgVectorStore
-    from src.vectorstore.base import VectorSearchFilter
 
     async def run():
         settings = get_settings()
@@ -820,7 +859,7 @@ def cluster_fit(days: int) -> None:
         news-tracker cluster fit              # Last 30 days
         news-tracker cluster fit --days 7     # Last 7 days
     """
-    from datetime import timedelta, timezone as tz
+    from datetime import timedelta
 
     import numpy as np
 
@@ -839,7 +878,7 @@ def cluster_fit(days: int) -> None:
             doc_repo = DocumentRepository(db)
             theme_repo = ThemeRepository(db)
 
-            until = datetime.now(tz.utc)
+            until = datetime.now(UTC)
             since = until - timedelta(days=days)
 
             click.echo(f"Fetching documents from last {days} days...")
@@ -878,12 +917,12 @@ def cluster_fit(days: int) -> None:
                     click.echo(click.style(f"  Failed to create {cluster.theme_id}: {e}", fg="red"))
 
             # Display results
-            click.echo(f"\nResults:")
+            click.echo("\nResults:")
             click.echo(f"  Documents processed: {len(docs)}")
             click.echo(f"  Themes discovered:   {len(theme_clusters)}")
             click.echo(f"  Themes persisted:    {created}")
 
-            click.echo(f"\nThemes:")
+            click.echo("\nThemes:")
             for tc in theme_clusters.values():
                 keywords = ", ".join(w for w, _ in tc.topic_words[:5])
                 click.echo(f"  {tc.theme_id[:20]:20s}  {tc.document_count:4d} docs  [{keywords}]")
@@ -895,8 +934,13 @@ def cluster_fit(days: int) -> None:
 
 
 @cluster.command("run")
-@click.option("--date", "target_date", default=None, type=click.DateTime(formats=["%Y-%m-%d"]),
-              help="Date to process (default: today UTC)")
+@click.option(
+    "--date",
+    "target_date",
+    default=None,
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    help="Date to process (default: today UTC)",
+)
 @click.option("--dry-run", is_flag=True, help="Preview document count without running")
 def cluster_run(target_date: Any, dry_run: bool) -> None:
     """Run daily batch clustering for a specific date.
@@ -908,7 +952,7 @@ def cluster_run(target_date: Any, dry_run: bool) -> None:
         news-tracker cluster run --date 2026-02-05  # Specific date
         news-tracker cluster run --dry-run           # Preview only
     """
-    from datetime import timedelta, timezone as tz
+    from datetime import timedelta
 
     from src.clustering.daily_job import run_daily_clustering
     from src.storage.database import Database
@@ -924,9 +968,9 @@ def cluster_run(target_date: Any, dry_run: bool) -> None:
                 from src.storage.repository import DocumentRepository
                 from src.themes.repository import ThemeRepository
 
-                d = d or datetime.now(tz.utc).date()
+                d = d or datetime.now(UTC).date()
                 repo = DocumentRepository(db)
-                since = datetime(d.year, d.month, d.day, tzinfo=tz.utc)
+                since = datetime(d.year, d.month, d.day, tzinfo=UTC)
                 until = since + timedelta(days=1)
                 docs = await repo.get_with_embeddings_since(since, until)
 
@@ -936,8 +980,9 @@ def cluster_run(target_date: Any, dry_run: bool) -> None:
                 click.echo(f"\nDry run for {d}")
                 click.echo(f"  Documents with embeddings: {len(docs)}")
                 click.echo(f"  Existing themes: {len(themes)}")
-                click.echo(f"  Day of week: {d.strftime('%A')}"
-                           f"{' (merge day)' if d.weekday() == 0 else ''}")
+                click.echo(
+                    f"  Day of week: {d.strftime('%A')}{' (merge day)' if d.weekday() == 0 else ''}"
+                )
                 click.echo("\nRun without --dry-run to execute.")
             else:
                 result = await run_daily_clustering(db, target_date=d)
@@ -964,10 +1009,20 @@ def cluster_run(target_date: Any, dry_run: bool) -> None:
 
 
 @cluster.command("backfill")
-@click.option("--start", "start_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
-              help="Start date (inclusive)")
-@click.option("--end", "end_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
-              help="End date (inclusive)")
+@click.option(
+    "--start",
+    "start_date",
+    required=True,
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    help="Start date (inclusive)",
+)
+@click.option(
+    "--end",
+    "end_date",
+    required=True,
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    help="End date (inclusive)",
+)
 def cluster_backfill(start_date: Any, end_date: Any) -> None:
     """Run daily clustering for a range of dates.
 
@@ -1038,8 +1093,12 @@ def cluster_backfill(start_date: Any, end_date: Any) -> None:
 
 @cluster.command("merge")
 @click.option("--dry-run", is_flag=True, help="Show what would merge without persisting")
-@click.option("--threshold", default=None, type=float,
-              help="Override similarity threshold for merge (default: 0.85)")
+@click.option(
+    "--threshold",
+    default=None,
+    type=float,
+    help="Override similarity threshold for merge (default: 0.85)",
+)
 def cluster_merge(dry_run: bool, threshold: float | None) -> None:
     """Merge similar themes based on centroid similarity.
 
@@ -1094,7 +1153,7 @@ def cluster_merge(dry_run: bool, threshold: float | None) -> None:
                     s_name = survivor.name if survivor else survivor_id
                     click.echo(f"  {a_name} → {s_name}")
 
-                click.echo(f"\nRun without --dry-run to execute.")
+                click.echo("\nRun without --dry-run to execute.")
             else:
                 merge_count = await _run_weekly_merge(themes, config, theme_repo, db)
 
@@ -1145,13 +1204,13 @@ def cluster_status() -> None:
             # Most recent update
             last_updated = max(t.updated_at for t in themes)
 
-            click.echo(f"\nClustering Status")
+            click.echo("\nClustering Status")
             click.echo("=" * 40)
             click.echo(f"  Total themes:     {len(themes)}")
             click.echo(f"  Total documents:  {total_docs}")
             click.echo(f"  Last updated:     {last_updated.strftime('%Y-%m-%d %H:%M:%S UTC')}")
 
-            click.echo(f"\n  Lifecycle Stages:")
+            click.echo("\n  Lifecycle Stages:")
             for stage in ("emerging", "accelerating", "mature", "fading"):
                 count = lifecycle_counts.get(stage, 0)
                 click.echo(f"    {stage:15s} {count}")
@@ -1207,15 +1266,11 @@ def cluster_recompute_centroids() -> None:
                     skipped += 1
                     continue
 
-                embeddings = np.array(
-                    [list(row["embedding"]) for row in rows], dtype=np.float32
-                )
+                embeddings = np.array([list(row["embedding"]) for row in rows], dtype=np.float32)
                 new_centroid = np.mean(embeddings, axis=0)
                 await theme_repo.update_centroid(theme.theme_id, new_centroid)
 
-                click.echo(
-                    f"  {theme.theme_id[:20]:20s}  updated ({len(rows)} docs)"
-                )
+                click.echo(f"  {theme.theme_id[:20]:20s}  updated ({len(rows)} docs)")
                 updated += 1
 
             click.echo(f"\nDone: {updated} updated, {skipped} skipped")
@@ -1303,15 +1358,26 @@ def narrative_worker(batch_size: int | None, metrics: bool, metrics_port: int) -
 
 
 @narrative.command("backfill")
-@click.option("--start", "start_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
-              help="Start date (inclusive)")
-@click.option("--end", "end_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
-              help="End date (inclusive)")
-@click.option("--reset/--no-reset", default=True,
-              help="Truncate narrative tables before rebuilding")
+@click.option(
+    "--start",
+    "start_date",
+    required=True,
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    help="Start date (inclusive)",
+)
+@click.option(
+    "--end",
+    "end_date",
+    required=True,
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    help="End date (inclusive)",
+)
+@click.option(
+    "--reset/--no-reset", default=True, help="Truncate narrative tables before rebuilding"
+)
 def narrative_backfill(start_date: Any, end_date: Any, reset: bool) -> None:
     """Rebuild narrative runs from theme-assigned documents in a date range."""
-    from datetime import timedelta, timezone as tz
+    from datetime import timedelta
 
     from src.storage.database import Database
 
@@ -1338,8 +1404,8 @@ def narrative_backfill(start_date: Any, end_date: Any, reset: bool) -> None:
                 )
 
             worker = await _build_narrative_worker_for_cli(db)
-            start_ts = datetime(start.year, start.month, start.day, tzinfo=tz.utc)
-            end_ts = datetime(end.year, end.month, end.day, tzinfo=tz.utc) + timedelta(days=1)
+            start_ts = datetime(start.year, start.month, start.day, tzinfo=UTC)
+            end_ts = datetime(end.year, end.month, end.day, tzinfo=UTC) + timedelta(days=1)
             rows = await db.fetch(
                 """
                 SELECT id, theme_ids, timestamp
@@ -1392,11 +1458,18 @@ def narrative_backfill(start_date: Any, end_date: Any, reset: bool) -> None:
 
 
 @narrative.command("replay")
-@click.option("--publish/--dry-run", default=False,
-              help="Persist alerts while replaying instead of reporting only")
-@click.option("--status", "run_status", default=None,
-              type=click.Choice(["active", "cooling", "closed"]),
-              help="Optional run status filter")
+@click.option(
+    "--publish/--dry-run",
+    default=False,
+    help="Persist alerts while replaying instead of reporting only",
+)
+@click.option(
+    "--status",
+    "run_status",
+    default=None,
+    type=click.Choice(["active", "cooling", "closed"]),
+    help="Optional run status filter",
+)
 @click.option("--limit", default=None, type=int, help="Maximum runs to replay")
 def narrative_replay(publish: bool, run_status: str | None, limit: int | None) -> None:
     """Re-run signal evaluation from existing narrative runs and buckets."""
@@ -1484,16 +1557,26 @@ def narrative_replay(publish: bool, run_status: str | None, limit: int | None) -
 
 
 @narrative.command("evaluate")
-@click.option("--start", "start_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
-              help="Start date (inclusive)")
-@click.option("--end", "end_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
-              help="End date (inclusive)")
+@click.option(
+    "--start",
+    "start_date",
+    required=True,
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    help="Start date (inclusive)",
+)
+@click.option(
+    "--end",
+    "end_date",
+    required=True,
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    help="End date (inclusive)",
+)
 @click.option("--horizon", default=5, type=int, help="Forward return horizon in trading days")
 def narrative_evaluate(start_date: Any, end_date: Any, horizon: int) -> None:
     """Score historical narrative alerts using cached forward returns."""
-    from collections import defaultdict
-    from datetime import timedelta, timezone as tz
     import json
+    from collections import defaultdict
+    from datetime import timedelta
 
     from src.backtest.config import BacktestConfig
     from src.backtest.data_feeds import PriceDataFeed
@@ -1510,8 +1593,8 @@ def narrative_evaluate(start_date: Any, end_date: Any, horizon: int) -> None:
                 click.echo(click.style("Error: start date must be before end date", fg="red"))
                 return
 
-            start_ts = datetime(start.year, start.month, start.day, tzinfo=tz.utc)
-            end_ts = datetime(end.year, end.month, end.day, tzinfo=tz.utc) + timedelta(days=1)
+            start_ts = datetime(start.year, start.month, start.day, tzinfo=UTC)
+            end_ts = datetime(end.year, end.month, end.day, tzinfo=UTC) + timedelta(days=1)
             rows = await db.fetch(
                 """
                 SELECT trigger_type, created_at, conviction_score, trigger_data
@@ -1582,9 +1665,7 @@ def narrative_evaluate(start_date: Any, end_date: Any, horizon: int) -> None:
                 count = len(records)
                 hit_rate = sum(1 for r in records if r["avg_return"] > 0) / count
                 mean_return = sum(r["avg_return"] for r in records) / count
-                click.echo(
-                    f"{trigger_type:26s} {count:>6d} {hit_rate:>9.1%} {mean_return:>13.2%}"
-                )
+                click.echo(f"{trigger_type:26s} {count:>6d} {hit_rate:>9.1%} {mean_return:>13.2%}")
 
             scored_records.sort(key=lambda item: item["score"])
             if scored_records:
@@ -1619,14 +1700,30 @@ def backtest() -> None:
 
 
 @backtest.command("run")
-@click.option("--start", "start_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
-              help="Start date (inclusive)")
-@click.option("--end", "end_date", required=True, type=click.DateTime(formats=["%Y-%m-%d"]),
-              help="End date (inclusive)")
-@click.option("--strategy", default="swing", type=click.Choice(["swing", "position"]),
-              help="Ranking strategy (default: swing)")
+@click.option(
+    "--start",
+    "start_date",
+    required=True,
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    help="Start date (inclusive)",
+)
+@click.option(
+    "--end",
+    "end_date",
+    required=True,
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    help="End date (inclusive)",
+)
+@click.option(
+    "--strategy",
+    default="swing",
+    type=click.Choice(["swing", "position"]),
+    help="Ranking strategy (default: swing)",
+)
 @click.option("--top-n", default=10, type=int, help="Number of top themes per day (default: 10)")
-@click.option("--horizon", default=5, type=int, help="Forward return horizon in trading days (default: 5)")
+@click.option(
+    "--horizon", default=5, type=int, help="Forward return horizon in trading days (default: 5)"
+)
 def backtest_run(
     start_date: Any,
     end_date: Any,
@@ -1642,7 +1739,8 @@ def backtest_run(
 
     Example:
         news-tracker backtest run --start 2025-01-01 --end 2025-06-30
-        news-tracker backtest run --start 2025-01-01 --end 2025-06-30 --strategy position --horizon 20
+        news-tracker backtest run --start 2025-01-01 --end 2025-06-30 \\
+            --strategy position --horizon 20
     """
     from src.backtest.engine import BacktestEngine
     from src.storage.database import Database
@@ -1689,9 +1787,11 @@ def backtest_run(
             click.echo(f"  Profit factor:  {_fmt_float(results.profit_factor)}")
 
             if results.calibration:
-                click.echo(f"\n  Calibration Buckets:")
-                click.echo(f"  {'Bucket':<25} {'Count':>6} {'Avg Score':>10} {'Avg Return':>11} {'Hit Rate':>9}")
-                click.echo(f"  {'-'*25} {'-'*6} {'-'*10} {'-'*11} {'-'*9}")
+                click.echo("\n  Calibration Buckets:")
+                hdr = f"  {'Bucket':<25} {'Count':>6} {'Avg Score':>10}"
+                hdr += f" {'Avg Return':>11} {'Hit Rate':>9}"
+                click.echo(hdr)
+                click.echo(f"  {'-' * 25} {'-' * 6} {'-' * 10} {'-' * 11} {'-' * 9}")
                 for b in results.calibration:
                     click.echo(
                         f"  {b['bucket_label']:<25} {b['count']:>6} "
@@ -1707,7 +1807,11 @@ def backtest_run(
 
 @backtest.command("plot")
 @click.option("--run-id", required=True, help="Backtest run ID to visualize")
-@click.option("--output-dir", default="./backtest_plots", help="Directory to save plots (default: ./backtest_plots)")
+@click.option(
+    "--output-dir",
+    default="./backtest_plots",
+    help="Directory to save plots (default: ./backtest_plots)",
+)
 def backtest_plot(run_id: str, output_dir: str) -> None:
     """Generate visualization charts for a completed backtest run.
 
@@ -1739,28 +1843,37 @@ def backtest_plot(run_id: str, output_dir: str) -> None:
                 return
 
             if bt_run.status != "completed":
-                click.echo(click.style(
-                    f"Error: Backtest run '{run_id}' has status '{bt_run.status}' (expected 'completed')",
-                    fg="red",
-                ))
+                click.echo(
+                    click.style(
+                        f"Error: Backtest run '{run_id}' has status"
+                        f" '{bt_run.status}' (expected 'completed')",
+                        fg="red",
+                    )
+                )
                 return
 
             if not bt_run.results:
-                click.echo(click.style(f"Error: Backtest run '{run_id}' has no results data", fg="red"))
+                click.echo(
+                    click.style(f"Error: Backtest run '{run_id}' has no results data", fg="red")
+                )
                 return
 
             # Reconstruct BacktestResults from stored JSONB
             data = bt_run.results
             daily_results = []
             for dr in data.get("daily_results", []):
-                daily_results.append(DailyBacktestResult(
-                    date=date_type.fromisoformat(dr["date"]) if isinstance(dr["date"], str) else dr["date"],
-                    top_n_tickers=dr.get("top_n_tickers", []),
-                    top_n_avg_return=dr.get("top_n_avg_return"),
-                    direction_correct=dr.get("direction_correct"),
-                    theme_count=dr.get("theme_count", 0),
-                    ranked_themes=dr.get("ranked_themes", []),
-                ))
+                daily_results.append(
+                    DailyBacktestResult(
+                        date=date_type.fromisoformat(dr["date"])
+                        if isinstance(dr["date"], str)
+                        else dr["date"],
+                        top_n_tickers=dr.get("top_n_tickers", []),
+                        top_n_avg_return=dr.get("top_n_avg_return"),
+                        direction_correct=dr.get("direction_correct"),
+                        theme_count=dr.get("theme_count", 0),
+                        ranked_themes=dr.get("ranked_themes", []),
+                    )
+                )
 
             results = BacktestResults(
                 run_id=data.get("run_id", run_id),
@@ -1837,6 +1950,50 @@ def graph_seed() -> None:
             click.echo(f"  Nodes seeded: {result['node_count']}")
             click.echo(f"  Edges seeded: {result['edge_count']}")
             click.echo(click.style("\nGraph seeded successfully!", fg="green"))
+
+        finally:
+            await db.close()
+
+    asyncio.run(run())
+
+
+@graph.command("sync")
+def graph_sync() -> None:
+    """Sync assertion-derived edges into the causal graph.
+
+    Reads resolved assertions from the intelligence layer, derives
+    graph edges, and persists them to causal_edges.  Seed edges are
+    treated as bootstrap priors; evidence-backed edges with sufficient
+    support override them.
+
+    Idempotent: safe to re-run (uses ON CONFLICT upserts).
+
+    Example:
+        news-tracker graph sync
+    """
+    from src.graph.sync import GraphSyncService
+    from src.storage.database import Database
+
+    async def run():
+        db = Database()
+        await db.connect()
+
+        try:
+            service = GraphSyncService(db)
+            result = await service.sync()
+
+            click.echo("\nGraph Sync Results:")
+            click.echo(f"  Assertions read:  {result.assertions_read}")
+            click.echo(f"  Edges derived:    {result.edges_derived}")
+            click.echo(f"  Edges synced:     {result.edges_synced}")
+            click.echo(f"  Edges removed:    {result.edges_removed}")
+            click.echo(f"  Edges skipped:    {result.edges_skipped}")
+            if result.errors:
+                click.echo(f"  Errors:           {len(result.errors)}")
+                for err in result.errors[:5]:
+                    click.echo(f"    - {err}")
+
+            click.echo(click.style("\nGraph sync complete!", fg="green"))
 
         finally:
             await db.close()
@@ -1977,10 +2134,7 @@ def _display_drift_report(report: Any, verbose: bool = False) -> None:
         color = severity_colors.get(result.severity, "white")
         label = result.drift_type.replace("_", " ").title()
 
-        click.echo(
-            click.style(f"  [{icon:4s}] ", fg=color)
-            + f"{label}: {result.message}"
-        )
+        click.echo(click.style(f"  [{icon:4s}] ", fg=color) + f"{label}: {result.message}")
 
         if verbose and result.metadata:
             for key, val in result.metadata.items():
@@ -1989,8 +2143,7 @@ def _display_drift_report(report: Any, verbose: bool = False) -> None:
     click.echo("=" * 50)
     overall_color = severity_colors.get(report.overall_severity, "white")
     click.echo(
-        "Overall: "
-        + click.style(report.overall_severity.upper(), fg=overall_color, bold=True)
+        "Overall: " + click.style(report.overall_severity.upper(), fg=overall_color, bold=True)
     )
 
     if report.has_issues:

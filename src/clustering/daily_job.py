@@ -12,10 +12,11 @@ Runs as an offline batch process (distinct from the real-time ClusteringWorker):
 Designed for external cron scheduling: ``0 4 * * * news-tracker daily-clustering``
 """
 
+import contextlib
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import numpy as np
@@ -67,7 +68,7 @@ async def run_daily_clustering(
         DailyClusteringResult with counts and any errors.
     """
     config = config or ClusteringConfig()
-    target_date = target_date or datetime.now(timezone.utc).date()
+    target_date = target_date or datetime.now(UTC).date()
     result = DailyClusteringResult(date=target_date)
     start_time = time.monotonic()
 
@@ -75,7 +76,7 @@ async def run_daily_clustering(
     theme_repo = ThemeRepository(database)
 
     # Phase 1: Time window
-    since = datetime(target_date.year, target_date.month, target_date.day, tzinfo=timezone.utc)
+    since = datetime(target_date.year, target_date.month, target_date.day, tzinfo=UTC)
     until = since + timedelta(days=1)
 
     # Phase 2: Fetch documents
@@ -184,7 +185,12 @@ async def run_daily_clustering(
     if unassigned_indices:
         try:
             new_theme_ids = await _detect_new_themes(
-                docs, embeddings, unassigned_indices, themes, config, theme_repo,
+                docs,
+                embeddings,
+                unassigned_indices,
+                themes,
+                config,
+                theme_repo,
             )
             result.new_themes_created = len(new_theme_ids)
         except Exception as e:
@@ -194,24 +200,42 @@ async def run_daily_clustering(
     # Phase 10: Compute basic daily metrics
     try:
         metrics_count = await _compute_daily_metrics(
-            target_date, themes, theme_doc_counts, doc_repo, theme_repo, since, until,
+            target_date,
+            themes,
+            theme_doc_counts,
+            doc_repo,
+            theme_repo,
+            since,
+            until,
         )
         result.metrics_computed = metrics_count
     except Exception as e:
         logger.exception("Metrics computation failed")
         result.errors.append(f"metrics: {e}")
 
+    # Phase 10.5: Compute propagation impact for themes with sentiment
+    try:
+        await _compute_propagation_impact(themes, theme_repo, database, target_date)
+    except Exception as e:
+        logger.exception("Propagation impact computation failed")
+        result.errors.append(f"propagation: {e}")
+
     # Phase 11: Lifecycle classification
     try:
         transitions = await _classify_lifecycle_stages(
-            target_date, themes, theme_repo,
+            target_date,
+            themes,
+            theme_repo,
         )
         result.lifecycle_transitions = transitions
         for t in transitions:
             if t.is_alertable:
                 logger.info(
                     "Lifecycle transition: %s %s → %s (%s)",
-                    t.theme_id, t.from_stage, t.to_stage, t.alert_message,
+                    t.theme_id,
+                    t.from_stage,
+                    t.to_stage,
+                    t.alert_message,
                 )
     except Exception as e:
         logger.exception("Lifecycle classification failed")
@@ -229,8 +253,13 @@ async def run_daily_clustering(
     # Phase 12: Alert generation (gated by settings.alerts_enabled)
     try:
         alerts_count = await _generate_daily_alerts(
-            target_date, themes, theme_doc_counts, theme_repo,
-            result.lifecycle_transitions, new_theme_ids, database,
+            target_date,
+            themes,
+            theme_doc_counts,
+            theme_repo,
+            result.lifecycle_transitions,
+            new_theme_ids,
+            database,
         )
         result.alerts_generated = alerts_count
     except Exception as e:
@@ -297,9 +326,7 @@ def _theme_to_cluster(theme: Theme) -> ThemeCluster:
     with descending synthetic scores for compatibility with BERTopicService
     methods that operate on topic_words.
     """
-    topic_words = [
-        (kw, 1.0 - i * 0.01) for i, kw in enumerate(theme.top_keywords)
-    ]
+    topic_words = [(kw, 1.0 - i * 0.01) for i, kw in enumerate(theme.top_keywords)]
     return ThemeCluster(
         theme_id=theme.theme_id,
         name=theme.name,
@@ -365,10 +392,7 @@ async def _detect_new_themes(
     service._initialized = True
 
     # Prepare candidates: (doc_id, text, embedding) triples
-    candidates = [
-        (docs[i]["id"], docs[i]["content"], embeddings[i])
-        for i in unassigned_indices
-    ]
+    candidates = [(docs[i]["id"], docs[i]["content"], embeddings[i]) for i in unassigned_indices]
 
     new_clusters = service.check_new_themes(candidates)
 
@@ -528,17 +552,23 @@ async def _run_weekly_merge(
 
             if survivor_cluster:
                 await theme_repo.update_centroid(
-                    survivor_cluster.theme_id, survivor_cluster.centroid,
+                    survivor_cluster.theme_id,
+                    survivor_cluster.centroid,
                 )
-                await theme_repo.update(survivor_cluster.theme_id, {
-                    "document_count": survivor_cluster.document_count,
-                    "top_keywords": [w for w, _ in survivor_cluster.topic_words],
-                })
+                await theme_repo.update(
+                    survivor_cluster.theme_id,
+                    {
+                        "document_count": survivor_cluster.document_count,
+                        "top_keywords": [w for w, _ in survivor_cluster.topic_words],
+                    },
+                )
 
         except Exception as e:
             logger.error(
                 "Failed to finalize merge %s → %s: %s",
-                absorbed_id, survivor_id, e,
+                absorbed_id,
+                survivor_id,
+                e,
             )
 
     logger.info("Weekly merge: %d themes absorbed", len(merge_results))
@@ -568,20 +598,27 @@ async def _classify_lifecycle_stages(
     for theme in themes:
         try:
             metrics_history = await theme_repo.get_metrics_range(
-                theme.theme_id, start, end,
+                theme.theme_id,
+                start,
+                end,
             )
             new_stage, confidence = classifier.classify(theme, metrics_history)
             transition = classifier.detect_transition(theme, new_stage, confidence)
 
             if transition:
                 transitions.append(transition)
-                await theme_repo.update(theme.theme_id, {
-                    "lifecycle_stage": new_stage,
-                })
+                await theme_repo.update(
+                    theme.theme_id,
+                    {
+                        "lifecycle_stage": new_stage,
+                    },
+                )
 
         except Exception as e:
             logger.error(
-                "Failed to classify lifecycle for %s: %s", theme.theme_id, e,
+                "Failed to classify lifecycle for %s: %s",
+                theme.theme_id,
+                e,
             )
 
     return transitions
@@ -630,13 +667,17 @@ async def _generate_daily_alerts(
             continue
         try:
             today_rows = await theme_repo.get_metrics_range(
-                theme.theme_id, target_date, target_date,
+                theme.theme_id,
+                target_date,
+                target_date,
             )
             if today_rows:
                 today_metrics_map[theme.theme_id] = today_rows[0]
 
             yesterday_rows = await theme_repo.get_metrics_range(
-                theme.theme_id, yesterday, yesterday,
+                theme.theme_id,
+                yesterday,
+                yesterday,
             )
             if yesterday_rows:
                 yesterday_metrics_map[theme.theme_id] = yesterday_rows[0]
@@ -650,8 +691,11 @@ async def _generate_daily_alerts(
     redis_client = None
     try:
         import redis.asyncio as redis_lib
+
         redis_client = redis_lib.from_url(
-            str(settings.redis_url), encoding="utf-8", decode_responses=True,
+            str(settings.redis_url),
+            encoding="utf-8",
+            decode_responses=True,
         )
     except Exception as e:
         logger.warning("Redis unavailable for alert dedup: %s", e)
@@ -673,7 +717,101 @@ async def _generate_daily_alerts(
         return len(alerts)
     finally:
         if redis_client is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await redis_client.aclose()
-            except Exception:
-                pass
+
+
+async def _compute_propagation_impact(
+    themes: list[Theme],
+    theme_repo: ThemeRepository,
+    database: Database,
+    target_date: date,
+) -> None:
+    """Compute sentiment propagation impact for themes and store in metadata.
+
+    For each theme with top_tickers and a sentiment score, propagates the
+    sentiment through the causal graph and records the total downstream
+    impact magnitude as ``theme.metadata["propagation_impact"]``.
+
+    Reads sentiment from freshly computed ``theme_metrics`` (Phase 10)
+    rather than the stale ``theme.metadata`` snapshot.
+
+    Only runs when ``propagation_enabled`` is True.
+    """
+    from datetime import timedelta
+
+    from src.config.settings import get_settings as _get_settings
+
+    settings = _get_settings()
+    if not settings.propagation_enabled:
+        return
+
+    from src.graph.causal_graph import CausalGraph
+    from src.graph.config import GraphConfig
+    from src.graph.propagation import SentimentPropagation
+    from src.themes.catalysts import propagation_delta
+
+    graph = CausalGraph(database, config=GraphConfig())
+    propagation = SentimentPropagation(graph)
+
+    # Fetch fresh sentiment from target_date metrics (written by Phase 10)
+    yesterday = target_date - timedelta(days=1)
+
+    updated = 0
+    for theme in themes:
+        try:
+            if not theme.top_tickers:
+                continue
+
+            # Read sentiment from freshly computed metrics, not stale metadata
+            metrics_list = await theme_repo.get_metrics_range(
+                theme.theme_id,
+                yesterday,
+                target_date,
+            )
+            avg_sentiment = None
+            for m in reversed(metrics_list):
+                if m.sentiment_score is not None:
+                    avg_sentiment = m.sentiment_score
+                    break
+
+            if avg_sentiment is None:
+                continue
+
+            bias = (
+                "bullish"
+                if avg_sentiment > 0.08
+                else ("bearish" if avg_sentiment < -0.08 else "mixed")
+            )
+            delta = propagation_delta(avg_sentiment, bias)
+            if abs(delta) < 0.01:
+                continue
+
+            # Propagate from each top ticker and sum impact magnitudes
+            total_impact = 0.0
+            affected_nodes = 0
+            for ticker in theme.top_tickers[:5]:
+                impacts = await propagation.propagate(ticker, delta)
+                for imp in impacts.values():
+                    total_impact += abs(imp.impact)
+                    affected_nodes += 1
+
+            if affected_nodes == 0:
+                continue
+
+            propagation_score = min(total_impact / max(affected_nodes, 1), 0.5)
+
+            metadata = dict(theme.metadata)
+            metadata["propagation_impact"] = round(propagation_score, 4)
+            metadata["propagation_affected_nodes"] = affected_nodes
+            await theme_repo.update(theme.theme_id, {"metadata": metadata})
+            updated += 1
+        except Exception as e:
+            logger.error(
+                "Propagation impact failed for theme %s: %s",
+                theme.theme_id,
+                e,
+            )
+
+    if updated:
+        logger.info("Propagation impact computed for %d themes", updated)

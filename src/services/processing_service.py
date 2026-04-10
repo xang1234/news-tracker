@@ -12,7 +12,6 @@ Features:
 """
 
 import asyncio
-import logging
 import time
 from typing import Any
 
@@ -22,7 +21,7 @@ from src.config.settings import get_settings
 from src.embedding.queue import EmbeddingQueue
 from src.ingestion.deduplication import Deduplicator
 from src.ingestion.preprocessor import Preprocessor
-from src.ingestion.queue import DocumentQueue, QueueMessage
+from src.ingestion.queue import DocumentQueue
 from src.ingestion.schemas import NormalizedDocument
 from src.observability.metrics import get_metrics
 from src.sentiment.queue import SentimentQueue
@@ -89,6 +88,10 @@ class ProcessingService:
         self._running = False
         self._metrics = get_metrics()
 
+        # Narrative claim extraction (events/entities → evidence claims)
+        self._claim_extraction_enabled = get_settings().narrative_claim_extraction_enabled
+        self._claim_repo: Any = None  # Lazy-initialized ClaimRepository
+
         logger.info(
             "Processing service initialized",
             batch_size=batch_size,
@@ -110,6 +113,7 @@ class ProcessingService:
         if enable_ner:
             try:
                 from src.ner.service import NERService
+
                 ner_service = NERService()
                 logger.info("NER service auto-injected into preprocessor")
             except ImportError:
@@ -121,6 +125,7 @@ class ProcessingService:
         if enable_keywords:
             try:
                 from src.keywords.service import KeywordsService
+
                 keywords_service = KeywordsService()
                 logger.info("Keywords service auto-injected into preprocessor")
             except ImportError:
@@ -132,6 +137,7 @@ class ProcessingService:
         if enable_events:
             try:
                 from src.event_extraction.patterns import PatternExtractor
+
                 event_extractor = PatternExtractor()
                 logger.info("Event extractor auto-injected into preprocessor")
             except ImportError:
@@ -177,6 +183,12 @@ class ProcessingService:
         self._repository = DocumentRepository(self._database)
         await self._repository.create_tables()
 
+        # Create claim repository if extraction is enabled
+        if self._claim_extraction_enabled:
+            from src.claims.repository import ClaimRepository
+
+            self._claim_repo = ClaimRepository(self._database)
+
         try:
             # Process messages from queue
             await self._process_loop()
@@ -219,10 +231,7 @@ class ProcessingService:
             batch.append((msg.message_id, msg.document))
 
             # Process batch when full or timeout
-            if (
-                len(batch) >= self._batch_size
-                or (time.monotonic() - batch_start) > 5.0
-            ):
+            if len(batch) >= self._batch_size or (time.monotonic() - batch_start) > 5.0:
                 await self._process_batch(batch)
                 batch = []
                 batch_start = time.monotonic()
@@ -362,6 +371,35 @@ class ProcessingService:
                             error=str(e),
                         )
 
+                # Stage 6: Extract narrative claims (events/entities → claims)
+                if self._claim_extraction_enabled:
+                    try:
+                        from src.claims.narrative_extractor import (
+                            extract_claims_from_document,
+                        )
+
+                        claims = extract_claims_from_document(
+                            doc_id=doc.id,
+                            events=doc.events_extracted,
+                            entities=doc.entities_mentioned,
+                            content=doc.content,
+                            published_at=doc.timestamp,
+                        )
+                        if claims and self._claim_repo is not None:
+                            for claim in claims:
+                                await self._claim_repo.upsert_claim(claim)
+                            logger.debug(
+                                "Extracted narrative claims",
+                                doc_id=doc.id,
+                                claim_count=len(claims),
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            "Failed to extract narrative claims",
+                            doc_id=doc.id,
+                            error=str(e),
+                        )
+
                 processed += 1
                 self._metrics.documents_stored.labels(
                     platform=doc.platform,
@@ -428,6 +466,13 @@ class ProcessingService:
         }
         stored_doc_ids: list[str] = []
 
+        # Initialize claim repo for run_once if extraction is enabled
+        claim_repo = None
+        if self._claim_extraction_enabled:
+            from src.claims.repository import ClaimRepository
+
+            claim_repo = ClaimRepository(self._database)
+
         try:
             for doc in docs:
                 try:
@@ -444,6 +489,29 @@ class ProcessingService:
                     await self._repository.insert(doc)
                     stats["processed"] += 1
                     stored_doc_ids.append(doc.id)
+
+                    # Stage 6: Extract narrative claims
+                    if self._claim_extraction_enabled and claim_repo is not None:
+                        try:
+                            from src.claims.narrative_extractor import (
+                                extract_claims_from_document,
+                            )
+
+                            claims = extract_claims_from_document(
+                                doc_id=doc.id,
+                                events=doc.events_extracted,
+                                entities=doc.entities_mentioned,
+                                content=doc.content,
+                                published_at=doc.timestamp,
+                            )
+                            for claim in claims:
+                                await claim_repo.upsert_claim(claim)
+                        except Exception as e:
+                            logger.warning(
+                                "Failed to extract narrative claims in run_once",
+                                doc_id=doc.id,
+                                error=str(e),
+                            )
 
                 except Exception as e:
                     stats["errors"] += 1
@@ -471,14 +539,10 @@ class ProcessingService:
         queue_healthy = await self._queue.health_check()
         db_healthy = await self._database.health_check()
         embedding_queue_healthy = (
-            await self._embedding_queue.health_check()
-            if self._embedding_queue
-            else None
+            await self._embedding_queue.health_check() if self._embedding_queue else None
         )
         sentiment_queue_healthy = (
-            await self._sentiment_queue.health_check()
-            if self._sentiment_queue
-            else None
+            await self._sentiment_queue.health_check() if self._sentiment_queue else None
         )
 
         return {
