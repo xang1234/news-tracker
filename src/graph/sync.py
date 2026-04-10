@@ -207,9 +207,12 @@ class GraphSyncService:
             result.edges_skipped += 1
             return
 
-        # Ensure both nodes exist (prevents FK violations for non-seeded concepts)
-        await self._graph.ensure_node(edge.source_concept_id)
-        await self._graph.ensure_node(edge.target_concept_id)
+        # Ensure both nodes exist (prevents FK violations for non-seeded concepts).
+        # Only create if missing — don't overwrite existing seed nodes' type/name/metadata.
+        for concept_id in (edge.source_concept_id, edge.target_concept_id):
+            existing_node = await self._graph_repo.get_node(concept_id)
+            if existing_node is None:
+                await self._graph.ensure_node(concept_id)
 
         # Build source_doc_ids from assertion metadata
         source_doc_ids: list[str] = []
@@ -235,13 +238,24 @@ class GraphSyncService:
 
         # competes_with requires explicit bidirectional edges (A→B and B→A)
         if relation == "competes_with":
-            await self._graph_repo.add_edge(
-                source=edge.target_concept_id,
-                target=edge.source_concept_id,
-                relation=relation,
-                confidence=edge.confidence,
-                source_doc_ids=source_doc_ids,
-                metadata=metadata,
+            # Check seed protection for the reverse direction too
+            reverse_existing = await self._graph_repo.get_edge(
+                edge.target_concept_id,
+                edge.source_concept_id,
+                relation,
             )
+            if not (
+                reverse_existing is not None
+                and not reverse_existing.source_doc_ids
+                and edge.support_count < self._min_evidence
+            ):
+                await self._graph_repo.add_edge(
+                    source=edge.target_concept_id,
+                    target=edge.source_concept_id,
+                    relation=relation,
+                    confidence=edge.confidence,
+                    source_doc_ids=source_doc_ids,
+                    metadata=metadata,
+                )
 
         result.edges_synced += 1

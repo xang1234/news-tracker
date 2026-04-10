@@ -241,15 +241,34 @@ class TestGraphSync:
             side_effect=lambda status, limit: ([assertion] if status == "active" else [])
         )
         sync_service._graph_repo.get_edge = AsyncMock(return_value=None)
+        sync_service._graph_repo.get_node = AsyncMock(return_value=None)
         sync_service._graph_repo.add_edge = AsyncMock()
 
         await sync_service.sync()
 
-        # ensure_node called for both source and target
+        # ensure_node called for both source and target (nodes don't exist yet)
         calls = sync_service._graph.ensure_node.call_args_list
         ensured_ids = {c.args[0] for c in calls}
         assert "NEW_TICKER" in ensured_ids
         assert "NVDA" in ensured_ids
+
+    @pytest.mark.asyncio
+    async def test_skips_ensure_node_for_existing_nodes(self, sync_service):
+        """Existing seed nodes should not be overwritten by ensure_node."""
+        assertion = _make_assertion("TSMC", "supplies_to", "NVDA")
+
+        sync_service._assertion_repo.list_assertions = AsyncMock(
+            side_effect=lambda status, limit: ([assertion] if status == "active" else [])
+        )
+        sync_service._graph_repo.get_edge = AsyncMock(return_value=None)
+        # Nodes already exist
+        sync_service._graph_repo.get_node = AsyncMock(return_value=MagicMock())
+        sync_service._graph_repo.add_edge = AsyncMock()
+
+        await sync_service.sync()
+
+        # ensure_node should NOT be called — nodes already exist
+        sync_service._graph.ensure_node.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_competes_with_creates_bidirectional_edges(self, sync_service):
