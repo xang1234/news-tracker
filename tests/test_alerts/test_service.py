@@ -78,22 +78,22 @@ class TestDeduplication:
     @pytest.mark.asyncio
     async def test_not_duplicate_when_key_set(self, service, mock_redis):
         mock_redis.set.return_value = True  # SET NX succeeded
-        assert await service._is_duplicate("t1", "volume_surge") is False
+        assert await service._is_duplicate("theme", "t1", "volume_surge") is False
 
     @pytest.mark.asyncio
     async def test_duplicate_when_key_exists(self, service, mock_redis):
         mock_redis.set.return_value = None  # SET NX failed (key exists)
-        assert await service._is_duplicate("t1", "volume_surge") is True
+        assert await service._is_duplicate("theme", "t1", "volume_surge") is True
 
     @pytest.mark.asyncio
     async def test_graceful_on_redis_error(self, service, mock_redis):
         mock_redis.set.side_effect = ConnectionError("Redis down")
-        assert await service._is_duplicate("t1", "volume_surge") is False
+        assert await service._is_duplicate("theme", "t1", "volume_surge") is False
 
     @pytest.mark.asyncio
     async def test_no_redis_client(self, config, mock_repo):
         svc = AlertService(config=config, alert_repo=mock_repo, redis_client=None)
-        assert await svc._is_duplicate("t1", "volume_surge") is False
+        assert await svc._is_duplicate("theme", "t1", "volume_surge") is False
 
 
 # ── Rate Limiting ────────────────────────────────────────
