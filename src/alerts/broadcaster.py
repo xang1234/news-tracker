@@ -9,13 +9,14 @@ Pattern: Background subscriber task + per-client filter matching.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from starlette.websockets import WebSocket, WebSocketState
+from starlette.websockets import WebSocket
 
 from src.alerts.schemas import Alert
 
@@ -31,9 +32,7 @@ class ClientConnection:
     ws: WebSocket
     severity: str | None = None
     theme_id: str | None = None
-    connected_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    connected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class AlertBroadcaster:
@@ -89,7 +88,9 @@ class AlertBroadcaster:
         )
         logger.info(
             "WebSocket client connected (total=%d, severity=%s, theme_id=%s)",
-            len(self._clients), severity, theme_id,
+            len(self._clients),
+            severity,
+            theme_id,
         )
         return True
 
@@ -98,7 +99,8 @@ class AlertBroadcaster:
         removed = self._clients.pop(ws, None)
         if removed:
             logger.info(
-                "WebSocket client disconnected (total=%d)", len(self._clients),
+                "WebSocket client disconnected (total=%d)",
+                len(self._clients),
             )
 
     async def start(self, redis_client: Any) -> None:
@@ -116,14 +118,17 @@ class AlertBroadcaster:
             self._pubsub = redis_client.pubsub()
             await self._pubsub.subscribe(CHANNEL_NAME)
             self._subscriber_task = asyncio.create_task(
-                self._listen(), name="alert-broadcaster-listener",
+                self._listen(),
+                name="alert-broadcaster-listener",
             )
             self._heartbeat_task = asyncio.create_task(
-                self._send_heartbeats(), name="alert-broadcaster-heartbeat",
+                self._send_heartbeats(),
+                name="alert-broadcaster-heartbeat",
             )
             logger.info(
                 "AlertBroadcaster started (channel=%s, heartbeat=%ds)",
-                CHANNEL_NAME, self._heartbeat_interval,
+                CHANNEL_NAME,
+                self._heartbeat_interval,
             )
         except Exception as e:
             self._running = False
@@ -135,18 +140,14 @@ class AlertBroadcaster:
 
         if self._subscriber_task is not None:
             self._subscriber_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._subscriber_task
-            except asyncio.CancelledError:
-                pass
             self._subscriber_task = None
 
         if self._heartbeat_task is not None:
             self._heartbeat_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._heartbeat_task
-            except asyncio.CancelledError:
-                pass
             self._heartbeat_task = None
 
         if self._pubsub is not None:
@@ -172,10 +173,12 @@ class AlertBroadcaster:
             True if published successfully.
         """
         try:
-            payload = json.dumps({
-                "type": "alert",
-                "data": alert.to_dict(),
-            })
+            payload = json.dumps(
+                {
+                    "type": "alert",
+                    "data": alert.to_dict(),
+                }
+            )
             await redis_client.publish(CHANNEL_NAME, payload)
             return True
         except Exception as e:
@@ -188,7 +191,8 @@ class AlertBroadcaster:
             while self._running:
                 try:
                     message = await self._pubsub.get_message(
-                        ignore_subscribe_messages=True, timeout=1.0,
+                        ignore_subscribe_messages=True,
+                        timeout=1.0,
                     )
                     if message is not None and message["type"] == "message":
                         await self._dispatch_message(message["data"])
@@ -246,9 +250,7 @@ class AlertBroadcaster:
         """
         if client.severity and client.severity != alert_severity:
             return False
-        if client.theme_id and client.theme_id != alert_theme_id:
-            return False
-        return True
+        return not (client.theme_id and client.theme_id != alert_theme_id)
 
     async def _send_heartbeats(self) -> None:
         """Background task: send periodic heartbeat pings to all clients."""
@@ -258,10 +260,12 @@ class AlertBroadcaster:
                 if not self._clients:
                     continue
 
-                heartbeat = json.dumps({
-                    "type": "heartbeat",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                })
+                heartbeat = json.dumps(
+                    {
+                        "type": "heartbeat",
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    }
+                )
 
                 disconnected: list[WebSocket] = []
                 for ws in list(self._clients):

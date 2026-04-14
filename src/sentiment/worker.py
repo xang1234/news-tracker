@@ -185,10 +185,7 @@ class SentimentWorker:
             batch.append(job)
 
             # Process batch when full or timeout
-            if (
-                len(batch) >= self._batch_size
-                or (time.monotonic() - batch_start) > batch_timeout
-            ):
+            if len(batch) >= self._batch_size or (time.monotonic() - batch_start) > batch_timeout:
                 await self._process_batch(batch)
                 batch = []
                 batch_start = time.monotonic()
@@ -274,9 +271,7 @@ class SentimentWorker:
                     result = await self._sentiment_service.analyze(text)
 
                 # Update document with sentiment
-                success = await self._repository.update_sentiment(
-                    job.document_id, result
-                )
+                success = await self._repository.update_sentiment(job.document_id, result)
 
                 if success:
                     processed += 1
@@ -450,8 +445,6 @@ class SentimentWorker:
             "queue_healthy": queue_healthy,
             "database_healthy": db_healthy,
             "sentiment_service_stats": (
-                self._sentiment_service.get_stats()
-                if self._sentiment_service
-                else None
+                self._sentiment_service.get_stats() if self._sentiment_service else None
             ),
         }

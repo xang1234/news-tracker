@@ -7,7 +7,7 @@ applied at the I/O boundary (before yfinance download) via asyncio.Semaphore.
 
 import asyncio
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from typing import Any
 
 from src.backtest.config import BacktestConfig
@@ -71,10 +71,7 @@ class PriceDataFeed:
             cached.extend(fetched)
 
         # Filter to requested range and sort
-        result = [
-            row for row in cached
-            if start <= row["date"] <= end
-        ]
+        result = [row for row in cached if start <= row["date"] <= end]
         result.sort(key=lambda r: r["date"])
         return result
 
@@ -107,7 +104,7 @@ class PriceDataFeed:
             trading_days = [row for row in data if row["date"] >= as_of]
 
             if not trading_days:
-                results[ticker] = {h: None for h in horizons}
+                results[ticker] = dict.fromkeys(horizons)
                 continue
 
             base_price = trading_days[0]["close"]
@@ -161,7 +158,10 @@ class PriceDataFeed:
         """
         async with self._semaphore:
             rows = await asyncio.to_thread(
-                self._yfinance_download, ticker, start, end,
+                self._yfinance_download,
+                ticker,
+                start,
+                end,
             )
 
         # Store in cache
@@ -224,14 +224,16 @@ class PriceDataFeed:
 
         results = []
         for idx, row in df.iterrows():
-            results.append({
-                "ticker": ticker,
-                "date": idx.date() if hasattr(idx, "date") else idx,
-                "open": float(row["Open"]),
-                "high": float(row["High"]),
-                "low": float(row["Low"]),
-                "close": float(row["Close"]),
-                "volume": int(row["Volume"]),
-            })
+            results.append(
+                {
+                    "ticker": ticker,
+                    "date": idx.date() if hasattr(idx, "date") else idx,
+                    "open": float(row["Open"]),
+                    "high": float(row["High"]),
+                    "low": float(row["Low"]),
+                    "close": float(row["Close"]),
+                    "volume": int(row["Volume"]),
+                }
+            )
 
         return results

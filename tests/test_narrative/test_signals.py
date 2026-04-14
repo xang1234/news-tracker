@@ -1,6 +1,6 @@
 """Unit tests for narrative momentum signal evaluation."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 
@@ -16,7 +16,7 @@ from src.narrative.signals import (
 
 
 def _make_run(**overrides) -> NarrativeRun:
-    now = datetime(2026, 2, 5, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 2, 5, 12, 0, 0, tzinfo=UTC)
     data = {
         "run_id": "run_123",
         "theme_id": "theme_123",
@@ -81,19 +81,16 @@ def _bucket(
 
 
 def test_narrative_surge_triggers_on_rate_uplift(monkeypatch):
-    now = datetime(2026, 2, 5, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 2, 5, 12, 0, 0, tzinfo=UTC)
     monkeypatch.setattr("src.narrative.signals._now", lambda: now)
     config = NarrativeConfig()
     run = _make_run(doc_count=24)
 
     baseline = [
-      _bucket(now - timedelta(hours=1, minutes=step * 5), doc_count=1)
-      for step in range(12, 0, -1)
+        _bucket(now - timedelta(hours=1, minutes=step * 5), doc_count=1)
+        for step in range(12, 0, -1)
     ]
-    recent = [
-      _bucket(now - timedelta(minutes=step * 5), doc_count=3)
-      for step in range(6, 0, -1)
-    ]
+    recent = [_bucket(now - timedelta(minutes=step * 5), doc_count=3) for step in range(6, 0, -1)]
 
     result = evaluate_narrative_surge(run, baseline + recent, config)
 
@@ -103,7 +100,7 @@ def test_narrative_surge_triggers_on_rate_uplift(monkeypatch):
 
 
 def test_cross_platform_breakout_escalates_with_recent_authority(monkeypatch):
-    now = datetime(2026, 2, 5, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 2, 5, 12, 0, 0, tzinfo=UTC)
     monkeypatch.setattr("src.narrative.signals._now", lambda: now)
     config = NarrativeConfig()
     run = _make_run()
@@ -123,7 +120,7 @@ def test_cross_platform_breakout_escalates_with_recent_authority(monkeypatch):
 
 
 def test_authority_divergence_requires_distinct_high_and_low_support(monkeypatch):
-    now = datetime(2026, 2, 5, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 2, 5, 12, 0, 0, tzinfo=UTC)
     monkeypatch.setattr("src.narrative.signals._now", lambda: now)
     config = NarrativeConfig()
     run = _make_run()
@@ -147,7 +144,7 @@ def test_authority_divergence_requires_distinct_high_and_low_support(monkeypatch
 
 
 def test_sentiment_regime_shift_requires_recent_confidence(monkeypatch):
-    now = datetime(2026, 2, 5, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 2, 5, 12, 0, 0, tzinfo=UTC)
     monkeypatch.setattr("src.narrative.signals._now", lambda: now)
     config = NarrativeConfig()
     run = _make_run()
@@ -177,7 +174,7 @@ def test_sentiment_regime_shift_requires_recent_confidence(monkeypatch):
 
 
 def test_evaluate_all_signals_returns_all_trigger_types(monkeypatch):
-    now = datetime(2026, 2, 5, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 2, 5, 12, 0, 0, tzinfo=UTC)
     monkeypatch.setattr("src.narrative.signals._now", lambda: now)
     config = NarrativeConfig()
     run = _make_run()

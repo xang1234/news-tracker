@@ -4,8 +4,9 @@ Tests the core BFS algorithm, edge-type weighting, decay, confidence
 attenuation, cycle detection, and min_impact filtering.
 """
 
+from unittest.mock import AsyncMock
+
 import pytest
-from unittest.mock import AsyncMock, patch
 
 from src.graph.causal_graph import CausalGraph
 from src.graph.config import GraphConfig
@@ -75,7 +76,13 @@ class TestSentimentPropagation:
         """A→B and A→C: both branches receive independent impact."""
         mock_database.fetch.return_value = [
             {"source": "A", "target": "B", "relation": "depends_on", "confidence": 1.0, "depth": 1},
-            {"source": "A", "target": "C", "relation": "supplies_to", "confidence": 1.0, "depth": 1},
+            {
+                "source": "A",
+                "target": "C",
+                "relation": "supplies_to",
+                "confidence": 1.0,
+                "depth": 1,
+            },
         ]
 
         impacts = await propagation.propagate("A", -0.5)
@@ -92,7 +99,13 @@ class TestSentimentPropagation:
     async def test_competes_with_flips_sign(self, propagation, mock_database):
         """competes_with edge flips the sentiment sign."""
         mock_database.fetch.return_value = [
-            {"source": "AMD", "target": "NVDA", "relation": "competes_with", "confidence": 1.0, "depth": 1},
+            {
+                "source": "AMD",
+                "target": "NVDA",
+                "relation": "competes_with",
+                "confidence": 1.0,
+                "depth": 1,
+            },
         ]
 
         impacts = await propagation.propagate("AMD", -0.5)
@@ -159,7 +172,13 @@ class TestSentimentPropagation:
         mock_database.fetch.return_value = [
             {"source": "A", "target": "B", "relation": "depends_on", "confidence": 1.0, "depth": 1},
             {"source": "A", "target": "C", "relation": "depends_on", "confidence": 1.0, "depth": 1},
-            {"source": "C", "target": "B", "relation": "supplies_to", "confidence": 1.0, "depth": 2},
+            {
+                "source": "C",
+                "target": "B",
+                "relation": "supplies_to",
+                "confidence": 1.0,
+                "depth": 2,
+            },
         ]
 
         impacts = await propagation.propagate("A", -0.5)
@@ -187,7 +206,13 @@ class TestSentimentPropagation:
         """Different edge types apply their respective weights."""
         mock_database.fetch.return_value = [
             {"source": "A", "target": "B", "relation": "depends_on", "confidence": 1.0, "depth": 1},
-            {"source": "A", "target": "C", "relation": "competes_with", "confidence": 1.0, "depth": 1},
+            {
+                "source": "A",
+                "target": "C",
+                "relation": "competes_with",
+                "confidence": 1.0,
+                "depth": 1,
+            },
             {"source": "A", "target": "D", "relation": "drives", "confidence": 1.0, "depth": 1},
         ]
 
@@ -218,7 +243,13 @@ class TestSentimentPropagation:
     async def test_unknown_relation_zero_weight(self, propagation, mock_database):
         """Unknown edge relation type gets zero weight → filtered out."""
         mock_database.fetch.return_value = [
-            {"source": "A", "target": "B", "relation": "unknown_rel", "confidence": 1.0, "depth": 1},
+            {
+                "source": "A",
+                "target": "B",
+                "relation": "unknown_rel",
+                "confidence": 1.0,
+                "depth": 1,
+            },
         ]
 
         impacts = await propagation.propagate("A", -0.5)
@@ -250,8 +281,20 @@ class TestGetDownstreamEdges:
     async def test_returns_edge_tuples(self, mock_database):
         """get_downstream_edges returns (source, target, relation, confidence, depth)."""
         mock_database.fetch.return_value = [
-            {"source": "TSMC", "target": "NVDA", "relation": "supplies_to", "confidence": 0.9, "depth": 1},
-            {"source": "NVDA", "target": "MSFT", "relation": "supplies_to", "confidence": 0.8, "depth": 2},
+            {
+                "source": "TSMC",
+                "target": "NVDA",
+                "relation": "supplies_to",
+                "confidence": 0.9,
+                "depth": 1,
+            },
+            {
+                "source": "NVDA",
+                "target": "MSFT",
+                "relation": "supplies_to",
+                "confidence": 0.8,
+                "depth": 2,
+            },
         ]
 
         repo = GraphRepository(mock_database)

@@ -1,7 +1,6 @@
 """Tests for ModelVersion, ModelVersionRepository, and version ID generation."""
 
 import json
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 import pytest

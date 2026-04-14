@@ -9,7 +9,7 @@ lifecycle transitions, or new theme emergence.
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 AlertTriggerType = Literal[
@@ -27,28 +27,32 @@ AlertTriggerType = Literal[
     "sentiment_regime_shift",
 ]
 
-VALID_TRIGGER_TYPES: frozenset[str] = frozenset({
-    "sentiment_velocity",
-    "extreme_sentiment",
-    "volume_surge",
-    "lifecycle_change",
-    "new_theme",
-    "propagated_impact",
-    "embedding_drift",
-    "cluster_instability",
-    "narrative_surge",
-    "cross_platform_breakout",
-    "authority_divergence",
-    "sentiment_regime_shift",
-})
+VALID_TRIGGER_TYPES: frozenset[str] = frozenset(
+    {
+        "sentiment_velocity",
+        "extreme_sentiment",
+        "volume_surge",
+        "lifecycle_change",
+        "new_theme",
+        "propagated_impact",
+        "embedding_drift",
+        "cluster_instability",
+        "narrative_surge",
+        "cross_platform_breakout",
+        "authority_divergence",
+        "sentiment_regime_shift",
+    }
+)
 
 AlertSeverity = Literal["critical", "warning", "info"]
 
-VALID_SEVERITIES: frozenset[str] = frozenset({
-    "critical",
-    "warning",
-    "info",
-})
+VALID_SEVERITIES: frozenset[str] = frozenset(
+    {
+        "critical",
+        "warning",
+        "info",
+    }
+)
 
 
 @dataclass
@@ -81,9 +85,7 @@ class Alert:
     conviction_score: float | None = None
     trigger_data: dict[str, Any] = field(default_factory=dict)
     acknowledged: bool = False
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.trigger_type not in VALID_TRIGGER_TYPES:
@@ -93,8 +95,7 @@ class Alert:
             )
         if self.severity not in VALID_SEVERITIES:
             raise ValueError(
-                f"Invalid severity {self.severity!r}. "
-                f"Must be one of: {sorted(VALID_SEVERITIES)}"
+                f"Invalid severity {self.severity!r}. Must be one of: {sorted(VALID_SEVERITIES)}"
             )
 
     def to_dict(self) -> dict[str, Any]:
@@ -128,7 +129,7 @@ class Alert:
         if isinstance(created_at, str):
             created_at = datetime.fromisoformat(created_at)
         elif created_at is None:
-            created_at = datetime.now(timezone.utc)
+            created_at = datetime.now(UTC)
 
         trigger_data = data.get("trigger_data", {})
         if isinstance(trigger_data, str):

@@ -20,6 +20,10 @@ from src.keywords.schemas import ExtractedKeyword
 
 logger = logging.getLogger(__name__)
 
+_SPACY_MISSING_HINT = (
+    "No spaCy model available. Download with: python -m spacy download en_core_web_sm"
+)
+
 
 class KeywordsService:
     """
@@ -73,8 +77,8 @@ class KeywordsService:
             return
 
         try:
-            import spacy
             import rapid_textrank.spacy_component  # noqa: F401 - registers the pipeline factory
+            import spacy
         except ImportError as e:
             logger.error(
                 "spacy and rapid-textrank[spacy] are required for keyword extraction. "
@@ -98,15 +102,11 @@ class KeywordsService:
                 try:
                     self._nlp = spacy.load("en_core_web_sm")
                 except OSError as fallback_error:
-                    logger.error("No spaCy model available. Download with: python -m spacy download en_core_web_sm")
-                    raise ImportError(
-                        "No spaCy model available. Download with: python -m spacy download en_core_web_sm"
-                    ) from fallback_error
+                    logger.error(_SPACY_MISSING_HINT)
+                    raise ImportError(_SPACY_MISSING_HINT) from fallback_error
             else:
-                logger.error("No spaCy model available. Download with: python -m spacy download en_core_web_sm")
-                raise ImportError(
-                    "No spaCy model available. Download with: python -m spacy download en_core_web_sm"
-                ) from e
+                logger.error(_SPACY_MISSING_HINT)
+                raise ImportError(_SPACY_MISSING_HINT) from e
 
         # Add rapid_textrank to the pipeline
         self._nlp.add_pipe("rapid_textrank")
@@ -192,9 +192,7 @@ class KeywordsService:
         """
         return self.extract_sync(text)
 
-    async def extract_batch(
-        self, texts: list[str]
-    ) -> list[list[ExtractedKeyword]]:
+    async def extract_batch(self, texts: list[str]) -> list[list[ExtractedKeyword]]:
         """
         Extract keywords from multiple texts.
 

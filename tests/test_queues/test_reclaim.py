@@ -8,9 +8,8 @@ Tests verify that the BaseRedisQueue correctly:
 - Handles Redis errors gracefully
 """
 
-import asyncio
 from dataclasses import dataclass
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -193,9 +192,7 @@ class TestBaseRedisQueueReclaim:
         assert dlq_fields["error"] == "max_retries_exceeded"
 
         # Verify message was ACKed after DLQ
-        queue._redis.xack.assert_called_once_with(
-            "test_stream", "test_workers", "msg-1"
-        )
+        queue._redis.xack.assert_called_once_with("test_stream", "test_workers", "msg-1")
 
     @pytest.mark.asyncio
     async def test_processes_pending_before_new(self, queue):
@@ -239,9 +236,7 @@ class TestBaseRedisQueueReclaim:
         from redis import ResponseError
 
         # Setup: XAUTOCLAIM command not recognized
-        queue._redis.xautoclaim.side_effect = ResponseError(
-            "ERR unknown command 'XAUTOCLAIM'"
-        )
+        queue._redis.xautoclaim.side_effect = ResponseError("ERR unknown command 'XAUTOCLAIM'")
 
         # Execute: should not raise, just skip reclaim
         reclaimed = []
@@ -419,17 +414,13 @@ class TestBaseRedisQueueAck:
         """Test message acknowledgment."""
         await queue.ack("msg-123")
 
-        queue._redis.xack.assert_called_once_with(
-            "test_stream", "test_workers", "msg-123"
-        )
+        queue._redis.xack.assert_called_once_with("test_stream", "test_workers", "msg-123")
 
     @pytest.mark.asyncio
     async def test_nack_moves_to_dlq(self, queue):
         """Test negative acknowledgment moves message to DLQ."""
         # Setup: xrange returns the original message
-        queue._redis.xrange.return_value = [
-            ("msg-123", {"data": "failed_data"})
-        ]
+        queue._redis.xrange.return_value = [("msg-123", {"data": "failed_data"})]
 
         await queue.nack("msg-123", error="Processing failed")
 

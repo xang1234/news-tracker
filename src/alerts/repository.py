@@ -6,7 +6,7 @@ storage, retrieval, and counting operations for Alert records.
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.alerts.schemas import Alert
@@ -74,7 +74,9 @@ class AlertRepository:
                 created.append(result)
             except Exception as e:
                 logger.error(
-                    "Failed to persist alert %s: %s", alert.alert_id, e,
+                    "Failed to persist alert %s: %s",
+                    alert.alert_id,
+                    e,
                 )
         return created
 
@@ -175,8 +177,11 @@ class AlertRepository:
         Returns:
             Number of alerts created today with the given severity.
         """
-        today_start = datetime.now(timezone.utc).replace(
-            hour=0, minute=0, second=0, microsecond=0,
+        today_start = datetime.now(UTC).replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
         )
         sql = """
             SELECT COUNT(*) FROM alerts

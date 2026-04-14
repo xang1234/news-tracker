@@ -8,7 +8,7 @@ expertise.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 
 
@@ -44,22 +44,16 @@ class AuthorityProfile:
     base_weight: float = 1.0
     total_calls: int = 0
     correct_calls: int = 0
-    first_seen: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    first_seen: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_good_call: datetime | None = None
     topic_scores: dict[str, dict[str, int]] = field(default_factory=dict)
     centrality_score: float = 0.0
-    updated_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         valid_tiers = {t.value for t in AuthorTier}
         if self.tier not in valid_tiers:
-            raise ValueError(
-                f"Invalid tier {self.tier!r}. Must be one of: {sorted(valid_tiers)}"
-            )
+            raise ValueError(f"Invalid tier {self.tier!r}. Must be one of: {sorted(valid_tiers)}")
         if self.total_calls < 0:
             raise ValueError("total_calls must be non-negative")
         if self.correct_calls < 0:

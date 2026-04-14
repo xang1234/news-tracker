@@ -1,7 +1,7 @@
 """Tests for VolumeMetricsService — pure computation and async orchestrator."""
 
 import math
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -13,7 +13,6 @@ from src.themes.metrics import (
     VolumeMetricsService,
 )
 from src.themes.schemas import ThemeMetrics
-
 
 # ── Helpers ──────────────────────────────────────────────────
 
@@ -40,7 +39,7 @@ def service() -> VolumeMetricsService:
 @pytest.fixture
 def ref_time() -> datetime:
     """Fixed reference time for deterministic tests."""
-    return datetime(2026, 2, 7, 12, 0, 0, tzinfo=timezone.utc)
+    return datetime(2026, 2, 7, 12, 0, 0, tzinfo=UTC)
 
 
 # ── TestComputeWeightedVolume ────────────────────────────────
@@ -52,9 +51,7 @@ class TestComputeWeightedVolume:
     def test_empty_docs_returns_zero(self, service: VolumeMetricsService) -> None:
         assert service.compute_weighted_volume([]) == 0.0
 
-    def test_single_twitter_doc(
-        self, service: VolumeMetricsService, ref_time: datetime
-    ) -> None:
+    def test_single_twitter_doc(self, service: VolumeMetricsService, ref_time: datetime) -> None:
         """A single Twitter doc at reference time → weight * 1.0 * authority."""
         doc = _make_doc(ref_time, platform="twitter", authority_score=1.0)
         result = service.compute_weighted_volume([doc], ref_time)
@@ -77,23 +74,17 @@ class TestComputeWeightedVolume:
             DEFAULT_PLATFORM_WEIGHTS["news"] / DEFAULT_PLATFORM_WEIGHTS["twitter"]
         )
 
-    def test_recency_decay(
-        self, service: VolumeMetricsService, ref_time: datetime
-    ) -> None:
+    def test_recency_decay(self, service: VolumeMetricsService, ref_time: datetime) -> None:
         """Older documents contribute less than recent ones."""
         recent = _make_doc(ref_time, authority_score=1.0)
-        old = _make_doc(
-            ref_time - timedelta(days=3), authority_score=1.0
-        )
+        old = _make_doc(ref_time - timedelta(days=3), authority_score=1.0)
 
         vol_recent = service.compute_weighted_volume([recent], ref_time)
         vol_old = service.compute_weighted_volume([old], ref_time)
 
         assert vol_recent > vol_old
 
-    def test_authority_scaling(
-        self, service: VolumeMetricsService, ref_time: datetime
-    ) -> None:
+    def test_authority_scaling(self, service: VolumeMetricsService, ref_time: datetime) -> None:
         """Higher authority → higher contribution."""
         low = _make_doc(ref_time, authority_score=0.2)
         high = _make_doc(ref_time, authority_score=0.8)
@@ -108,9 +99,7 @@ class TestComputeWeightedVolume:
     ) -> None:
         """Documents older than window_days are excluded."""
         # Default window is 7 days; doc at 8 days ago should be excluded
-        old_doc = _make_doc(
-            ref_time - timedelta(days=8), authority_score=1.0
-        )
+        old_doc = _make_doc(ref_time - timedelta(days=8), authority_score=1.0)
         assert service.compute_weighted_volume([old_doc], ref_time) == 0.0
 
     def test_doc_at_window_boundary_included(
@@ -128,9 +117,7 @@ class TestComputeWeightedVolume:
         self, service: VolumeMetricsService, ref_time: datetime
     ) -> None:
         """Doc with None authority_score still contributes (floor of 0.1)."""
-        doc = SimpleNamespace(
-            timestamp=ref_time, platform="twitter", authority_score=None
-        )
+        doc = SimpleNamespace(timestamp=ref_time, platform="twitter", authority_score=None)
         vol = service.compute_weighted_volume([doc], ref_time)
         expected = DEFAULT_PLATFORM_WEIGHTS["twitter"] * 1.0 * 0.1
         assert vol == pytest.approx(expected)
@@ -156,9 +143,7 @@ class TestComputeWeightedVolume:
         self, service: VolumeMetricsService, ref_time: datetime
     ) -> None:
         """Docs with None timestamp are silently skipped."""
-        doc = SimpleNamespace(
-            timestamp=None, platform="twitter", authority_score=0.5
-        )
+        doc = SimpleNamespace(timestamp=None, platform="twitter", authority_score=0.5)
         assert service.compute_weighted_volume([doc], ref_time) == 0.0
 
     def test_multiple_docs_additive(
@@ -180,9 +165,7 @@ class TestComputeWeightedVolume:
 class TestComputeVolumeZscore:
     """Tests for z-score normalization."""
 
-    def test_insufficient_history_returns_none(
-        self, service: VolumeMetricsService
-    ) -> None:
+    def test_insufficient_history_returns_none(self, service: VolumeMetricsService) -> None:
         """Fewer than min_history_days → None."""
         result = service.compute_volume_zscore(5.0, [1.0, 2.0, 3.0])
         assert result is None
@@ -236,9 +219,7 @@ class TestComputeVolumeZscore:
 class TestComputeVelocity:
     """Tests for EMA-based velocity computation."""
 
-    def test_insufficient_data_returns_none(
-        self, service: VolumeMetricsService
-    ) -> None:
+    def test_insufficient_data_returns_none(self, service: VolumeMetricsService) -> None:
         """Fewer than ema_long_span values → None."""
         result = service.compute_velocity([1.0, 2.0])
         assert result is None
@@ -251,18 +232,14 @@ class TestComputeVelocity:
         # Short and long EMA converge on constant input → velocity ≈ 0
         assert result == pytest.approx(0.0, abs=0.01)
 
-    def test_rising_zscores_positive_velocity(
-        self, service: VolumeMetricsService
-    ) -> None:
+    def test_rising_zscores_positive_velocity(self, service: VolumeMetricsService) -> None:
         """Increasing z-scores → positive velocity (short EMA > long EMA)."""
         zscores = [float(i) for i in range(10)]
         result = service.compute_velocity(zscores)
         assert result is not None
         assert result > 0
 
-    def test_falling_zscores_negative_velocity(
-        self, service: VolumeMetricsService
-    ) -> None:
+    def test_falling_zscores_negative_velocity(self, service: VolumeMetricsService) -> None:
         """Decreasing z-scores → negative velocity."""
         zscores = [float(10 - i) for i in range(10)]
         result = service.compute_velocity(zscores)
@@ -276,21 +253,15 @@ class TestComputeVelocity:
 class TestComputeAcceleration:
     """Tests for acceleration (velocity delta)."""
 
-    def test_insufficient_data_returns_none(
-        self, service: VolumeMetricsService
-    ) -> None:
+    def test_insufficient_data_returns_none(self, service: VolumeMetricsService) -> None:
         assert service.compute_acceleration([1.0]) is None
         assert service.compute_acceleration([]) is None
 
-    def test_positive_acceleration(
-        self, service: VolumeMetricsService
-    ) -> None:
+    def test_positive_acceleration(self, service: VolumeMetricsService) -> None:
         result = service.compute_acceleration([1.0, 3.0])
         assert result == pytest.approx(2.0)
 
-    def test_negative_acceleration(
-        self, service: VolumeMetricsService
-    ) -> None:
+    def test_negative_acceleration(self, service: VolumeMetricsService) -> None:
         result = service.compute_acceleration([3.0, 1.0])
         assert result == pytest.approx(-2.0)
 
@@ -313,17 +284,13 @@ class TestDetectVolumeAnomaly:
     def test_surge(self, service: VolumeMetricsService) -> None:
         assert service.detect_volume_anomaly(3.5) == "surge"
 
-    def test_exact_surge_threshold(
-        self, service: VolumeMetricsService
-    ) -> None:
+    def test_exact_surge_threshold(self, service: VolumeMetricsService) -> None:
         assert service.detect_volume_anomaly(3.0) == "surge"
 
     def test_collapse(self, service: VolumeMetricsService) -> None:
         assert service.detect_volume_anomaly(-2.5) == "collapse"
 
-    def test_exact_collapse_threshold(
-        self, service: VolumeMetricsService
-    ) -> None:
+    def test_exact_collapse_threshold(self, service: VolumeMetricsService) -> None:
         assert service.detect_volume_anomaly(-2.0) == "collapse"
 
     def test_normal_range(self, service: VolumeMetricsService) -> None:
@@ -375,12 +342,12 @@ class TestComputeForTheme:
         # Docs assigned to this theme
         docs = [
             _make_doc(
-                datetime(2026, 2, 7, 10, 0, tzinfo=timezone.utc),
+                datetime(2026, 2, 7, 10, 0, tzinfo=UTC),
                 platform="news",
                 authority_score=0.8,
             ),
             _make_doc(
-                datetime(2026, 2, 6, 14, 0, tzinfo=timezone.utc),
+                datetime(2026, 2, 6, 14, 0, tzinfo=UTC),
                 platform="twitter",
                 authority_score=0.5,
             ),
@@ -405,9 +372,7 @@ class TestComputeForTheme:
         mock_theme_repo = AsyncMock()
         mock_theme_repo.get_metrics_range = AsyncMock(return_value=history)
 
-        svc = VolumeMetricsService(
-            doc_repo=mock_doc_repo, theme_repo=mock_theme_repo
-        )
+        svc = VolumeMetricsService(doc_repo=mock_doc_repo, theme_repo=mock_theme_repo)
 
         result = await svc.compute_for_theme("theme_test", ref_date)
 
@@ -419,9 +384,7 @@ class TestComputeForTheme:
         assert result.weighted_volume > 0
 
         # Verify repos were called
-        mock_doc_repo.get_documents_by_theme.assert_awaited_once_with(
-            "theme_test", limit=500
-        )
+        mock_doc_repo.get_documents_by_theme.assert_awaited_once_with("theme_test", limit=500)
         mock_theme_repo.get_metrics_range.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -433,9 +396,7 @@ class TestComputeForTheme:
         mock_theme_repo = AsyncMock()
         mock_theme_repo.get_metrics_range = AsyncMock(return_value=[])
 
-        svc = VolumeMetricsService(
-            doc_repo=mock_doc_repo, theme_repo=mock_theme_repo
-        )
+        svc = VolumeMetricsService(doc_repo=mock_doc_repo, theme_repo=mock_theme_repo)
 
         result = await svc.compute_for_theme("theme_test", date(2026, 2, 7))
 

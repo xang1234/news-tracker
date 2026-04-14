@@ -195,7 +195,13 @@ class TestFit:
                 break
 
         assert topic_0_theme is not None
-        assert set(topic_0_theme.document_ids) == {"doc_000", "doc_001", "doc_002", "doc_003", "doc_004"}
+        assert set(topic_0_theme.document_ids) == {
+            "doc_000",
+            "doc_001",
+            "doc_002",
+            "doc_003",
+            "doc_004",
+        }
 
     def test_topic_words_from_model(
         self,
@@ -275,7 +281,9 @@ class TestFitInputValidation:
 class TestFitEdgeCases:
     """Tests for edge cases in fit()."""
 
-    def test_all_outliers(self, clustering_config, sample_documents, sample_embeddings, sample_document_ids):
+    def test_all_outliers(
+        self, clustering_config, sample_documents, sample_embeddings, sample_document_ids
+    ):
         """When BERTopic assigns all docs to topic -1, should return no themes."""
         service = BERTopicService(config=clustering_config)
         model = MagicMock()
@@ -287,7 +295,9 @@ class TestFitEdgeCases:
         assert themes == {}
         assert service.is_initialized
 
-    def test_single_cluster(self, clustering_config, sample_documents, sample_embeddings, sample_document_ids):
+    def test_single_cluster(
+        self, clustering_config, sample_documents, sample_embeddings, sample_document_ids
+    ):
         """Should handle a single non-outlier cluster."""
         service = BERTopicService(config=clustering_config)
         model = MagicMock()
@@ -302,7 +312,9 @@ class TestFitEdgeCases:
         theme = list(themes.values())[0]
         assert theme.document_count == 15
 
-    def test_internal_error_returns_empty(self, clustering_config, sample_documents, sample_embeddings, sample_document_ids):
+    def test_internal_error_returns_empty(
+        self, clustering_config, sample_documents, sample_embeddings, sample_document_ids
+    ):
         """Internal BERTopic error should return empty dict, not raise."""
         service = BERTopicService(config=clustering_config)
         model = MagicMock()
@@ -643,7 +655,11 @@ class TestTransformEdgeCases:
     """Tests for edge cases in transform()."""
 
     def test_no_themes_returns_all_candidates(
-        self, clustering_config, sample_documents, sample_embeddings, sample_document_ids,
+        self,
+        clustering_config,
+        sample_documents,
+        sample_embeddings,
+        sample_document_ids,
     ):
         """If fit() produced no themes (all outliers), transform returns empty."""
         service = BERTopicService(config=clustering_config)
@@ -938,7 +954,9 @@ class TestCheckNewThemes:
             fitted_service._new_theme_candidates.append((f"cand_{i}", emb))
 
         # Also add one that's NOT in the candidate list
-        fitted_service._new_theme_candidates.append(("unrelated_doc", rng.randn(768).astype(np.float32)))
+        fitted_service._new_theme_candidates.append(
+            ("unrelated_doc", rng.randn(768).astype(np.float32))
+        )
 
         center = rng.randn(768)
         center /= np.linalg.norm(center)

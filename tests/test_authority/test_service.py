@@ -29,21 +29,15 @@ class TestClassifyTier:
         assert tier == AuthorTier.RESEARCH
 
     def test_verified_substack_is_research(self, service):
-        tier = service.classify_tier(
-            author_verified=True, platform="substack"
-        )
+        tier = service.classify_tier(author_verified=True, platform="substack")
         assert tier == AuthorTier.RESEARCH
 
     def test_verified_news_is_research(self, service):
-        tier = service.classify_tier(
-            author_verified=True, platform="news"
-        )
+        tier = service.classify_tier(author_verified=True, platform="news")
         assert tier == AuthorTier.RESEARCH
 
     def test_research_name_takes_priority_over_verified(self, service):
-        tier = service.classify_tier(
-            author_verified=True, author_name="SemiAnalysis"
-        )
+        tier = service.classify_tier(author_verified=True, author_name="SemiAnalysis")
         assert tier == AuthorTier.RESEARCH
 
 
@@ -138,24 +132,16 @@ class TestComputeScore:
         assert 0.0 < score < 1.0
 
     def test_followers_boost_score(self, service, established_profile, now):
-        no_followers = service.compute_score(
-            established_profile, followers=0, now=now
-        )
-        with_followers = service.compute_score(
-            established_profile, followers=100_000, now=now
-        )
+        no_followers = service.compute_score(established_profile, followers=0, now=now)
+        with_followers = service.compute_score(established_profile, followers=100_000, now=now)
         assert with_followers > no_followers
 
     def test_zero_followers_no_crash(self, service, established_profile, now):
-        score = service.compute_score(
-            established_profile, followers=0, now=now
-        )
+        score = service.compute_score(established_profile, followers=0, now=now)
         assert 0.0 <= score <= 1.0
 
     def test_none_followers_no_crash(self, service, established_profile, now):
-        score = service.compute_score(
-            established_profile, followers=None, now=now
-        )
+        score = service.compute_score(established_profile, followers=None, now=now)
         assert 0.0 <= score <= 1.0
 
     def test_perfect_accuracy_high_score(self, service, now):
@@ -201,12 +187,16 @@ class TestComputeScoreSimple:
     def test_verified_twitter_user(self, service, now):
         first_seen = now - timedelta(days=60)
         anon_score = service.compute_score_simple(
-            author_verified=False, platform="twitter",
-            first_seen=first_seen, now=now,
+            author_verified=False,
+            platform="twitter",
+            first_seen=first_seen,
+            now=now,
         )
         verified_score = service.compute_score_simple(
-            author_verified=True, platform="twitter",
-            first_seen=first_seen, now=now,
+            author_verified=True,
+            platform="twitter",
+            first_seen=first_seen,
+            now=now,
         )
         assert verified_score > anon_score
 
@@ -215,12 +205,14 @@ class TestComputeScoreSimple:
         score = service.compute_score_simple(
             author_name="SemiAnalysis",
             platform="substack",
-            first_seen=first_seen, now=now,
+            first_seen=first_seen,
+            now=now,
         )
         anon = service.compute_score_simple(
             author_name="random",
             platform="twitter",
-            first_seen=first_seen, now=now,
+            first_seen=first_seen,
+            now=now,
         )
         assert score > anon
 
@@ -271,9 +263,7 @@ class TestTopicScore:
         assert ai_score > memory_score
 
     def test_topic_missing_returns_none(self, service, established_profile, now):
-        result = service.compute_topic_score(
-            established_profile, "nonexistent_topic", now=now
-        )
+        result = service.compute_topic_score(established_profile, "nonexistent_topic", now=now)
         assert result is None
 
 
@@ -282,17 +272,13 @@ class TestUpdateTrackRecord:
 
     @pytest.mark.asyncio
     async def test_no_repo_returns_none(self, service):
-        result = await service.update_track_record(
-            "user", "twitter", is_correct=True
-        )
+        result = await service.update_track_record("user", "twitter", is_correct=True)
         assert result is None
 
     @pytest.mark.asyncio
     async def test_no_profile_returns_none(self, service_with_repo, repository):
         repository.get = AsyncMock(return_value=None)
-        result = await service_with_repo.update_track_record(
-            "unknown", "twitter", is_correct=True
-        )
+        result = await service_with_repo.update_track_record("unknown", "twitter", is_correct=True)
         assert result is None
 
     @pytest.mark.asyncio
@@ -302,9 +288,7 @@ class TestUpdateTrackRecord:
         repository.get = AsyncMock(return_value=established_profile)
         repository.upsert = AsyncMock(side_effect=lambda p: p)
 
-        result = await service_with_repo.update_track_record(
-            "user_123", "twitter", is_correct=True
-        )
+        result = await service_with_repo.update_track_record("user_123", "twitter", is_correct=True)
         assert result is not None
         assert result.total_calls == 21
         assert result.correct_calls == 16
@@ -326,9 +310,7 @@ class TestUpdateTrackRecord:
         assert result.last_good_call == original_good_call
 
     @pytest.mark.asyncio
-    async def test_topic_tracking(
-        self, service_with_repo, repository, established_profile
-    ):
+    async def test_topic_tracking(self, service_with_repo, repository, established_profile):
         repository.get = AsyncMock(return_value=established_profile)
         repository.upsert = AsyncMock(side_effect=lambda p: p)
 
@@ -357,12 +339,8 @@ class TestConfigOverrides:
             last_good_call=now - timedelta(days=1),
         )
 
-        conservative_score = AuthorityService(config=conservative).compute_score(
-            profile, now=now
-        )
-        liberal_score = AuthorityService(config=liberal).compute_score(
-            profile, now=now
-        )
+        conservative_score = AuthorityService(config=conservative).compute_score(profile, now=now)
+        liberal_score = AuthorityService(config=liberal).compute_score(profile, now=now)
         assert liberal_score > conservative_score
 
     def test_custom_probation_days(self, now):
@@ -375,14 +353,10 @@ class TestConfigOverrides:
             first_seen=now - timedelta(days=10),
         )
 
-        short_score = AuthorityService(config=short_probation).compute_score(
-            profile, now=now
-        )
-        long_score = AuthorityService(config=long_probation).compute_score(
-            profile, now=now
-        )
+        short_score = AuthorityService(config=short_probation).compute_score(profile, now=now)
+        long_score = AuthorityService(config=long_probation).compute_score(profile, now=now)
         assert short_score > long_score
 
 
 # Import at bottom to avoid issues with conftest fixtures
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock  # noqa: E402

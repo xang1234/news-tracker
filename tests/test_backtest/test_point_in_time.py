@@ -1,7 +1,7 @@
 """Tests for PointInTimeService temporal filtering."""
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import numpy as np
 import pytest
@@ -40,7 +40,7 @@ class TestGetThemesAsOf:
     ) -> None:
         """Calls ThemeRepository.get_all_as_of with correct params."""
         mock_theme_repo.get_all_as_of = AsyncMock(return_value=[])
-        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)
 
         result = await pit_service.get_themes_as_of(
             as_of=as_of,
@@ -63,7 +63,7 @@ class TestGetThemesAsOf:
     ) -> None:
         """Works with no lifecycle stage filter."""
         mock_theme_repo.get_all_as_of = AsyncMock(return_value=[])
-        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)
 
         await pit_service.get_themes_as_of(as_of=as_of)
 
@@ -85,7 +85,7 @@ class TestGetDocumentsAsOf:
     ) -> None:
         """SQL filters on fetched_at, NOT timestamp."""
         mock_database.fetch.return_value = []
-        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)
 
         await pit_service.get_documents_as_of(as_of=as_of)
 
@@ -101,8 +101,8 @@ class TestGetDocumentsAsOf:
     ) -> None:
         """Adds lower bound on fetched_at when since is provided."""
         mock_database.fetch.return_value = []
-        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
-        since = datetime(2025, 6, 1, 0, 0, 0, tzinfo=timezone.utc)
+        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)
+        since = datetime(2025, 6, 1, 0, 0, 0, tzinfo=UTC)
 
         await pit_service.get_documents_as_of(as_of=as_of, since=since)
 
@@ -124,10 +124,10 @@ class TestGetDocumentsAsOf:
                 "authority_score": 0.85,
                 "sentiment": '{"label": "positive", "score": 0.9}',
                 "theme_ids": ["theme_abc"],
-                "fetched_at": datetime(2025, 6, 14, tzinfo=timezone.utc),
+                "fetched_at": datetime(2025, 6, 14, tzinfo=UTC),
             }
         ]
-        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)
 
         result = await pit_service.get_documents_as_of(as_of=as_of)
 
@@ -146,7 +146,7 @@ class TestGetDocumentsAsOf:
     ) -> None:
         """Only returns documents with embeddings."""
         mock_database.fetch.return_value = []
-        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)
 
         await pit_service.get_documents_as_of(as_of=as_of)
 
@@ -165,7 +165,7 @@ class TestGetMetricsAsOf:
     ) -> None:
         """Calls get_metrics_range with correct date window."""
         mock_theme_repo.get_metrics_range = AsyncMock(return_value=[])
-        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)
 
         await pit_service.get_metrics_as_of(
             theme_id="theme_abc",
@@ -197,11 +197,11 @@ class TestGetThemeCentroidsAsOf:
             theme_id="theme_abc",
             name="test",
             centroid=centroid,
-            created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
-            updated_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+            created_at=datetime(2025, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2025, 1, 1, tzinfo=UTC),
         )
         mock_theme_repo.get_all_as_of = AsyncMock(return_value=[theme])
-        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+        as_of = datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)
 
         result = await pit_service.get_theme_centroids_as_of(as_of=as_of)
 

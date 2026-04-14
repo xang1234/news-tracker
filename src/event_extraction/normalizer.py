@@ -9,15 +9,32 @@ from __future__ import annotations
 import re
 from datetime import date
 
-
 # Month name → number mapping
 _MONTH_MAP: dict[str, int] = {
-    "january": 1, "february": 2, "march": 3, "april": 4,
-    "may": 5, "june": 6, "july": 7, "august": 8,
-    "september": 9, "october": 10, "november": 11, "december": 12,
-    "jan": 1, "feb": 2, "mar": 3, "apr": 4,
-    "jun": 6, "jul": 7, "aug": 8, "sep": 9,
-    "sept": 9, "oct": 10, "nov": 11, "dec": 12,
+    "january": 1,
+    "february": 2,
+    "march": 3,
+    "april": 4,
+    "may": 5,
+    "june": 6,
+    "july": 7,
+    "august": 8,
+    "september": 9,
+    "october": 10,
+    "november": 11,
+    "december": 12,
+    "jan": 1,
+    "feb": 2,
+    "mar": 3,
+    "apr": 4,
+    "jun": 6,
+    "jul": 7,
+    "aug": 8,
+    "sep": 9,
+    "sept": 9,
+    "oct": 10,
+    "nov": 11,
+    "dec": 12,
 }
 
 # Quarter → month ranges
@@ -129,9 +146,7 @@ class TimeNormalizer:
     def _try_end_of_year(self, text: str) -> str | None:
         """Match 'by end of year', 'end of year', 'year-end', 'by year end'."""
         lower = text.lower().strip()
-        if re.match(
-            r"^(by\s+)?(end\s+of\s+(the\s+)?year|year[\s-]?end)$", lower
-        ):
+        if re.match(r"^(by\s+)?(end\s+of\s+(the\s+)?year|year[\s-]?end)$", lower):
             return f"{self._ref.year}-Q4"
         return None
 

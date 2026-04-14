@@ -7,8 +7,6 @@ from starlette.requests import Request
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_keywords_service
-from src.api.rate_limit import limiter
-from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     ErrorResponse,
     KeywordItem,
@@ -16,6 +14,8 @@ from src.api.models import (
     KeywordsResponse,
     KeywordsResultItem,
 )
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.keywords.service import KeywordsService
 
 router = APIRouter()
@@ -53,7 +53,7 @@ async def extract_keywords(
         batch_results = await service.extract_batch(body.texts)
 
         results = []
-        for text, keywords in zip(body.texts, batch_results):
+        for text, keywords in zip(body.texts, batch_results, strict=True):
             items = [
                 KeywordItem(
                     text=kw.text,

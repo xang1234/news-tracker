@@ -119,14 +119,11 @@ class ClusteringQueue(BaseRedisQueue[ClusteringJob]):
         )
 
         logger.debug(
-            f"Published clustering job for document_id={document_id}, "
-            f"model={embedding_model}"
+            f"Published clustering job for document_id={document_id}, model={embedding_model}"
         )
         return str(message_id)
 
-    async def publish_batch(
-        self, document_ids: list[str], embedding_model: str
-    ) -> list[str]:
+    async def publish_batch(self, document_ids: list[str], embedding_model: str) -> list[str]:
         """
         Publish multiple clustering jobs to the queue.
 

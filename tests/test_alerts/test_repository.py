@@ -1,8 +1,9 @@
 """Tests for AlertRepository with mocked Database."""
 
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock
+
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
 
 from src.alerts.repository import AlertRepository, _row_to_alert
 from src.alerts.schemas import Alert
@@ -30,7 +31,7 @@ def _make_db_row(**overrides):
         "message": "Z-score is 3.5",
         "trigger_data": {"volume_zscore": 3.5},
         "acknowledged": False,
-        "created_at": datetime(2026, 2, 7, 10, 0, 0, tzinfo=timezone.utc),
+        "created_at": datetime(2026, 2, 7, 10, 0, 0, tzinfo=UTC),
     }
     row.update(overrides)
     return row

@@ -192,10 +192,7 @@ class ClusteringWorker:
             batch.append(job)
 
             # Process when batch is full or timeout exceeded
-            if (
-                len(batch) >= self._batch_size
-                or (time.monotonic() - batch_start) > batch_timeout
-            ):
+            if len(batch) >= self._batch_size or (time.monotonic() - batch_start) > batch_timeout:
                 await self._process_batch(batch)
                 batch = []
                 batch_start = time.monotonic()
@@ -232,9 +229,7 @@ class ClusteringWorker:
             try:
                 # --- Idempotency check ---
                 idem_key = f"{_IDEMPOTENCY_PREFIX}:{job.document_id}:{job.embedding_model}"
-                was_set = await self._redis.set(
-                    idem_key, "1", nx=True, ex=_IDEMPOTENCY_TTL
-                )
+                was_set = await self._redis.set(idem_key, "1", nx=True, ex=_IDEMPOTENCY_TTL)
                 if not was_set:
                     logger.debug(
                         "Clustering job already processed",
@@ -304,9 +299,7 @@ class ClusteringWorker:
                 metrics.clustering_similarity.observe(similarity)
 
                 # --- Assign document to theme ---
-                await self._doc_repo.update_themes(
-                    job.document_id, [theme.theme_id]
-                )
+                await self._doc_repo.update_themes(job.document_id, [theme.theme_id])
 
                 # --- EMA centroid update ---
                 new_centroid = self._ema_centroid_update(
@@ -314,14 +307,11 @@ class ClusteringWorker:
                     embedding_array,
                     self._config.centroid_learning_rate,
                 )
-                await self._theme_repo.update_centroid(
-                    theme.theme_id, new_centroid
-                )
+                await self._theme_repo.update_centroid(theme.theme_id, new_centroid)
 
                 # --- Atomic document_count increment ---
                 await self._database.execute(
-                    "UPDATE themes SET document_count = document_count + 1 "
-                    "WHERE theme_id = $1",
+                    "UPDATE themes SET document_count = document_count + 1 WHERE theme_id = $1",
                     theme.theme_id,
                 )
 
@@ -417,9 +407,7 @@ class ClusteringWorker:
         Returns:
             Updated centroid as float32 ndarray.
         """
-        return (
-            (1.0 - learning_rate) * centroid + learning_rate * embedding
-        ).astype(np.float32)
+        return ((1.0 - learning_rate) * centroid + learning_rate * embedding).astype(np.float32)
 
     @property
     def is_running(self) -> bool:

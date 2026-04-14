@@ -7,17 +7,16 @@ Run with: uv run pytest tests/test_vectorstore/test_integration.py -v --integrat
 Mark tests with @pytest.mark.integration to only run with --integration flag.
 """
 
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
 
 from src.ingestion.schemas import EngagementMetrics, NormalizedDocument, Platform
 
 
 # Custom marker for integration tests
 def pytest_configure(config):
-    config.addinivalue_line(
-        "markers", "integration: mark test as requiring live infrastructure"
-    )
+    config.addinivalue_line("markers", "integration: mark test as requiring live infrastructure")
 
 
 @pytest.fixture
@@ -29,8 +28,8 @@ async def integration_db():
     """
     pytest.importorskip("asyncpg")
 
-    from src.storage.database import Database
     from src.config.settings import get_settings
+    from src.storage.database import Database
 
     settings = get_settings()
     db = Database(database_url=str(settings.database_url))
@@ -51,7 +50,7 @@ def integration_documents() -> list[NormalizedDocument]:
         NormalizedDocument(
             id="integ_test_1",
             platform=Platform.TWITTER,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             author_id="test_user_1",
             author_name="Test Analyst",
             author_followers=10000,
@@ -64,7 +63,7 @@ def integration_documents() -> list[NormalizedDocument]:
         NormalizedDocument(
             id="integ_test_2",
             platform=Platform.REDDIT,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             author_id="test_user_2",
             author_name="semiconductor_investor",
             author_followers=5000,
@@ -77,7 +76,7 @@ def integration_documents() -> list[NormalizedDocument]:
         NormalizedDocument(
             id="integ_test_3",
             platform=Platform.NEWS,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             author_id="reuters",
             author_name="Reuters",
             author_followers=1000000,
@@ -97,10 +96,10 @@ class TestPgVectorStoreIntegration:
     @pytest.mark.asyncio
     async def test_upsert_and_search(self, integration_db, integration_documents):
         """Test full upsert and search workflow."""
+        import math
+
         from src.storage.repository import DocumentRepository
         from src.vectorstore.pgvector_store import PgVectorStore
-        from src.vectorstore.base import VectorSearchFilter
-        import math
 
         # Create repository and store
         repo = DocumentRepository(integration_db)
@@ -142,10 +141,11 @@ class TestPgVectorStoreIntegration:
     @pytest.mark.asyncio
     async def test_search_with_filters(self, integration_db, integration_documents):
         """Test search with various filters."""
-        from src.storage.repository import DocumentRepository
-        from src.vectorstore.pgvector_store import PgVectorStore
-        from src.vectorstore.base import VectorSearchFilter
         import math
+
+        from src.storage.repository import DocumentRepository
+        from src.vectorstore.base import VectorSearchFilter
+        from src.vectorstore.pgvector_store import PgVectorStore
 
         repo = DocumentRepository(integration_db)
         await repo.create_tables()
@@ -192,11 +192,11 @@ class TestVectorStoreManagerIntegration:
         pytest.importorskip("transformers")
         pytest.importorskip("torch")
 
-        from src.storage.repository import DocumentRepository
-        from src.vectorstore.pgvector_store import PgVectorStore
-        from src.vectorstore.manager import VectorStoreManager
-        from src.embedding.service import EmbeddingService
         from src.embedding.config import EmbeddingConfig
+        from src.embedding.service import EmbeddingService
+        from src.storage.repository import DocumentRepository
+        from src.vectorstore.manager import VectorStoreManager
+        from src.vectorstore.pgvector_store import PgVectorStore
 
         # Create components
         repo = DocumentRepository(integration_db)

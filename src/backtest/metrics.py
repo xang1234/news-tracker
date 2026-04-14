@@ -98,9 +98,7 @@ class BacktestMetrics:
                     "avg_return": b.avg_return,
                     "hit_rate": b.hit_rate,
                 }
-                for b in BacktestMetrics._calibration_buckets(
-                    daily_results, n_calibration_buckets
-                )
+                for b in BacktestMetrics._calibration_buckets(daily_results, n_calibration_buckets)
             ],
             "trading_days_with_returns": len(returns),
         }
@@ -110,11 +108,7 @@ class BacktestMetrics:
         daily_results: list[DailyBacktestResult],
     ) -> list[float]:
         """Extract non-None top_n_avg_return values from daily results."""
-        return [
-            r.top_n_avg_return
-            for r in daily_results
-            if r.top_n_avg_return is not None
-        ]
+        return [r.top_n_avg_return for r in daily_results if r.top_n_avg_return is not None]
 
     @staticmethod
     def _directional_accuracy(
@@ -124,11 +118,7 @@ class BacktestMetrics:
 
         Returns None if no days have direction data.
         """
-        directions = [
-            r.direction_correct
-            for r in daily_results
-            if r.direction_correct is not None
-        ]
+        directions = [r.direction_correct for r in daily_results if r.direction_correct is not None]
         if not directions:
             return None
         return sum(1 for d in directions if d) / len(directions)

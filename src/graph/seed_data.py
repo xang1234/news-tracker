@@ -15,7 +15,7 @@ The seed is idempotent: uses ON CONFLICT upserts so it's safe to re-run.
 import logging
 from dataclasses import dataclass
 
-from src.graph.schemas import CausalEdge, CausalNode, NodeType, RelationType
+from src.graph.schemas import NodeType, RelationType
 from src.storage.database import Database
 
 from .causal_graph import CausalGraph
@@ -209,11 +209,11 @@ EQUIPMENT_SUPPLY_EDGES: list[_EdgeDef] = [
 # Memory makers → AI chip consumers (HBM for GPUs)
 
 MEMORY_SUPPLY_EDGES: list[_EdgeDef] = [
-    _edge("SK_HYNIX", "NVDA", "supplies_to", 0.95),   # Primary HBM supplier
+    _edge("SK_HYNIX", "NVDA", "supplies_to", 0.95),  # Primary HBM supplier
     _edge("SK_HYNIX", "AMD", "supplies_to", 0.80),
-    _edge("SAMSUNG", "NVDA", "supplies_to", 0.85),     # HBM + GDDR
+    _edge("SAMSUNG", "NVDA", "supplies_to", 0.85),  # HBM + GDDR
     _edge("SAMSUNG", "AMD", "supplies_to", 0.75),
-    _edge("MU", "NVDA", "supplies_to", 0.75),           # HBM3E qualification
+    _edge("MU", "NVDA", "supplies_to", 0.75),  # HBM3E qualification
     _edge("MU", "AMD", "supplies_to", 0.70),
     _edge("MU", "INTC", "supplies_to", 0.70),
 ]
@@ -235,7 +235,7 @@ EDA_SUPPLY_EDGES: list[_EdgeDef] = [
     _edge("CDNS", "INTC", "supplies_to", 0.85),
     # ARM → licensees
     _edge("ARM", "QCOM", "supplies_to", 0.95),  # Snapdragon uses ARM cores
-    _edge("ARM", "NVDA", "supplies_to", 0.85),   # Grace CPU
+    _edge("ARM", "NVDA", "supplies_to", 0.85),  # Grace CPU
     _edge("ARM", "MRVL", "supplies_to", 0.80),
     _edge("ARM", "AVGO", "supplies_to", 0.75),
 ]

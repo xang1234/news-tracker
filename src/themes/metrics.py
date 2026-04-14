@@ -11,7 +11,7 @@ Duck-typed document input: pure methods accept any object with
 
 import logging
 import math
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -130,7 +130,7 @@ class VolumeMetricsService:
             return 0.0
 
         if reference_time is None:
-            reference_time = datetime.now(timezone.utc)
+            reference_time = datetime.now(UTC)
 
         decay = self._config.decay_factor
         window = timedelta(days=self._config.window_days)
@@ -143,7 +143,7 @@ class VolumeMetricsService:
                 continue
             # Make naive timestamps UTC-aware for comparison
             if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=timezone.utc)
+                ts = ts.replace(tzinfo=UTC)
             if ts < cutoff:
                 continue
 
@@ -179,9 +179,7 @@ class VolumeMetricsService:
             return None
 
         mean = sum(rolling_history) / len(rolling_history)
-        variance = sum((v - mean) ** 2 for v in rolling_history) / len(
-            rolling_history
-        )
+        variance = sum((v - mean) ** 2 for v in rolling_history) / len(rolling_history)
         std = math.sqrt(variance)
 
         if std == 0:
@@ -288,61 +286,45 @@ class VolumeMetricsService:
             ThemeMetrics with volume fields populated.
         """
         if self._doc_repo is None or self._theme_repo is None:
-            raise RuntimeError(
-                "doc_repo and theme_repo are required for compute_for_theme"
-            )
+            raise RuntimeError("doc_repo and theme_repo are required for compute_for_theme")
 
         # Fetch documents assigned to this theme
-        docs = await self._doc_repo.get_documents_by_theme(
-            theme_id, limit=500
-        )
+        docs = await self._doc_repo.get_documents_by_theme(theme_id, limit=500)
 
         # Reference time = end of target_date in UTC
         reference_time = datetime(
             target_date.year,
             target_date.month,
             target_date.day,
-            23, 59, 59,
-            tzinfo=timezone.utc,
+            23,
+            59,
+            59,
+            tzinfo=UTC,
         )
 
         # Compute weighted volume for the target date
         weighted_volume = self.compute_weighted_volume(docs, reference_time)
 
         # Fetch historical metrics for z-score rolling window
-        history_start = target_date - timedelta(
-            days=self._config.history_window
-        )
+        history_start = target_date - timedelta(days=self._config.history_window)
         history_end = target_date - timedelta(days=1)
-        history = await self._theme_repo.get_metrics_range(
-            theme_id, history_start, history_end
-        )
+        history = await self._theme_repo.get_metrics_range(theme_id, history_start, history_end)
 
         # Build rolling volume history from persisted weighted_volume
-        rolling_volumes = [
-            m.weighted_volume
-            for m in history
-            if m.weighted_volume is not None
-        ]
+        rolling_volumes = [m.weighted_volume for m in history if m.weighted_volume is not None]
 
         # Z-score
-        volume_zscore = self.compute_volume_zscore(
-            weighted_volume, rolling_volumes
-        )
+        volume_zscore = self.compute_volume_zscore(weighted_volume, rolling_volumes)
 
         # Build z-score history for velocity
-        zscores = [
-            m.volume_zscore for m in history if m.volume_zscore is not None
-        ]
+        zscores = [m.volume_zscore for m in history if m.volume_zscore is not None]
         if volume_zscore is not None:
             zscores.append(volume_zscore)
 
         velocity = self.compute_velocity(zscores)
 
         # Build velocity history for acceleration
-        velocities = [
-            m.velocity for m in history if m.velocity is not None
-        ]
+        velocities = [m.velocity for m in history if m.velocity is not None]
         if velocity is not None:
             velocities.append(velocity)
 

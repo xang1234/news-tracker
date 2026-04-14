@@ -157,9 +157,7 @@ class TwitterAdapter(BaseAdapter):
 
         self._xui = self._build_xui_guardrail_config(settings, xui_usernames)
         cooldown_len = max(1, self._xui.source_cooldown_cycles)
-        self._xui_state = XuiGuardrailState(
-            recent_lead_sources=deque(maxlen=cooldown_len)
-        )
+        self._xui_state = XuiGuardrailState(recent_lead_sources=deque(maxlen=cooldown_len))
         self._rng = random.Random()
 
         # Track seen tweet IDs to avoid duplicates
@@ -231,9 +229,7 @@ class TwitterAdapter(BaseAdapter):
         if not self._xui.enabled:
             logger.error("Twitter bearer token not configured and xui disabled")
         else:
-            logger.warning(
-                "xui cycle did not complete successfully and no API token is configured"
-            )
+            logger.warning("xui cycle did not complete successfully and no API token is configured")
 
     async def _collect_xui_items(self) -> tuple[list[dict[str, Any]], bool]:
         """Run one guarded xui collection cycle and return raw items + success flag."""
@@ -710,7 +706,7 @@ class TwitterAdapter(BaseAdapter):
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             for i in range(0, len(ticker_list), batch_size):
-                batch = ticker_list[i: i + batch_size]
+                batch = ticker_list[i : i + batch_size]
                 query = self._build_query(batch)
 
                 params = {
@@ -869,9 +865,9 @@ class TwitterAdapter(BaseAdapter):
 
             timestamp = _parse_iso_utc(tweet.get("created_at")) or _utc_now()
 
-            handle = str(
-                tweet.get("author_handle") or raw.get("username") or ""
-            ).strip().lstrip("@")
+            handle = (
+                str(tweet.get("author_handle") or raw.get("username") or "").strip().lstrip("@")
+            )
             display_name = str(tweet.get("author_display_name") or handle or "unknown").strip()
 
             processed = translate_emoji_sentiment(content)
@@ -1011,7 +1007,7 @@ def _extract_json_payload(stdout_text: str) -> dict[str, Any]:
     if start == -1 or end <= start:
         return {}
 
-    snippet = raw[start:end + 1]
+    snippet = raw[start : end + 1]
     try:
         parsed = json.loads(snippet)
         return parsed if isinstance(parsed, dict) else {}

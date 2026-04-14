@@ -349,7 +349,6 @@ class HTTPClient:
         if not self._client:
             raise RuntimeError("HTTPClient must be used as async context manager")
 
-        last_exception: Exception | None = None
         last_status_code: int | None = None
         last_response_body: str | None = None
 
@@ -408,7 +407,10 @@ class HTTPClient:
                             response_body=last_response_body,
                         )
                     raise HTTPClientError(
-                        f"Request failed with status {response.status_code} after {attempt + 1} attempts",
+                        (
+                            f"Request failed with status {response.status_code} "
+                            f"after {attempt + 1} attempts"
+                        ),
                         status_code=response.status_code,
                         response_body=last_response_body,
                     )
@@ -425,8 +427,6 @@ class HTTPClient:
                 return response
 
             except (httpx.TimeoutException, httpx.ConnectError, httpx.ReadError) as e:
-                last_exception = e
-
                 if attempt < self.retry_config.max_retries:
                     backoff = self.retry_config.calculate_backoff(attempt)
                     logger.warning(

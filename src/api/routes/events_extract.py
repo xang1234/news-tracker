@@ -1,21 +1,21 @@
 """Event extraction endpoint for playground."""
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from starlette.requests import Request
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_pattern_extractor
-from src.api.rate_limit import limiter
-from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     ErrorResponse,
     EventsExtractRequest,
     EventsExtractResponse,
     ExtractedEventItem,
 )
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.event_extraction.patterns import PatternExtractor
 from src.ingestion.schemas import NormalizedDocument, Platform
 
@@ -32,7 +32,9 @@ router = APIRouter()
         503: {"model": ErrorResponse, "description": "Events service disabled"},
     },
     summary="Extract events from text",
-    description="Extract structured SVO events (capacity, product, price, guidance) from financial text.",
+    description=(
+        "Extract structured SVO events (capacity, product, price, guidance) from financial text."
+    ),
 )
 @limiter.limit(lambda: _get_settings().rate_limit_default)
 async def extract_events(
@@ -54,7 +56,7 @@ async def extract_events(
         doc = NormalizedDocument(
             id="playground_0",
             platform=Platform.NEWS,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             author_id="playground",
             author_name="Playground",
             content=body.text,

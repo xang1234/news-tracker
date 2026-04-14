@@ -1,6 +1,6 @@
 """Tests for ClusteringQueue."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -102,11 +102,14 @@ class TestClusteringQueueParsing:
     def test_parse_job(self, clustering_config):
         """Should parse Redis message into ClusteringJob."""
         queue = ClusteringQueue(config=clustering_config)
-        job = queue._parse_job("msg_123", {
-            "document_id": "doc_abc",
-            "embedding_model": "finbert",
-            "queued_at": "1234567890.0",
-        })
+        job = queue._parse_job(
+            "msg_123",
+            {
+                "document_id": "doc_abc",
+                "embedding_model": "finbert",
+                "queued_at": "1234567890.0",
+            },
+        )
         assert job.document_id == "doc_abc"
         assert job.embedding_model == "finbert"
         assert job.message_id == "msg_123"
@@ -114,9 +117,12 @@ class TestClusteringQueueParsing:
     def test_parse_job_default_model(self, clustering_config):
         """Should default to finbert when embedding_model missing."""
         queue = ClusteringQueue(config=clustering_config)
-        job = queue._parse_job("msg_123", {
-            "document_id": "doc_abc",
-        })
+        job = queue._parse_job(
+            "msg_123",
+            {
+                "document_id": "doc_abc",
+            },
+        )
         assert job.embedding_model == "finbert"
 
     def test_set_retry_count(self, clustering_config):
@@ -158,9 +164,7 @@ class TestClusteringQueuePublish:
         queue._redis = mock_redis
         queue._stream_config = queue._get_stream_config()
 
-        msg_ids = await queue.publish_batch(
-            ["doc_1", "doc_2", "doc_3"], "finbert"
-        )
+        msg_ids = await queue.publish_batch(["doc_1", "doc_2", "doc_3"], "finbert")
 
         assert len(msg_ids) == 3
         pipe = mock_redis.pipeline.return_value

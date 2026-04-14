@@ -7,7 +7,7 @@ and API responses.
 
 import hashlib
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -52,7 +52,7 @@ class ThemeCluster:
     centroid: np.ndarray
     document_count: int
     document_ids: list[str] = field(default_factory=list)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime | None = field(default=None)
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -136,7 +136,7 @@ class ThemeCluster:
         if isinstance(created_at, str):
             created_at = datetime.fromisoformat(created_at)
         elif created_at is None:
-            created_at = datetime.now(timezone.utc)
+            created_at = datetime.now(UTC)
 
         updated_at = data.get("updated_at")
         if isinstance(updated_at, str):

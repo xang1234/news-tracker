@@ -1,6 +1,6 @@
 """Pytest fixtures for theme tests."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock
 
 import numpy as np
@@ -40,8 +40,8 @@ def sample_theme(sample_centroid: np.ndarray) -> Theme:
         top_tickers=["NVDA", "AMD"],
         lifecycle_stage="emerging",
         document_count=25,
-        created_at=datetime(2025, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
-        updated_at=datetime(2025, 1, 16, 8, 30, 0, tzinfo=timezone.utc),
+        created_at=datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC),
+        updated_at=datetime(2025, 1, 16, 8, 30, 0, tzinfo=UTC),
         description="GPU architecture developments",
         top_entities=[
             {"type": "COMPANY", "normalized": "NVIDIA", "score": 0.95},
@@ -62,8 +62,8 @@ def sample_db_row(sample_centroid: np.ndarray) -> dict:
         "top_tickers": ["NVDA", "AMD"],
         "lifecycle_stage": "emerging",
         "document_count": 25,
-        "created_at": datetime(2025, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
-        "updated_at": datetime(2025, 1, 16, 8, 30, 0, tzinfo=timezone.utc),
+        "created_at": datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC),
+        "updated_at": datetime(2025, 1, 16, 8, 30, 0, tzinfo=UTC),
         "description": "GPU architecture developments",
         "top_entities": '[{"type": "COMPANY", "normalized": "NVIDIA", "score": 0.95}]',
         "metadata": '{"bertopic_topic_id": 3}',

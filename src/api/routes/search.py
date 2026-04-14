@@ -4,17 +4,17 @@ Semantic search endpoint for finding similar documents.
 
 import time
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from starlette.requests import Request
-import structlog
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_vector_store_manager
 from src.api.models import (
+    ErrorResponse,
     SearchRequest,
     SearchResponse,
     SearchResultItem,
-    ErrorResponse,
 )
 from src.api.rate_limit import limiter
 from src.config.settings import get_settings
@@ -77,12 +77,14 @@ async def search_similar(
     try:
         # Build filter from request
         filters = None
-        if any([
-            body.platforms,
-            body.tickers,
-            body.theme_ids,
-            body.min_authority_score is not None,
-        ]):
+        if any(
+            [
+                body.platforms,
+                body.tickers,
+                body.theme_ids,
+                body.min_authority_score is not None,
+            ]
+        ):
             filters = VectorSearchFilter(
                 platforms=body.platforms,
                 tickers=body.tickers,

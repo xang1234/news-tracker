@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from src.event_extraction.config import EventExtractionConfig
 from src.event_extraction.normalizer import TimeNormalizer
-from src.event_extraction.schemas import EventRecord, VALID_EVENT_TYPES
+from src.event_extraction.schemas import EventRecord
 
 if TYPE_CHECKING:
     from src.ingestion.schemas import NormalizedDocument
@@ -113,11 +113,11 @@ def _build_patterns() -> dict[str, list[re.Pattern[str]]]:
             # "production setback / production issues"
             rf"{_ACTOR}\s+(?P<action>(?:hit\s+(?:a|by)\s+)?(?:experienc|encounter|fac)(?:es?|ed|ing)?)\s+(?P<object>(?:production|manufacturing)\s+(?:setback|delay|issue|problem|snag)[A-Za-z\s]{{0,20}}?)(?:\s+{_TIME})?",
             # "behind schedule"
-            rf"(?P<object>[A-Za-z][\w\s\-]{{1,40}}?)\s+(?:is|are|runs?|running)\s+(?P<action>behind\s+schedule)(?:\s+by\s+(?P<quantity>\d[\d,\.]*\s*(?:weeks?|months?|quarters?)))?",
+            r"(?P<object>[A-Za-z][\w\s\-]{1,40}?)\s+(?:is|are|runs?|running)\s+(?P<action>behind\s+schedule)(?:\s+by\s+(?P<quantity>\d[\d,\.]*\s*(?:weeks?|months?|quarters?)))?",
             # "slip / slipped / slipping to"
             rf"(?P<object>[A-Za-z][\w\s\-]{{1,40}}?)\s+(?P<action>slip(?:s|ped|ping)?)\s+(?:to|until)\s+{_TIME}",
             # "supply date pushed"
-            rf"(?P<object>[A-Za-z][\w\s\-]{{1,40}}?)\s+(?:supply|delivery|ship)\s+(?:date|timeline)\s+(?P<action>push(?:ed)?\s+(?:back|out)|delay(?:ed)?)",
+            r"(?P<object>[A-Za-z][\w\s\-]{1,40}?)\s+(?:supply|delivery|ship)\s+(?:date|timeline)\s+(?P<action>push(?:ed)?\s+(?:back|out)|delay(?:ed)?)",
             # "timeline extended"
             rf"(?P<object>[A-Za-z][\w\s\-]{{1,40}}?)\s+(?P<action>timeline\s+(?:extended|pushed|slipped))(?:\s+(?:to|by)\s+{_TIME})?",
             # "won't ship until"
@@ -133,7 +133,7 @@ def _build_patterns() -> dict[str, list[re.Pattern[str]]]:
             # "prices fell / dropped / declined"
             rf"(?P<object>[A-Za-z][\w\s]{{1,40}}?)\s+(?:prices?|pricing|cost|ASP)\s+(?P<action>(?:fell|drop|declin|decreas|tumbl)(?:es?|ed|ing|s|ped)?)(?:\s+(?:by\s+)?{_QUANTITY})?(?:\s+{_TIME})?",
             # "X% price increase / decrease"
-            rf"(?P<quantity>\d[\d,\.]*\s*%)\s+(?P<object>price)\s+(?P<action>(?:increase|hike|rise|decrease|cut|reduction|drop))",
+            r"(?P<quantity>\d[\d,\.]*\s*%)\s+(?P<object>price)\s+(?P<action>(?:increase|hike|rise|decrease|cut|reduction|drop))",
             # "ASP of X rose / fell"
             rf"(?:ASP|average\s+selling\s+price)\s+(?:of\s+)?(?P<object>[A-Za-z][\w\s]{{1,30}}?)\s+(?P<action>(?:rose|fell|increas|decreas|climb|drop)(?:es?|ed|ing|s|ped)?)\s*(?:(?:by\s+)?{_QUANTITY})?",
             # "pricing power"
@@ -171,9 +171,7 @@ def _build_patterns() -> dict[str, list[re.Pattern[str]]]:
 
     compiled: dict[str, list[re.Pattern[str]]] = {}
     for event_type, pattern_list in patterns.items():
-        compiled[event_type] = [
-            re.compile(p, re.IGNORECASE) for p in pattern_list
-        ]
+        compiled[event_type] = [re.compile(p, re.IGNORECASE) for p in pattern_list]
 
     return compiled
 
@@ -211,10 +209,11 @@ class PatternExtractor:
         """Get TickerExtractor via singleton (avoids circular import)."""
         if self._ticker_extractor is None:
             from src.ingestion.base_adapter import get_ticker_extractor
+
             self._ticker_extractor = get_ticker_extractor()
         return self._ticker_extractor
 
-    def extract(self, doc: "NormalizedDocument") -> list[EventRecord]:
+    def extract(self, doc: NormalizedDocument) -> list[EventRecord]:
         """
         Extract events from a document.
 
@@ -286,9 +285,7 @@ class PatternExtractor:
             time_ref = self._normalizer.normalize(time_ref_raw)
 
         # Link tickers from context window around the match
-        tickers = self._extract_context_tickers(
-            full_text, match.start(), match.end(), doc_tickers
-        )
+        tickers = self._extract_context_tickers(full_text, match.start(), match.end(), doc_tickers)
 
         # Compute confidence
         confidence = self._compute_confidence(actor, tickers, quantity)
@@ -374,7 +371,4 @@ class PatternExtractor:
     ) -> bool:
         """Check if a span overlaps with any previously seen span."""
         s, e = span
-        for ss, se in seen:
-            if s < se and e > ss:
-                return True
-        return False
+        return any(s < se and e > ss for ss, se in seen)

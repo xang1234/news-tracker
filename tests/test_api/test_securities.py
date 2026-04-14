@@ -1,6 +1,6 @@
 """Tests for securities REST API endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -29,8 +29,8 @@ def _make_security(
         country=kwargs.pop("country", "US"),
         currency=kwargs.pop("currency", "USD"),
         is_active=is_active,
-        created_at=kwargs.pop("created_at", datetime(2026, 1, 1, tzinfo=timezone.utc)),
-        updated_at=kwargs.pop("updated_at", datetime(2026, 2, 5, tzinfo=timezone.utc)),
+        created_at=kwargs.pop("created_at", datetime(2026, 1, 1, tzinfo=UTC)),
+        updated_at=kwargs.pop("updated_at", datetime(2026, 2, 5, tzinfo=UTC)),
         **kwargs,
     )
 
@@ -82,7 +82,9 @@ class TestFeatureGate:
         settings.security_master_enabled = False
         mock_settings.return_value = settings
 
-        resp = client.post("/securities", json={"ticker": "NVDA", "exchange": "US", "name": "NVIDIA"})
+        resp = client.post(
+            "/securities", json={"ticker": "NVDA", "exchange": "US", "name": "NVIDIA"}
+        )
         assert resp.status_code == 404
 
 

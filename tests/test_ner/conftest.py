@@ -1,6 +1,6 @@
 """Pytest fixtures for NER tests."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -243,10 +243,9 @@ def mock_coref_model():
     """
     cluster_specs = {
         # "Samsung" (0:7) is antecedent for "The Korean chipmaker" (36:56)
-        (
-            "Samsung announced new HBM capacity. "
-            "The Korean chipmaker expects strong demand."
-        ): [[(0, 7), (36, 56)]],
+        ("Samsung announced new HBM capacity. The Korean chipmaker expects strong demand."): [
+            [(0, 7), (36, 56)]
+        ],
         # Two clusters:
         #   "Nvidia" (0:6) is antecedent for "The company" (44:55)
         #   "Blackwell" (20:29) is antecedent for "it" (63:65)
@@ -279,18 +278,12 @@ def mock_ner_service_with_coref(ner_config_with_coref, mock_coref_model):
     # Build a spaCy mock that recognizes resolved texts
     entities_map = {
         # Original texts (NER may miss coreferences)
-        (
-            "Samsung announced new HBM capacity. "
-            "The Korean chipmaker expects strong demand."
-        ): [
+        ("Samsung announced new HBM capacity. The Korean chipmaker expects strong demand."): [
             ("Samsung", 0, 7, "ORG"),
             ("HBM", 22, 25, "TECHNOLOGY"),
         ],
         # Resolved texts (NER finds the entity directly)
-        (
-            "Samsung announced new HBM capacity. "
-            "Samsung expects strong demand."
-        ): [
+        ("Samsung announced new HBM capacity. Samsung expects strong demand."): [
             ("Samsung", 0, 7, "ORG"),
             ("HBM", 22, 25, "TECHNOLOGY"),
             ("Samsung", 36, 43, "ORG"),

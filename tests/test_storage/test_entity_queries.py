@@ -4,8 +4,8 @@ These test the SQL query construction and parameter handling of
 DocumentRepository entity methods using a mocked asyncpg database.
 """
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -52,15 +52,15 @@ class TestListEntities:
                 "type": "COMPANY",
                 "normalized": "NVIDIA",
                 "mention_count": 42,
-                "first_seen": datetime(2026, 1, 1, tzinfo=timezone.utc),
-                "last_seen": datetime(2026, 2, 5, tzinfo=timezone.utc),
+                "first_seen": datetime(2026, 1, 1, tzinfo=UTC),
+                "last_seen": datetime(2026, 2, 5, tzinfo=UTC),
             },
             {
                 "type": "TICKER",
                 "normalized": "NVDA",
                 "mention_count": 30,
-                "first_seen": datetime(2026, 1, 5, tzinfo=timezone.utc),
-                "last_seen": datetime(2026, 2, 4, tzinfo=timezone.utc),
+                "first_seen": datetime(2026, 1, 5, tzinfo=UTC),
+                "last_seen": datetime(2026, 2, 4, tzinfo=UTC),
             },
         ]
 
@@ -117,8 +117,8 @@ class TestGetEntityDetail:
             "type": "COMPANY",
             "normalized": "NVIDIA",
             "mention_count": 42,
-            "first_seen": datetime(2026, 1, 1, tzinfo=timezone.utc),
-            "last_seen": datetime(2026, 2, 5, tzinfo=timezone.utc),
+            "first_seen": datetime(2026, 1, 1, tzinfo=UTC),
+            "last_seen": datetime(2026, 2, 5, tzinfo=UTC),
         }
         mock_db.fetch.return_value = [
             {"platform": "twitter", "count": 20},

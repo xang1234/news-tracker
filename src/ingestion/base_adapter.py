@@ -250,6 +250,7 @@ class BaseAdapter(ABC):
 
 # Common preprocessing utilities used across adapters
 
+
 def extract_cashtags(text: str) -> list[str]:
     """
     Extract $TICKER cashtags from text.
@@ -264,7 +265,7 @@ def extract_cashtags(text: str) -> list[str]:
     Returns:
         List of ticker symbols (without $ prefix)
     """
-    pattern = r'\$([A-Z]{1,5})\b'
+    pattern = r"\$([A-Z]{1,5})\b"
     matches = re.findall(pattern, text.upper())
     return list(set(matches))
 
@@ -279,6 +280,7 @@ def get_ticker_extractor():
     if _ticker_extractor is None:
         # Import here to avoid circular imports
         from src.ingestion.preprocessor import TickerExtractor
+
         _ticker_extractor = TickerExtractor()
     return _ticker_extractor
 
@@ -318,7 +320,7 @@ def clean_text(text: str) -> str:
     text = " ".join(text.split())
 
     # Remove null bytes and other control characters
-    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text)
 
     return text.strip()
 
@@ -351,18 +353,18 @@ def expand_twitter_abbreviations(text: str) -> str:
         Text with abbreviations expanded (for better NLP)
     """
     abbreviations = {
-        r'\bLFG\b': 'lets go',
-        r'\bHODL\b': 'hold',
-        r'\bFOMO\b': 'fear of missing out',
-        r'\bFUD\b': 'fear uncertainty doubt',
-        r'\bDD\b': 'due diligence',
-        r'\bIMO\b': 'in my opinion',
-        r'\bIMHO\b': 'in my humble opinion',
-        r'\bTLDR\b': 'too long didnt read',
-        r'\bATH\b': 'all time high',
-        r'\bATL\b': 'all time low',
-        r'\bYOLO\b': 'you only live once',
-        r'\bDCA\b': 'dollar cost averaging',
+        r"\bLFG\b": "lets go",
+        r"\bHODL\b": "hold",
+        r"\bFOMO\b": "fear of missing out",
+        r"\bFUD\b": "fear uncertainty doubt",
+        r"\bDD\b": "due diligence",
+        r"\bIMO\b": "in my opinion",
+        r"\bIMHO\b": "in my humble opinion",
+        r"\bTLDR\b": "too long didnt read",
+        r"\bATH\b": "all time high",
+        r"\bATL\b": "all time low",
+        r"\bYOLO\b": "you only live once",
+        r"\bDCA\b": "dollar cost averaging",
     }
 
     for pattern, replacement in abbreviations.items():
@@ -382,18 +384,18 @@ def translate_emoji_sentiment(text: str) -> str:
         Text with emojis translated
     """
     emoji_map = {
-        '🚀': ' bullish ',
-        '📈': ' bullish ',
-        '🌙': ' bullish ',
-        '💎': ' holding ',
-        '🙌': ' holding ',
-        '📉': ' bearish ',
-        '🐻': ' bearish ',
-        '🐂': ' bullish ',
-        '💰': ' profit ',
-        '🔥': ' hot ',
-        '⚠️': ' warning ',
-        '🎯': ' target ',
+        "🚀": " bullish ",
+        "📈": " bullish ",
+        "🌙": " bullish ",
+        "💎": " holding ",
+        "🙌": " holding ",
+        "📉": " bearish ",
+        "🐻": " bearish ",
+        "🐂": " bullish ",
+        "💰": " profit ",
+        "🔥": " hot ",
+        "⚠️": " warning ",
+        "🎯": " target ",
     }
 
     for emoji, replacement in emoji_map.items():

@@ -1,11 +1,11 @@
 """Tests for /graph/* endpoints."""
 
-import pytest
 from unittest.mock import MagicMock
 
 
 class _MockNode:
     """Simple mock for GraphNode dataclass."""
+
     def __init__(self, node_id, node_type="ticker", name="NVDA", metadata=None):
         self.node_id = node_id
         self.node_type = node_type
@@ -43,9 +43,7 @@ class TestGraphNodesRoute:
 
         resp = client.get("/graph/nodes?node_type=ticker")
         assert resp.status_code == 200
-        mock_graph_repo.get_all_nodes.assert_called_once_with(
-            node_type="ticker", limit=200
-        )
+        mock_graph_repo.get_all_nodes.assert_called_once_with(node_type="ticker", limit=200)
 
     def test_list_nodes_error_sanitized(self, client, mock_graph_repo):
         """Error response doesn't leak internal details."""
@@ -102,10 +100,13 @@ class TestGraphPropagateRoute:
         mock_impact.edge_confidence = 0.8
         mock_propagation_service.propagate.return_value = {"amd": mock_impact}
 
-        resp = client.post("/graph/propagate", json={
-            "source_node": "nvda",
-            "sentiment_delta": 0.5,
-        })
+        resp = client.post(
+            "/graph/propagate",
+            json={
+                "source_node": "nvda",
+                "sentiment_delta": 0.5,
+            },
+        )
 
         assert resp.status_code == 200
         body = resp.json()
@@ -118,10 +119,13 @@ class TestGraphPropagateRoute:
         """Error response doesn't leak internal details."""
         mock_propagation_service.propagate.side_effect = RuntimeError("recursive CTE timeout")
 
-        resp = client.post("/graph/propagate", json={
-            "source_node": "nvda",
-            "sentiment_delta": 0.3,
-        })
+        resp = client.post(
+            "/graph/propagate",
+            json={
+                "source_node": "nvda",
+                "sentiment_delta": 0.3,
+            },
+        )
 
         assert resp.status_code == 500
         body = resp.json()

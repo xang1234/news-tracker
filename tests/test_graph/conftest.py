@@ -1,6 +1,6 @@
 """Pytest fixtures for causal graph tests."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -38,8 +38,8 @@ def sample_node_row() -> dict:
         "node_type": "ticker",
         "name": "NVIDIA Corporation",
         "metadata": '{"sector": "semiconductors"}',
-        "created_at": datetime(2025, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
-        "updated_at": datetime(2025, 1, 16, 8, 30, 0, tzinfo=timezone.utc),
+        "created_at": datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC),
+        "updated_at": datetime(2025, 1, 16, 8, 30, 0, tzinfo=UTC),
     }
 
 
@@ -64,6 +64,6 @@ def sample_edge_row() -> dict:
         "relation": "supplies_to",
         "confidence": 0.9,
         "source_doc_ids": ["doc_001"],
-        "created_at": datetime(2025, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
+        "created_at": datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC),
         "metadata": "{}",
     }

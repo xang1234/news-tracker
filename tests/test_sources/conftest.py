@@ -1,6 +1,6 @@
 """Shared fixtures for sources tests."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -41,8 +41,8 @@ def sample_db_row() -> dict:
         "description": "Deep semiconductor analysis",
         "is_active": True,
         "metadata": {"category": "analyst"},
-        "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
-        "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+        "created_at": datetime(2025, 1, 1, tzinfo=UTC),
+        "updated_at": datetime(2025, 1, 1, tzinfo=UTC),
     }
 
 
@@ -56,8 +56,8 @@ def sample_reddit_row() -> dict:
         "description": "Options and meme stocks",
         "is_active": True,
         "metadata": {},
-        "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
-        "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+        "created_at": datetime(2025, 1, 1, tzinfo=UTC),
+        "updated_at": datetime(2025, 1, 1, tzinfo=UTC),
     }
 
 
@@ -71,6 +71,6 @@ def sample_substack_row() -> dict:
         "description": "Semiconductor deep dives",
         "is_active": True,
         "metadata": {},
-        "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
-        "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+        "created_at": datetime(2025, 1, 1, tzinfo=UTC),
+        "updated_at": datetime(2025, 1, 1, tzinfo=UTC),
     }

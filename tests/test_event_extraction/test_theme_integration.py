@@ -1,6 +1,6 @@
 """Tests for event-theme integration (linker and summary)."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -30,7 +30,7 @@ def _make_event(
         "time_ref": time_ref,
         "tickers": tickers or ["TSM"],
         "confidence": confidence,
-        "created_at": created_at or datetime(2026, 2, 5, 12, 0, 0, tzinfo=timezone.utc),
+        "created_at": created_at or datetime(2026, 2, 5, 12, 0, 0, tzinfo=UTC),
     }
 
 
@@ -121,14 +121,22 @@ class TestDeduplicateEvents:
     def test_composite_key_dedup(self):
         events = [
             _make_event(
-                event_id="e1", doc_id="d1", actor="TSMC", action="is expanding",
-                object="fab capacity", time_ref="Q3 2026",
-                created_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+                event_id="e1",
+                doc_id="d1",
+                actor="TSMC",
+                action="is expanding",
+                object="fab capacity",
+                time_ref="Q3 2026",
+                created_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
             ),
             _make_event(
-                event_id="e2", doc_id="d2", actor="TSMC", action="is expanding",
-                object="fab capacity", time_ref="Q3 2026",
-                created_at=datetime(2026, 2, 5, 12, 0, 0, tzinfo=timezone.utc),
+                event_id="e2",
+                doc_id="d2",
+                actor="TSMC",
+                action="is expanding",
+                object="fab capacity",
+                time_ref="Q3 2026",
+                created_at=datetime(2026, 2, 5, 12, 0, 0, tzinfo=UTC),
             ),
         ]
 
@@ -137,8 +145,8 @@ class TestDeduplicateEvents:
         assert len(result) == 1
 
     def test_earliest_kept(self):
-        early = datetime(2026, 2, 3, 8, 0, 0, tzinfo=timezone.utc)
-        late = datetime(2026, 2, 5, 12, 0, 0, tzinfo=timezone.utc)
+        early = datetime(2026, 2, 3, 8, 0, 0, tzinfo=UTC)
+        late = datetime(2026, 2, 5, 12, 0, 0, tzinfo=UTC)
 
         events = [
             _make_event(event_id="e-late", doc_id="d2", created_at=late),
@@ -174,10 +182,7 @@ class TestDeduplicateEvents:
         assert result[0]["confidence"] == pytest.approx(0.75)
 
     def test_confidence_cap_at_1(self):
-        events = [
-            _make_event(event_id=f"e{i}", doc_id=f"d{i}", confidence=0.9)
-            for i in range(10)
-        ]
+        events = [_make_event(event_id=f"e{i}", doc_id=f"d{i}", confidence=0.9) for i in range(10)]
 
         result = EventThemeLinker.deduplicate_events(events)
 
@@ -220,12 +225,16 @@ class TestDeduplicateEvents:
     def test_result_sorted_by_created_at_desc(self):
         events = [
             _make_event(
-                event_id="e1", doc_id="d1", actor="TSMC",
-                created_at=datetime(2026, 2, 3, tzinfo=timezone.utc),
+                event_id="e1",
+                doc_id="d1",
+                actor="TSMC",
+                created_at=datetime(2026, 2, 3, tzinfo=UTC),
             ),
             _make_event(
-                event_id="e2", doc_id="d2", actor="Intel",
-                created_at=datetime(2026, 2, 5, tzinfo=timezone.utc),
+                event_id="e2",
+                doc_id="d2",
+                actor="Intel",
+                created_at=datetime(2026, 2, 5, tzinfo=UTC),
             ),
         ]
 

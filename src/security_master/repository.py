@@ -134,19 +134,25 @@ class SecurityMasterRepository:
 
         await self._db.execute(
             _BULK_UPSERT_SQL,
-            tickers, exchanges, names, aliases, sectors,
-            countries, currencies, figis, actives,
+            tickers,
+            exchanges,
+            names,
+            aliases,
+            sectors,
+            countries,
+            currencies,
+            figis,
+            actives,
         )
         logger.info("Bulk upserted %d securities", len(securities))
         return len(securities)
 
-    async def get_by_ticker(
-        self, ticker: str, exchange: str = "US"
-    ) -> Security | None:
+    async def get_by_ticker(self, ticker: str, exchange: str = "US") -> Security | None:
         """Fetch a single security by ticker and exchange."""
         row = await self._db.fetchrow(
             "SELECT * FROM securities WHERE ticker = $1 AND exchange = $2",
-            ticker, exchange,
+            ticker,
+            exchange,
         )
         return _record_to_security(row) if row else None
 
@@ -202,9 +208,7 @@ class SecurityMasterRepository:
 
     async def get_all_active_tickers(self) -> set[str]:
         """Fetch just the ticker symbols for all active securities."""
-        rows = await self._db.fetch(
-            "SELECT ticker FROM securities WHERE is_active = TRUE"
-        )
+        rows = await self._db.fetch("SELECT ticker FROM securities WHERE is_active = TRUE")
         return {r["ticker"] for r in rows}
 
     async def get_company_to_ticker_map(self) -> dict[str, str]:
@@ -236,7 +240,9 @@ class SecurityMasterRepository:
             ORDER BY sim DESC
             LIMIT $3
             """,
-            query, threshold, limit,
+            query,
+            threshold,
+            limit,
         )
         return [_record_to_security(r) for r in rows]
 
@@ -247,7 +253,8 @@ class SecurityMasterRepository:
             UPDATE securities SET is_active = FALSE, updated_at = NOW()
             WHERE ticker = $1 AND exchange = $2 AND is_active = TRUE
             """,
-            ticker, exchange,
+            ticker,
+            exchange,
         )
         return result.endswith("1")
 

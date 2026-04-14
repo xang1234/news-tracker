@@ -1,6 +1,6 @@
 """Tests for Theme and ThemeMetrics dataclasses."""
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 
 import numpy as np
 import pytest
@@ -48,9 +48,12 @@ class TestThemeInit:
         assert isinstance(theme.updated_at, datetime)
 
     def test_valid_lifecycle_stages_constant(self) -> None:
-        assert VALID_LIFECYCLE_STAGES == {
-            "emerging", "accelerating", "mature", "fading",
-        }
+        assert {
+            "emerging",
+            "accelerating",
+            "mature",
+            "fading",
+        } == VALID_LIFECYCLE_STAGES
 
 
 class TestThemeEquality:
@@ -119,7 +122,9 @@ class TestThemeSerialization:
         assert restored.top_entities == sample_theme.top_entities
         assert restored.metadata == sample_theme.metadata
         np.testing.assert_allclose(
-            restored.centroid, sample_theme.centroid, atol=1e-6,
+            restored.centroid,
+            sample_theme.centroid,
+            atol=1e-6,
         )
 
     def test_from_dict_parses_json_strings(self) -> None:

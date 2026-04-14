@@ -114,15 +114,17 @@ class PointInTimeService:
             else:
                 embedding = None
 
-            results.append({
-                "id": row["id"],
-                "content": row["content"],
-                "embedding": embedding,
-                "authority_score": row.get("authority_score"),
-                "sentiment": sentiment,
-                "theme_ids": list(row.get("theme_ids", [])),
-                "fetched_at": row["fetched_at"],
-            })
+            results.append(
+                {
+                    "id": row["id"],
+                    "content": row["content"],
+                    "embedding": embedding,
+                    "authority_score": row.get("authority_score"),
+                    "sentiment": sentiment,
+                    "theme_ids": list(row.get("theme_ids", [])),
+                    "fetched_at": row["fetched_at"],
+                }
+            )
 
         return results
 
@@ -163,7 +165,4 @@ class PointInTimeService:
             Dict mapping theme_id to centroid as list of floats.
         """
         themes = await self.get_themes_as_of(as_of=as_of, limit=10000)
-        return {
-            t.theme_id: t.centroid.tolist()
-            for t in themes
-        }
+        return {t.theme_id: t.centroid.tolist() for t in themes}

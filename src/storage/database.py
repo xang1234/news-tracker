@@ -77,9 +77,7 @@ class Database:
                 # Enable pgvector extension
                 await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
-            logger.info(
-                f"Database connected (pool: {self._min_size}-{self._max_size})"
-            )
+            logger.info(f"Database connected (pool: {self._min_size}-{self._max_size})")
 
         except Exception as e:
             logger.error(f"Failed to connect to database: {e}")
@@ -133,9 +131,8 @@ class Database:
                 await conn.execute("INSERT INTO ...")
                 await conn.execute("UPDATE ...")
         """
-        async with self.pool.acquire() as conn:
-            async with conn.transaction():
-                yield conn
+        async with self.pool.acquire() as conn, conn.transaction():
+            yield conn
 
     async def execute(self, query: str, *args: Any) -> str:
         """

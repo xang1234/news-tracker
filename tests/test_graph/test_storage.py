@@ -1,21 +1,19 @@
 """Tests for GraphRepository CRUD and traversal operations."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
 
-from src.graph.schemas import CausalEdge, CausalNode
+from src.graph.schemas import CausalNode
 from src.graph.storage import GraphRepository, _row_to_edge, _row_to_node
 
 
 class TestRowConversions:
     """Test module-level row conversion helpers."""
 
-    def test_row_to_node_json_string_metadata(
-        self, sample_node_row: dict
-    ) -> None:
+    def test_row_to_node_json_string_metadata(self, sample_node_row: dict) -> None:
         """_row_to_node parses JSON string metadata."""
         node = _row_to_node(sample_node_row)
         assert node.node_id == "NVDA"
@@ -30,8 +28,8 @@ class TestRowConversions:
             "node_type": "ticker",
             "name": "AMD",
             "metadata": {"sector": "semiconductors"},
-            "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
-            "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+            "created_at": datetime(2025, 1, 1, tzinfo=UTC),
+            "updated_at": datetime(2025, 1, 1, tzinfo=UTC),
         }
         node = _row_to_node(row)
         assert node.metadata == {"sector": "semiconductors"}
@@ -54,7 +52,7 @@ class TestRowConversions:
             "relation": "drives",
             "confidence": 1.0,
             "source_doc_ids": [],
-            "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+            "created_at": datetime(2025, 1, 1, tzinfo=UTC),
             "metadata": {"note": "test"},
         }
         edge = _row_to_edge(row)
@@ -204,9 +202,7 @@ class TestGetDownstream:
     """Test GraphRepository.get_downstream()."""
 
     @pytest.mark.asyncio
-    async def test_returns_node_depth_tuples(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_returns_node_depth_tuples(self, mock_database: AsyncMock) -> None:
         """get_downstream() returns (node_id, depth) tuples from CTE."""
         mock_database.fetch.return_value = [
             {"node_id": "NVDA", "depth": 1},
@@ -224,9 +220,7 @@ class TestGetDownstream:
         assert "NOT" in sql  # cycle detection
 
     @pytest.mark.asyncio
-    async def test_empty_for_leaf_node(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_empty_for_leaf_node(self, mock_database: AsyncMock) -> None:
         """get_downstream() returns empty list for a leaf node."""
         mock_database.fetch.return_value = []
         repo = GraphRepository(mock_database)
@@ -239,9 +233,7 @@ class TestGetUpstream:
     """Test GraphRepository.get_upstream()."""
 
     @pytest.mark.asyncio
-    async def test_returns_node_depth_tuples(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_returns_node_depth_tuples(self, mock_database: AsyncMock) -> None:
         """get_upstream() follows edges in reverse direction."""
         mock_database.fetch.return_value = [
             {"node_id": "ASML", "depth": 1},
@@ -262,9 +254,7 @@ class TestGetNeighbors:
     """Test GraphRepository.get_neighbors()."""
 
     @pytest.mark.asyncio
-    async def test_without_relation_filter(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_without_relation_filter(self, mock_database: AsyncMock) -> None:
         """get_neighbors() returns all neighbors when no filter."""
         mock_database.fetch.return_value = [
             {"neighbor": "TSMC", "relation": "supplies_to"},
@@ -281,18 +271,14 @@ class TestGetNeighbors:
         assert "UNION ALL" in sql
 
     @pytest.mark.asyncio
-    async def test_with_relation_filter(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_with_relation_filter(self, mock_database: AsyncMock) -> None:
         """get_neighbors() filters by relation types."""
         mock_database.fetch.return_value = [
             {"neighbor": "AMD", "relation": "competes_with"},
         ]
         repo = GraphRepository(mock_database)
 
-        result = await repo.get_neighbors(
-            "NVDA", relations=["competes_with"]
-        )
+        result = await repo.get_neighbors("NVDA", relations=["competes_with"])
 
         assert result == [("AMD", "competes_with")]
 
@@ -307,9 +293,7 @@ class TestFindPath:
     @pytest.mark.asyncio
     async def test_path_found(self, mock_database: AsyncMock) -> None:
         """find_path() returns shortest path when one exists."""
-        mock_database.fetchrow.return_value = {
-            "path": ["ASML", "TSMC", "NVDA"]
-        }
+        mock_database.fetchrow.return_value = {"path": ["ASML", "TSMC", "NVDA"]}
         repo = GraphRepository(mock_database)
 
         result = await repo.find_path("ASML", "NVDA", max_depth=3)
@@ -335,9 +319,7 @@ class TestGetSubgraph:
     """Test GraphRepository.get_subgraph()."""
 
     @pytest.mark.asyncio
-    async def test_subgraph_structure(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_subgraph_structure(self, mock_database: AsyncMock) -> None:
         """get_subgraph() returns dict with nodes and edges."""
         # Mock downstream and upstream CTEs to return some node IDs
         mock_database.fetch.side_effect = [
@@ -352,24 +334,24 @@ class TestGetSubgraph:
                     "node_type": "ticker",
                     "name": "TSMC",
                     "metadata": "{}",
-                    "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
-                    "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+                    "created_at": datetime(2025, 1, 1, tzinfo=UTC),
+                    "updated_at": datetime(2025, 1, 1, tzinfo=UTC),
                 },
                 {
                     "node_id": "NVDA",
                     "node_type": "ticker",
                     "name": "NVIDIA",
                     "metadata": "{}",
-                    "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
-                    "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+                    "created_at": datetime(2025, 1, 1, tzinfo=UTC),
+                    "updated_at": datetime(2025, 1, 1, tzinfo=UTC),
                 },
                 {
                     "node_id": "ASML",
                     "node_type": "ticker",
                     "name": "ASML",
                     "metadata": "{}",
-                    "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
-                    "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+                    "created_at": datetime(2025, 1, 1, tzinfo=UTC),
+                    "updated_at": datetime(2025, 1, 1, tzinfo=UTC),
                 },
             ],
             # Edge fetch: SELECT * FROM causal_edges WHERE source/target ANY
@@ -380,7 +362,7 @@ class TestGetSubgraph:
                     "relation": "supplies_to",
                     "confidence": 0.9,
                     "source_doc_ids": [],
-                    "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+                    "created_at": datetime(2025, 1, 1, tzinfo=UTC),
                     "metadata": "{}",
                 },
                 {
@@ -389,7 +371,7 @@ class TestGetSubgraph:
                     "relation": "supplies_to",
                     "confidence": 0.85,
                     "source_doc_ids": [],
-                    "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+                    "created_at": datetime(2025, 1, 1, tzinfo=UTC),
                     "metadata": "{}",
                 },
             ],

@@ -15,7 +15,6 @@ Architecture:
 
 import logging
 import re
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -26,7 +25,6 @@ from src.ner.config import NERConfig
 from src.ner.schemas import EntityType, FinancialEntity
 
 if TYPE_CHECKING:
-    import spacy
     from spacy.language import Language
     from spacy.tokens import Doc
 
@@ -84,7 +82,7 @@ class NERService:
                 in link_entities_to_theme().
         """
         self.config = config or NERConfig()
-        self._nlp: "Language | None" = None
+        self._nlp: Language | None = None
         self._coref_model: Any = None
         self._embedding_service = embedding_service
         self._initialized = False
@@ -117,9 +115,7 @@ class NERService:
         try:
             import spacy
         except ImportError as e:
-            raise ImportError(
-                "spaCy is required for NER. Install with: pip install spacy"
-            ) from e
+            raise ImportError("spaCy is required for NER. Install with: pip install spacy") from e
 
         # Try to load the configured model
         model_name = self.config.spacy_model
@@ -129,9 +125,7 @@ class NERService:
         except OSError:
             # Try fallback model
             fallback = self.config.fallback_model
-            logger.warning(
-                f"Model '{model_name}' not found, trying fallback: {fallback}"
-            )
+            logger.warning(f"Model '{model_name}' not found, trying fallback: {fallback}")
             try:
                 self._nlp = spacy.load(fallback)
             except OSError as e:
@@ -166,6 +160,7 @@ class NERService:
         for pattern_file in patterns_dir.glob("*.jsonl"):
             try:
                 import json
+
                 with open(pattern_file) as f:
                     for line in f:
                         line = line.strip()
@@ -194,9 +189,7 @@ class NERService:
                     config={"overwrite_ents": False},
                 )
                 ruler.add_patterns(all_patterns)
-                logger.info(
-                    f"Loaded {len(all_patterns)} EntityRuler patterns (appended)"
-                )
+                logger.info(f"Loaded {len(all_patterns)} EntityRuler patterns (appended)")
 
     def _load_coref_model(self) -> None:
         """Load fastcoref model for coreference resolution."""
@@ -276,7 +269,7 @@ class NERService:
             # Sort by position — first mention is the antecedent (canonical)
             spans.sort(key=lambda s: s[0])
             canonical = spans[0][2]
-            for char_start, char_end, mention_text in spans[1:]:
+            for char_start, char_end, _mention_text in spans[1:]:
                 replacements.append((char_start, char_end, canonical))
 
         if not replacements:
@@ -313,10 +306,7 @@ class NERService:
 
         # Resolve coreferences before NER for long documents
         working_text = text
-        if (
-            self._coref_model is not None
-            and len(text) >= self.config.coref_min_length
-        ):
+        if self._coref_model is not None and len(text) >= self.config.coref_min_length:
             working_text = self._resolve_text(text)
 
         # Process with spaCy
@@ -335,9 +325,7 @@ class NERService:
         entities = self._deduplicate_entities(entities)
 
         # Filter by confidence threshold
-        entities = [
-            e for e in entities if e.confidence >= self.config.confidence_threshold
-        ]
+        entities = [e for e in entities if e.confidence >= self.config.confidence_threshold]
 
         # Filter by configured entity types
         entities = [e for e in entities if e.type in self.config.extract_types]
@@ -360,9 +348,7 @@ class NERService:
         """
         return self.extract_sync(text)
 
-    async def extract_batch(
-        self, texts: list[str]
-    ) -> list[list[FinancialEntity]]:
+    async def extract_batch(self, texts: list[str]) -> list[list[FinancialEntity]]:
         """
         Extract entities from multiple texts.
 
@@ -395,10 +381,7 @@ class NERService:
             # Resolve coreferences for long texts before NER
             working_batch = []
             for t in batch:
-                if (
-                    self._coref_model is not None
-                    and len(t) >= self.config.coref_min_length
-                ):
+                if self._coref_model is not None and len(t) >= self.config.coref_min_length:
                     working_batch.append(self._resolve_text(t))
                 else:
                     working_batch.append(t)
@@ -406,14 +389,15 @@ class NERService:
             # Process batch with spaCy pipe
             docs = list(self._nlp.pipe(working_batch))
 
-            for doc, text in zip(docs, working_batch):
+            for doc, text in zip(docs, working_batch, strict=True):
                 entities = self._extract_from_doc(doc, text)
                 entities.extend(self._extract_cashtags(text))
 
                 entities.extend(self._fuzzy_match_companies(text, entities))
                 entities = self._deduplicate_entities(entities)
                 entities = [
-                    e for e in entities
+                    e
+                    for e in entities
                     if e.confidence >= self.config.confidence_threshold
                     and e.type in self.config.extract_types
                 ]
@@ -523,9 +507,7 @@ class NERService:
             0.82
         """
         if self._embedding_service is None:
-            logger.warning(
-                "No embedding service available, falling back to substring matching"
-            )
+            logger.warning("No embedding service available, falling back to substring matching")
             return self.link_entities_to_theme(entities, theme_keywords)
 
         if not entities:
@@ -597,9 +579,7 @@ class NERService:
 
         return float(np.dot(vec_a, vec_b) / (norm_a * norm_b))
 
-    def _extract_from_doc(
-        self, doc: "Doc", original_text: str
-    ) -> list[FinancialEntity]:
+    def _extract_from_doc(self, doc: "Doc", original_text: str) -> list[FinancialEntity]:
         """Extract entities from a spaCy Doc."""
         entities: list[FinancialEntity] = []
 
@@ -638,14 +618,14 @@ class NERService:
         entities: list[FinancialEntity] = []
 
         # Match $TICKER pattern (1-5 uppercase letters)
-        pattern = r'\$([A-Z]{1,5})\b'
+        pattern = r"\$([A-Z]{1,5})\b"
 
         for match in re.finditer(pattern, text.upper()):
             ticker = match.group(1)
             if ticker in SEMICONDUCTOR_TICKERS:
                 # Find the actual position in original text
                 # (case-insensitive search)
-                for m in re.finditer(rf'\$({ticker})\b', text, re.IGNORECASE):
+                for m in re.finditer(rf"\$({ticker})\b", text, re.IGNORECASE):
                     entities.append(
                         FinancialEntity(
                             text=m.group(0),
@@ -674,8 +654,10 @@ class NERService:
         # Check each known company name
         for company_name, (normalized, ticker) in self._company_lookup.items():
             # Skip if we already found this company
-            if any(e.normalized == normalized or e.metadata.get("ticker") == ticker
-                   for e in existing_entities):
+            if any(
+                e.normalized == normalized or e.metadata.get("ticker") == ticker
+                for e in existing_entities
+            ):
                 continue
 
             # Try exact match first
@@ -698,18 +680,18 @@ class NERService:
 
             # Fuzzy match for variations
             words = text_lower.split()
-            for i, word in enumerate(words):
+            for _i, word in enumerate(words):
                 if len(word) < 4:
                     continue
                 score = fuzz.ratio(company_name, word)
                 if score >= self.config.fuzzy_threshold:
                     # Find word position in original text
-                    pattern = rf'\b{re.escape(word)}\b'
+                    pattern = rf"\b{re.escape(word)}\b"
                     for match in re.finditer(pattern, text_lower):
                         if (match.start(), match.end()) not in covered_spans:
                             entities.append(
                                 FinancialEntity(
-                                    text=text[match.start():match.end()],
+                                    text=text[match.start() : match.end()],
                                     type="COMPANY",
                                     normalized=normalized,
                                     start=match.start(),
@@ -722,9 +704,7 @@ class NERService:
 
         return entities
 
-    def _deduplicate_entities(
-        self, entities: list[FinancialEntity]
-    ) -> list[FinancialEntity]:
+    def _deduplicate_entities(self, entities: list[FinancialEntity]) -> list[FinancialEntity]:
         """
         Remove duplicate and overlapping entities.
 
@@ -751,12 +731,11 @@ class NERService:
                     entity_len = entity.end - entity.start
                     other_len = other.end - other.start
 
-                    if entity_len > other_len and entity.confidence >= other.confidence - 0.2:
-                        result.remove(other)
-                        result.append(entity)
-                        break
-                    # If new entity has much higher confidence, prefer it
-                    elif entity.confidence > other.confidence + 0.3:
+                    if (
+                        entity_len > other_len
+                        and entity.confidence >= other.confidence - 0.2
+                        or entity.confidence > other.confidence + 0.3
+                    ):
                         result.remove(other)
                         result.append(entity)
                         break

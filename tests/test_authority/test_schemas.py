@@ -40,9 +40,7 @@ class TestAuthorityProfileCreation:
 
     def test_all_valid_tiers(self):
         for tier in AuthorTier:
-            p = AuthorityProfile(
-                author_id="x", platform="twitter", tier=tier.value
-            )
+            p = AuthorityProfile(author_id="x", platform="twitter", tier=tier.value)
             assert p.tier == tier.value
 
     def test_topic_scores_dict(self):
@@ -59,21 +57,15 @@ class TestAuthorityProfileValidation:
 
     def test_invalid_tier(self):
         with pytest.raises(ValueError, match="Invalid tier"):
-            AuthorityProfile(
-                author_id="x", platform="twitter", tier="expert"
-            )
+            AuthorityProfile(author_id="x", platform="twitter", tier="expert")
 
     def test_negative_total_calls(self):
         with pytest.raises(ValueError, match="total_calls must be non-negative"):
-            AuthorityProfile(
-                author_id="x", platform="twitter", total_calls=-1
-            )
+            AuthorityProfile(author_id="x", platform="twitter", total_calls=-1)
 
     def test_negative_correct_calls(self):
         with pytest.raises(ValueError, match="correct_calls must be non-negative"):
-            AuthorityProfile(
-                author_id="x", platform="twitter", correct_calls=-1
-            )
+            AuthorityProfile(author_id="x", platform="twitter", correct_calls=-1)
 
     def test_correct_exceeds_total(self):
         with pytest.raises(ValueError, match="correct_calls cannot exceed total_calls"):
@@ -86,7 +78,9 @@ class TestAuthorityProfileValidation:
 
     def test_equal_correct_and_total_is_valid(self):
         p = AuthorityProfile(
-            author_id="x", platform="twitter",
-            total_calls=10, correct_calls=10,
+            author_id="x",
+            platform="twitter",
+            total_calls=10,
+            correct_calls=10,
         )
         assert p.correct_calls == p.total_calls

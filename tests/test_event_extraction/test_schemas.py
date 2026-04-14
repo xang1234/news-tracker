@@ -1,10 +1,9 @@
 """Tests for EventRecord schema."""
 
 import json
-from datetime import datetime, timezone
-from uuid import uuid4
+from datetime import UTC, datetime
 
-from src.event_extraction.schemas import EventRecord, VALID_EVENT_TYPES
+from src.event_extraction.schemas import VALID_EVENT_TYPES, EventRecord
 
 
 class TestEventRecord:
@@ -57,24 +56,36 @@ class TestEventRecord:
     def test_auto_generated_uuid(self):
         """Test that event_id is unique across instances."""
         e1 = EventRecord(
-            doc_id="d1", event_type="price_change", action="raised",
-            span_start=0, span_end=10, extractor_version="1.0.0",
+            doc_id="d1",
+            event_type="price_change",
+            action="raised",
+            span_start=0,
+            span_end=10,
+            extractor_version="1.0.0",
         )
         e2 = EventRecord(
-            doc_id="d2", event_type="price_change", action="raised",
-            span_start=0, span_end=10, extractor_version="1.0.0",
+            doc_id="d2",
+            event_type="price_change",
+            action="raised",
+            span_start=0,
+            span_end=10,
+            extractor_version="1.0.0",
         )
         assert e1.event_id != e2.event_id
 
     def test_created_at_default(self):
         """Test that created_at defaults to UTC now."""
         event = EventRecord(
-            doc_id="d1", event_type="product_launch", action="launched",
-            span_start=0, span_end=10, extractor_version="1.0.0",
+            doc_id="d1",
+            event_type="product_launch",
+            action="launched",
+            span_start=0,
+            span_end=10,
+            extractor_version="1.0.0",
         )
         assert event.created_at.tzinfo is not None
         # Should be within the last minute
-        delta = datetime.now(timezone.utc) - event.created_at
+        delta = datetime.now(UTC) - event.created_at
         assert delta.total_seconds() < 60
 
 
@@ -118,8 +129,12 @@ class TestEventRecordSerialization:
     def test_to_dict_is_json_serializable(self):
         """Test that to_dict output can be JSON-serialized."""
         event = EventRecord(
-            doc_id="d1", event_type="price_change", action="raised",
-            tickers=["TSM"], span_start=0, span_end=10,
+            doc_id="d1",
+            event_type="price_change",
+            action="raised",
+            tickers=["TSM"],
+            span_start=0,
+            span_end=10,
             extractor_version="1.0.0",
         )
         json_str = json.dumps(event.to_dict())
@@ -200,17 +215,24 @@ class TestEventTypes:
     def test_valid_event_types(self):
         """Test all documented event types are in the valid set."""
         expected = {
-            "capacity_expansion", "capacity_constraint",
-            "product_launch", "product_delay",
-            "price_change", "guidance_change",
+            "capacity_expansion",
+            "capacity_constraint",
+            "product_launch",
+            "product_delay",
+            "price_change",
+            "guidance_change",
         }
-        assert VALID_EVENT_TYPES == expected
+        assert expected == VALID_EVENT_TYPES
 
     def test_event_record_accepts_valid_types(self):
         """Test EventRecord can be created with each valid type."""
         for event_type in VALID_EVENT_TYPES:
             event = EventRecord(
-                doc_id="d1", event_type=event_type, action="test",
-                span_start=0, span_end=5, extractor_version="1.0.0",
+                doc_id="d1",
+                event_type=event_type,
+                action="test",
+                span_start=0,
+                span_end=5,
+                extractor_version="1.0.0",
             )
             assert event.event_type == event_type

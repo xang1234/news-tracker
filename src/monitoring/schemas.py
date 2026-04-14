@@ -6,17 +6,19 @@ whether to alert or log.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 DriftSeverity = Literal["ok", "warning", "critical"]
 
-VALID_DRIFT_TYPES: frozenset[str] = frozenset({
-    "embedding_drift",
-    "theme_fragmentation",
-    "sentiment_calibration",
-    "cluster_stability",
-})
+VALID_DRIFT_TYPES: frozenset[str] = frozenset(
+    {
+        "embedding_drift",
+        "theme_fragmentation",
+        "sentiment_calibration",
+        "cluster_stability",
+    }
+)
 
 
 @dataclass
@@ -39,9 +41,7 @@ class DriftResult:
     thresholds: dict[str, float]
     message: str
     metadata: dict[str, Any] = field(default_factory=dict)
-    checked_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    checked_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.drift_type not in VALID_DRIFT_TYPES:

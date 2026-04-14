@@ -86,9 +86,7 @@ class CausalGraph:
             metadata=metadata,
         )
 
-    async def remove_edge(
-        self, source: str, target: str, relation: str
-    ) -> bool:
+    async def remove_edge(self, source: str, target: str, relation: str) -> bool:
         """Remove an edge. Returns True if an edge was actually deleted."""
         return await self._repo.remove_edge(source, target, relation)
 
@@ -103,9 +101,7 @@ class CausalGraph:
         depth = min(max_depth, self._config.max_traversal_depth)
         return await self._repo.get_downstream_edges(node_id, max_depth=depth)
 
-    async def get_downstream(
-        self, node_id: str, max_depth: int = 2
-    ) -> list[tuple[str, int]]:
+    async def get_downstream(self, node_id: str, max_depth: int = 2) -> list[tuple[str, int]]:
         """Get all nodes reachable by following outgoing edges.
 
         Returns:
@@ -114,9 +110,7 @@ class CausalGraph:
         depth = min(max_depth, self._config.max_traversal_depth)
         return await self._repo.get_downstream(node_id, max_depth=depth)
 
-    async def get_upstream(
-        self, node_id: str, max_depth: int = 2
-    ) -> list[tuple[str, int]]:
+    async def get_upstream(self, node_id: str, max_depth: int = 2) -> list[tuple[str, int]]:
         """Get all nodes that can reach this node via outgoing edges.
 
         Returns:
@@ -137,9 +131,7 @@ class CausalGraph:
         """
         return await self._repo.get_neighbors(node_id, relations=relations)
 
-    async def find_path(
-        self, source: str, target: str, max_depth: int = 5
-    ) -> list[str] | None:
+    async def find_path(self, source: str, target: str, max_depth: int = 5) -> list[str] | None:
         """Find shortest path between two nodes.
 
         Returns:
@@ -148,9 +140,7 @@ class CausalGraph:
         depth = min(max_depth, self._config.max_traversal_depth)
         return await self._repo.find_path(source, target, max_depth=depth)
 
-    async def get_subgraph(
-        self, node_id: str, depth: int = 2
-    ) -> dict[str, Any]:
+    async def get_subgraph(self, node_id: str, depth: int = 2) -> dict[str, Any]:
         """Extract a local subgraph around a node.
 
         Returns:

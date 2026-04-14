@@ -1,18 +1,15 @@
 """Tests for the CompellingnessService."""
 
 import json
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
-import pytest
 
 from src.scoring.circuit_breaker import CircuitOpenError, CircuitState
 from src.scoring.compellingness import CompellingnessService
 from src.scoring.config import ScoringConfig
-from src.scoring.schemas import CompellingnessScore, DimensionScores
+from src.scoring.schemas import CompellingnessScore
 from src.themes.schemas import Theme
-
 
 # ── Thesis Building ──────────────────────────────────────
 
@@ -41,7 +38,9 @@ class TestThesisBuilding:
         assert "Entities:" not in text  # No entities
 
     def test_includes_keywords_and_tickers(
-        self, scoring_config: ScoringConfig, sample_theme: Theme,
+        self,
+        scoring_config: ScoringConfig,
+        sample_theme: Theme,
     ) -> None:
         service = CompellingnessService(config=scoring_config)
         text = service.build_thesis_text(sample_theme)
@@ -51,7 +50,9 @@ class TestThesisBuilding:
         assert "AMD" in text
         assert "hbm" in text
 
-    def test_truncates_long_lists(self, scoring_config: ScoringConfig, sample_centroid: np.ndarray) -> None:
+    def test_truncates_long_lists(
+        self, scoring_config: ScoringConfig, sample_centroid: np.ndarray
+    ) -> None:
         """Keywords/tickers/entities are capped at max limits."""
         theme = Theme(
             theme_id="theme_long_lists_00",
@@ -139,7 +140,9 @@ class TestTieredPipeline:
     """Tests for score_theme() tier gating logic."""
 
     async def test_low_rule_score_skips_llm(
-        self, scoring_config: ScoringConfig, minimal_theme: Theme,
+        self,
+        scoring_config: ScoringConfig,
+        minimal_theme: Theme,
     ) -> None:
         """Themes scoring below tier2_min_rule_score stay at Tier 1."""
         service = CompellingnessService(config=scoring_config)
@@ -149,7 +152,10 @@ class TestTieredPipeline:
         assert service._stats["tier1_only"] >= 1
 
     async def test_tier2_gating(
-        self, scoring_config: ScoringConfig, sample_theme: Theme, mock_gpt_score: CompellingnessScore,
+        self,
+        scoring_config: ScoringConfig,
+        sample_theme: Theme,
+        mock_gpt_score: CompellingnessScore,
     ) -> None:
         """Theme with high rule score advances to Tier 2, but GPT < tier3_min stays at Tier 2."""
         service = CompellingnessService(config=scoring_config)
@@ -216,7 +222,9 @@ class TestTieredPipeline:
         assert score.overall_score == 7.5  # (9.0 + 6.0) / 2
 
     async def test_llm_failure_falls_back_to_rule(
-        self, scoring_config: ScoringConfig, sample_theme: Theme,
+        self,
+        scoring_config: ScoringConfig,
+        sample_theme: Theme,
     ) -> None:
         """When LLM call fails, fallback to rule-based score."""
         service = CompellingnessService(config=scoring_config)
@@ -260,7 +268,9 @@ class TestBudgetTracking:
         assert service._memory_budgets
 
     async def test_auto_downgrade_on_budget_exhaustion(
-        self, scoring_config: ScoringConfig, sample_theme: Theme,
+        self,
+        scoring_config: ScoringConfig,
+        sample_theme: Theme,
     ) -> None:
         """Exhausted budget causes tier downgrade to rule-based."""
         scoring_config.daily_budget_openai = 0.0  # Zero budget
@@ -271,7 +281,9 @@ class TestBudgetTracking:
         assert score.tier_used == "rule"
 
     async def test_redis_budget_tracking(
-        self, scoring_config: ScoringConfig, mock_redis: AsyncMock,
+        self,
+        scoring_config: ScoringConfig,
+        mock_redis: AsyncMock,
     ) -> None:
         """Budget check uses Redis when available."""
         scoring_config.daily_budget_openai = 5.0  # Set explicit limit for test
@@ -306,7 +318,10 @@ class TestCaching:
         assert h1 != h2
 
     async def test_cache_hit(
-        self, scoring_config: ScoringConfig, mock_redis: AsyncMock, sample_theme: Theme,
+        self,
+        scoring_config: ScoringConfig,
+        mock_redis: AsyncMock,
+        sample_theme: Theme,
     ) -> None:
         """Cached score is returned without LLM calls."""
         scoring_config.cache_enabled = True
@@ -325,7 +340,9 @@ class TestCaching:
         assert score.overall_score == 7.0
 
     async def test_cache_disabled_skips(
-        self, scoring_config: ScoringConfig, sample_theme: Theme,
+        self,
+        scoring_config: ScoringConfig,
+        sample_theme: Theme,
     ) -> None:
         """With cache disabled, no Redis calls are made."""
         scoring_config.cache_enabled = False
@@ -343,7 +360,9 @@ class TestCircuitBreakerIntegration:
     """Tests for circuit breaker fallback in the pipeline."""
 
     async def test_open_circuit_falls_back_to_rule(
-        self, scoring_config: ScoringConfig, sample_theme: Theme,
+        self,
+        scoring_config: ScoringConfig,
+        sample_theme: Theme,
     ) -> None:
         """Open OpenAI circuit causes fallback to rule-based scoring."""
         service = CompellingnessService(config=scoring_config)
@@ -367,14 +386,20 @@ class TestBatchScoring:
     """Tests for score_themes_batch()."""
 
     async def test_batch_returns_one_per_theme(
-        self, scoring_config: ScoringConfig, sample_theme: Theme, minimal_theme: Theme,
+        self,
+        scoring_config: ScoringConfig,
+        sample_theme: Theme,
+        minimal_theme: Theme,
     ) -> None:
         service = CompellingnessService(config=scoring_config)
         results = await service.score_themes_batch([sample_theme, minimal_theme])
         assert len(results) == 2
 
     async def test_error_isolation(
-        self, scoring_config: ScoringConfig, sample_theme: Theme, minimal_theme: Theme,
+        self,
+        scoring_config: ScoringConfig,
+        sample_theme: Theme,
+        minimal_theme: Theme,
     ) -> None:
         """One theme failing doesn't affect others."""
         service = CompellingnessService(config=scoring_config)
@@ -405,7 +430,9 @@ class TestStats:
     """Tests for get_stats()."""
 
     async def test_stats_after_scoring(
-        self, scoring_config: ScoringConfig, sample_theme: Theme,
+        self,
+        scoring_config: ScoringConfig,
+        sample_theme: Theme,
     ) -> None:
         service = CompellingnessService(config=scoring_config)
         await service.score_theme(sample_theme)

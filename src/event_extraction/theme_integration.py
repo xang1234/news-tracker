@@ -87,12 +87,15 @@ class EventThemeLinker:
             else:
                 existing = groups[key]
                 # Keep earliest created_at
-                if event.get("created_at") and existing.get("created_at"):
-                    if event["created_at"] < existing["created_at"]:
-                        doc_ids = existing["source_doc_ids"]
-                        new_event = dict(event)
-                        new_event["source_doc_ids"] = doc_ids
-                        groups[key] = new_event
+                if (
+                    event.get("created_at")
+                    and existing.get("created_at")
+                    and event["created_at"] < existing["created_at"]
+                ):
+                    doc_ids = existing["source_doc_ids"]
+                    new_event = dict(event)
+                    new_event["source_doc_ids"] = doc_ids
+                    groups[key] = new_event
 
                 # Track source document
                 doc_id = event["doc_id"]
@@ -102,9 +105,7 @@ class EventThemeLinker:
                 # Boost confidence per additional source
                 extra_sources = len(groups[key]["source_doc_ids"]) - 1
                 base_confidence = event.get("confidence", 0.7)
-                groups[key]["confidence"] = min(
-                    1.0, base_confidence + 0.05 * extra_sources
-                )
+                groups[key]["confidence"] = min(1.0, base_confidence + 0.05 * extra_sources)
 
         result = list(groups.values())
         result.sort(
@@ -147,18 +148,10 @@ class ThemeWithEvents:
         Returns:
             Signal string or None.
         """
-        supply_up = sum(
-            self.event_counts.get(t, 0) for t in _SUPPLY_INCREASING
-        )
-        supply_down = sum(
-            self.event_counts.get(t, 0) for t in _SUPPLY_DECREASING
-        )
-        product_up = sum(
-            self.event_counts.get(t, 0) for t in _PRODUCT_MOMENTUM
-        )
-        product_down = sum(
-            self.event_counts.get(t, 0) for t in _PRODUCT_RISK
-        )
+        supply_up = sum(self.event_counts.get(t, 0) for t in _SUPPLY_INCREASING)
+        supply_down = sum(self.event_counts.get(t, 0) for t in _SUPPLY_DECREASING)
+        product_up = sum(self.event_counts.get(t, 0) for t in _PRODUCT_MOMENTUM)
+        product_down = sum(self.event_counts.get(t, 0) for t in _PRODUCT_RISK)
 
         # Determine dominant axis
         supply_delta = supply_up - supply_down
@@ -185,7 +178,7 @@ class ThemeWithEvents:
         cls,
         theme_id: str,
         events: list[dict[str, Any]],
-    ) -> "ThemeWithEvents":
+    ) -> ThemeWithEvents:
         """Build a ThemeWithEvents from a list of event dicts.
 
         Args:

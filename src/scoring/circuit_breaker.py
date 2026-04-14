@@ -15,7 +15,8 @@ Usage:
 import enum
 import logging
 import time
-from typing import Any, Callable, Coroutine, TypeVar
+from collections.abc import Callable, Coroutine
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -101,9 +102,7 @@ class GenericCircuitBreaker:
                     self._name,
                 )
             else:
-                raise CircuitOpenError(
-                    f"Circuit breaker {self._name} is OPEN"
-                )
+                raise CircuitOpenError(f"Circuit breaker {self._name} is OPEN")
 
         try:
             result = await fn(*args, **kwargs)

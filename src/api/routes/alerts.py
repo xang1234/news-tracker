@@ -2,17 +2,17 @@
 
 import time
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from starlette.requests import Request
-import structlog
 
 from src.alerts.repository import AlertRepository
 from src.alerts.schemas import VALID_SEVERITIES, VALID_TRIGGER_TYPES
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_alert_repository
+from src.api.models import AlertAcknowledgeResponse, AlertItem, AlertsResponse, ErrorResponse
 from src.api.rate_limit import limiter
 from src.config.settings import get_settings as _get_settings
-from src.api.models import AlertAcknowledgeResponse, AlertItem, AlertsResponse, ErrorResponse
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -41,7 +41,10 @@ async def list_alerts(
     ),
     trigger_type: str | None = Query(
         default=None,
-        description="Filter by trigger type: sentiment_velocity, extreme_sentiment, volume_surge, lifecycle_change, new_theme",
+        description=(
+            "Filter by trigger type: sentiment_velocity, extreme_sentiment, "
+            "volume_surge, lifecycle_change, new_theme"
+        ),
     ),
     theme_id: str | None = Query(
         default=None,
@@ -68,8 +71,7 @@ async def list_alerts(
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=(
-                    f"Invalid severity {severity!r}. "
-                    f"Must be one of: {sorted(VALID_SEVERITIES)}"
+                    f"Invalid severity {severity!r}. Must be one of: {sorted(VALID_SEVERITIES)}"
                 ),
             )
 
@@ -145,7 +147,9 @@ async def list_alerts(
         500: {"model": ErrorResponse, "description": "Server error"},
     },
     summary="Acknowledge an alert",
-    description="Mark an alert as acknowledged. Idempotent — already-acknowledged alerts return 404.",
+    description=(
+        "Mark an alert as acknowledged. Idempotent — already-acknowledged alerts return 404."
+    ),
 )
 @limiter.limit(lambda: _get_settings().rate_limit_default)
 async def acknowledge_alert(

@@ -1,7 +1,5 @@
 """Tests for /embed endpoint."""
 
-import pytest
-
 
 class TestEmbedRoute:
     """Test the embedding endpoint."""
@@ -10,10 +8,13 @@ class TestEmbedRoute:
         """POST /embed with valid input returns embeddings."""
         mock_embedding_service.embed_batch.return_value = [[0.1] * 768]
 
-        resp = client.post("/embed", json={
-            "texts": ["NVIDIA reports record revenue"],
-            "model": "auto",
-        })
+        resp = client.post(
+            "/embed",
+            json={
+                "texts": ["NVIDIA reports record revenue"],
+                "model": "auto",
+            },
+        )
 
         assert resp.status_code == 200
         body = resp.json()

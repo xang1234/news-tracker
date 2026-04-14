@@ -5,6 +5,7 @@ Document explorer endpoints for browsing, filtering, and inspecting documents.
 import asyncio
 import json
 import time
+from datetime import UTC
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -12,8 +13,6 @@ from starlette.requests import Request
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_document_repository
-from src.api.rate_limit import limiter
-from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     DocumentDetailResponse,
     DocumentListItem,
@@ -23,6 +22,8 @@ from src.api.models import (
     ErrorResponse,
     PlatformCount,
 )
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.storage.repository import DocumentRepository
 
 logger = structlog.get_logger(__name__)
@@ -56,9 +57,7 @@ def _parse_engagement(engagement: dict | str | None) -> dict:
 
 def _record_to_list_item(row) -> DocumentListItem:
     """Map a lightweight DB record to a DocumentListItem."""
-    sentiment_label, sentiment_confidence = _extract_sentiment_fields(
-        row.get("sentiment")
-    )
+    sentiment_label, sentiment_confidence = _extract_sentiment_fields(row.get("sentiment"))
     ts = row.get("timestamp")
     fetched = row.get("fetched_at")
     return DocumentListItem(
@@ -302,7 +301,9 @@ async def list_documents(
     if content_type is not None and content_type not in _CONTENT_TYPE_WHITELIST:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid content_type '{content_type}'. Allowed: {sorted(_CONTENT_TYPE_WHITELIST)}",
+            detail=(
+                f"Invalid content_type '{content_type}'. Allowed: {sorted(_CONTENT_TYPE_WHITELIST)}"
+            ),
         )
 
     # Parse date strings to datetime if provided
@@ -310,11 +311,11 @@ async def list_documents(
     until_dt = None
     if since is not None:
         try:
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             since_dt = datetime.fromisoformat(since)
             if since_dt.tzinfo is None:
-                since_dt = since_dt.replace(tzinfo=timezone.utc)
+                since_dt = since_dt.replace(tzinfo=UTC)
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -322,28 +323,28 @@ async def list_documents(
             )
     if until is not None:
         try:
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             until_dt = datetime.fromisoformat(until)
             if until_dt.tzinfo is None:
-                until_dt = until_dt.replace(tzinfo=timezone.utc)
+                until_dt = until_dt.replace(tzinfo=UTC)
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Invalid 'until' date format: '{until}'. Use ISO 8601.",
             )
 
-    filter_kwargs = dict(
-        platform=platform,
-        content_type=content_type,
-        ticker=ticker,
-        q=q,
-        since=since_dt,
-        until=until_dt,
-        max_spam=max_spam,
-        min_authority=min_authority,
-        active_sources_only=active_sources_only,
-    )
+    filter_kwargs = {
+        "platform": platform,
+        "content_type": content_type,
+        "ticker": ticker,
+        "q": q,
+        "since": since_dt,
+        "until": until_dt,
+        "max_spam": max_spam,
+        "min_authority": min_authority,
+        "active_sources_only": active_sources_only,
+    }
 
     start = time.perf_counter()
     total, rows = await asyncio.gather(

@@ -1,6 +1,6 @@
 """Tests for PatternExtractor integration with Preprocessor."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.event_extraction.patterns import PatternExtractor
 from src.ingestion.preprocessor import Preprocessor
@@ -16,7 +16,7 @@ class TestPreprocessorEventsIntegration:
             id="test_1",
             platform=Platform.NEWS,
             url="https://example.com/article",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             author_id="author_1",
             author_name="Test Author",
             content=content,
@@ -25,18 +25,14 @@ class TestPreprocessorEventsIntegration:
     def test_events_disabled_no_extraction(self):
         """Events should not be extracted when disabled."""
         preprocessor = Preprocessor(enable_events=False)
-        doc = self._make_doc(
-            "NVIDIA launched the H200 GPU for data center AI workloads."
-        )
+        doc = self._make_doc("NVIDIA launched the H200 GPU for data center AI workloads.")
         processed = preprocessor.process(doc)
         assert processed.events_extracted == []
 
     def test_events_enabled_no_extractor(self):
         """Events enabled but no extractor provided should not crash."""
         preprocessor = Preprocessor(enable_events=True, event_extractor=None)
-        doc = self._make_doc(
-            "NVIDIA launched the H200 GPU for data center AI workloads."
-        )
+        doc = self._make_doc("NVIDIA launched the H200 GPU for data center AI workloads.")
         processed = preprocessor.process(doc)
         assert processed.events_extracted == []
 
@@ -47,9 +43,7 @@ class TestPreprocessorEventsIntegration:
             event_extractor=extractor,
             enable_events=True,
         )
-        doc = self._make_doc(
-            "NVIDIA launched the H200 GPU accelerator for AI workloads."
-        )
+        doc = self._make_doc("NVIDIA launched the H200 GPU accelerator for AI workloads.")
         processed = preprocessor.process(doc)
         assert len(processed.events_extracted) > 0
         for ev in processed.events_extracted:
@@ -66,9 +60,7 @@ class TestPreprocessorEventsIntegration:
             event_extractor=extractor,
             enable_events=True,
         )
-        doc = self._make_doc(
-            "TSMC raised wafer prices by 5% for advanced nodes."
-        )
+        doc = self._make_doc("TSMC raised wafer prices by 5% for advanced nodes.")
         processed = preprocessor.process(doc)
         json_str = json.dumps(processed.events_extracted)
         parsed = json.loads(json_str)
@@ -81,9 +73,7 @@ class TestPreprocessorEventsIntegration:
             event_extractor=extractor,
             enable_events=True,
         )
-        doc = self._make_doc(
-            "$NVDA NVIDIA raised revenue guidance to $22 billion for Q4 2026."
-        )
+        doc = self._make_doc("$NVDA NVIDIA raised revenue guidance to $22 billion for Q4 2026.")
         processed = preprocessor.process(doc)
 
         # Tickers should be extracted
@@ -114,8 +104,6 @@ class TestPreprocessorEventsIntegration:
             event_extractor=extractor,
             enable_events=True,
         )
-        doc = self._make_doc(
-            "The weather in San Francisco is sunny today with clear skies."
-        )
+        doc = self._make_doc("The weather in San Francisco is sunny today with clear skies.")
         processed = preprocessor.process(doc)
         assert processed.events_extracted == []

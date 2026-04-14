@@ -92,9 +92,7 @@ class SecurityMasterService:
 
     # ── Fuzzy search ────────────────────────────────────────────
 
-    async def fuzzy_search(
-        self, query: str, limit: int = 10
-    ) -> list[Security]:
+    async def fuzzy_search(self, query: str, limit: int = 10) -> list[Security]:
         """Search securities by name using pg_trgm similarity."""
         return await self._repo.search_by_name(
             query, limit=limit, threshold=self._config.fuzzy_threshold

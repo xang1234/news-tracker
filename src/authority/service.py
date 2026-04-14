@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import logging
 import math
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from src.authority.config import AuthorityConfig
-from src.authority.schemas import AuthorTier, AuthorityProfile
+from src.authority.schemas import AuthorityProfile, AuthorTier
 
 if TYPE_CHECKING:
     from src.authority.repository import AuthorityRepository
@@ -27,18 +27,20 @@ logger = logging.getLogger(__name__)
 
 
 # Known research / specialized outlets (author_name patterns)
-_RESEARCH_OUTLETS: frozenset[str] = frozenset({
-    "semianalysis",
-    "techinsights",
-    "ic insights",
-    "yole développement",
-    "yole group",
-    "trendforce",
-    "counterpoint",
-    "omdia",
-    "gartner",
-    "idc semiconductor",
-})
+_RESEARCH_OUTLETS: frozenset[str] = frozenset(
+    {
+        "semianalysis",
+        "techinsights",
+        "ic insights",
+        "yole développement",
+        "yole group",
+        "trendforce",
+        "counterpoint",
+        "omdia",
+        "gartner",
+        "idc semiconductor",
+    }
+)
 
 
 class AuthorityService:
@@ -56,7 +58,7 @@ class AuthorityService:
     def __init__(
         self,
         config: AuthorityConfig | None = None,
-        repository: "AuthorityRepository | None" = None,
+        repository: AuthorityRepository | None = None,
     ) -> None:
         self._config = config or AuthorityConfig()
         self._repo = repository
@@ -130,7 +132,7 @@ class AuthorityService:
             Authority score clamped to [min_score, max_score].
         """
         if now is None:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
         cfg = self._config
 
@@ -160,7 +162,9 @@ class AuthorityService:
         if followers is not None and followers > 0:
             follower_bonus = min(
                 cfg.follower_log_cap,
-                cfg.follower_log_cap * math.log(followers + 1) / math.log(cfg.follower_log_base + 1),
+                cfg.follower_log_cap
+                * math.log(followers + 1)
+                / math.log(cfg.follower_log_base + 1),
             )
 
         # Combine: raw_score = base_weight * accuracy * recency * probation + follower
@@ -200,7 +204,7 @@ class AuthorityService:
             Authority score in [0, 1].
         """
         if now is None:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
         if first_seen is None:
             first_seen = now
 
@@ -288,14 +292,15 @@ class AuthorityService:
         if profile is None:
             logger.debug(
                 "No authority profile for %s/%s, skipping track record update",
-                author_id, platform,
+                author_id,
+                platform,
             )
             return None
 
         profile.total_calls += 1
         if is_correct:
             profile.correct_calls += 1
-            profile.last_good_call = datetime.now(timezone.utc)
+            profile.last_good_call = datetime.now(UTC)
 
         # Topic-specific tracking
         if topic is not None:
@@ -305,7 +310,7 @@ class AuthorityService:
             if is_correct:
                 profile.topic_scores[topic]["correct"] += 1
 
-        profile.updated_at = datetime.now(timezone.utc)
+        profile.updated_at = datetime.now(UTC)
         return await self._repo.upsert(profile)
 
     def compute_topic_score(

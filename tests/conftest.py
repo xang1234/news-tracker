@@ -1,8 +1,8 @@
 """Pytest fixtures for news-tracker tests."""
 
 import asyncio
-from datetime import datetime, timezone
-from typing import AsyncGenerator, Generator
+from collections.abc import Generator
+from datetime import UTC, datetime
 
 import pytest
 
@@ -36,7 +36,7 @@ def sample_document() -> NormalizedDocument:
         id="twitter_123456789",
         platform=Platform.TWITTER,
         url="https://twitter.com/user/status/123456789",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         author_id="user_123",
         author_name="test_user",
         author_followers=1000,
@@ -59,12 +59,15 @@ def spam_document() -> NormalizedDocument:
         id="twitter_spam_001",
         platform=Platform.TWITTER,
         url="https://twitter.com/spammer/status/001",
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         author_id="spam_bot_123",
         author_name="crypto_guru_42069",
         author_followers=5,
         author_verified=False,
-        content="🚀🚀🚀 $NVDA $AMD $INTC $TSM $QCOM $AVGO TO THE MOON!!! JOIN MY DISCORD FOR FREE SIGNALS!!! 🚀🚀🚀",
+        content=(
+            "🚀🚀🚀 $NVDA $AMD $INTC $TSM $QCOM $AVGO TO THE MOON!!! "
+            "JOIN MY DISCORD FOR FREE SIGNALS!!! 🚀🚀🚀"
+        ),
         content_type="post",
         engagement=EngagementMetrics(likes=2, shares=0, comments=1),
         tickers_mentioned=["NVDA", "AMD", "INTC", "TSM", "QCOM", "AVGO"],
@@ -86,7 +89,7 @@ def duplicate_documents() -> list[NormalizedDocument]:
         NormalizedDocument(
             id="news_1",
             platform=Platform.NEWS,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             author_id="reuters",
             author_name="Reuters",
             content=base_content,
@@ -96,7 +99,7 @@ def duplicate_documents() -> list[NormalizedDocument]:
         NormalizedDocument(
             id="news_2",
             platform=Platform.NEWS,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             author_id="yahoo",
             author_name="Yahoo Finance",
             # Near-identical content with minor differences (same words, slight reordering)
@@ -113,7 +116,7 @@ def duplicate_documents() -> list[NormalizedDocument]:
         NormalizedDocument(
             id="news_3",
             platform=Platform.NEWS,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             author_id="bloomberg",
             author_name="Bloomberg",
             # Completely different content (should NOT be duplicate)
@@ -168,11 +171,13 @@ def batch_documents() -> list[NormalizedDocument]:
             NormalizedDocument(
                 id=f"{platform.value}_{i}",
                 platform=platform,
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
                 author_id=f"author_{i}",
                 author_name=f"user_{i}",
                 content=content,
-                content_type="post" if platform in [Platform.TWITTER, Platform.REDDIT] else "article",
+                content_type="post"
+                if platform in [Platform.TWITTER, Platform.REDDIT]
+                else "article",
                 tickers_mentioned=[ticker],
             )
         )

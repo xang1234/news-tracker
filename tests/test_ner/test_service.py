@@ -16,6 +16,7 @@ class TestNERServiceInitialization:
     def test_lazy_initialization(self, ner_config):
         """Model should not be loaded until first extract call."""
         import sys
+
         mock_spacy = MagicMock()
         with patch.dict(sys.modules, {"spacy": mock_spacy}):
             service = NERService(config=ner_config)
@@ -26,6 +27,7 @@ class TestNERServiceInitialization:
     def test_initialization_on_extract(self, ner_config):
         """Model should load on first extract call."""
         import sys
+
         mock_spacy = MagicMock()
         mock_nlp = MagicMock()
         mock_nlp.meta = {"name": "test_model"}
@@ -42,6 +44,7 @@ class TestNERServiceInitialization:
     def test_fallback_model(self, ner_config):
         """Should try fallback model if primary fails."""
         import sys
+
         mock_spacy = MagicMock()
         mock_nlp = MagicMock()
         mock_nlp.meta = {"name": "fallback_model"}
@@ -70,7 +73,7 @@ class TestCashtagExtraction:
 
     def test_extract_multiple_cashtags(self, mock_ner_service):
         """Should extract multiple cashtags."""
-        entities = mock_ner_service.extract_sync("$NVDA and $AMD are up, $INTC is flat")
+        mock_ner_service.extract_sync("$NVDA and $AMD are up, $INTC is flat")
 
         tickers = mock_ner_service.extract_tickers("$NVDA and $AMD are up, $INTC is flat")
         assert "NVDA" in tickers
@@ -104,8 +107,7 @@ class TestCompanyExtraction:
         entities = mock_ner_service.extract_sync(text)
 
         nvidia_entities = [
-            e for e in entities
-            if e.type == "COMPANY" and "NVIDIA" in e.normalized.upper()
+            e for e in entities if e.type == "COMPANY" and "NVIDIA" in e.normalized.upper()
         ]
         if nvidia_entities:
             assert nvidia_entities[0].metadata.get("ticker") == "NVDA"
@@ -128,9 +130,7 @@ class TestFuzzyMatching:
         # The fuzzy matcher should find "nvidia" variation
         entities = service._fuzzy_match_companies("NVIDIA is great", [])
 
-        nvidia_entities = [
-            e for e in entities if "NVIDIA" in e.normalized.upper()
-        ]
+        nvidia_entities = [e for e in entities if "NVIDIA" in e.normalized.upper()]
         assert len(nvidia_entities) >= 1
 
 
@@ -390,9 +390,7 @@ class TestSemanticThemeLinking:
         assert scores["AMD"] >= 0.2  # At minimum the domain bonus
 
     @pytest.mark.asyncio
-    async def test_semantic_linking_low_similarity_filtered(
-        self, ner_service_with_embeddings
-    ):
+    async def test_semantic_linking_low_similarity_filtered(self, ner_service_with_embeddings):
         """Entities below threshold should get zero score."""
         # Configure threshold
         ner_service_with_embeddings.config.semantic_similarity_threshold = 0.7
@@ -429,9 +427,7 @@ class TestSemanticThemeLinking:
         assert scores == {}
 
     @pytest.mark.asyncio
-    async def test_semantic_linking_fallback_without_embedding_service(
-        self, mock_ner_service
-    ):
+    async def test_semantic_linking_fallback_without_embedding_service(self, mock_ner_service):
         """Should fall back to substring matching without embedding service."""
         entities = [
             FinancialEntity(
@@ -446,9 +442,7 @@ class TestSemanticThemeLinking:
         ]
 
         theme_keywords = ["nvidia", "gpu"]  # "nvidia" appears in theme
-        scores = await mock_ner_service.link_entities_to_theme_semantic(
-            entities, theme_keywords
-        )
+        scores = await mock_ner_service.link_entities_to_theme_semantic(entities, theme_keywords)
 
         # Should use substring matching fallback
         assert "NVIDIA" in scores
@@ -460,9 +454,7 @@ class TestSemanticThemeLinking:
     ):
         """Should gracefully handle embedding failures."""
         # Make embedding fail
-        mock_embedding_service.embed_minilm = AsyncMock(
-            side_effect=Exception("Embedding failed")
-        )
+        mock_embedding_service.embed_minilm = AsyncMock(side_effect=Exception("Embedding failed"))
 
         service = NERService(
             config=ner_config,
@@ -486,9 +478,7 @@ class TestSemanticThemeLinking:
         ]
 
         # Should not raise, should fall back to substring matching
-        scores = await service.link_entities_to_theme_semantic(
-            entities, ["nvidia", "gpu"]
-        )
+        scores = await service.link_entities_to_theme_semantic(entities, ["nvidia", "gpu"])
 
         # Falls back to substring matching
         assert "NVIDIA" in scores
@@ -560,10 +550,7 @@ class TestCoreferenceResolution:
         # This text is below 500 chars, so set min_length low for testing
         mock_ner_service_with_coref.config.coref_min_length = 10
 
-        text = (
-            "Samsung announced new HBM capacity. "
-            "The Korean chipmaker expects strong demand."
-        )
+        text = "Samsung announced new HBM capacity. The Korean chipmaker expects strong demand."
 
         entities = mock_ner_service_with_coref.extract_sync(text)
 
@@ -574,10 +561,7 @@ class TestCoreferenceResolution:
 
     def test_coref_min_length_boundary(self, mock_ner_service_with_coref):
         """Text exactly at coref_min_length should trigger resolution."""
-        text = (
-            "Samsung announced new HBM capacity. "
-            "The Korean chipmaker expects strong demand."
-        )
+        text = "Samsung announced new HBM capacity. The Korean chipmaker expects strong demand."
         # Set min_length to exactly the text length
         mock_ner_service_with_coref.config.coref_min_length = len(text)
 
@@ -641,9 +625,7 @@ class TestCoreferenceResolution:
             "The Korean chipmaker expects strong demand."
         )  # > 50 chars
 
-        results = await mock_ner_service_with_coref.extract_batch(
-            [short_text, long_text]
-        )
+        results = await mock_ner_service_with_coref.extract_batch([short_text, long_text])
 
         assert len(results) == 2
 

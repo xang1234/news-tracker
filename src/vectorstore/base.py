@@ -62,12 +62,10 @@ class VectorSearchFilter:
 
     def __post_init__(self) -> None:
         """Validate filter values."""
-        if self.min_authority_score is not None:
-            if not 0.0 <= self.min_authority_score <= 1.0:
-                raise ValueError(
-                    f"min_authority_score must be between 0.0 and 1.0, "
-                    f"got {self.min_authority_score}"
-                )
+        if self.min_authority_score is not None and not 0.0 <= self.min_authority_score <= 1.0:
+            raise ValueError(
+                f"min_authority_score must be between 0.0 and 1.0, got {self.min_authority_score}"
+            )
 
         # Validate timestamp range
         if (

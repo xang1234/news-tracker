@@ -133,7 +133,8 @@ class NotificationDispatcher:
             except Exception as e:
                 logger.error(
                     "Unexpected error dispatching alert %s: %s",
-                    alert.alert_id, e,
+                    alert.alert_id,
+                    e,
                 )
 
     async def _send_with_retry(
@@ -160,13 +161,17 @@ class NotificationDispatcher:
                     if attempt > 0:
                         logger.info(
                             "Alert %s delivered to %s on attempt %d",
-                            alert.alert_id, channel.name, attempt + 1,
+                            alert.alert_id,
+                            channel.name,
+                            attempt + 1,
                         )
                     return True
             except Exception as e:
                 logger.warning(
                     "Channel %s send error (attempt %d): %s",
-                    channel.name, attempt + 1, e,
+                    channel.name,
+                    attempt + 1,
+                    e,
                 )
 
             # Wait before retry (if not the last attempt)
@@ -176,7 +181,9 @@ class NotificationDispatcher:
 
         logger.warning(
             "All %d attempts exhausted for alert %s on channel %s",
-            max_attempts, alert.alert_id, channel.name,
+            max_attempts,
+            alert.alert_id,
+            channel.name,
         )
         return False
 
@@ -202,12 +209,14 @@ class NotificationDispatcher:
             await self._redis.expire(key, ttl_seconds)
             logger.info(
                 "Queued alert %s for retry on channel %s",
-                alert.alert_id, channel_name,
+                alert.alert_id,
+                channel_name,
             )
         except Exception as e:
             logger.warning(
                 "Failed to queue alert %s for retry: %s",
-                alert.alert_id, e,
+                alert.alert_id,
+                e,
             )
 
     def _record_delivery(
@@ -227,15 +236,20 @@ class NotificationDispatcher:
         if failures and not successes:
             logger.error(
                 "Alert %s (%s) failed ALL channels: %s",
-                alert.alert_id, alert.severity, failures,
+                alert.alert_id,
+                alert.severity,
+                failures,
             )
         elif failures:
             logger.warning(
                 "Alert %s partial delivery: ok=%s failed=%s",
-                alert.alert_id, successes, failures,
+                alert.alert_id,
+                successes,
+                failures,
             )
         else:
             logger.debug(
                 "Alert %s delivered to all channels: %s",
-                alert.alert_id, successes,
+                alert.alert_id,
+                successes,
             )

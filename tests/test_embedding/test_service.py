@@ -211,10 +211,12 @@ class TestMeanPooling:
 
     def test_mean_pool_multiple(self, mock_embedding_service):
         """Mean pool should average multiple embeddings."""
-        embeddings = np.array([
-            [1.0, 2.0, 3.0],
-            [4.0, 5.0, 6.0],
-        ])
+        embeddings = np.array(
+            [
+                [1.0, 2.0, 3.0],
+                [4.0, 5.0, 6.0],
+            ]
+        )
 
         pooled = mock_embedding_service._mean_pool(embeddings)
 

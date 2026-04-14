@@ -2,8 +2,8 @@
 
 import json
 import time
-from datetime import date, datetime, timezone
-from unittest.mock import AsyncMock, call, patch
+from datetime import UTC, date, datetime
+from unittest.mock import AsyncMock
 
 import numpy as np
 import pytest
@@ -146,7 +146,8 @@ class TestGetAll:
 
     @pytest.mark.asyncio
     async def test_with_lifecycle_stages(
-        self, mock_database: AsyncMock,
+        self,
+        mock_database: AsyncMock,
     ) -> None:
         mock_database.fetch.return_value = []
         repo = ThemeRepository(mock_database)
@@ -182,7 +183,8 @@ class TestUpdate:
         repo = ThemeRepository(mock_database)
 
         result = await repo.update(
-            "theme_a1b2c3d4e5f6", {"name": "new_name"},
+            "theme_a1b2c3d4e5f6",
+            {"name": "new_name"},
         )
 
         sql = mock_database.fetchrow.call_args[0][0]
@@ -214,7 +216,8 @@ class TestUpdate:
 
     @pytest.mark.asyncio
     async def test_invalid_field_raises(
-        self, mock_database: AsyncMock,
+        self,
+        mock_database: AsyncMock,
     ) -> None:
         repo = ThemeRepository(mock_database)
 
@@ -223,7 +226,8 @@ class TestUpdate:
 
     @pytest.mark.asyncio
     async def test_empty_updates_raises(
-        self, mock_database: AsyncMock,
+        self,
+        mock_database: AsyncMock,
     ) -> None:
         repo = ThemeRepository(mock_database)
 
@@ -232,7 +236,8 @@ class TestUpdate:
 
     @pytest.mark.asyncio
     async def test_bad_lifecycle_raises(
-        self, mock_database: AsyncMock,
+        self,
+        mock_database: AsyncMock,
     ) -> None:
         repo = ThemeRepository(mock_database)
 
@@ -241,7 +246,8 @@ class TestUpdate:
 
     @pytest.mark.asyncio
     async def test_not_found_raises(
-        self, mock_database: AsyncMock,
+        self,
+        mock_database: AsyncMock,
     ) -> None:
         mock_database.fetchrow.return_value = None
         repo = ThemeRepository(mock_database)
@@ -261,7 +267,8 @@ class TestUpdate:
 
         entities = [{"type": "COMPANY", "normalized": "AMD"}]
         await repo.update(
-            "theme_a1b2c3d4e5f6", {"top_entities": entities},
+            "theme_a1b2c3d4e5f6",
+            {"top_entities": entities},
         )
 
         args = mock_database.fetchrow.call_args[0]
@@ -270,7 +277,8 @@ class TestUpdate:
 
     @pytest.mark.asyncio
     async def test_centroid_excluded(
-        self, mock_database: AsyncMock,
+        self,
+        mock_database: AsyncMock,
     ) -> None:
         """centroid is not in the updatable allowlist."""
         repo = ThemeRepository(mock_database)
@@ -307,7 +315,8 @@ class TestUpdateCentroid:
 
     @pytest.mark.asyncio
     async def test_pgvector_formatting(
-        self, mock_database: AsyncMock,
+        self,
+        mock_database: AsyncMock,
     ) -> None:
         mock_database.execute.return_value = "UPDATE 1"
         repo = ThemeRepository(mock_database)
@@ -324,7 +333,8 @@ class TestDelete:
 
     @pytest.mark.asyncio
     async def test_found_returns_true(
-        self, mock_database: AsyncMock,
+        self,
+        mock_database: AsyncMock,
     ) -> None:
         mock_database.fetchval.return_value = "theme_abc"
         repo = ThemeRepository(mock_database)
@@ -334,7 +344,8 @@ class TestDelete:
 
     @pytest.mark.asyncio
     async def test_not_found_returns_false(
-        self, mock_database: AsyncMock,
+        self,
+        mock_database: AsyncMock,
     ) -> None:
         mock_database.fetchval.return_value = None
         repo = ThemeRepository(mock_database)
@@ -380,8 +391,8 @@ class TestRowToTheme:
             "theme_id": "theme_min",
             "name": "minimal",
             "centroid": "[0.0,0.0,0.0]",
-            "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
-            "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+            "created_at": datetime(2025, 1, 1, tzinfo=UTC),
+            "updated_at": datetime(2025, 1, 1, tzinfo=UTC),
         }
         theme = _row_to_theme(row)
         assert theme.top_keywords == []
@@ -533,7 +544,9 @@ class TestGetCentroidsBatch:
 
         assert "theme_abc" in result
         np.testing.assert_allclose(
-            result["theme_abc"], sample_centroid, atol=1e-5,
+            result["theme_abc"],
+            sample_centroid,
+            atol=1e-5,
         )
         # Verify single-query fetch with ANY
         sql = mock_database.fetch.call_args[0][0]
@@ -729,15 +742,15 @@ class TestAddMetrics:
 
         args = mock_database.execute.call_args[0]
         assert args[1] == "theme_a1b2c3d4e5f6"  # theme_id
-        assert args[2] == date(2025, 6, 15)       # date
-        assert args[3] == 42                       # document_count
-        assert args[4] is None                     # weighted_volume
-        assert args[5] == pytest.approx(0.35)      # sentiment_score
-        assert args[6] == pytest.approx(1.8)       # volume_zscore
-        assert args[7] == pytest.approx(0.12)      # velocity
-        assert args[8] == pytest.approx(0.03)      # acceleration
-        assert args[9] == pytest.approx(0.65)      # avg_authority
-        assert args[10] == pytest.approx(0.72)     # bullish_ratio
+        assert args[2] == date(2025, 6, 15)  # date
+        assert args[3] == 42  # document_count
+        assert args[4] is None  # weighted_volume
+        assert args[5] == pytest.approx(0.35)  # sentiment_score
+        assert args[6] == pytest.approx(1.8)  # volume_zscore
+        assert args[7] == pytest.approx(0.12)  # velocity
+        assert args[8] == pytest.approx(0.03)  # acceleration
+        assert args[9] == pytest.approx(0.65)  # avg_authority
+        assert args[10] == pytest.approx(0.72)  # bullish_ratio
 
     @pytest.mark.asyncio
     async def test_nullable_fields(

@@ -136,7 +136,16 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/api/models.py" = ["E501"]
-"src/api/routes/themes.py" = ["B008", "B904"]
+# FastAPI routes: Depends() is the expected default-arg pattern (B008);
+# HTTPException re-raises don't need `from err` for HTTP clients (B904).
+"src/api/routes/*.py" = ["B008", "B904"]
+# Long SQL literals with descriptive column names are more readable unwrapped.
+"src/narrative/worker.py" = ["E501"]
+# A single multi-hundred-char regex literal — splitting hurts readability.
+"src/event_extraction/patterns.py" = ["E501"]
+# Mock classes conventionally use PascalCase names even when assigned locally.
+"tests/test_cli/test_graph.py" = ["N806"]
+"tests/test_clustering/test_daily_job.py" = ["N806"]
 
 [tool.mypy]
 python_version = "3.11"

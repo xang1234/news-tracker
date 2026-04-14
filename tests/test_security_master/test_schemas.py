@@ -1,6 +1,6 @@
 """Tests for security master schemas."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.security_master.schemas import Security
 
@@ -23,7 +23,7 @@ class TestSecurity:
         assert sec.updated_at is None
 
     def test_full_construction(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         sec = Security(
             ticker="005930.KS",
             exchange="KRX",

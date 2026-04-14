@@ -2,14 +2,12 @@
 
 import time
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from starlette.requests import Request
-import structlog
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_security_master_repository
-from src.api.rate_limit import limiter
-from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     CreateSecurityRequest,
     ErrorResponse,
@@ -17,6 +15,8 @@ from src.api.models import (
     SecurityItem,
     UpdateSecurityRequest,
 )
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.security_master.repository import SecurityMasterRepository
 from src.security_master.schemas import Security
 

@@ -1,12 +1,11 @@
 """Tests for the CausalGraph high-level service."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 from src.graph.causal_graph import CausalGraph
 from src.graph.config import GraphConfig
-from src.graph.schemas import CausalNode
 
 
 class TestEnsureNode:
@@ -52,9 +51,7 @@ class TestAddEdge:
     """Test CausalGraph.add_edge()."""
 
     @pytest.mark.asyncio
-    async def test_uses_config_default_confidence(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_uses_config_default_confidence(self, mock_database: AsyncMock) -> None:
         """add_edge() uses config default_confidence when not specified."""
         config = GraphConfig(default_confidence=0.75)
         graph = CausalGraph(mock_database, config=config)
@@ -65,9 +62,7 @@ class TestAddEdge:
         assert params[3] == 0.75
 
     @pytest.mark.asyncio
-    async def test_explicit_confidence_overrides_config(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_explicit_confidence_overrides_config(self, mock_database: AsyncMock) -> None:
         """Explicit confidence overrides config default."""
         config = GraphConfig(default_confidence=0.75)
         graph = CausalGraph(mock_database, config=config)
@@ -82,9 +77,7 @@ class TestTraversalDepthClamping:
     """Test that traversal methods clamp depth to config max."""
 
     @pytest.mark.asyncio
-    async def test_get_downstream_clamps_depth(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_get_downstream_clamps_depth(self, mock_database: AsyncMock) -> None:
         """get_downstream() clamps max_depth to config limit."""
         config = GraphConfig(max_traversal_depth=3)
         mock_database.fetch.return_value = []
@@ -97,9 +90,7 @@ class TestTraversalDepthClamping:
         assert params[1] == 3
 
     @pytest.mark.asyncio
-    async def test_get_upstream_clamps_depth(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_get_upstream_clamps_depth(self, mock_database: AsyncMock) -> None:
         """get_upstream() clamps max_depth to config limit."""
         config = GraphConfig(max_traversal_depth=3)
         mock_database.fetch.return_value = []
@@ -111,9 +102,7 @@ class TestTraversalDepthClamping:
         assert params[1] == 3
 
     @pytest.mark.asyncio
-    async def test_find_path_clamps_depth(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_find_path_clamps_depth(self, mock_database: AsyncMock) -> None:
         """find_path() clamps max_depth to config limit."""
         config = GraphConfig(max_traversal_depth=3)
         mock_database.fetchrow.return_value = None
@@ -125,9 +114,7 @@ class TestTraversalDepthClamping:
         assert params[2] == 3
 
     @pytest.mark.asyncio
-    async def test_get_subgraph_clamps_depth(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_get_subgraph_clamps_depth(self, mock_database: AsyncMock) -> None:
         """get_subgraph() clamps depth to config limit."""
         config = GraphConfig(max_traversal_depth=2)
         mock_database.fetch.return_value = []
@@ -147,9 +134,7 @@ class TestRemoveEdge:
     """Test CausalGraph.remove_edge()."""
 
     @pytest.mark.asyncio
-    async def test_delegates_to_repository(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_delegates_to_repository(self, mock_database: AsyncMock) -> None:
         """remove_edge() delegates to GraphRepository."""
         mock_database.execute.return_value = "DELETE 1"
         graph = CausalGraph(mock_database)
@@ -158,9 +143,7 @@ class TestRemoveEdge:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_returns_false_when_not_found(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_returns_false_when_not_found(self, mock_database: AsyncMock) -> None:
         """remove_edge() returns False when edge doesn't exist."""
         mock_database.execute.return_value = "DELETE 0"
         graph = CausalGraph(mock_database)

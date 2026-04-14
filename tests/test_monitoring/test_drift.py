@@ -4,8 +4,8 @@ Mocks Database with AsyncMock to avoid real DB connections.
 Tests are grouped by check type following the project convention.
 """
 
-from datetime import date, datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from datetime import date
+from unittest.mock import AsyncMock
 
 import numpy as np
 import pytest
@@ -15,7 +15,6 @@ from src.monitoring.schemas import (
     VALID_DRIFT_TYPES,
     DriftReport,
     DriftResult,
-    DriftSeverity,
 )
 from src.monitoring.service import (
     DriftService,
@@ -23,7 +22,6 @@ from src.monitoring.service import (
     _kl_divergence,
     _parse_embedding,
 )
-
 
 # ── Fixtures ─────────────────────────────────────────────────
 
@@ -201,10 +199,12 @@ class TestThemeFragmentation:
     @pytest.mark.asyncio
     async def test_normal_rate(self, service, mock_db):
         """Normal theme creation rate is ok."""
-        mock_db.fetch = AsyncMock(return_value=[
-            {"day": date(2026, 2, 5), "cnt": 8},
-            {"day": date(2026, 2, 6), "cnt": 10},
-        ])
+        mock_db.fetch = AsyncMock(
+            return_value=[
+                {"day": date(2026, 2, 5), "cnt": 8},
+                {"day": date(2026, 2, 6), "cnt": 10},
+            ]
+        )
         result = await service.check_theme_fragmentation()
         assert result.drift_type == "theme_fragmentation"
         assert result.severity == "ok"
@@ -213,10 +213,12 @@ class TestThemeFragmentation:
     @pytest.mark.asyncio
     async def test_high_rate_critical(self, service, mock_db):
         """50+ themes per day triggers critical."""
-        mock_db.fetch = AsyncMock(return_value=[
-            {"day": date(2026, 2, 5), "cnt": 10},
-            {"day": date(2026, 2, 6), "cnt": 55},
-        ])
+        mock_db.fetch = AsyncMock(
+            return_value=[
+                {"day": date(2026, 2, 5), "cnt": 10},
+                {"day": date(2026, 2, 6), "cnt": 55},
+            ]
+        )
         result = await service.check_theme_fragmentation()
         assert result.severity == "critical"
         assert result.value == 55.0
@@ -224,9 +226,11 @@ class TestThemeFragmentation:
     @pytest.mark.asyncio
     async def test_warning_rate(self, service, mock_db):
         """30-49 themes per day triggers warning."""
-        mock_db.fetch = AsyncMock(return_value=[
-            {"day": date(2026, 2, 6), "cnt": 35},
-        ])
+        mock_db.fetch = AsyncMock(
+            return_value=[
+                {"day": date(2026, 2, 6), "cnt": 35},
+            ]
+        )
         result = await service.check_theme_fragmentation()
         assert result.severity == "warning"
 
@@ -238,9 +242,11 @@ class TestSentimentCalibration:
     @pytest.mark.asyncio
     async def test_insufficient_data(self, service, mock_db):
         """Returns ok when < 3 days available."""
-        mock_db.fetch = AsyncMock(return_value=[
-            {"date": date(2026, 2, 6), "avg_ratio": 0.5},
-        ])
+        mock_db.fetch = AsyncMock(
+            return_value=[
+                {"date": date(2026, 2, 6), "avg_ratio": 0.5},
+            ]
+        )
         result = await service.check_sentiment_calibration()
         assert result.severity == "ok"
         assert "Insufficient" in result.message
@@ -249,13 +255,15 @@ class TestSentimentCalibration:
     async def test_stable_sentiment(self, service, mock_db):
         """Stable bullish_ratio has low z-score."""
         # Wider baseline spread so 0.50 on last day is well within 2σ
-        mock_db.fetch = AsyncMock(return_value=[
-            {"date": date(2026, 2, 1), "avg_ratio": 0.45},
-            {"date": date(2026, 2, 2), "avg_ratio": 0.55},
-            {"date": date(2026, 2, 3), "avg_ratio": 0.48},
-            {"date": date(2026, 2, 4), "avg_ratio": 0.52},
-            {"date": date(2026, 2, 5), "avg_ratio": 0.50},
-        ])
+        mock_db.fetch = AsyncMock(
+            return_value=[
+                {"date": date(2026, 2, 1), "avg_ratio": 0.45},
+                {"date": date(2026, 2, 2), "avg_ratio": 0.55},
+                {"date": date(2026, 2, 3), "avg_ratio": 0.48},
+                {"date": date(2026, 2, 4), "avg_ratio": 0.52},
+                {"date": date(2026, 2, 5), "avg_ratio": 0.50},
+            ]
+        )
         result = await service.check_sentiment_calibration()
         assert result.drift_type == "sentiment_calibration"
         assert result.severity == "ok"
@@ -263,14 +271,16 @@ class TestSentimentCalibration:
     @pytest.mark.asyncio
     async def test_extreme_shift(self, service, mock_db):
         """Sudden jump in bullish ratio triggers warning or critical."""
-        mock_db.fetch = AsyncMock(return_value=[
-            {"date": date(2026, 2, 1), "avg_ratio": 0.50},
-            {"date": date(2026, 2, 2), "avg_ratio": 0.51},
-            {"date": date(2026, 2, 3), "avg_ratio": 0.49},
-            {"date": date(2026, 2, 4), "avg_ratio": 0.50},
-            # Extreme jump on last day
-            {"date": date(2026, 2, 5), "avg_ratio": 0.95},
-        ])
+        mock_db.fetch = AsyncMock(
+            return_value=[
+                {"date": date(2026, 2, 1), "avg_ratio": 0.50},
+                {"date": date(2026, 2, 2), "avg_ratio": 0.51},
+                {"date": date(2026, 2, 3), "avg_ratio": 0.49},
+                {"date": date(2026, 2, 4), "avg_ratio": 0.50},
+                # Extreme jump on last day
+                {"date": date(2026, 2, 5), "avg_ratio": 0.95},
+            ]
+        )
         result = await service.check_sentiment_calibration()
         assert result.severity in ("warning", "critical")
         assert result.value > 2.0
@@ -320,16 +330,24 @@ class TestDriftReport:
         assert not report.has_issues
 
     def test_overall_worst_of(self):
-        report = DriftReport(results=[
-            DriftResult(
-                drift_type="embedding_drift", severity="ok",
-                value=0.01, thresholds={}, message="ok",
-            ),
-            DriftResult(
-                drift_type="theme_fragmentation", severity="critical",
-                value=60.0, thresholds={}, message="high",
-            ),
-        ])
+        report = DriftReport(
+            results=[
+                DriftResult(
+                    drift_type="embedding_drift",
+                    severity="ok",
+                    value=0.01,
+                    thresholds={},
+                    message="ok",
+                ),
+                DriftResult(
+                    drift_type="theme_fragmentation",
+                    severity="critical",
+                    value=60.0,
+                    thresholds={},
+                    message="high",
+                ),
+            ]
+        )
         assert report.overall_severity == "critical"
         assert report.has_issues
 

@@ -184,8 +184,20 @@ def service_with_similar_themes(clustering_config):
     centroid_c /= np.linalg.norm(centroid_c)
 
     words_a = [("gpu", 0.15), ("nvidia", 0.12), ("ai", 0.10), ("chip", 0.08), ("training", 0.06)]
-    words_b = [("gpu", 0.14), ("accelerator", 0.11), ("nvidia", 0.10), ("compute", 0.07), ("deep", 0.05)]
-    words_c = [("memory", 0.18), ("hbm3e", 0.14), ("bandwidth", 0.11), ("samsung", 0.09), ("dram", 0.07)]
+    words_b = [
+        ("gpu", 0.14),
+        ("accelerator", 0.11),
+        ("nvidia", 0.10),
+        ("compute", 0.07),
+        ("deep", 0.05),
+    ]
+    words_c = [
+        ("memory", 0.18),
+        ("hbm3e", 0.14),
+        ("bandwidth", 0.11),
+        ("samsung", 0.09),
+        ("dram", 0.07),
+    ]
 
     theme_a = ThemeCluster(
         theme_id=ThemeCluster.generate_theme_id(words_a),

@@ -14,7 +14,7 @@ Architecture:
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -168,7 +168,8 @@ class BERTopicService:
         - New candidate (< similarity_threshold_new): buffered for future theme creation
 
         Args:
-            documents: List of document text strings (unused in similarity, kept for API consistency).
+            documents: List of document text strings (unused in similarity,
+                kept for API consistency).
             embeddings: Pre-computed embedding matrix of shape (n_docs, embedding_dim).
             document_ids: List of document IDs corresponding to each document.
 
@@ -240,7 +241,7 @@ class BERTopicService:
 
         # Per-document assignment
         results: list[tuple[str, list[str], float]] = []
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         lr = self.config.centroid_learning_rate
         assign_threshold = self.config.similarity_threshold_assign
         new_threshold = self.config.similarity_threshold_new
@@ -267,9 +268,7 @@ class BERTopicService:
 
             else:
                 # New theme candidate: buffer for future theme creation
-                self._new_theme_candidates.append(
-                    (doc_id, embeddings[i].copy())
-                )
+                self._new_theme_candidates.append((doc_id, embeddings[i].copy()))
                 results.append((doc_id, [], max_sim))
 
         return results
@@ -349,7 +348,7 @@ class BERTopicService:
         themes: dict[str, ThemeCluster] = {}
 
         # Get unique non-outlier topic IDs
-        unique_topics = sorted(set(t for t in topics if t != -1))
+        unique_topics = sorted({t for t in topics if t != -1})
 
         for topic_id in unique_topics:
             # Find document indices for this topic
@@ -426,7 +425,7 @@ class BERTopicService:
 
         merged_set: set[int] = set()
         merge_results: list[tuple[str, str]] = []
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         for sim, idx_a, idx_b in pairs:
             if idx_a in merged_set or idx_b in merged_set:
@@ -449,9 +448,7 @@ class BERTopicService:
 
             # Weighted centroid
             n1, n2 = survivor.document_count, absorbed.document_count
-            survivor.centroid = (n1 * survivor.centroid + n2 * absorbed.centroid) / (
-                n1 + n2
-            )
+            survivor.centroid = (n1 * survivor.centroid + n2 * absorbed.centroid) / (n1 + n2)
 
             # Merge topic words: combine, dedup by word keeping max score
             word_scores: dict[str, float] = {}
@@ -496,8 +493,7 @@ class BERTopicService:
         self._themes = new_themes
 
         logger.info(
-            f"Merge complete: {len(merge_results)} merges, "
-            f"{len(self._themes)} themes remaining"
+            f"Merge complete: {len(merge_results)} merges, {len(self._themes)} themes remaining"
         )
 
         return merge_results
@@ -544,9 +540,7 @@ class BERTopicService:
         # Build existing centroid matrix for overlap checking
         existing_centroids = None
         if self._themes:
-            existing_centroids = np.vstack(
-                [t.centroid for t in self._themes.values()]
-            )
+            existing_centroids = np.vstack([t.centroid for t in self._themes.values()])
             cen_norms = np.linalg.norm(existing_centroids, axis=1, keepdims=True)
             cen_norms = np.where(cen_norms == 0, 1.0, cen_norms)
             existing_centroids_normalized = existing_centroids / cen_norms
@@ -612,9 +606,7 @@ class BERTopicService:
         # Clear ALL passed-in candidate doc_ids from _new_theme_candidates
         passed_doc_ids = set(doc_ids)
         self._new_theme_candidates = [
-            (did, emb)
-            for did, emb in self._new_theme_candidates
-            if did not in passed_doc_ids
+            (did, emb) for did, emb in self._new_theme_candidates if did not in passed_doc_ids
         ]
 
         logger.info(
@@ -624,9 +616,7 @@ class BERTopicService:
 
         return new_themes
 
-    def _extract_keywords_tfidf(
-        self, texts: list[str]
-    ) -> list[tuple[str, float]]:
+    def _extract_keywords_tfidf(self, texts: list[str]) -> list[tuple[str, float]]:
         """
         Extract top keywords from texts using TF-IDF scoring.
 

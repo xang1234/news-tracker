@@ -1,6 +1,6 @@
 """Shared fixtures for authority tests."""
 
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
@@ -48,7 +48,7 @@ def service_with_repo(config, repository):
 @pytest.fixture
 def now():
     """Fixed reference time."""
-    return datetime(2026, 2, 8, 12, 0, 0, tzinfo=timezone.utc)
+    return datetime(2026, 2, 8, 12, 0, 0, tzinfo=UTC)
 
 
 @pytest.fixture

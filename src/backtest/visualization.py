@@ -84,9 +84,10 @@ class BacktestVisualizer:
             Path to the saved PNG file.
         """
         import matplotlib
+
         matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
         import matplotlib.dates as mdates
+        import matplotlib.pyplot as plt
 
         output_dir = Path(output_dir)
 
@@ -99,12 +100,20 @@ class BacktestVisualizer:
             ax.plot(dates, wealth, linewidth=1.5, color="#2196F3")
             ax.axhline(y=1.0, color="gray", linestyle="--", linewidth=0.8, alpha=0.7)
             ax.fill_between(
-                dates, 1.0, wealth,
-                where=wealth >= 1.0, alpha=0.1, color="#4CAF50",
+                dates,
+                1.0,
+                wealth,
+                where=wealth >= 1.0,
+                alpha=0.1,
+                color="#4CAF50",
             )
             ax.fill_between(
-                dates, 1.0, wealth,
-                where=wealth < 1.0, alpha=0.1, color="#F44336",
+                dates,
+                1.0,
+                wealth,
+                where=wealth < 1.0,
+                alpha=0.1,
+                color="#F44336",
             )
             ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
             ax.xaxis.set_major_locator(mdates.AutoDateLocator())
@@ -113,8 +122,7 @@ class BacktestVisualizer:
         ax.set_xlabel("Date")
         ax.set_ylabel("Wealth Multiplier")
         ax.set_title(
-            f"Cumulative Returns — {results.strategy} strategy, "
-            f"{results.horizon}d horizon"
+            f"Cumulative Returns — {results.strategy} strategy, {results.horizon}d horizon"
         )
         ax.grid(True, alpha=0.3)
 
@@ -142,9 +150,10 @@ class BacktestVisualizer:
             Path to the saved PNG file.
         """
         import matplotlib
+
         matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
         import matplotlib.dates as mdates
+        import matplotlib.pyplot as plt
 
         output_dir = Path(output_dir)
 
@@ -171,7 +180,7 @@ class BacktestVisualizer:
                 fontsize=9,
                 color="#D32F2F",
                 fontweight="bold",
-                arrowprops=dict(arrowstyle="->", color="#D32F2F"),
+                arrowprops={"arrowstyle": "->", "color": "#D32F2F"},
             )
 
             ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
@@ -181,10 +190,7 @@ class BacktestVisualizer:
         ax.axhline(y=0, color="gray", linestyle="--", linewidth=0.8, alpha=0.7)
         ax.set_xlabel("Date")
         ax.set_ylabel("Drawdown")
-        ax.set_title(
-            f"Drawdown — {results.strategy} strategy, "
-            f"{results.horizon}d horizon"
-        )
+        ax.set_title(f"Drawdown — {results.strategy} strategy, {results.horizon}d horizon")
         ax.grid(True, alpha=0.3)
 
         path = output_dir / "drawdown.png"
@@ -212,6 +218,7 @@ class BacktestVisualizer:
             Path to the saved PNG file.
         """
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
@@ -247,17 +254,20 @@ class BacktestVisualizer:
                 z = np.polyfit(scores, returns, 1)
                 p = np.poly1d(z)
                 x_range = np.linspace(min(scores), max(scores), 100)
-                ax.plot(x_range, p(x_range), "--", color="#FF9800", linewidth=1.5,
-                        label=f"Trend (slope={z[0]:.4f})")
+                ax.plot(
+                    x_range,
+                    p(x_range),
+                    "--",
+                    color="#FF9800",
+                    linewidth=1.5,
+                    label=f"Trend (slope={z[0]:.4f})",
+                )
                 ax.legend()
 
         ax.axhline(y=0, color="gray", linestyle="--", linewidth=0.8, alpha=0.7)
         ax.set_xlabel("Mean Theme Score")
         ax.set_ylabel("Forward Return")
-        ax.set_title(
-            f"Score vs Return — {results.strategy} strategy, "
-            f"{results.horizon}d horizon"
-        )
+        ax.set_title(f"Score vs Return — {results.strategy} strategy, {results.horizon}d horizon")
         ax.grid(True, alpha=0.3)
 
         path = output_dir / "score_vs_return.png"
@@ -285,6 +295,7 @@ class BacktestVisualizer:
             Path to the saved PNG file.
         """
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         from matplotlib.colors import TwoSlopeNorm
@@ -307,11 +318,21 @@ class BacktestVisualizer:
             for key, rets in monthly.items():
                 monthly_returns[key] = float(np.prod(1.0 + np.array(rets)) - 1.0)
 
-            years = sorted(set(k[0] for k in monthly_returns))
-            months = list(range(1, 13))
+            years = sorted({k[0] for k in monthly_returns})
+            list(range(1, 13))
             month_labels = [
-                "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+                "Jan",
+                "Feb",
+                "Mar",
+                "Apr",
+                "May",
+                "Jun",
+                "Jul",
+                "Aug",
+                "Sep",
+                "Oct",
+                "Nov",
+                "Dec",
             ]
 
             # Build data matrix (years × months)
@@ -338,9 +359,13 @@ class BacktestVisualizer:
                     if not np.isnan(val):
                         text_color = "white" if abs(val) > abs_max * 0.6 else "black"
                         ax.text(
-                            j, i, f"{val:.1%}",
-                            ha="center", va="center",
-                            fontsize=8, color=text_color,
+                            j,
+                            i,
+                            f"{val:.1%}",
+                            ha="center",
+                            va="center",
+                            fontsize=8,
+                            color=text_color,
                         )
 
             ax.set_xticks(range(12))
@@ -350,14 +375,15 @@ class BacktestVisualizer:
             fig.colorbar(im, ax=ax, label="Monthly Return", shrink=0.8)
         else:
             ax.text(
-                0.5, 0.5, "No monthly data available",
-                ha="center", va="center", transform=ax.transAxes,
+                0.5,
+                0.5,
+                "No monthly data available",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
             )
 
-        ax.set_title(
-            f"Monthly Returns — {results.strategy} strategy, "
-            f"{results.horizon}d horizon"
-        )
+        ax.set_title(f"Monthly Returns — {results.strategy} strategy, {results.horizon}d horizon")
 
         path = output_dir / "monthly_heatmap.png"
         fig.savefig(path, dpi=150, bbox_inches="tight")
@@ -373,7 +399,6 @@ def _extract_date_returns(
 
     Returns matplotlib-compatible date objects and float returns.
     """
-    import matplotlib.dates as mdates
 
     dates = []
     returns: list[float] = []

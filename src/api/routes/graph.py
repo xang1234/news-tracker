@@ -8,8 +8,6 @@ from starlette.requests import Request
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_graph_repository, get_propagation_service
-from src.api.rate_limit import limiter
-from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     ErrorResponse,
     GraphEdgeItem,
@@ -20,6 +18,8 @@ from src.api.models import (
     PropagationImpactItem,
     SubgraphResponse,
 )
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.graph.propagation import SentimentPropagation
 from src.graph.storage import GraphRepository
 
@@ -40,7 +40,9 @@ router = APIRouter()
 @limiter.limit(lambda: _get_settings().rate_limit_graph)
 async def list_graph_nodes(
     request: Request,
-    node_type: str | None = Query(default=None, description="Filter by node type (ticker, theme, technology)"),
+    node_type: str | None = Query(
+        default=None, description="Filter by node type (ticker, theme, technology)"
+    ),
     limit: int = Query(default=200, ge=1, le=1000, description="Maximum nodes to return"),
     api_key: str = Depends(verify_api_key),
     repo: GraphRepository = Depends(get_graph_repository),

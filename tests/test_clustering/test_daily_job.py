@@ -1,7 +1,7 @@
 """Tests for daily batch clustering job."""
 
-from datetime import date, datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import date
+from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pytest
@@ -16,8 +16,7 @@ from src.clustering.daily_job import (
     run_daily_clustering,
 )
 from src.clustering.schemas import ThemeCluster
-from src.themes.schemas import Theme, ThemeMetrics
-
+from src.themes.schemas import Theme
 
 # ── Fixtures ──────────────────────────────────────────────
 
@@ -64,8 +63,14 @@ def _make_theme(theme_id="theme_abc", centroid=None, doc_count=10, keywords=None
     )
 
 
-def _make_doc(doc_id="doc_001", embedding=None, content="test content",
-              authority=0.5, sentiment=None, theme_ids=None):
+def _make_doc(
+    doc_id="doc_001",
+    embedding=None,
+    content="test content",
+    authority=0.5,
+    sentiment=None,
+    theme_ids=None,
+):
     """Create a lightweight doc dict matching get_with_embeddings_since() output."""
     emb = embedding if embedding is not None else np.random.randn(768).astype(np.float32).tolist()
     return {
@@ -174,7 +179,6 @@ class TestThemeConversion:
 
 
 class TestDailyClusteringAssignment:
-
     @pytest.mark.asyncio
     async def test_strong_assignment_above_threshold(self, config, mock_database):
         """Documents above assign threshold get strong assignment + EMA."""
@@ -187,8 +191,10 @@ class TestDailyClusteringAssignment:
         theme = _make_theme(centroid=centroid)
         doc = _make_doc(embedding=embedding.tolist())
 
-        with patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo, \
-             patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo:
+        with (
+            patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo,
+            patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo,
+        ):
             doc_repo = MockDocRepo.return_value
             theme_repo = MockThemeRepo.return_value
             doc_repo.get_with_embeddings_since = AsyncMock(return_value=[doc])
@@ -221,8 +227,10 @@ class TestDailyClusteringAssignment:
         theme = _make_theme(centroid=centroid)
         doc = _make_doc(embedding=embedding.tolist())
 
-        with patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo, \
-             patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo:
+        with (
+            patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo,
+            patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo,
+        ):
             doc_repo = MockDocRepo.return_value
             theme_repo = MockThemeRepo.return_value
             doc_repo.get_with_embeddings_since = AsyncMock(return_value=[doc])
@@ -251,8 +259,10 @@ class TestDailyClusteringAssignment:
         theme = _make_theme(centroid=centroid)
         doc = _make_doc(embedding=embedding.tolist())
 
-        with patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo, \
-             patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo:
+        with (
+            patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo,
+            patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo,
+        ):
             doc_repo = MockDocRepo.return_value
             theme_repo = MockThemeRepo.return_value
             doc_repo.get_with_embeddings_since = AsyncMock(return_value=[doc])
@@ -270,8 +280,10 @@ class TestDailyClusteringAssignment:
     @pytest.mark.asyncio
     async def test_empty_documents_returns_zeros(self, config, mock_database):
         """No documents in the time window returns zero counts."""
-        with patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo, \
-             patch("src.clustering.daily_job.ThemeRepository"):
+        with (
+            patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo,
+            patch("src.clustering.daily_job.ThemeRepository"),
+        ):
             doc_repo = MockDocRepo.return_value
             doc_repo.get_with_embeddings_since = AsyncMock(return_value=[])
 
@@ -286,8 +298,10 @@ class TestDailyClusteringAssignment:
         """No themes in DB means all docs are unassigned."""
         docs = [_make_doc(doc_id=f"doc_{i}") for i in range(5)]
 
-        with patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo, \
-             patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo:
+        with (
+            patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo,
+            patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo,
+        ):
             doc_repo = MockDocRepo.return_value
             theme_repo = MockThemeRepo.return_value
             doc_repo.get_with_embeddings_since = AsyncMock(return_value=docs)
@@ -304,7 +318,6 @@ class TestDailyClusteringAssignment:
 
 
 class TestNewThemeDetection:
-
     @pytest.mark.asyncio
     async def test_new_themes_from_unassigned(self, config, mock_database):
         """Unassigned candidates should trigger check_new_themes."""
@@ -318,8 +331,9 @@ class TestNewThemeDetection:
         for i in range(10):
             emb = np.zeros(768, dtype=np.float32)
             emb[i + 1] = 1.0  # orthogonal to centroid[0]
-            docs.append(_make_doc(doc_id=f"doc_{i}", embedding=emb.tolist(),
-                                  content=f"unique content {i}"))
+            docs.append(
+                _make_doc(doc_id=f"doc_{i}", embedding=emb.tolist(), content=f"unique content {i}")
+            )
 
         new_cluster = ThemeCluster(
             theme_id="theme_new_123",
@@ -330,9 +344,11 @@ class TestNewThemeDetection:
             metadata={"lifecycle_stage": "emerging"},
         )
 
-        with patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo, \
-             patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo, \
-             patch("src.clustering.daily_job.BERTopicService") as MockService:
+        with (
+            patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo,
+            patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo,
+            patch("src.clustering.daily_job.BERTopicService") as MockService,
+        ):
             doc_repo = MockDocRepo.return_value
             theme_repo = MockThemeRepo.return_value
             service_instance = MockService.return_value
@@ -366,8 +382,10 @@ class TestNewThemeDetection:
             emb[i + 1] = 1.0
             docs.append(_make_doc(doc_id=f"doc_{i}", embedding=emb.tolist()))
 
-        with patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo, \
-             patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo:
+        with (
+            patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo,
+            patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo,
+        ):
             doc_repo = MockDocRepo.return_value
             theme_repo = MockThemeRepo.return_value
             doc_repo.get_with_embeddings_since = AsyncMock(return_value=docs)
@@ -388,10 +406,20 @@ class TestMetricsComputation:
 
     def test_basic_metrics(self):
         sentiments = [
-            {"sentiment": {"label": "positive", "scores": {"positive": 0.9, "negative": 0.05, "neutral": 0.05}},
-             "authority_score": 0.8},
-            {"sentiment": {"label": "negative", "scores": {"positive": 0.1, "negative": 0.8, "neutral": 0.1}},
-             "authority_score": 0.6},
+            {
+                "sentiment": {
+                    "label": "positive",
+                    "scores": {"positive": 0.9, "negative": 0.05, "neutral": 0.05},
+                },
+                "authority_score": 0.8,
+            },
+            {
+                "sentiment": {
+                    "label": "negative",
+                    "scores": {"positive": 0.1, "negative": 0.8, "neutral": 0.1},
+                },
+                "authority_score": 0.6,
+            },
         ]
         m = _aggregate_sentiment_metrics("theme_1", date(2026, 2, 5), 2, sentiments)
         assert m.document_count == 2
@@ -401,8 +429,13 @@ class TestMetricsComputation:
 
     def test_all_positive_sentiment(self):
         sentiments = [
-            {"sentiment": {"label": "positive", "scores": {"positive": 0.9, "negative": 0.05, "neutral": 0.05}},
-             "authority_score": 0.9},
+            {
+                "sentiment": {
+                    "label": "positive",
+                    "scores": {"positive": 0.9, "negative": 0.05, "neutral": 0.05},
+                },
+                "authority_score": 0.9,
+            },
         ]
         m = _aggregate_sentiment_metrics("theme_1", date(2026, 2, 5), 1, sentiments)
         assert m.bullish_ratio == pytest.approx(1.0)
@@ -418,8 +451,13 @@ class TestMetricsComputation:
 
     def test_missing_authority_excluded(self):
         sentiments = [
-            {"sentiment": {"label": "neutral", "scores": {"positive": 0.3, "negative": 0.3, "neutral": 0.4}},
-             "authority_score": None},
+            {
+                "sentiment": {
+                    "label": "neutral",
+                    "scores": {"positive": 0.3, "negative": 0.3, "neutral": 0.4},
+                },
+                "authority_score": None,
+            },
         ]
         m = _aggregate_sentiment_metrics("theme_1", date(2026, 2, 5), 1, sentiments)
         assert m.avg_authority is None  # No valid authority values
@@ -437,7 +475,6 @@ class TestMetricsComputation:
 
 
 class TestWeeklyMaintenance:
-
     @pytest.mark.asyncio
     async def test_merge_triggered_on_monday(self, config, mock_database):
         """Monday target_date should trigger weekly merge."""
@@ -448,15 +485,19 @@ class TestWeeklyMaintenance:
         centroid_b = centroid_a + np.random.randn(768).astype(np.float32) * 0.001
         centroid_b /= np.linalg.norm(centroid_b)
 
-        theme_a = _make_theme(theme_id="theme_a", centroid=centroid_a, doc_count=50,
-                              keywords=["gpu", "nvidia"])
-        theme_b = _make_theme(theme_id="theme_b", centroid=centroid_b, doc_count=30,
-                              keywords=["gpu", "nvidia"])
+        theme_a = _make_theme(
+            theme_id="theme_a", centroid=centroid_a, doc_count=50, keywords=["gpu", "nvidia"]
+        )
+        theme_b = _make_theme(
+            theme_id="theme_b", centroid=centroid_b, doc_count=30, keywords=["gpu", "nvidia"]
+        )
 
         doc = _make_doc(embedding=centroid_a.tolist())
 
-        with patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo, \
-             patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo:
+        with (
+            patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo,
+            patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo,
+        ):
             doc_repo = MockDocRepo.return_value
             theme_repo = MockThemeRepo.return_value
 
@@ -470,7 +511,9 @@ class TestWeeklyMaintenance:
             theme_repo.update = AsyncMock(return_value=theme_a)
 
             result = await run_daily_clustering(
-                mock_database, target_date=monday, config=config,
+                mock_database,
+                target_date=monday,
+                config=config,
             )
 
         # At least one merge should happen (themes are nearly identical)
@@ -487,8 +530,10 @@ class TestWeeklyMaintenance:
         theme = _make_theme(centroid=centroid)
         doc = _make_doc(embedding=centroid.tolist())
 
-        with patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo, \
-             patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo:
+        with (
+            patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo,
+            patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo,
+        ):
             doc_repo = MockDocRepo.return_value
             theme_repo = MockThemeRepo.return_value
 
@@ -500,7 +545,9 @@ class TestWeeklyMaintenance:
             theme_repo.add_metrics = AsyncMock()
 
             result = await run_daily_clustering(
-                mock_database, target_date=tuesday, config=config,
+                mock_database,
+                target_date=tuesday,
+                config=config,
             )
 
         assert result.themes_merged == 0
@@ -510,7 +557,6 @@ class TestWeeklyMaintenance:
 
 
 class TestRunDailyClustering:
-
     @pytest.mark.asyncio
     async def test_full_pipeline_happy_path(self, config, mock_database):
         """End-to-end test with multiple docs and themes."""
@@ -520,49 +566,70 @@ class TestRunDailyClustering:
         centroid_b = np.zeros(768, dtype=np.float32)
         centroid_b[1] = 1.0
 
-        theme_a = _make_theme(theme_id="theme_a", centroid=centroid_a,
-                              keywords=["topic_a"])
-        theme_b = _make_theme(theme_id="theme_b", centroid=centroid_b,
-                              keywords=["topic_b"])
+        theme_a = _make_theme(theme_id="theme_a", centroid=centroid_a, keywords=["topic_a"])
+        theme_b = _make_theme(theme_id="theme_b", centroid=centroid_b, keywords=["topic_b"])
 
         # Docs close to theme_a
         docs = []
         for i in range(3):
             emb = centroid_a + np.random.randn(768).astype(np.float32) * 0.01
             emb /= np.linalg.norm(emb)
-            docs.append(_make_doc(
-                doc_id=f"doc_a_{i}", embedding=emb.tolist(),
-                sentiment={"label": "positive", "scores": {"positive": 0.8, "negative": 0.1, "neutral": 0.1}},
-            ))
+            docs.append(
+                _make_doc(
+                    doc_id=f"doc_a_{i}",
+                    embedding=emb.tolist(),
+                    sentiment={
+                        "label": "positive",
+                        "scores": {"positive": 0.8, "negative": 0.1, "neutral": 0.1},
+                    },
+                )
+            )
 
         # Doc close to theme_b
         emb_b = centroid_b + np.random.randn(768).astype(np.float32) * 0.01
         emb_b /= np.linalg.norm(emb_b)
-        docs.append(_make_doc(
-            doc_id="doc_b_0", embedding=emb_b.tolist(),
-            sentiment={"label": "negative", "scores": {"positive": 0.1, "negative": 0.8, "neutral": 0.1}},
-        ))
+        docs.append(
+            _make_doc(
+                doc_id="doc_b_0",
+                embedding=emb_b.tolist(),
+                sentiment={
+                    "label": "negative",
+                    "scores": {"positive": 0.1, "negative": 0.8, "neutral": 0.1},
+                },
+            )
+        )
 
         # Use a Wednesday so no merge
         wednesday = date(2026, 2, 4)
 
-        with patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo, \
-             patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo:
+        with (
+            patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo,
+            patch("src.clustering.daily_job.ThemeRepository") as MockThemeRepo,
+        ):
             doc_repo = MockDocRepo.return_value
             theme_repo = MockThemeRepo.return_value
 
             doc_repo.get_with_embeddings_since = AsyncMock(return_value=docs)
             doc_repo.update_themes = AsyncMock(return_value=True)
-            doc_repo.get_sentiments_for_theme = AsyncMock(return_value=[
-                {"sentiment": {"label": "positive", "scores": {"positive": 0.8, "negative": 0.1, "neutral": 0.1}},
-                 "authority_score": 0.7},
-            ])
+            doc_repo.get_sentiments_for_theme = AsyncMock(
+                return_value=[
+                    {
+                        "sentiment": {
+                            "label": "positive",
+                            "scores": {"positive": 0.8, "negative": 0.1, "neutral": 0.1},
+                        },
+                        "authority_score": 0.7,
+                    },
+                ]
+            )
             theme_repo.get_all = AsyncMock(return_value=[theme_a, theme_b])
             theme_repo.update_centroid = AsyncMock()
             theme_repo.add_metrics = AsyncMock()
 
             result = await run_daily_clustering(
-                mock_database, target_date=wednesday, config=config,
+                mock_database,
+                target_date=wednesday,
+                config=config,
             )
 
         assert result.documents_fetched == 4
@@ -577,13 +644,17 @@ class TestRunDailyClustering:
     @pytest.mark.asyncio
     async def test_empty_day_returns_zeros(self, config, mock_database):
         """No docs on a given day returns all-zero result."""
-        with patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo, \
-             patch("src.clustering.daily_job.ThemeRepository"):
+        with (
+            patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo,
+            patch("src.clustering.daily_job.ThemeRepository"),
+        ):
             doc_repo = MockDocRepo.return_value
             doc_repo.get_with_embeddings_since = AsyncMock(return_value=[])
 
             result = await run_daily_clustering(
-                mock_database, target_date=date(2026, 2, 5), config=config,
+                mock_database,
+                target_date=date(2026, 2, 5),
+                config=config,
             )
 
         assert result.documents_fetched == 0
@@ -597,15 +668,19 @@ class TestRunDailyClustering:
     @pytest.mark.asyncio
     async def test_fetch_error_captured(self, config, mock_database):
         """DB error during fetch is captured in result.errors."""
-        with patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo, \
-             patch("src.clustering.daily_job.ThemeRepository"):
+        with (
+            patch("src.clustering.daily_job.DocumentRepository") as MockDocRepo,
+            patch("src.clustering.daily_job.ThemeRepository"),
+        ):
             doc_repo = MockDocRepo.return_value
             doc_repo.get_with_embeddings_since = AsyncMock(
                 side_effect=RuntimeError("DB connection lost")
             )
 
             result = await run_daily_clustering(
-                mock_database, target_date=date(2026, 2, 5), config=config,
+                mock_database,
+                target_date=date(2026, 2, 5),
+                config=config,
             )
 
         assert len(result.errors) == 1

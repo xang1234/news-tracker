@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
@@ -35,8 +35,8 @@ class NarrativeRun:
     conviction_score: float = 0.0
     last_signal_at: datetime | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.status not in VALID_RUN_STATUSES:
@@ -77,15 +77,12 @@ class NarrativeSignalState:
     state: str = "inactive"
     last_score: float = 0.0
     last_alert_at: datetime | None = None
-    last_transition_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    last_transition_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     cooldown_until: datetime | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.state not in VALID_SIGNAL_STATES:
             raise ValueError(
-                f"Invalid signal state {self.state!r}. "
-                f"Must be one of {sorted(VALID_SIGNAL_STATES)}"
+                f"Invalid signal state {self.state!r}. Must be one of {sorted(VALID_SIGNAL_STATES)}"
             )

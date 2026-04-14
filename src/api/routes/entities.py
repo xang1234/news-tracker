@@ -1,19 +1,16 @@
 """Entity Explorer endpoints — browse, search, and manage extracted entities."""
 
-import json
 import time
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from starlette.requests import Request
-import structlog
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_document_repository, get_graph_repository
-from src.api.rate_limit import limiter
-from src.config.settings import get_settings as _get_settings
 from src.api.models import (
-    CooccurringEntityItem,
     CooccurrenceResponse,
+    CooccurringEntityItem,
     EntityDetailResponse,
     EntityListResponse,
     EntityMergeRequest,
@@ -27,6 +24,8 @@ from src.api.models import (
     TrendingEntitiesResponse,
     TrendingEntityItem,
 )
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.graph.storage import GraphRepository
 from src.storage.repository import DocumentRepository
 
@@ -165,7 +164,10 @@ async def list_entities(
         if entity_type and entity_type not in VALID_ENTITY_TYPES:
             raise HTTPException(
                 status_code=422,
-                detail=f"Invalid entity_type {entity_type!r}. Must be one of: {sorted(VALID_ENTITY_TYPES)}",
+                detail=(
+                    f"Invalid entity_type {entity_type!r}. "
+                    f"Must be one of: {sorted(VALID_ENTITY_TYPES)}"
+                ),
             )
 
         entities, total = await doc_repo.list_entities(
@@ -302,9 +304,7 @@ async def get_entity_documents(
                 author_name=d.author_name,
                 tickers=d.tickers_mentioned,
                 authority_score=d.authority_score,
-                sentiment_label=(
-                    d.sentiment.get("overall_label") if d.sentiment else None
-                ),
+                sentiment_label=(d.sentiment.get("overall_label") if d.sentiment else None),
                 sentiment_confidence=(
                     d.sentiment.get("overall_confidence") if d.sentiment else None
                 ),

@@ -90,19 +90,24 @@ class WebhookChannel(NotificationChannel):
                     return True
                 logger.warning(
                     "Webhook %s returned %d for alert %s",
-                    self._url, resp.status_code, alert.alert_id,
+                    self._url,
+                    resp.status_code,
+                    alert.alert_id,
                 )
                 return False
         except httpx.TimeoutException:
             logger.warning(
                 "Webhook %s timed out for alert %s",
-                self._url, alert.alert_id,
+                self._url,
+                alert.alert_id,
             )
             return False
         except Exception as e:
             logger.warning(
                 "Webhook %s failed for alert %s: %s",
-                self._url, alert.alert_id, e,
+                self._url,
+                alert.alert_id,
+                e,
             )
             return False
 
@@ -180,23 +185,28 @@ class SlackChannel(NotificationChannel):
                     return True
                 logger.warning(
                     "Slack webhook returned %d for alert %s",
-                    resp.status_code, alert.alert_id,
+                    resp.status_code,
+                    alert.alert_id,
                 )
                 return False
         except httpx.TimeoutException:
             logger.warning(
-                "Slack webhook timed out for alert %s", alert.alert_id,
+                "Slack webhook timed out for alert %s",
+                alert.alert_id,
             )
             return False
         except Exception as e:
             logger.warning(
-                "Slack webhook failed for alert %s: %s", alert.alert_id, e,
+                "Slack webhook failed for alert %s: %s",
+                alert.alert_id,
+                e,
             )
             return False
 
 
 class CircuitState(enum.Enum):
     """Circuit breaker states."""
+
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half_open"
@@ -245,7 +255,8 @@ class CircuitBreaker(NotificationChannel):
             else:
                 logger.debug(
                     "Circuit breaker %s: OPEN, rejecting alert %s",
-                    self.name, alert.alert_id,
+                    self.name,
+                    alert.alert_id,
                 )
                 return False
 
@@ -273,7 +284,8 @@ class CircuitBreaker(NotificationChannel):
                 self._state = CircuitState.OPEN
                 logger.warning(
                     "Circuit breaker %s: CLOSED → OPEN after %d failures",
-                    self.name, self._consecutive_failures,
+                    self.name,
+                    self._consecutive_failures,
                 )
 
         return success

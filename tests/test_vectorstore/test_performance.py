@@ -13,7 +13,7 @@ to allow selective execution.
 """
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import numpy as np
@@ -69,8 +69,7 @@ class TestVectorStorePerformance:
         # With mocked DB, throughput should be much higher than 1000/s
         # This test ensures the Python overhead is minimal
         assert throughput > 1000, (
-            f"Upsert throughput {throughput:.0f}/s below 1000/s target "
-            f"(mocked DB should be faster)"
+            f"Upsert throughput {throughput:.0f}/s below 1000/s target (mocked DB should be faster)"
         )
 
     @pytest.mark.asyncio
@@ -82,26 +81,28 @@ class TestVectorStorePerformance:
         result processing, not database latency.
         """
         # Mock database returns results immediately
-        mock_database.fetch = AsyncMock(return_value=[
-            {
-                "id": f"doc_{i}",
-                "platform": "twitter",
-                "url": f"https://twitter.com/user/status/{i}",
-                "title": f"Document {i}",
-                "content": f"Content for document {i} about semiconductors.",
-                "author_name": f"user_{i}",
-                "author_verified": i % 2 == 0,
-                "author_followers": 1000 + i * 100,
-                "tickers": ["NVDA", "AMD"],
-                "theme_ids": [],
-                "spam_score": 0.1,
-                "authority_score": 0.7,
-                "engagement": "{}",
-                "timestamp": datetime.now(timezone.utc),
-                "similarity": 0.95 - (i * 0.01),
-            }
-            for i in range(10)
-        ])
+        mock_database.fetch = AsyncMock(
+            return_value=[
+                {
+                    "id": f"doc_{i}",
+                    "platform": "twitter",
+                    "url": f"https://twitter.com/user/status/{i}",
+                    "title": f"Document {i}",
+                    "content": f"Content for document {i} about semiconductors.",
+                    "author_name": f"user_{i}",
+                    "author_verified": i % 2 == 0,
+                    "author_followers": 1000 + i * 100,
+                    "tickers": ["NVDA", "AMD"],
+                    "theme_ids": [],
+                    "spam_score": 0.1,
+                    "authority_score": 0.7,
+                    "engagement": "{}",
+                    "timestamp": datetime.now(UTC),
+                    "similarity": 0.95 - (i * 0.01),
+                }
+                for i in range(10)
+            ]
+        )
 
         store = PgVectorStore(database=mock_database)
 
@@ -127,12 +128,8 @@ class TestVectorStorePerformance:
         max_latency = max(latencies)
 
         # With mocked DB, latency should be very low
-        assert avg_latency < 50, (
-            f"Average search latency {avg_latency:.1f}ms exceeds 50ms target"
-        )
-        assert max_latency < 100, (
-            f"Max search latency {max_latency:.1f}ms exceeds 100ms threshold"
-        )
+        assert avg_latency < 50, f"Average search latency {avg_latency:.1f}ms exceeds 50ms target"
+        assert max_latency < 100, f"Max search latency {max_latency:.1f}ms exceeds 100ms threshold"
 
     @pytest.mark.asyncio
     async def test_search_with_filters_latency_mock(self, mock_database, sample_embedding):
@@ -151,8 +148,8 @@ class TestVectorStorePerformance:
             tickers=["NVDA", "AMD", "INTC", "TSM"],
             min_authority_score=0.5,
             exclude_ids=[f"exclude_{i}" for i in range(100)],
-            timestamp_after=datetime(2026, 1, 1, tzinfo=timezone.utc),
-            timestamp_before=datetime(2026, 2, 1, tzinfo=timezone.utc),
+            timestamp_after=datetime(2026, 1, 1, tzinfo=UTC),
+            timestamp_before=datetime(2026, 2, 1, tzinfo=UTC),
         )
 
         # Measure filtered search latency
@@ -173,9 +170,7 @@ class TestVectorStorePerformance:
         avg_latency = sum(latencies) / len(latencies)
 
         # Filtered search should still be fast (just SQL building overhead)
-        assert avg_latency < 50, (
-            f"Filtered search latency {avg_latency:.1f}ms exceeds 50ms target"
-        )
+        assert avg_latency < 50, f"Filtered search latency {avg_latency:.1f}ms exceeds 50ms target"
 
     @pytest.mark.asyncio
     async def test_result_conversion_throughput(self, mock_database):
@@ -201,7 +196,7 @@ class TestVectorStorePerformance:
                 "spam_score": 0.05,
                 "authority_score": 0.8,
                 "engagement": '{"likes": 100, "shares": 20, "comments": 5}',
-                "timestamp": datetime.now(timezone.utc),
+                "timestamp": datetime.now(UTC),
                 "similarity": 0.99 - (i * 0.001),
             }
             for i in range(n_results)

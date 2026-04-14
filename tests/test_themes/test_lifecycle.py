@@ -1,22 +1,18 @@
 """Tests for theme lifecycle classifier and transition detection."""
 
-from datetime import date, datetime, timezone
+from datetime import date
 
 import numpy as np
 import pytest
 
 from src.themes.lifecycle import (
-    ACCELERATING_VELOCITY_THRESHOLD,
     EMERGING_DOC_CEILING,
-    FADING_VELOCITY_THRESHOLD,
     LifecycleClassifier,
 )
 from src.themes.schemas import Theme, ThemeMetrics
 from src.themes.transitions import (
-    ALERTABLE_TRANSITIONS,
     LifecycleTransition,
 )
-
 
 # ── Fixtures ────────────────────────────────────────────────
 
@@ -140,7 +136,7 @@ class TestClassifyAccelerating:
                 theme_id="theme_test123456",
                 date=date(2025, 6, 10 + i),
                 document_count=50 + i * 20,
-                velocity=0.1 * (2 ** i),
+                velocity=0.1 * (2**i),
             )
             for i in range(5)
         ]
@@ -159,7 +155,7 @@ class TestClassifyAccelerating:
                 theme_id="theme_test123456",
                 date=date(2025, 6, 10 + i),
                 document_count=50 + i * 10,
-                velocity=0.2 * (2 ** i),
+                velocity=0.2 * (2**i),
             )
             for i in range(5)
         ]
@@ -270,43 +266,29 @@ class TestClassifyNoneVelocity:
 class TestComputeTrend:
     """Tests for the trend computation helper."""
 
-    def test_increasing_values_positive_trend(
-        self, classifier: LifecycleClassifier
-    ) -> None:
+    def test_increasing_values_positive_trend(self, classifier: LifecycleClassifier) -> None:
         trend = classifier._compute_trend([1, 2, 3, 4, 5])
         assert trend > 0
 
-    def test_decreasing_values_negative_trend(
-        self, classifier: LifecycleClassifier
-    ) -> None:
+    def test_decreasing_values_negative_trend(self, classifier: LifecycleClassifier) -> None:
         trend = classifier._compute_trend([5, 4, 3, 2, 1])
         assert trend < 0
 
-    def test_constant_values_zero_trend(
-        self, classifier: LifecycleClassifier
-    ) -> None:
+    def test_constant_values_zero_trend(self, classifier: LifecycleClassifier) -> None:
         trend = classifier._compute_trend([3, 3, 3, 3])
         assert trend == 0.0
 
-    def test_single_value_returns_zero(
-        self, classifier: LifecycleClassifier
-    ) -> None:
+    def test_single_value_returns_zero(self, classifier: LifecycleClassifier) -> None:
         assert classifier._compute_trend([42]) == 0.0
 
-    def test_empty_returns_zero(
-        self, classifier: LifecycleClassifier
-    ) -> None:
+    def test_empty_returns_zero(self, classifier: LifecycleClassifier) -> None:
         assert classifier._compute_trend([]) == 0.0
 
-    def test_two_values_positive(
-        self, classifier: LifecycleClassifier
-    ) -> None:
+    def test_two_values_positive(self, classifier: LifecycleClassifier) -> None:
         trend = classifier._compute_trend([10, 20])
         assert trend > 0
 
-    def test_all_zeros_returns_zero(
-        self, classifier: LifecycleClassifier
-    ) -> None:
+    def test_all_zeros_returns_zero(self, classifier: LifecycleClassifier) -> None:
         """All zeros → zero mean, slope normalized to raw slope."""
         trend = classifier._compute_trend([0, 0, 0])
         assert trend == 0.0

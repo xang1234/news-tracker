@@ -1,6 +1,5 @@
 """Tests for /search/similar endpoint."""
 
-import pytest
 from unittest.mock import MagicMock
 
 
@@ -25,10 +24,13 @@ class TestSearchRoute:
         }
         mock_vector_store_manager.query.return_value = [mock_result]
 
-        resp = client.post("/search/similar", json={
-            "query": "NVIDIA GPU demand",
-            "limit": 5,
-        })
+        resp = client.post(
+            "/search/similar",
+            json={
+                "query": "NVIDIA GPU demand",
+                "limit": 5,
+            },
+        )
 
         assert resp.status_code == 200
         body = resp.json()
@@ -46,12 +48,15 @@ class TestSearchRoute:
         """POST /search/similar with filters passes them through."""
         mock_vector_store_manager.query.return_value = []
 
-        resp = client.post("/search/similar", json={
-            "query": "semiconductor supply",
-            "platforms": ["twitter"],
-            "tickers": ["NVDA"],
-            "min_authority_score": 0.5,
-        })
+        resp = client.post(
+            "/search/similar",
+            json={
+                "query": "semiconductor supply",
+                "platforms": ["twitter"],
+                "tickers": ["NVDA"],
+                "min_authority_score": 0.5,
+            },
+        )
 
         assert resp.status_code == 200
         assert resp.json()["total"] == 0

@@ -92,20 +92,20 @@ class DeduplicationIndex:
 
         # Normalize text
         text = text.lower()
-        text = re.sub(r'[^\w\s]', '', text)  # Remove punctuation
+        text = re.sub(r"[^\w\s]", "", text)  # Remove punctuation
         words = text.split()
 
         # Use 3-word shingles (n-grams)
         # This captures phrase-level similarity
         shingle_size = 3
         for i in range(len(words) - shingle_size + 1):
-            shingle = ' '.join(words[i : i + shingle_size])
-            m.update(shingle.encode('utf-8'))
+            shingle = " ".join(words[i : i + shingle_size])
+            m.update(shingle.encode("utf-8"))
 
         # Also add individual words for short texts
         if len(words) < shingle_size * 2:
             for word in words:
-                m.update(word.encode('utf-8'))
+                m.update(word.encode("utf-8"))
 
         return m
 
@@ -147,9 +147,7 @@ class DeduplicationIndex:
         # Check for duplicates first
         result = self.check_duplicate(doc)
         if result.is_duplicate:
-            logger.debug(
-                f"Duplicate detected: {doc.id} similar to {result.similar_doc_ids}"
-            )
+            logger.debug(f"Duplicate detected: {doc.id} similar to {result.similar_doc_ids}")
             return False
 
         # Create MinHash and insert
@@ -269,9 +267,7 @@ class Deduplicator:
 
         if result.is_duplicate:
             self._duplicates_found += 1
-            logger.debug(
-                f"Duplicate: {doc.id} similar to {result.similar_doc_ids[:3]}"
-            )
+            logger.debug(f"Duplicate: {doc.id} similar to {result.similar_doc_ids[:3]}")
 
         return result.is_duplicate
 
@@ -289,9 +285,7 @@ class Deduplicator:
         """
         # Check if index needs rotation
         if self._index.size >= self.max_index_size:
-            logger.info(
-                f"Index size ({self._index.size}) reached limit, rotating"
-            )
+            logger.info(f"Index size ({self._index.size}) reached limit, rotating")
             self._rotate_index()
 
         return self._index.insert(doc)
@@ -310,9 +304,7 @@ class Deduplicator:
 
         # Check if index needs rotation before inserting
         if self._index.size >= self.max_index_size:
-            logger.info(
-                f"Index size ({self._index.size}) reached limit, rotating"
-            )
+            logger.info(f"Index size ({self._index.size}) reached limit, rotating")
             self._rotate_index()
 
         result = self._index.insert_if_unique(doc)

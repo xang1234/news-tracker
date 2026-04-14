@@ -1,9 +1,7 @@
 """Tests for document explorer API endpoints."""
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock
+from datetime import UTC, datetime
 
-import pytest
 from src.ingestion.schemas import EngagementMetrics, NormalizedDocument, Platform
 
 
@@ -18,8 +16,8 @@ def _make_doc(
         id=doc_id,
         platform=platform,
         url=kwargs.pop("url", "https://example.com/article"),
-        timestamp=kwargs.pop("timestamp", datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc)),
-        fetched_at=kwargs.pop("fetched_at", datetime(2026, 2, 5, 10, 5, 0, tzinfo=timezone.utc)),
+        timestamp=kwargs.pop("timestamp", datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC)),
+        fetched_at=kwargs.pop("fetched_at", datetime(2026, 2, 5, 10, 5, 0, tzinfo=UTC)),
         author_id=kwargs.pop("author_id", "user_123"),
         author_name=kwargs.pop("author_name", "ChipAnalyst"),
         author_followers=kwargs.pop("author_followers", 5000),
@@ -39,7 +37,15 @@ def _make_doc(
         ),
         events_extracted=kwargs.pop(
             "events_extracted",
-            [{"event_type": "product_launch", "actor": "NVIDIA", "action": "announces", "object": "GPU", "time_ref": "Q2 2026"}],
+            [
+                {
+                    "event_type": "product_launch",
+                    "actor": "NVIDIA",
+                    "action": "announces",
+                    "object": "GPU",
+                    "time_ref": "Q2 2026",
+                }
+            ],
         ),
         urls_mentioned=kwargs.pop("urls_mentioned", ["https://nvidia.com"]),
         spam_score=kwargs.pop("spam_score", 0.05),
@@ -71,8 +77,8 @@ def _make_list_record(**overrides):
         "sentiment": {"label": "positive", "confidence": 0.92},
         "engagement": {"likes": 100, "shares": 20, "comments": 5},
         "theme_ids": ["theme_abc123"],
-        "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
-        "fetched_at": datetime(2026, 2, 5, 10, 5, 0, tzinfo=timezone.utc),
+        "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
+        "fetched_at": datetime(2026, 2, 5, 10, 5, 0, tzinfo=UTC),
     }
     rec.update(overrides)
     return rec
@@ -169,9 +175,7 @@ class TestListDocuments:
 
     def test_null_sentiment_in_record(self, client, mock_doc_repo):
         """Records with no sentiment should have null label/confidence."""
-        mock_doc_repo.list_documents.return_value = [
-            _make_list_record(sentiment=None)
-        ]
+        mock_doc_repo.list_documents.return_value = [_make_list_record(sentiment=None)]
         mock_doc_repo.list_documents_count.return_value = 1
 
         resp = client.get("/documents")

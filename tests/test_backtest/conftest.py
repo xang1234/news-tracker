@@ -1,6 +1,6 @@
 """Pytest fixtures for backtest tests."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock
 
 import numpy as np
@@ -45,7 +45,7 @@ def sample_model_version() -> ModelVersion:
             "embedding_model_name": "ProsusAI/finbert",
             "clustering_enabled": True,
         },
-        created_at=datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc),
+        created_at=datetime(2025, 6, 1, 12, 0, 0, tzinfo=UTC),
         description="Initial model version",
     )
 
@@ -58,7 +58,7 @@ def sample_model_version_row() -> dict:
         "embedding_model": "ProsusAI/finbert",
         "clustering_config": '{"hdbscan_min_cluster_size": 10}',
         "config_snapshot": '{"embedding_model_name": "ProsusAI/finbert"}',
-        "created_at": datetime(2025, 6, 1, 12, 0, 0, tzinfo=timezone.utc),
+        "created_at": datetime(2025, 6, 1, 12, 0, 0, tzinfo=UTC),
         "description": "Initial model version",
     }
 
@@ -73,7 +73,7 @@ def sample_backtest_run() -> BacktestRun:
         date_range_end=date(2025, 6, 30),
         parameters={"strategy": "swing", "forward_horizons": [1, 5, 10]},
         status="running",
-        created_at=datetime(2025, 7, 1, 10, 0, 0, tzinfo=timezone.utc),
+        created_at=datetime(2025, 7, 1, 10, 0, 0, tzinfo=UTC),
     )
 
 
@@ -88,7 +88,7 @@ def sample_backtest_run_row() -> dict:
         "parameters": '{"strategy": "swing"}',
         "results": None,
         "status": "running",
-        "created_at": datetime(2025, 7, 1, 10, 0, 0, tzinfo=timezone.utc),
+        "created_at": datetime(2025, 7, 1, 10, 0, 0, tzinfo=UTC),
         "completed_at": None,
         "error_message": None,
     }
