@@ -1,0 +1,62 @@
+{
+  "backend": "onnx",
+  "batch_size": 8,
+  "benchmarks": {
+    "embedding_finbert_long": {
+      "avg_ms": 13563.16,
+      "median_ms": 13334.08,
+      "throughput_per_sec": 0.07
+    },
+    "embedding_minilm_batch": {
+      "avg_ms": 47.7,
+      "median_ms": 44.39,
+      "throughput_per_sec": 167.72
+    },
+    "embedding_minilm_single": {
+      "avg_ms": 12.01,
+      "median_ms": 7.26,
+      "throughput_per_sec": 83.29
+    },
+    "sentiment_batch": {
+      "avg_ms": 281.08,
+      "median_ms": 260.9,
+      "throughput_per_sec": 28.46
+    },
+    "sentiment_single": {
+      "avg_ms": 70.58,
+      "median_ms": 47.47,
+      "throughput_per_sec": 14.17
+    }
+  },
+  "embedding_stats": {
+    "accelerator": "cpu",
+    "backend": "onnx",
+    "cache_enabled": false,
+    "device": "cpu",
+    "execution_provider": "CPUExecutionProvider",
+    "finbert_dim": 768,
+    "finbert_model": "ProsusAI/finbert",
+    "initialized": {
+      "finbert": true,
+      "minilm": true
+    },
+    "minilm_dim": 384,
+    "minilm_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "onnx_minilm_model_path": "/app/models/embedding-minilm",
+    "onnx_model_path": "/app/models/embedding-finbert"
+  },
+  "iterations": 5,
+  "max_rss_mb": 2637.99,
+  "sentiment_stats": {
+    "accelerator": "cpu",
+    "backend": "onnx",
+    "cache_enabled": false,
+    "device": "not initialized",
+    "entity_sentiment_enabled": true,
+    "execution_provider": "CPUExecutionProvider",
+    "initialized": true,
+    "model": "ProsusAI/finbert",
+    "onnx_model_path": "/app/models/sentiment-finbert"
+  },
+  "warmup_iterations": 2
+}

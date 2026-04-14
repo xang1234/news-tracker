@@ -99,9 +99,10 @@ RUN apt-get update && \
 ARG XUI_INSTALL=true
 ARG CPU_RUNTIME_OPTIMIZED=false
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-# ONNX model paths are set conditionally at container start.
-# When EXPORT_ONNX_MODELS=false the directories are empty and
-# services fall back to downloading from HuggingFace Hub.
+# ONNX model paths are exported by docker-entrypoint.sh at container start
+# only when /app/models/*/model.onnx exists. With EXPORT_ONNX_MODELS=false
+# the directories are empty, the env vars stay unset, and services fall
+# back to downloading from HuggingFace Hub.
 
 # Non-root user for security
 RUN useradd --create-home --shell /bin/bash appuser
@@ -127,6 +128,8 @@ RUN if [ "$XUI_INSTALL" = "true" ]; then \
 COPY src/ src/
 COPY pyproject.toml ./
 COPY migrations/ migrations/
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Put venv on PATH so `news-tracker` CLI is available
 ENV PATH="/app/.venv/bin:$PATH"
@@ -140,6 +143,7 @@ EXPOSE 8001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -sf http://localhost:8001/health || exit 1
 
-# Flexible entrypoint: `docker run <image> sentiment-worker` overrides CMD
-ENTRYPOINT ["news-tracker"]
+# Wrapper sets ONNX env vars conditionally, then dispatches to the CLI.
+# `docker run <image> sentiment-worker` overrides CMD.
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["serve"]

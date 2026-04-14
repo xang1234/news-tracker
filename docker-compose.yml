@@ -127,8 +127,7 @@ services:
     restart: unless-stopped
     mem_limit: 2g
     cpus: '2.0'
-    entrypoint: ["sh", "-c"]
-    command: ["news-tracker init-db && news-tracker serve"]
+    command: ["sh", "-c", "news-tracker init-db && news-tracker serve"]
     ports:
       - "8001:8001"
     env_file: .env
