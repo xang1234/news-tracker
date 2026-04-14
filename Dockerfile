@@ -43,6 +43,14 @@ RUN if [ "$EXPORT_ONNX_MODELS" = "true" ]; then \
       rm -rf /tmp/onnx-export; \
     fi
 
+# Prune torch and optimum from dedicated CPU-only images — must happen in the
+# builder where `uv` is installed. ONNX models are already exported by now, so
+# the bulky torch/optimum wheels can go. `onnxruntime` is kept (it's a regular
+# project dep) so inference continues to work.
+RUN if [ "$CPU_RUNTIME_OPTIMIZED" = "true" ]; then \
+      uv pip uninstall -p /app/.venv/bin/python torch optimum optimum-onnx onnx; \
+    fi
+
 # Install xui CLI from git (private/public) when enabled.
 # Private token is passed as a BuildKit secret (id=xui_github_token) to avoid leaking in logs.
 RUN --mount=type=secret,id=xui_github_token \
@@ -112,12 +120,6 @@ WORKDIR /app
 # Copy virtual env from builder
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/models /app/models
-
-# Prune Torch from dedicated CPU-only images only. The shared runtime image
-# still supports optional Torch-backed features like fastcoref and spaCy trf.
-RUN if [ "$CPU_RUNTIME_OPTIMIZED" = "true" ]; then \
-      uv pip uninstall -p /app/.venv/bin/python torch optimum optimum-onnx onnx; \
-    fi
 
 # Install Playwright Chromium browser for xui runs.
 RUN if [ "$XUI_INSTALL" = "true" ]; then \
