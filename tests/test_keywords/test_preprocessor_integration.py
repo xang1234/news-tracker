@@ -1,7 +1,6 @@
 """Tests for KeywordsService integration with Preprocessor."""
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.ingestion.preprocessor import Preprocessor
 from src.ingestion.schemas import NormalizedDocument, Platform
@@ -17,7 +16,7 @@ class TestPreprocessorKeywordsIntegration:
             id="test_1",
             platform=Platform.NEWS,
             url="https://example.com/article",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             author_id="author_1",
             author_name="Test Author",
             content=content,

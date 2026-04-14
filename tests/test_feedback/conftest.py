@@ -1,11 +1,10 @@
 """Shared fixtures for feedback tests."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
 
-from src.feedback.repository import FeedbackRepository
 from src.feedback.schemas import Feedback
 
 
@@ -30,7 +29,7 @@ def sample_feedback():
         quality_label="useful",
         comment="Very actionable insight",
         user_id="test-api-key",
-        created_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+        created_at=datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
     )
 
 

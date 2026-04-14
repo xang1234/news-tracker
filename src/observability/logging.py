@@ -49,13 +49,13 @@ def setup_logging() -> None:
             structlog.processors.format_exc_info,
             structlog.processors.JSONRenderer(),
         ]
-        renderer = structlog.processors.JSONRenderer()
+        structlog.processors.JSONRenderer()
     else:
         # Development: Pretty console output
         processors = shared_processors + [
             structlog.dev.ConsoleRenderer(colors=True),
         ]
-        renderer = structlog.dev.ConsoleRenderer(colors=True)
+        structlog.dev.ConsoleRenderer(colors=True)
 
     # Configure structlog
     structlog.configure(

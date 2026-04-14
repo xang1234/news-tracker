@@ -16,9 +16,7 @@ class TestUpsert:
         self, mock_database: AsyncMock, sample_source: Source
     ) -> None:
         repo = SourcesRepository(mock_database)
-        mock_database.fetch.return_value = [
-            {"platform": "twitter", "identifier": "SemiAnalysis"}
-        ]
+        mock_database.fetch.return_value = [{"platform": "twitter", "identifier": "SemiAnalysis"}]
 
         await repo.upsert(sample_source)
 
@@ -64,9 +62,7 @@ class TestGetByKey:
     """Tests for single-source lookup."""
 
     @pytest.mark.asyncio
-    async def test_found(
-        self, mock_database: AsyncMock, sample_db_row: dict
-    ) -> None:
+    async def test_found(self, mock_database: AsyncMock, sample_db_row: dict) -> None:
         mock_database.fetchrow.return_value = sample_db_row
         repo = SourcesRepository(mock_database)
 
@@ -91,9 +87,7 @@ class TestListSources:
     """Tests for paginated list with filters."""
 
     @pytest.mark.asyncio
-    async def test_no_filters(
-        self, mock_database: AsyncMock, sample_db_row: dict
-    ) -> None:
+    async def test_no_filters(self, mock_database: AsyncMock, sample_db_row: dict) -> None:
         mock_database.fetchval.return_value = 1
         mock_database.fetch.return_value = [sample_db_row]
         repo = SourcesRepository(mock_database)
@@ -105,9 +99,7 @@ class TestListSources:
         assert sources[0].identifier == "SemiAnalysis"
 
     @pytest.mark.asyncio
-    async def test_platform_filter(
-        self, mock_database: AsyncMock, sample_db_row: dict
-    ) -> None:
+    async def test_platform_filter(self, mock_database: AsyncMock, sample_db_row: dict) -> None:
         mock_database.fetchval.return_value = 1
         mock_database.fetch.return_value = [sample_db_row]
         repo = SourcesRepository(mock_database)
@@ -120,9 +112,7 @@ class TestListSources:
         assert "platform = $" in count_sql
 
     @pytest.mark.asyncio
-    async def test_search_filter(
-        self, mock_database: AsyncMock, sample_db_row: dict
-    ) -> None:
+    async def test_search_filter(self, mock_database: AsyncMock, sample_db_row: dict) -> None:
         mock_database.fetchval.return_value = 1
         mock_database.fetch.return_value = [sample_db_row]
         repo = SourcesRepository(mock_database)
@@ -145,9 +135,7 @@ class TestListSources:
         assert "is_active = TRUE" in count_sql
 
     @pytest.mark.asyncio
-    async def test_pagination(
-        self, mock_database: AsyncMock, sample_db_row: dict
-    ) -> None:
+    async def test_pagination(self, mock_database: AsyncMock, sample_db_row: dict) -> None:
         mock_database.fetchval.return_value = 50
         mock_database.fetch.return_value = [sample_db_row]
         repo = SourcesRepository(mock_database)
@@ -175,9 +163,7 @@ class TestGetActiveByPlatform:
     """Tests for fetching active sources by platform."""
 
     @pytest.mark.asyncio
-    async def test_returns_list(
-        self, mock_database: AsyncMock, sample_db_row: dict
-    ) -> None:
+    async def test_returns_list(self, mock_database: AsyncMock, sample_db_row: dict) -> None:
         mock_database.fetch.return_value = [sample_db_row]
         repo = SourcesRepository(mock_database)
 

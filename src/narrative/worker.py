@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import numpy as np
@@ -103,10 +104,8 @@ class NarrativeWorker:
             finally:
                 if maintenance_task:
                     maintenance_task.cancel()
-                    try:
+                    with contextlib.suppress(asyncio.CancelledError):
                         await maintenance_task
-                    except asyncio.CancelledError:
-                        pass
                     maintenance_task = None
         await self._cleanup()
 
@@ -132,7 +131,8 @@ class NarrativeWorker:
             batch.append(job)
             if (
                 len(batch) >= self._batch_size
-                or (asyncio.get_event_loop().time() - batch_start) > self._config.worker_batch_timeout
+                or (asyncio.get_event_loop().time() - batch_start)
+                > self._config.worker_batch_timeout
             ):
                 await self._process_batch(batch)
                 batch = []
@@ -247,14 +247,15 @@ class NarrativeWorker:
     ) -> NarrativeRun | None:
         best_run: NarrativeRun | None = None
         best_similarity = 0.0
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for candidate in candidates:
             if candidate.status == "closed":
                 continue
             similarity = self._cosine_similarity(candidate.centroid, embedding)
-            if candidate.status == "cooling":
-                if now - candidate.last_document_at > timedelta(hours=self._config.close_hours):
-                    continue
+            if candidate.status == "cooling" and now - candidate.last_document_at > timedelta(
+                hours=self._config.close_hours
+            ):
+                continue
             if similarity >= self._config.similarity_threshold and similarity > best_similarity:
                 best_similarity = similarity
                 best_run = candidate
@@ -269,7 +270,7 @@ class NarrativeWorker:
     ) -> NarrativeRun:
         run_id = f"run_{uuid.uuid4().hex[:12]}"
         platform_first_seen = json.dumps({str(document.platform): document.timestamp.isoformat()})
-        ticker_counts = json.dumps({ticker: 1 for ticker in document.tickers_mentioned})
+        ticker_counts = json.dumps(dict.fromkeys(document.tickers_mentioned, 1))
         sentiment_value = self._sentiment_value(document.sentiment)
         authority = float(document.authority_score or 0.0)
         label = self._label_from_doc(document)
@@ -333,7 +334,7 @@ class NarrativeWorker:
             ORDER BY bucket_start ASC
             """,
             run.run_id,
-            datetime.now(timezone.utc) - timedelta(hours=self._config.surge_baseline_hours),
+            datetime.now(UTC) - timedelta(hours=self._config.surge_baseline_hours),
         )
         buckets = [_row_to_bucket(row) for row in buckets_rows]
         current_rate, current_acceleration = self._compute_rate_metrics(buckets)
@@ -394,7 +395,7 @@ class NarrativeWorker:
             bucket_start,
         )
         platform_counts = {str(document.platform): 1}
-        ticker_counts = {ticker: 1 for ticker in document.tickers_mentioned}
+        ticker_counts = dict.fromkeys(document.tickers_mentioned, 1)
         if existing_row:
             existing_bucket = _row_to_bucket(existing_row)
             for key, value in existing_bucket.platform_counts.items():
@@ -491,7 +492,7 @@ class NarrativeWorker:
                         """,
                         run.run_id,
                         float(evaluation.conviction_score or run.conviction_score),
-                        datetime.now(timezone.utc),
+                        datetime.now(UTC),
                     )
                 await self._upsert_signal_state(conn, run.run_id, state, evaluation, should_publish)
         if alerts_to_publish and self._alert_service:
@@ -502,7 +503,7 @@ class NarrativeWorker:
         state: NarrativeSignalState | None,
         evaluation: SignalEvaluation,
     ) -> bool:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if not evaluation.triggered:
             return False
         if state is None:
@@ -521,10 +522,12 @@ class NarrativeWorker:
         evaluation: SignalEvaluation,
         published: bool,
     ) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         next_state = "active" if evaluation.triggered else "inactive"
         last_score = evaluation.metric_value if evaluation.triggered else 0.0
-        cooldown_until = now + timedelta(minutes=30) if published else (state.cooldown_until if state else None)
+        cooldown_until = (
+            now + timedelta(minutes=30) if published else (state.cooldown_until if state else None)
+        )
         metadata = dict(state.metadata) if state else {}
         if evaluation.triggered and evaluation.trigger_type == "cross_platform_breakout":
             metadata["platform_count"] = evaluation.metric_value
@@ -544,7 +547,9 @@ class NarrativeWorker:
             """,
             run_id,
             evaluation.trigger_type,
-            next_state if (evaluation.triggered or evaluation.metric_value <= evaluation.deactivate_below) else (state.state if state else "inactive"),
+            next_state
+            if (evaluation.triggered or evaluation.metric_value <= evaluation.deactivate_below)
+            else (state.state if state else "inactive"),
             last_score,
             now if published else (state.last_alert_at if state else None),
             now,
@@ -563,7 +568,7 @@ class NarrativeWorker:
                 logger.exception("Narrative maintenance failed")
 
     async def _run_maintenance(self) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cooling_cutoff = now - timedelta(hours=self._config.cooling_hours)
         close_cutoff = now - timedelta(hours=self._config.close_hours)
         await self._database.execute(
@@ -588,11 +593,13 @@ class NarrativeWorker:
         # Real merges must rewrite memberships and bucket state together. Until
         # that exists, keep maintenance limited to cooling/closing transitions.
         if self._config.merge_runs_enabled:
-            logger.warning("Narrative run merges are enabled without a transactional implementation")
+            logger.warning(
+                "Narrative run merges are enabled without a transactional implementation"
+            )
 
     @staticmethod
     def _bucket_start(ts: datetime, bucket_minutes: int = 5) -> datetime:
-        ts = ts.astimezone(timezone.utc)
+        ts = ts.astimezone(UTC)
         minute = (ts.minute // bucket_minutes) * bucket_minutes
         return ts.replace(minute=minute, second=0, microsecond=0)
 

@@ -1,16 +1,17 @@
 """Tests for /sentiment endpoint."""
 
-import pytest
-
 
 class TestSentimentRoute:
     """Test the sentiment analysis endpoint."""
 
     def test_sentiment_happy_path(self, client, mock_sentiment_service):
         """POST /sentiment with valid input returns sentiment results."""
-        resp = client.post("/sentiment", json={
-            "texts": ["NVIDIA stock surges on AI demand"],
-        })
+        resp = client.post(
+            "/sentiment",
+            json={
+                "texts": ["NVIDIA stock surges on AI demand"],
+            },
+        )
 
         assert resp.status_code == 200
         body = resp.json()

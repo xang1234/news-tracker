@@ -45,10 +45,7 @@ def check_sentiment_velocity(
 
     direction = "bullish" if delta > 0 else "bearish"
 
-    if abs_delta >= config.sentiment_velocity_critical:
-        severity = "critical"
-    else:
-        severity = "warning"
+    severity = "critical" if abs_delta >= config.sentiment_velocity_critical else "warning"
 
     return Alert(
         theme_id=theme.theme_id,
@@ -136,10 +133,7 @@ def check_volume_surge(
     if metrics.volume_zscore < config.volume_surge_threshold:
         return None
 
-    if metrics.volume_zscore >= config.volume_surge_critical:
-        severity = "critical"
-    else:
-        severity = "warning"
+    severity = "critical" if metrics.volume_zscore >= config.volume_surge_critical else "warning"
 
     return Alert(
         theme_id=theme.theme_id,
@@ -147,8 +141,7 @@ def check_volume_surge(
         severity=severity,
         title=f"Volume surge: {theme.name}",
         message=(
-            f"Theme '{theme.name}' volume z-score is "
-            f"{metrics.volume_zscore:.1f}σ above normal"
+            f"Theme '{theme.name}' volume z-score is {metrics.volume_zscore:.1f}σ above normal"
         ),
         trigger_data={
             "volume_zscore": round(metrics.volume_zscore, 4),
@@ -178,10 +171,7 @@ def check_lifecycle_change(
     if not transition.is_alertable:
         return None
 
-    is_gaining = (
-        transition.from_stage == "emerging"
-        and transition.to_stage == "accelerating"
-    )
+    is_gaining = transition.from_stage == "emerging" and transition.to_stage == "accelerating"
     severity = "critical" if is_gaining else "warning"
 
     return Alert(
@@ -258,10 +248,7 @@ def check_propagated_impact(
 
     direction = "negative" if impact < 0 else "positive"
 
-    if abs(impact) >= config.propagated_impact_threshold * 2:
-        severity = "critical"
-    else:
-        severity = "warning"
+    severity = "critical" if abs(impact) >= config.propagated_impact_threshold * 2 else "warning"
 
     return Alert(
         theme_id=target_node_id,

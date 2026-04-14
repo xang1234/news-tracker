@@ -39,18 +39,16 @@ class TestExponentialBackoff:
         backoff = ExponentialBackoff(
             base_delay=10.0, max_delay=100.0, multiplier=2.0, jitter_range=0.5
         )
-        delays = [backoff.next_delay() for _ in range(20)]
+        [backoff.next_delay() for _ in range(20)]
         # Reset and try again — with jitter the sequences should differ
         backoff.reset()
-        delays2 = [backoff.next_delay() for _ in range(20)]
+        [backoff.next_delay() for _ in range(20)]
         # At least some delays should differ (extremely unlikely to be all equal)
-        assert delays != delays2 or True  # jitter is random, can't guarantee
+        assert True  # jitter is random, can't guarantee
 
     def test_jitter_stays_non_negative(self):
         """Delay should never be negative even with large jitter."""
-        backoff = ExponentialBackoff(
-            base_delay=0.5, max_delay=60.0, jitter_range=0.5
-        )
+        backoff = ExponentialBackoff(base_delay=0.5, max_delay=60.0, jitter_range=0.5)
         for _ in range(100):
             delay = backoff.next_delay()
             assert delay >= 0

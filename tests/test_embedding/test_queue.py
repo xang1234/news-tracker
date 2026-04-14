@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.embedding.config import EmbeddingConfig
 from src.embedding.queue import EmbeddingJob, EmbeddingQueue
 
 
@@ -133,9 +132,9 @@ class TestEmbeddingQueueAcknowledge:
     @pytest.mark.asyncio
     async def test_nack_moves_to_dlq(self, mock_redis):
         """Should move failed message to DLQ on nack."""
-        mock_redis.xrange = AsyncMock(return_value=[
-            ("msg_123", {"document_id": "doc_456", "priority": "0"})
-        ])
+        mock_redis.xrange = AsyncMock(
+            return_value=[("msg_123", {"document_id": "doc_456", "priority": "0"})]
+        )
 
         with patch("redis.asyncio.from_url", return_value=mock_redis):
             async with EmbeddingQueue() as queue:
@@ -155,13 +154,20 @@ class TestEmbeddingQueueConsume:
     @pytest.mark.asyncio
     async def test_consume_yields_jobs(self, mock_redis):
         """Should yield EmbeddingJob objects."""
-        mock_redis.xreadgroup = AsyncMock(side_effect=[
-            [("embedding_queue", [
-                ("msg_1", {"document_id": "doc_1", "priority": "0"}),
-                ("msg_2", {"document_id": "doc_2", "priority": "5"}),
-            ])],
-            [],  # No more messages
-        ])
+        mock_redis.xreadgroup = AsyncMock(
+            side_effect=[
+                [
+                    (
+                        "embedding_queue",
+                        [
+                            ("msg_1", {"document_id": "doc_1", "priority": "0"}),
+                            ("msg_2", {"document_id": "doc_2", "priority": "5"}),
+                        ],
+                    )
+                ],
+                [],  # No more messages
+            ]
+        )
 
         with patch("redis.asyncio.from_url", return_value=mock_redis):
             async with EmbeddingQueue() as queue:

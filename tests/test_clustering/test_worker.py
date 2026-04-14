@@ -1,13 +1,12 @@
 """Tests for ClusteringWorker real-time theme assignment."""
 
-from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
 import pytest
 
 from src.clustering.config import ClusteringConfig
 from src.clustering.worker import ClusteringWorker
-
 
 # ── Fixtures ──────────────────────────────────────────────
 
@@ -78,6 +77,7 @@ def worker(config, mock_queue, mock_database, mock_doc_repo, mock_theme_repo, mo
 def _make_job(doc_id="doc_001", model="finbert", msg_id="msg-1"):
     """Create a ClusteringJob-like object."""
     from src.clustering.queue import ClusteringJob
+
     return ClusteringJob(
         document_id=doc_id,
         embedding_model=model,
@@ -174,7 +174,9 @@ class TestProcessBatch:
     """Tests for _process_batch with various scenarios."""
 
     @pytest.mark.asyncio
-    async def test_successful_assignment(self, worker, mock_doc_repo, mock_theme_repo, mock_queue, mock_database):
+    async def test_successful_assignment(
+        self, worker, mock_doc_repo, mock_theme_repo, mock_queue, mock_database
+    ):
         """Happy path: doc has embedding, matches a theme."""
         embedding = np.random.randn(768).astype(np.float32).tolist()
         doc = _make_doc(embedding=embedding)
@@ -190,9 +192,7 @@ class TestProcessBatch:
         await worker._process_batch([job])
 
         # Document theme_ids updated
-        mock_doc_repo.update_themes.assert_called_once_with(
-            "doc_001", [theme.theme_id]
-        )
+        mock_doc_repo.update_themes.assert_called_once_with("doc_001", [theme.theme_id])
         # Centroid EMA updated
         mock_theme_repo.update_centroid.assert_called_once()
         # Atomic document_count increment
@@ -238,7 +238,9 @@ class TestProcessBatch:
         mock_queue.ack.assert_called_once_with("msg-1")
 
     @pytest.mark.asyncio
-    async def test_missing_embedding_clears_idem_key(self, worker, mock_doc_repo, mock_redis, mock_queue):
+    async def test_missing_embedding_clears_idem_key(
+        self, worker, mock_doc_repo, mock_redis, mock_queue
+    ):
         """Doc exists but no embedding — clear idem key for retry."""
         doc = _make_doc(embedding=None)
         mock_doc_repo.get_by_id.return_value = doc

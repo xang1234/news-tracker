@@ -14,13 +14,13 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from src.backtest.audit import BacktestRun, BacktestRunRepository
 from src.backtest.config import BacktestConfig
 from src.backtest.data_feeds import PriceDataFeed
-from src.backtest.metrics import BacktestMetrics, CalibrationBucket
+from src.backtest.metrics import BacktestMetrics
 from src.backtest.model_versions import (
     ModelVersionRepository,
     create_version_from_settings,
@@ -52,9 +52,7 @@ class DailyBacktestResult:
 
     date: date
     ranked_themes: list[dict[str, Any]] = field(default_factory=list)
-    ticker_returns: dict[str, dict[int, float | None]] = field(
-        default_factory=dict
-    )
+    ticker_returns: dict[str, dict[int, float | None]] = field(default_factory=dict)
     top_n_tickers: list[str] = field(default_factory=list)
     top_n_avg_return: float | None = None
     direction_correct: bool | None = None
@@ -251,11 +249,16 @@ class BacktestEngine:
                 if i > 0 and i % 50 == 0:
                     logger.info(
                         "Backtest progress: day %d/%d (%s)",
-                        i, len(trading_days), day,
+                        i,
+                        len(trading_days),
+                        day,
                     )
 
                 result = await self._process_day(
-                    day, strategy, top_n, horizon,
+                    day,
+                    strategy,
+                    top_n,
+                    horizon,
                 )
                 daily_results.append(result)
 
@@ -290,9 +293,7 @@ class BacktestEngine:
             )
 
             # Step 5: Persist summary
-            await self._run_repo.mark_completed(
-                run_id, results.summary_dict()
-            )
+            await self._run_repo.mark_completed(run_id, results.summary_dict())
 
             logger.info(
                 "Backtest complete: %d trading days, mean return %.4f",
@@ -306,6 +307,7 @@ class BacktestEngine:
             # Mark run as failed on any error
             try:
                 import traceback
+
                 error_msg = traceback.format_exc()
                 await self._run_repo.mark_failed(run_id, error_msg[:2000])
             except Exception:
@@ -331,7 +333,7 @@ class BacktestEngine:
             DailyBacktestResult for this day.
         """
         # End of day UTC as the "as-of" time
-        as_of = datetime(day.year, day.month, day.day, 23, 59, 59, tzinfo=timezone.utc)
+        as_of = datetime(day.year, day.month, day.day, 23, 59, 59, tzinfo=UTC)
 
         # Get themes active at this point in time
         themes = await self._pit.get_themes_as_of(as_of)
@@ -383,7 +385,8 @@ class BacktestEngine:
 
         # Get forward returns
         fwd_returns = await self._price_feed.get_forward_returns(
-            tickers, day,
+            tickers,
+            day,
         )
 
         # Compute average return at selected horizon

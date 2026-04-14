@@ -6,7 +6,6 @@ upsert, retrieval, and batch operations for AuthorityProfile records.
 
 import json
 import logging
-from datetime import datetime, timezone
 from typing import Any
 
 from src.authority.schemas import AuthorityProfile

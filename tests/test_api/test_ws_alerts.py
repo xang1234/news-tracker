@@ -1,11 +1,12 @@
 """Integration tests for the /ws/alerts WebSocket endpoint."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from src.alerts.broadcaster import AlertBroadcaster
 from src.alerts.schemas import Alert
@@ -25,7 +26,7 @@ def _make_alert(
         severity=severity,
         title="Volume surge detected",
         message="Theme volume z-score exceeds threshold",
-        created_at=datetime(2026, 2, 7, 10, 0, 0, tzinfo=timezone.utc),
+        created_at=datetime(2026, 2, 7, 10, 0, 0, tzinfo=UTC),
     )
 
 
@@ -96,13 +97,16 @@ class TestWebSocketConnection:
 
             # Simulate an alert being dispatched
             alert = _make_alert()
-            payload = json.dumps({
-                "type": "alert",
-                "data": alert.to_dict(),
-            })
+            payload = json.dumps(
+                {
+                    "type": "alert",
+                    "data": alert.to_dict(),
+                }
+            )
 
             # Directly call _dispatch_message (simulates Redis pub/sub delivery)
             import asyncio
+
             loop = asyncio.new_event_loop()
             loop.run_until_complete(broadcaster._dispatch_message(payload))
             loop.close()
@@ -141,11 +145,14 @@ class TestWebSocketFiltering:
 
         with client.websocket_connect("/ws/alerts?severity=critical") as ws:
             # Send critical alert
-            payload = json.dumps({
-                "type": "alert",
-                "data": {"severity": "critical", "theme_id": "t1", "alert_id": "a1"},
-            })
+            payload = json.dumps(
+                {
+                    "type": "alert",
+                    "data": {"severity": "critical", "theme_id": "t1", "alert_id": "a1"},
+                }
+            )
             import asyncio
+
             loop = asyncio.new_event_loop()
             loop.run_until_complete(broadcaster._dispatch_message(payload))
             loop.close()
@@ -158,20 +165,25 @@ class TestWebSocketFiltering:
 
         with client.websocket_connect("/ws/alerts?severity=critical") as ws:
             # Send warning alert — should NOT be received
-            payload = json.dumps({
-                "type": "alert",
-                "data": {"severity": "warning", "theme_id": "t1", "alert_id": "a2"},
-            })
+            payload = json.dumps(
+                {
+                    "type": "alert",
+                    "data": {"severity": "warning", "theme_id": "t1", "alert_id": "a2"},
+                }
+            )
             import asyncio
+
             loop = asyncio.new_event_loop()
             loop.run_until_complete(broadcaster._dispatch_message(payload))
             loop.close()
 
             # Send a matching alert so we can verify the first wasn't received
-            payload2 = json.dumps({
-                "type": "alert",
-                "data": {"severity": "critical", "theme_id": "t2", "alert_id": "a3"},
-            })
+            payload2 = json.dumps(
+                {
+                    "type": "alert",
+                    "data": {"severity": "critical", "theme_id": "t2", "alert_id": "a3"},
+                }
+            )
             loop = asyncio.new_event_loop()
             loop.run_until_complete(broadcaster._dispatch_message(payload2))
             loop.close()
@@ -185,17 +197,22 @@ class TestWebSocketFiltering:
 
         with client.websocket_connect("/ws/alerts?theme_id=theme_xyz") as ws:
             # Non-matching
-            payload1 = json.dumps({
-                "type": "alert",
-                "data": {"severity": "warning", "theme_id": "theme_other", "alert_id": "a1"},
-            })
+            payload1 = json.dumps(
+                {
+                    "type": "alert",
+                    "data": {"severity": "warning", "theme_id": "theme_other", "alert_id": "a1"},
+                }
+            )
             # Matching
-            payload2 = json.dumps({
-                "type": "alert",
-                "data": {"severity": "warning", "theme_id": "theme_xyz", "alert_id": "a2"},
-            })
+            payload2 = json.dumps(
+                {
+                    "type": "alert",
+                    "data": {"severity": "warning", "theme_id": "theme_xyz", "alert_id": "a2"},
+                }
+            )
 
             import asyncio
+
             loop = asyncio.new_event_loop()
             loop.run_until_complete(broadcaster._dispatch_message(payload1))
             loop.run_until_complete(broadcaster._dispatch_message(payload2))
@@ -214,28 +231,29 @@ class TestWebSocketAuth:
     def test_valid_api_key_connects(self, app_auth_required, broadcaster):
         client = TestClient(app_auth_required)
 
-        with client.websocket_connect("/ws/alerts?api_key=secret-key-1") as ws:
+        with client.websocket_connect("/ws/alerts?api_key=secret-key-1"):
             assert broadcaster.active_connections == 1
 
     def test_invalid_api_key_rejected(self, app_auth_required):
         client = TestClient(app_auth_required)
 
-        with pytest.raises(Exception):
-            with client.websocket_connect("/ws/alerts?api_key=wrong-key"):
-                pass
+        with (
+            pytest.raises(WebSocketDisconnect),
+            client.websocket_connect("/ws/alerts?api_key=wrong-key"),
+        ):
+            pass
 
     def test_missing_api_key_rejected(self, app_auth_required):
         client = TestClient(app_auth_required)
 
-        with pytest.raises(Exception):
-            with client.websocket_connect("/ws/alerts"):
-                pass
+        with pytest.raises(WebSocketDisconnect), client.websocket_connect("/ws/alerts"):
+            pass
 
     def test_dev_mode_no_key_needed(self, app_enabled, broadcaster):
         """When api_keys is None (dev mode), connections are allowed."""
         client = TestClient(app_enabled)
 
-        with client.websocket_connect("/ws/alerts") as ws:
+        with client.websocket_connect("/ws/alerts"):
             assert broadcaster.active_connections == 1
 
 
@@ -248,9 +266,8 @@ class TestWebSocketFeatureFlag:
     def test_disabled_rejects_connection(self, app_disabled):
         client = TestClient(app_disabled)
 
-        with pytest.raises(Exception):
-            with client.websocket_connect("/ws/alerts"):
-                pass
+        with pytest.raises(WebSocketDisconnect), client.websocket_connect("/ws/alerts"):
+            pass
 
 
 # ── Max Connections ──────────────────────────────────────
@@ -276,10 +293,12 @@ class TestWebSocketMaxConnections:
 
         # Connection is accepted then closed — Starlette TestClient
         # raises WebSocketDisconnect when server closes the connection
-        with pytest.raises(Exception):
-            with client.websocket_connect("/ws/alerts") as ws:
-                # Try to receive — should get a close frame
-                ws.receive_json()
+        with (
+            pytest.raises(WebSocketDisconnect),
+            client.websocket_connect("/ws/alerts") as ws,
+        ):
+            # Try to receive — should get a close frame
+            ws.receive_json()
 
         # Clean up
         for fc in fake_clients:

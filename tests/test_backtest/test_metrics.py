@@ -12,7 +12,6 @@ import pytest
 from src.backtest.engine import DailyBacktestResult
 from src.backtest.metrics import BacktestMetrics, CalibrationBucket
 
-
 # ── _extract_returns ────────────────────────────────────────
 
 
@@ -46,15 +45,13 @@ class TestDirectionalAccuracy:
 
     def test_all_correct(self):
         results = [
-            DailyBacktestResult(date=date(2025, 1, i), direction_correct=True)
-            for i in range(1, 4)
+            DailyBacktestResult(date=date(2025, 1, i), direction_correct=True) for i in range(1, 4)
         ]
         assert BacktestMetrics._directional_accuracy(results) == 1.0
 
     def test_all_none(self):
         results = [
-            DailyBacktestResult(date=date(2025, 1, i), direction_correct=None)
-            for i in range(1, 4)
+            DailyBacktestResult(date=date(2025, 1, i), direction_correct=None) for i in range(1, 4)
         ]
         assert BacktestMetrics._directional_accuracy(results) is None
 

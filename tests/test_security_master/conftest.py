@@ -1,6 +1,6 @@
 """Shared fixtures for security master tests."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -46,8 +46,8 @@ def sample_db_row() -> dict:
         "currency": "USD",
         "figi": None,
         "is_active": True,
-        "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
-        "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+        "created_at": datetime(2025, 1, 1, tzinfo=UTC),
+        "updated_at": datetime(2025, 1, 1, tzinfo=UTC),
     }
 
 
@@ -64,6 +64,6 @@ def sample_korean_row() -> dict:
         "currency": "KRW",
         "figi": "BBG000H7TBB4",
         "is_active": True,
-        "created_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
-        "updated_at": datetime(2025, 1, 1, tzinfo=timezone.utc),
+        "created_at": datetime(2025, 1, 1, tzinfo=UTC),
+        "updated_at": datetime(2025, 1, 1, tzinfo=UTC),
     }

@@ -20,7 +20,7 @@ Usage:
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from bs4 import BeautifulSoup
@@ -105,9 +105,7 @@ class SotweClient:
         try:
             from curl_cffi.requests import AsyncSession  # noqa: F401
         except ImportError:
-            logger.warning(
-                "curl_cffi not installed. Install with: pip install curl_cffi"
-            )
+            logger.warning("curl_cffi not installed. Install with: pip install curl_cffi")
             return False
 
         # Quick connectivity check
@@ -208,7 +206,6 @@ class SotweClient:
             List of SotweTweet objects
         """
         tweets = []
-        seen_ids: set[str] = set()
 
         # Try to extract tweets from NUXT data first (most reliable)
         tweets = self._parse_tweets_from_nuxt(html, username)
@@ -241,10 +238,7 @@ class SotweClient:
 
         # Find all tweet objects by looking for id followed by retweetCount
         # This pattern finds the start of each tweet object
-        tweet_starts = list(re.finditer(
-            r'id:"(\d{15,20})",retweetCount:(\d+|[a-z]+),',
-            html
-        ))
+        tweet_starts = list(re.finditer(r'id:"(\d{15,20})",retweetCount:(\d+|[a-z]+),', html))
 
         for i, match in enumerate(tweet_starts):
             try:
@@ -266,24 +260,22 @@ class SotweClient:
                 retweets = self._parse_nuxt_number(match.group(2))
 
                 # Extract other metrics
-                fav_match = re.search(r'favoriteCount:(\d+|[a-z]+)', chunk)
+                fav_match = re.search(r"favoriteCount:(\d+|[a-z]+)", chunk)
                 likes = self._parse_nuxt_number(fav_match.group(1)) if fav_match else 0
 
-                view_match = re.search(r'viewCount:(\d+|[a-z]+)', chunk)
+                view_match = re.search(r"viewCount:(\d+|[a-z]+)", chunk)
                 views = self._parse_nuxt_number(view_match.group(1)) if view_match else 0
 
-                reply_match = re.search(r'replyCount:(\d+|[a-z]+)', chunk)
+                reply_match = re.search(r"replyCount:(\d+|[a-z]+)", chunk)
                 replies = self._parse_nuxt_number(reply_match.group(1)) if reply_match else 0
 
                 # Extract timestamp
-                time_match = re.search(r'createdAt:(\d+)', chunk)
+                time_match = re.search(r"createdAt:(\d+)", chunk)
                 if time_match:
                     timestamp_ms = int(time_match.group(1))
-                    created_at = datetime.fromtimestamp(
-                        timestamp_ms / 1000, tz=timezone.utc
-                    )
+                    created_at = datetime.fromtimestamp(timestamp_ms / 1000, tz=UTC)
                 else:
-                    created_at = datetime.now(timezone.utc)
+                    created_at = datetime.now(UTC)
 
                 # Extract text - find text:" and capture until closing "
                 text_match = re.search(r'text:"((?:[^"\\]|\\.)*)"', chunk)
@@ -524,9 +516,7 @@ class SotweClient:
             datetime_str = time_elem.get("datetime")
             if datetime_str:
                 try:
-                    return datetime.fromisoformat(
-                        datetime_str.replace("Z", "+00:00")
-                    )
+                    return datetime.fromisoformat(datetime_str.replace("Z", "+00:00"))
                 except ValueError:
                     pass
 
@@ -536,9 +526,9 @@ class SotweClient:
             # Match patterns like "2h", "3d", "5m"
             if re.match(r"^\d+[hdmw]$", text, re.I):
                 # Relative time - return current time as approximation
-                return datetime.now(timezone.utc)
+                return datetime.now(UTC)
 
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
 
     def _parse_tweets_fallback(
         self,
@@ -625,7 +615,7 @@ class SotweClient:
                 SotweTweet(
                     id=tweet_id,
                     text=text,
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
                     username=username,
                     author_name=username,
                     likes=metadata.get("likes", 0),
@@ -640,21 +630,10 @@ class SotweClient:
     # Keep old methods for backwards compatibility with tests
     def _is_tweet_like(self, data: dict[str, Any]) -> bool:
         """Check if a dictionary looks like tweet data (for test compatibility)."""
-        has_text = any(
-            key in data
-            for key in ["text", "full_text", "rawContent"]
-        )
-        has_id = any(
-            key in data
-            for key in ["id", "id_str", "tweetId", "tweet_id"]
-        )
+        has_text = any(key in data for key in ["text", "full_text", "rawContent"])
+        has_id = any(key in data for key in ["id", "id_str", "tweetId", "tweet_id"])
         is_user = "screen_name" in data and "followers_count" in data
-        text_value = (
-            data.get("full_text")
-            or data.get("text")
-            or data.get("rawContent")
-            or ""
-        )
+        text_value = data.get("full_text") or data.get("text") or data.get("rawContent") or ""
         has_substantial_text = len(str(text_value)) > 10
         return has_text and has_id and not is_user and has_substantial_text
 
@@ -678,10 +657,7 @@ class SotweClient:
     ) -> SotweTweet | None:
         """Parse a single tweet from dict data (for test compatibility)."""
         tweet_id = (
-            data.get("id_str")
-            or data.get("id")
-            or data.get("tweetId")
-            or data.get("tweet_id")
+            data.get("id_str") or data.get("id") or data.get("tweetId") or data.get("tweet_id")
         )
         if not tweet_id:
             return None
@@ -706,11 +682,7 @@ class SotweClient:
             or data.get("username")
             or default_username
         )
-        author_name = (
-            user_data.get("name")
-            or data.get("author_name")
-            or username
-        )
+        author_name = user_data.get("name") or data.get("author_name") or username
 
         likes = self._extract_metric(data, ["favorite_count", "likes", "likeCount"])
         retweets = self._extract_metric(data, ["retweet_count", "retweets", "retweetCount"])
@@ -731,28 +703,19 @@ class SotweClient:
 
     def _parse_timestamp(self, data: dict[str, Any]) -> datetime:
         """Parse timestamp from dict data (for test compatibility)."""
-        timestamp_str = (
-            data.get("created_at")
-            or data.get("timestamp")
-            or data.get("date")
-        )
+        timestamp_str = data.get("created_at") or data.get("timestamp") or data.get("date")
         if not timestamp_str:
-            return datetime.now(timezone.utc)
+            return datetime.now(UTC)
         try:
             if isinstance(timestamp_str, str):
                 if "T" in timestamp_str:
-                    return datetime.fromisoformat(
-                        timestamp_str.replace("Z", "+00:00")
-                    )
-                return datetime.strptime(
-                    timestamp_str,
-                    "%a %b %d %H:%M:%S %z %Y"
-                )
+                    return datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+                return datetime.strptime(timestamp_str, "%a %b %d %H:%M:%S %z %Y")
             elif isinstance(timestamp_str, (int, float)):
-                return datetime.fromtimestamp(timestamp_str, tz=timezone.utc)
+                return datetime.fromtimestamp(timestamp_str, tz=UTC)
         except (ValueError, TypeError) as e:
             logger.debug(f"Failed to parse timestamp '{timestamp_str}': {e}")
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
 
     def _extract_metric(
         self,

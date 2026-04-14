@@ -4,16 +4,13 @@ Covers trading day generation, metrics map building, and the full
 run_backtest lifecycle (success, error, no themes, missing prices).
 """
 
-from datetime import date, datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, date, datetime
+from unittest.mock import AsyncMock
 
-import numpy as np
 import pytest
 
-from src.backtest.config import BacktestConfig
-from src.backtest.engine import BacktestEngine, BacktestResults, DailyBacktestResult
+from src.backtest.engine import BacktestEngine, BacktestResults
 from src.themes.schemas import Theme, ThemeMetrics
-
 
 # ── Trading Days ────────────────────────────────────────────
 
@@ -57,10 +54,14 @@ class TestBuildMetricsMap:
         engine = BacktestEngine(mock_database)
 
         older = ThemeMetrics(
-            theme_id="theme_nvda", date=date(2025, 6, 14), volume_zscore=1.0,
+            theme_id="theme_nvda",
+            date=date(2025, 6, 14),
+            volume_zscore=1.0,
         )
         newer = ThemeMetrics(
-            theme_id="theme_nvda", date=date(2025, 6, 15), volume_zscore=3.5,
+            theme_id="theme_nvda",
+            date=date(2025, 6, 15),
+            volume_zscore=3.5,
         )
 
         # Mock get_metrics_as_of to return two metrics for first theme, empty for others
@@ -75,7 +76,7 @@ class TestBuildMetricsMap:
 
         engine._pit.get_metrics_as_of = mock_get_metrics
 
-        as_of = datetime(2025, 6, 15, 23, 59, 59, tzinfo=timezone.utc)
+        as_of = datetime(2025, 6, 15, 23, 59, 59, tzinfo=UTC)
         metrics_map = await engine._build_metrics_map(sample_themes, as_of)
 
         assert "theme_nvda" in metrics_map
@@ -86,7 +87,7 @@ class TestBuildMetricsMap:
     @pytest.mark.asyncio
     async def test_empty_themes(self, mock_database):
         engine = BacktestEngine(mock_database)
-        as_of = datetime(2025, 6, 15, 23, 59, 59, tzinfo=timezone.utc)
+        as_of = datetime(2025, 6, 15, 23, 59, 59, tzinfo=UTC)
         metrics_map = await engine._build_metrics_map([], as_of)
         assert metrics_map == {}
 
@@ -118,23 +119,25 @@ def _make_mock_engine(
     engine._price_feed.get_forward_returns = AsyncMock(return_value=forward_returns)
 
     # Mock repositories to return simple objects
-    mock_database.fetchrow = AsyncMock(return_value={
-        "version_id": "mv_test123",
-        "embedding_model": "ProsusAI/finbert",
-        "clustering_config": "{}",
-        "config_snapshot": "{}",
-        "created_at": datetime(2025, 6, 1, tzinfo=timezone.utc),
-        "description": "test",
-        "run_id": "run_test",
-        "model_version_id": "mv_test123",
-        "date_range_start": date(2025, 6, 2),
-        "date_range_end": date(2025, 6, 6),
-        "parameters": '{"strategy": "swing"}',
-        "results": None,
-        "status": "running",
-        "completed_at": None,
-        "error_message": None,
-    })
+    mock_database.fetchrow = AsyncMock(
+        return_value={
+            "version_id": "mv_test123",
+            "embedding_model": "ProsusAI/finbert",
+            "clustering_config": "{}",
+            "config_snapshot": "{}",
+            "created_at": datetime(2025, 6, 1, tzinfo=UTC),
+            "description": "test",
+            "run_id": "run_test",
+            "model_version_id": "mv_test123",
+            "date_range_start": date(2025, 6, 2),
+            "date_range_end": date(2025, 6, 6),
+            "parameters": '{"strategy": "swing"}',
+            "results": None,
+            "status": "running",
+            "completed_at": None,
+            "error_message": None,
+        }
+    )
 
     return engine
 
@@ -142,16 +145,23 @@ def _make_mock_engine(
 class TestRunBacktest:
     @pytest.mark.asyncio
     async def test_basic_run(
-        self, mock_database, sample_themes, sample_theme_metrics, sample_forward_returns,
+        self,
+        mock_database,
+        sample_themes,
+        sample_theme_metrics,
+        sample_forward_returns,
     ):
         """3-day run produces results with metrics."""
         engine = _make_mock_engine(
-            mock_database, sample_themes, sample_theme_metrics, sample_forward_returns,
+            mock_database,
+            sample_themes,
+            sample_theme_metrics,
+            sample_forward_returns,
         )
 
         results = await engine.run_backtest(
             start_date=date(2025, 6, 2),  # Monday
-            end_date=date(2025, 6, 4),    # Wednesday
+            end_date=date(2025, 6, 4),  # Wednesday
             strategy="swing",
             top_n=3,
             horizon=5,
@@ -166,14 +176,21 @@ class TestRunBacktest:
 
     @pytest.mark.asyncio
     async def test_audit_lifecycle(
-        self, mock_database, sample_themes, sample_theme_metrics, sample_forward_returns,
+        self,
+        mock_database,
+        sample_themes,
+        sample_theme_metrics,
+        sample_forward_returns,
     ):
         """Verifies create → mark_completed sequence."""
         engine = _make_mock_engine(
-            mock_database, sample_themes, sample_theme_metrics, sample_forward_returns,
+            mock_database,
+            sample_themes,
+            sample_theme_metrics,
+            sample_forward_returns,
         )
 
-        results = await engine.run_backtest(
+        await engine.run_backtest(
             start_date=date(2025, 6, 2),
             end_date=date(2025, 6, 2),
             strategy="swing",
@@ -189,7 +206,10 @@ class TestRunBacktest:
     async def test_error_marks_failed(self, mock_database, sample_themes, sample_theme_metrics):
         """On error, mark_failed is called before re-raising."""
         engine = _make_mock_engine(
-            mock_database, sample_themes, sample_theme_metrics, {},
+            mock_database,
+            sample_themes,
+            sample_theme_metrics,
+            {},
         )
 
         # Force an error during processing
@@ -229,12 +249,18 @@ class TestRunBacktest:
 
     @pytest.mark.asyncio
     async def test_missing_price_data_graceful(
-        self, mock_database, sample_themes, sample_theme_metrics,
+        self,
+        mock_database,
+        sample_themes,
+        sample_theme_metrics,
     ):
         """Missing price data results in None returns."""
         # Empty forward returns dict
         engine = _make_mock_engine(
-            mock_database, sample_themes, sample_theme_metrics, {},
+            mock_database,
+            sample_themes,
+            sample_theme_metrics,
+            {},
         )
 
         results = await engine.run_backtest(
@@ -249,11 +275,18 @@ class TestRunBacktest:
 
     @pytest.mark.asyncio
     async def test_strategy_forwarded(
-        self, mock_database, sample_themes, sample_theme_metrics, sample_forward_returns,
+        self,
+        mock_database,
+        sample_themes,
+        sample_theme_metrics,
+        sample_forward_returns,
     ):
         """Strategy parameter is recorded in results."""
         engine = _make_mock_engine(
-            mock_database, sample_themes, sample_theme_metrics, sample_forward_returns,
+            mock_database,
+            sample_themes,
+            sample_theme_metrics,
+            sample_forward_returns,
         )
 
         results = await engine.run_backtest(

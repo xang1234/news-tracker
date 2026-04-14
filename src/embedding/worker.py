@@ -9,7 +9,6 @@ Runs as a standalone service that:
 """
 
 import asyncio
-import logging
 import time
 from typing import Any
 
@@ -203,10 +202,7 @@ class EmbeddingWorker:
             batch.append(job)
 
             # Process batch when full or timeout
-            if (
-                len(batch) >= self._batch_size
-                or (time.monotonic() - batch_start) > batch_timeout
-            ):
+            if len(batch) >= self._batch_size or (time.monotonic() - batch_start) > batch_timeout:
                 await self._process_batch(batch)
                 batch = []
                 batch_start = time.monotonic()
@@ -297,15 +293,11 @@ class EmbeddingWorker:
 
         # Process FinBERT batch
         if finbert_jobs:
-            processed += await self._process_model_batch(
-                finbert_jobs, ModelType.FINBERT, doc_map
-            )
+            processed += await self._process_model_batch(finbert_jobs, ModelType.FINBERT, doc_map)
 
         # Process MiniLM batch
         if minilm_jobs:
-            processed += await self._process_model_batch(
-                minilm_jobs, ModelType.MINILM, doc_map
-            )
+            processed += await self._process_model_batch(minilm_jobs, ModelType.MINILM, doc_map)
 
         # Record metrics
         elapsed = time.monotonic() - start_time
@@ -352,7 +344,7 @@ class EmbeddingWorker:
             )
 
             # Update documents with embeddings
-            for (job, _), embedding in zip(jobs, embeddings):
+            for (job, _), embedding in zip(jobs, embeddings, strict=True):
                 try:
                     if model_type == ModelType.MINILM:
                         success = await self._repository.update_embedding_minilm(
@@ -532,8 +524,6 @@ class EmbeddingWorker:
             "queue_healthy": queue_healthy,
             "database_healthy": db_healthy,
             "embedding_service_stats": (
-                self._embedding_service.get_stats()
-                if self._embedding_service
-                else None
+                self._embedding_service.get_stats() if self._embedding_service else None
             ),
         }

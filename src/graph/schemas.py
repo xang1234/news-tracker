@@ -5,20 +5,16 @@ causal_nodes and causal_edges database tables.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 NodeType = Literal["ticker", "theme", "technology"]
 
-RelationType = Literal[
-    "depends_on", "supplies_to", "competes_with", "drives", "blocks"
-]
+RelationType = Literal["depends_on", "supplies_to", "competes_with", "drives", "blocks"]
 
 VALID_NODE_TYPES = frozenset({"ticker", "theme", "technology"})
 
-VALID_RELATION_TYPES = frozenset(
-    {"depends_on", "supplies_to", "competes_with", "drives", "blocks"}
-)
+VALID_RELATION_TYPES = frozenset({"depends_on", "supplies_to", "competes_with", "drives", "blocks"})
 
 
 @dataclass
@@ -38,18 +34,13 @@ class CausalNode:
     node_type: NodeType
     name: str
     metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
-    updated_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.node_type not in VALID_NODE_TYPES:
             raise ValueError(
-                f"Invalid node_type {self.node_type!r}. "
-                f"Must be one of: {sorted(VALID_NODE_TYPES)}"
+                f"Invalid node_type {self.node_type!r}. Must be one of: {sorted(VALID_NODE_TYPES)}"
             )
 
     def __eq__(self, other: object) -> bool:
@@ -80,9 +71,7 @@ class CausalEdge:
     relation: RelationType
     confidence: float = 1.0
     source_doc_ids: list[str] = field(default_factory=list)
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -92,6 +81,4 @@ class CausalEdge:
                 f"Must be one of: {sorted(VALID_RELATION_TYPES)}"
             )
         if not 0.0 <= self.confidence <= 1.0:
-            raise ValueError(
-                f"confidence must be between 0.0 and 1.0, got {self.confidence}"
-            )
+            raise ValueError(f"confidence must be between 0.0 and 1.0, got {self.confidence}")

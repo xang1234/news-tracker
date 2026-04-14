@@ -1,12 +1,13 @@
 """Tests for alert schema validation and serialization."""
 
+from datetime import datetime
+
 import pytest
-from datetime import datetime, timezone
 
 from src.alerts.schemas import (
-    Alert,
-    VALID_TRIGGER_TYPES,
     VALID_SEVERITIES,
+    VALID_TRIGGER_TYPES,
+    Alert,
 )
 
 

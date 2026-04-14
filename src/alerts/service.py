@@ -6,7 +6,7 @@ functions in ``triggers.py``.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from src.alerts.config import AlertConfig
 from src.alerts.repository import AlertRepository
@@ -128,7 +128,8 @@ class AlertService:
 
         if await self._is_rate_limited(alert.severity):
             logger.debug(
-                "Alert rate limited: %s severity", alert.severity,
+                "Alert rate limited: %s severity",
+                alert.severity,
             )
             return False
 
@@ -222,7 +223,8 @@ class AlertService:
             return persisted
 
         logger.info(
-            "Alert generation: %d candidates, all filtered out", len(candidates),
+            "Alert generation: %d candidates, all filtered out",
+            len(candidates),
         )
         return []
 

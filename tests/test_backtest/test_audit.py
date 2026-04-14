@@ -1,7 +1,7 @@
 """Tests for BacktestRun and BacktestRunRepository lifecycle."""
 
 import json
-from datetime import date, datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -60,13 +60,14 @@ class TestBacktestRunRepository:
             **sample_backtest_run_row,
             "status": "completed",
             "results": '{"accuracy": 0.85}',
-            "completed_at": datetime(2025, 7, 1, 11, 0, 0, tzinfo=timezone.utc),
+            "completed_at": datetime(2025, 7, 1, 11, 0, 0, tzinfo=UTC),
         }
         mock_database.fetchrow.return_value = completed_row
         repo = BacktestRunRepository(mock_database)
 
         result = await repo.mark_completed(
-            "run_test_001", {"accuracy": 0.85},
+            "run_test_001",
+            {"accuracy": 0.85},
         )
 
         sql = mock_database.fetchrow.call_args[0][0]
@@ -97,7 +98,7 @@ class TestBacktestRunRepository:
             **sample_backtest_run_row,
             "status": "failed",
             "error_message": "OOM",
-            "completed_at": datetime(2025, 7, 1, 11, 0, 0, tzinfo=timezone.utc),
+            "completed_at": datetime(2025, 7, 1, 11, 0, 0, tzinfo=UTC),
         }
         mock_database.fetchrow.return_value = failed_row
         repo = BacktestRunRepository(mock_database)
@@ -173,7 +174,7 @@ class TestBacktestRunRepository:
         mock_database.fetch.return_value = [sample_backtest_run_row]
         repo = BacktestRunRepository(mock_database)
 
-        results = await repo.list_runs(status="running")
+        await repo.list_runs(status="running")
 
         sql = mock_database.fetch.call_args[0][0]
         assert "WHERE status = $1" in sql

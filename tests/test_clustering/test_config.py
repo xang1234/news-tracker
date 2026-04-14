@@ -140,6 +140,6 @@ class TestClusteringConfig:
 
     def test_package_import(self):
         """Should be importable from the clustering package."""
-        from src.clustering import ClusteringConfig as CC
+        from src.clustering import ClusteringConfig as Reimported
 
-        assert CC is ClusteringConfig
+        assert Reimported is ClusteringConfig

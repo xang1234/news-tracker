@@ -79,7 +79,9 @@ def _record_to_source(record) -> Source:
         display_name=record["display_name"],
         description=record["description"],
         is_active=record["is_active"],
-        metadata=json.loads(record["metadata"]) if record["metadata"] and isinstance(record["metadata"], str) else (record["metadata"] or {}),
+        metadata=json.loads(record["metadata"])
+        if record["metadata"] and isinstance(record["metadata"], str)
+        else (record["metadata"] or {}),
         created_at=record["created_at"],
         updated_at=record["updated_at"],
     )
@@ -129,7 +131,12 @@ class SourcesRepository:
 
         await self._db.execute(
             _BULK_UPSERT_SQL,
-            platforms, identifiers, display_names, descriptions, actives, metadatas,
+            platforms,
+            identifiers,
+            display_names,
+            descriptions,
+            actives,
+            metadatas,
         )
         logger.info("Bulk upserted %d sources", len(sources))
         return len(sources)
@@ -154,20 +161,24 @@ class SourcesRepository:
 
         row = await self._db.fetchrow(
             _BULK_CREATE_SQL,
-            platforms, identifiers, display_names, descriptions, actives, metadatas,
+            platforms,
+            identifiers,
+            display_names,
+            descriptions,
+            actives,
+            metadatas,
         )
         created = row["created"] if row else 0
         total = row["total"] if row else len(sources)
         logger.info("Bulk created %d/%d sources", created, total)
         return int(created), int(total)
 
-    async def get_by_key(
-        self, platform: str, identifier: str
-    ) -> Source | None:
+    async def get_by_key(self, platform: str, identifier: str) -> Source | None:
         """Fetch a single source by platform and identifier."""
         row = await self._db.fetchrow(
             "SELECT * FROM sources WHERE platform = $1 AND identifier = $2",
-            platform, identifier,
+            platform,
+            identifier,
         )
         return _record_to_source(row) if row else None
 
@@ -193,9 +204,7 @@ class SourcesRepository:
             idx += 1
 
         if search:
-            conditions.append(
-                f"(identifier ILIKE ${idx} OR display_name ILIKE ${idx})"
-            )
+            conditions.append(f"(identifier ILIKE ${idx} OR display_name ILIKE ${idx})")
             params.append(f"%{search}%")
             idx += 1
 
@@ -229,7 +238,8 @@ class SourcesRepository:
             UPDATE sources SET is_active = FALSE, updated_at = NOW()
             WHERE platform = $1 AND identifier = $2 AND is_active = TRUE
             """,
-            platform, identifier,
+            platform,
+            identifier,
         )
         return result.endswith("1")
 

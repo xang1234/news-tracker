@@ -1,7 +1,7 @@
 """Pytest fixtures for vectorstore tests."""
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -26,6 +26,7 @@ def sample_embedding() -> list[float]:
     """Sample 768-dimensional embedding."""
     # Return a normalized unit vector for testing
     import math
+
     dim = 768
     value = 1.0 / math.sqrt(dim)
     return [value] * dim
@@ -35,6 +36,7 @@ def sample_embedding() -> list[float]:
 def sample_embeddings() -> list[list[float]]:
     """Multiple sample embeddings for batch testing."""
     import math
+
     dim = 768
     embeddings = []
     for i in range(5):
@@ -118,6 +120,7 @@ def mock_repository() -> AsyncMock:
 def mock_embedding_service() -> AsyncMock:
     """Mock EmbeddingService instance."""
     import math
+
     dim = 768
     value = 1.0 / math.sqrt(dim)
     embedding = [value] * dim
@@ -135,7 +138,7 @@ def document_for_authority() -> NormalizedDocument:
     return NormalizedDocument(
         id="twitter_auth_test",
         platform=Platform.TWITTER,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         author_id="verified_analyst",
         author_name="Top Analyst",
         author_followers=100000,
@@ -156,7 +159,7 @@ def low_authority_document() -> NormalizedDocument:
     return NormalizedDocument(
         id="twitter_low_auth",
         platform=Platform.TWITTER,
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
         author_id="new_user",
         author_name="New User",
         author_followers=10,

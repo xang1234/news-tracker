@@ -103,9 +103,7 @@ class EmbeddingService:
 
     def _has_configured_onnx_models(self) -> bool:
         """Return whether both embedding ONNX model directories are configured."""
-        return bool(
-            self._config.onnx_model_path and self._config.onnx_minilm_model_path
-        )
+        return bool(self._config.onnx_model_path and self._config.onnx_minilm_model_path)
 
     def _initialize(self, model_type: ModelType = ModelType.FINBERT) -> None:
         """Initialize model and tokenizer on first use."""
@@ -321,9 +319,7 @@ class EmbeddingService:
         sum_mask = np.clip(np.sum(input_mask_expanded, axis=1), a_min=1e-9, a_max=None)
         return sum_embeddings / sum_mask
 
-    def _embed_single(
-        self, text: str, model_type: ModelType = ModelType.FINBERT
-    ) -> np.ndarray:
+    def _embed_single(self, text: str, model_type: ModelType = ModelType.FINBERT) -> np.ndarray:
         """Generate embedding for a single text (internal, synchronous)."""
         return self._embed_text_batch([text], model_type)[0]
 
@@ -464,7 +460,7 @@ class EmbeddingService:
 
         batch_size = self._config.batch_size
         for batch_start in range(0, len(to_embed), batch_size):
-            batch = to_embed[batch_start: batch_start + batch_size]
+            batch = to_embed[batch_start : batch_start + batch_size]
             single_chunk_items: list[tuple[int, str]] = []
             chunked_items: list[tuple[int, list[str], str]] = []
 

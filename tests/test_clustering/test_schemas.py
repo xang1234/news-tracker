@@ -1,9 +1,8 @@
 """Tests for ThemeCluster dataclass."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import numpy as np
-import pytest
 
 from src.clustering.schemas import ThemeCluster
 
@@ -48,7 +47,7 @@ class TestThemeClusterToDict:
 
     def test_to_dict_updated_at_datetime(self):
         """updated_at should serialize as ISO string when set."""
-        ts = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+        ts = datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)
         theme = ThemeCluster(
             theme_id="theme_x",
             name="test",
@@ -132,7 +131,7 @@ class TestThemeClusterFromDict:
 
     def test_from_dict_updated_at_roundtrip(self):
         """to_dict → from_dict should preserve updated_at."""
-        ts = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+        ts = datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)
         original = ThemeCluster(
             theme_id="theme_x",
             name="test",

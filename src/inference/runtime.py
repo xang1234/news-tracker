@@ -181,9 +181,7 @@ def _resolve_onnx_runtime(
     available_providers = set(ort.get_available_providers())
     if provider not in available_providers:
         if provider == "CPUExecutionProvider":
-            raise RuntimeError(
-                "ONNX CPU provider is unavailable in this environment."
-            )
+            raise RuntimeError("ONNX CPU provider is unavailable in this environment.")
         raise RuntimeError(
             f"Requested ONNX provider '{provider}' is unavailable. "
             f"Available providers: {sorted(available_providers)}"

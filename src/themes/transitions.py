@@ -6,9 +6,8 @@ alerting and audit logging.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-
 
 # Transitions worth alerting on, with human-readable descriptions.
 ALERTABLE_TRANSITIONS: dict[tuple[str, str], str] = {
@@ -36,9 +35,7 @@ class LifecycleTransition:
     theme_id: str
     from_stage: str
     to_stage: str
-    detected_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    detected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     confidence: float = 1.0
     metadata: dict[str, Any] = field(default_factory=dict)
 

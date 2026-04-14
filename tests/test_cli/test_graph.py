@@ -6,7 +6,7 @@ import pytest
 from click.testing import CliRunner
 
 from src.cli import main
-from src.graph.seed_data import ALL_EDGES, ALL_NODES, SEED_VERSION
+from src.graph.seed_data import ALL_EDGES, ALL_NODES
 
 
 @pytest.fixture
@@ -29,10 +29,12 @@ class TestGraphSeed:
             "updated_at": None,
         }
 
-        with patch("src.graph.seed_data.Database", return_value=mock_db) as MockDB:
+        with (
+            patch("src.graph.seed_data.Database", return_value=mock_db),
             # Also patch the Database import inside the CLI function
-            with patch("src.storage.database.Database", return_value=mock_db):
-                result = runner.invoke(main, ["graph", "seed"])
+            patch("src.storage.database.Database", return_value=mock_db),
+        ):
+            result = runner.invoke(main, ["graph", "seed"])
 
         assert result.exit_code == 0, result.output
         assert "Graph Seed Results" in result.output

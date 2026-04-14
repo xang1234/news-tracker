@@ -1,6 +1,6 @@
 """Shared fixtures for API tests."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
@@ -21,7 +21,7 @@ from src.api.dependencies import (
     get_theme_repository,
     get_vector_store_manager,
 )
-from src.themes.ranking import RankedTheme, ThemeRankingService
+from src.themes.ranking import ThemeRankingService
 from src.themes.schemas import Theme, ThemeMetrics
 
 
@@ -42,12 +42,8 @@ def _make_theme(
         top_entities=kwargs.pop("top_entities", [{"name": "NVIDIA", "score": 0.9}]),
         lifecycle_stage=lifecycle_stage,
         document_count=document_count,
-        created_at=kwargs.pop(
-            "created_at", datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
-        ),
-        updated_at=kwargs.pop(
-            "updated_at", datetime(2026, 2, 5, 8, 30, 0, tzinfo=timezone.utc)
-        ),
+        created_at=kwargs.pop("created_at", datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)),
+        updated_at=kwargs.pop("updated_at", datetime(2026, 2, 5, 8, 30, 0, tzinfo=UTC)),
         description=kwargs.pop("description", "GPU and NVIDIA HBM memory theme"),
         metadata=kwargs.pop("metadata", {"bertopic_topic_id": 3}),
         **kwargs,
@@ -89,14 +85,16 @@ def mock_doc_repo():
     # Document explorer endpoints
     repo.list_documents = AsyncMock(return_value=[])
     repo.list_documents_count = AsyncMock(return_value=0)
-    repo.get_document_stats = AsyncMock(return_value={
-        "total_count": 0,
-        "platform_counts": [],
-        "embedding_coverage": {"finbert_pct": 0.0, "minilm_pct": 0.0},
-        "sentiment_coverage": 0.0,
-        "earliest_document": None,
-        "latest_document": None,
-    })
+    repo.get_document_stats = AsyncMock(
+        return_value={
+            "total_count": 0,
+            "platform_counts": [],
+            "embedding_coverage": {"finbert_pct": 0.0, "minilm_pct": 0.0},
+            "sentiment_coverage": 0.0,
+            "earliest_document": None,
+            "latest_document": None,
+        }
+    )
     repo.get_by_id = AsyncMock(return_value=None)
     return repo
 
@@ -144,13 +142,17 @@ def mock_embedding_service():
 def mock_sentiment_service():
     """Mock SentimentService."""
     service = AsyncMock()
-    service.analyze_batch = AsyncMock(return_value=[{
-        "label": "positive",
-        "confidence": 0.92,
-        "scores": {"positive": 0.92, "neutral": 0.05, "negative": 0.03},
-        "entity_sentiments": [],
-        "model": "ProsusAI/finbert",
-    }])
+    service.analyze_batch = AsyncMock(
+        return_value=[
+            {
+                "label": "positive",
+                "confidence": 0.92,
+                "scores": {"positive": 0.92, "neutral": 0.05, "negative": 0.03},
+                "entity_sentiments": [],
+                "model": "ProsusAI/finbert",
+            }
+        ]
+    )
     service.close = AsyncMock()
     return service
 

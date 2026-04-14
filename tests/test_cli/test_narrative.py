@@ -1,6 +1,6 @@
 """Tests for the narrative CLI command group."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -56,7 +56,7 @@ class TestNarrativeBackfill:
             {
                 "id": "doc_1",
                 "theme_ids": ["theme_1"],
-                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc),
+                "timestamp": datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC),
             }
         ]
         mock_db.fetchval.return_value = 1
@@ -67,8 +67,10 @@ class TestNarrativeBackfill:
         worker._doc_repo.get_by_id = AsyncMock(return_value=document)
         worker.process_document_for_theme = AsyncMock(return_value=MagicMock(run_id="run_1"))
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.cli._build_narrative_worker_for_cli", new=AsyncMock(return_value=worker)):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.cli._build_narrative_worker_for_cli", new=AsyncMock(return_value=worker)),
+        ):
             result = runner.invoke(
                 main,
                 ["narrative", "backfill", "--start", "2026-02-05", "--end", "2026-02-05"],
@@ -90,8 +92,12 @@ class TestNarrativeReplay:
         mock_worker = MagicMock()
         mock_worker._narrative_repo = AsyncMock()
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.cli._build_narrative_worker_for_cli", new=AsyncMock(return_value=mock_worker)):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch(
+                "src.cli._build_narrative_worker_for_cli", new=AsyncMock(return_value=mock_worker)
+            ),
+        ):
             result = runner.invoke(main, ["narrative", "replay", "--dry-run"])
 
         assert result.exit_code == 0

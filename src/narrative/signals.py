@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from statistics import mean, pstdev
 from typing import Any
 
@@ -59,7 +59,7 @@ def _conviction_from_components(
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def evaluate_narrative_surge(
@@ -71,28 +71,17 @@ def evaluate_narrative_surge(
     baseline_cutoff = _now() - timedelta(hours=config.surge_baseline_hours)
 
     recent_buckets = [b for b in buckets if b.bucket_start >= recent_cutoff]
-    baseline_buckets = [
-        b for b in buckets
-        if baseline_cutoff <= b.bucket_start < recent_cutoff
-    ]
+    baseline_buckets = [b for b in buckets if baseline_cutoff <= b.bucket_start < recent_cutoff]
     recent_docs = sum(b.doc_count for b in recent_buckets)
     recent_rate = (
-        (recent_docs / max(config.surge_window_minutes, 1)) * 60.0
-        if recent_buckets
-        else 0.0
+        (recent_docs / max(config.surge_window_minutes, 1)) * 60.0 if recent_buckets else 0.0
     )
 
-    baseline_rates = [
-        _bucket_rate_per_hour(b, config.bucket_minutes) for b in baseline_buckets
-    ]
+    baseline_rates = [_bucket_rate_per_hour(b, config.bucket_minutes) for b in baseline_buckets]
     baseline_mean = mean(baseline_rates) if baseline_rates else 0.0
     baseline_std = pstdev(baseline_rates) if len(baseline_rates) > 1 else 0.0
     uplift = recent_rate / baseline_mean if baseline_mean > 0 else 0.0
-    z_score = (
-        (recent_rate - baseline_mean) / baseline_std
-        if baseline_std > 0
-        else 0.0
-    )
+    z_score = (recent_rate - baseline_mean) / baseline_std if baseline_std > 0 else 0.0
 
     triggered = (
         run.doc_count >= config.surge_min_total_docs
@@ -125,8 +114,7 @@ def evaluate_narrative_surge(
     tickers = list(run.ticker_counts)[:3]
     title = f"Narrative surge: {run.label}"
     message = (
-        f"{run.label} is running at {recent_rate:.1f}/hr "
-        f"({z_score:.1f}σ, {uplift:.1f}x baseline)"
+        f"{run.label} is running at {recent_rate:.1f}/hr ({z_score:.1f}σ, {uplift:.1f}x baseline)"
     )
     return SignalEvaluation(
         trigger_type="narrative_surge",
@@ -187,13 +175,9 @@ def evaluate_cross_platform_breakout(
     )
     recent_cutoff = _now() - timedelta(hours=2)
     recent = [b for b in buckets if b.bucket_start >= recent_cutoff]
-    recent_high_authority_docs = sum(
-        b.high_authority_doc_count for b in recent
-    )
+    recent_high_authority_docs = sum(b.high_authority_doc_count for b in recent)
     severity = (
-        "critical"
-        if run.platform_count >= 4 or recent_high_authority_docs > 0
-        else "warning"
+        "critical" if run.platform_count >= 4 or recent_high_authority_docs > 0 else "warning"
     )
     return SignalEvaluation(
         trigger_type="cross_platform_breakout",
@@ -204,8 +188,7 @@ def evaluate_cross_platform_breakout(
         conviction_score=conviction,
         title=f"Cross-platform breakout: {run.label}",
         message=(
-            f"{run.label} spread across {run.platform_count} platforms in "
-            f"{spread_hours:.1f}h"
+            f"{run.label} spread across {run.platform_count} platforms in {spread_hours:.1f}h"
         ),
         trigger_data={
             "platform_count": run.platform_count,
@@ -235,12 +218,8 @@ def evaluate_authority_divergence(
             triggered=False,
         )
 
-    high_avg = _weighted_average(
-        sum(b.high_authority_sentiment_sum for b in recent), high_weight
-    )
-    low_avg = _weighted_average(
-        sum(b.low_authority_sentiment_sum for b in recent), low_weight
-    )
+    high_avg = _weighted_average(sum(b.high_authority_sentiment_sum for b in recent), high_weight)
+    low_avg = _weighted_average(sum(b.low_authority_sentiment_sum for b in recent), low_weight)
     gap = abs(high_avg - low_avg)
     triggered = gap >= config.authority_gap_trigger
     if not triggered:
@@ -271,10 +250,7 @@ def evaluate_authority_divergence(
         severity=severity,
         conviction_score=conviction,
         title=f"Authority divergence: {run.label}",
-        message=(
-            f"High-authority sentiment diverged from crowd sentiment "
-            f"by {gap:.2f}"
-        ),
+        message=(f"High-authority sentiment diverged from crowd sentiment by {gap:.2f}"),
         trigger_data={
             "high_authority_avg": round(high_avg, 3),
             "low_authority_avg": round(low_avg, 3),
@@ -356,10 +332,7 @@ def evaluate_sentiment_regime_shift(
         severity=severity,
         conviction_score=conviction,
         title=f"Sentiment regime shift: {run.label}",
-        message=(
-            f"{run.label} flipped {direction} "
-            f"(Δ={delta:+.2f} vs prior window)"
-        ),
+        message=(f"{run.label} flipped {direction} (Δ={delta:+.2f} vs prior window)"),
         trigger_data={
             "recent_sentiment": round(recent_sentiment, 3),
             "prior_sentiment": round(prior_sentiment, 3),

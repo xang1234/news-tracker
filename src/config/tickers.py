@@ -29,40 +29,34 @@ _cached_company_map: dict[str, str] | None = None
 SEMICONDUCTOR_TICKERS: set[str] = {
     # GPU/AI Chips
     "NVDA",  # NVIDIA
-    "AMD",   # Advanced Micro Devices
+    "AMD",  # Advanced Micro Devices
     "INTC",  # Intel
-
     # Foundries
-    "TSM",   # Taiwan Semiconductor (TSMC)
-    "UMC",   # United Microelectronics
-    "GFS",   # GlobalFoundries
-
+    "TSM",  # Taiwan Semiconductor (TSMC)
+    "UMC",  # United Microelectronics
+    "GFS",  # GlobalFoundries
     # Memory
-    "MU",    # Micron Technology
-    "WDC",   # Western Digital
-    "STX",   # Seagate (HDD but relevant)
-
+    "MU",  # Micron Technology
+    "WDC",  # Western Digital
+    "STX",  # Seagate (HDD but relevant)
     # Equipment
     "ASML",  # ASML Holding (lithography)
     "AMAT",  # Applied Materials
     "LRCX",  # Lam Research
     "KLAC",  # KLA Corporation
-    "TER",   # Teradyne
-
+    "TER",  # Teradyne
     # Analog/Mixed-Signal
-    "TXN",   # Texas Instruments
-    "ADI",   # Analog Devices
+    "TXN",  # Texas Instruments
+    "ADI",  # Analog Devices
     "MCHP",  # Microchip Technology
-    "ON",    # ON Semiconductor
+    "ON",  # ON Semiconductor
     "NXPI",  # NXP Semiconductors
-
     # Mobile/Wireless
     "QCOM",  # Qualcomm
     "AVGO",  # Broadcom
     "MRVL",  # Marvell Technology
     "SWKS",  # Skyworks Solutions
     "QRVO",  # Qorvo
-
     # Specialty
     "MPWR",  # Monolithic Power Systems
     "CRUS",  # Cirrus Logic
@@ -70,9 +64,8 @@ SEMICONDUCTOR_TICKERS: set[str] = {
     "WOLF",  # Wolfspeed (SiC)
     "LSCC",  # Lattice Semiconductor
     "SMTC",  # Semtech
-
     # AI Infrastructure (adjacent)
-    "ARM",   # ARM Holdings
+    "ARM",  # ARM Holdings
     "SNPS",  # Synopsys (EDA)
     "CDNS",  # Cadence Design (EDA)
 }
@@ -86,7 +79,6 @@ COMPANY_TO_TICKER: dict[str, str] = {
     "geforce": "NVDA",
     "jensen huang": "NVDA",
     "jensen": "NVDA",
-
     # AMD
     "amd": "AMD",
     "advanced micro devices": "AMD",
@@ -95,7 +87,6 @@ COMPANY_TO_TICKER: dict[str, str] = {
     "ryzen": "AMD",
     "epyc": "AMD",
     "xilinx": "AMD",  # Acquired by AMD
-
     # Intel
     "intel": "INTC",
     "intc": "INTC",
@@ -104,103 +95,80 @@ COMPANY_TO_TICKER: dict[str, str] = {
     "core i": "INTC",
     "arc gpu": "INTC",
     "altera": "INTC",  # Acquired by Intel
-
     # TSMC
     "tsmc": "TSM",
     "taiwan semiconductor": "TSM",
     "taiwan semi": "TSM",
     "morris chang": "TSM",
     "c.c. wei": "TSM",
-
     # Micron
     "micron": "MU",
     "micron technology": "MU",
     "crucial": "MU",  # Micron brand
-
     # ASML
     "asml": "ASML",
     "euv": "ASML",  # EUV lithography strongly associated
-
     # Applied Materials
     "applied materials": "AMAT",
     "amat": "AMAT",
-
     # Lam Research
     "lam research": "LRCX",
     "lam": "LRCX",
-
     # KLA
     "kla": "KLAC",
     "kla corporation": "KLAC",
-
     # Qualcomm
     "qualcomm": "QCOM",
     "snapdragon": "QCOM",
-
     # Broadcom
     "broadcom": "AVGO",
     "avgo": "AVGO",
     "hock tan": "AVGO",
-
     # Texas Instruments
     "texas instruments": "TXN",
     "ti": "TXN",
     "txn": "TXN",
-
     # Analog Devices
     "analog devices": "ADI",
     "adi": "ADI",
-
     # NXP
     "nxp": "NXPI",
     "nxp semiconductors": "NXPI",
-
     # Marvell
     "marvell": "MRVL",
     "marvell technology": "MRVL",
-
     # ON Semiconductor
     "on semiconductor": "ON",
     "on semi": "ON",
     "onsemi": "ON",
-
     # Microchip
     "microchip": "MCHP",
     "microchip technology": "MCHP",
-
     # Skyworks
     "skyworks": "SWKS",
     "skyworks solutions": "SWKS",
-
     # Qorvo
     "qorvo": "QRVO",
-
     # ARM
     "arm": "ARM",
     "arm holdings": "ARM",
     "softbank arm": "ARM",
-
     # Synopsys
     "synopsys": "SNPS",
-
     # Cadence
     "cadence": "CDNS",
     "cadence design": "CDNS",
-
     # GlobalFoundries
     "globalfoundries": "GFS",
     "gf": "GFS",
-
     # Wolfspeed
     "wolfspeed": "WOLF",
     "cree": "WOLF",  # Former name
     "silicon carbide": "WOLF",
     "sic": "WOLF",
-
     # Lattice
     "lattice": "LSCC",
     "lattice semiconductor": "LSCC",
-
     # Memory companies
     "samsung semiconductor": "005930.KS",  # Korean ticker
     "samsung memory": "005930.KS",
@@ -211,30 +179,63 @@ COMPANY_TO_TICKER: dict[str, str] = {
 # Technology keywords that indicate semiconductor relevance
 SEMICONDUCTOR_KEYWORDS: set[str] = {
     # Manufacturing
-    "wafer", "fab", "foundry", "lithography", "euv", "duv",
-    "node", "nm process", "3nm", "5nm", "7nm", "10nm", "14nm",
-    "chiplet", "packaging", "cowos", "foveros", "emib",
-
+    "wafer",
+    "fab",
+    "foundry",
+    "lithography",
+    "euv",
+    "duv",
+    "node",
+    "nm process",
+    "3nm",
+    "5nm",
+    "7nm",
+    "10nm",
+    "14nm",
+    "chiplet",
+    "packaging",
+    "cowos",
+    "foveros",
+    "emib",
     # Memory
-    "dram", "nand", "hbm", "gddr", "ddr5", "ddr4",
-    "memory bandwidth", "memory stacking",
-
+    "dram",
+    "nand",
+    "hbm",
+    "gddr",
+    "ddr5",
+    "ddr4",
+    "memory bandwidth",
+    "memory stacking",
     # AI/ML
-    "gpu", "tpu", "npu", "accelerator", "inference",
-    "training chip", "ai chip", "ml chip",
-    "cuda", "tensor core", "matrix engine",
-
+    "gpu",
+    "tpu",
+    "npu",
+    "accelerator",
+    "inference",
+    "training chip",
+    "ai chip",
+    "ml chip",
+    "cuda",
+    "tensor core",
+    "matrix engine",
     # Networking
-    "networking chip", "switch asic", "nic",
-    "dpu", "smartnic", "infiniband",
-
+    "networking chip",
+    "switch asic",
+    "nic",
+    "dpu",
+    "smartnic",
+    "infiniband",
     # Automotive
-    "automotive chip", "adas", "soc",
-
+    "automotive chip",
+    "adas",
+    "soc",
     # Supply chain
-    "chip shortage", "semiconductor shortage",
-    "chip supply", "semiconductor supply",
-    "chip inventory", "semiconductor inventory",
+    "chip shortage",
+    "semiconductor shortage",
+    "chip supply",
+    "semiconductor supply",
+    "chip inventory",
+    "semiconductor inventory",
 }
 
 

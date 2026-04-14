@@ -1,6 +1,6 @@
 """Tests for the causal graph seed data module."""
 
-from unittest.mock import AsyncMock, call
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -41,8 +41,7 @@ class TestSeedDataIntegrity:
         """Every edge uses a valid relation type."""
         for edge in ALL_EDGES:
             assert edge.relation in VALID_RELATION_TYPES, (
-                f"Edge ({edge.source}, {edge.target}) has invalid "
-                f"relation {edge.relation!r}"
+                f"Edge ({edge.source}, {edge.target}) has invalid relation {edge.relation!r}"
             )
 
     def test_all_edge_confidence_in_range(self) -> None:
@@ -57,8 +56,7 @@ class TestSeedDataIntegrity:
         """No edge connects a node to itself."""
         for edge in ALL_EDGES:
             assert edge.source != edge.target, (
-                f"Self-loop found: {edge.source} → {edge.source} "
-                f"({edge.relation})"
+                f"Self-loop found: {edge.source} → {edge.source} ({edge.relation})"
             )
 
     def test_node_ids_unique(self) -> None:
@@ -70,17 +68,13 @@ class TestSeedDataIntegrity:
         """Every edge source references a defined node."""
         node_ids = {n.node_id for n in ALL_NODES}
         for edge in ALL_EDGES:
-            assert edge.source in node_ids, (
-                f"Edge source {edge.source!r} not in defined nodes"
-            )
+            assert edge.source in node_ids, f"Edge source {edge.source!r} not in defined nodes"
 
     def test_edge_targets_reference_defined_nodes(self) -> None:
         """Every edge target references a defined node."""
         node_ids = {n.node_id for n in ALL_NODES}
         for edge in ALL_EDGES:
-            assert edge.target in node_ids, (
-                f"Edge target {edge.target!r} not in defined nodes"
-            )
+            assert edge.target in node_ids, f"Edge target {edge.target!r} not in defined nodes"
 
     def test_no_duplicate_edges(self) -> None:
         """No duplicate (source, target, relation) triples."""
@@ -143,8 +137,7 @@ class TestSeedDataCoverage:
         for edge in COMPETITION_EDGES:
             reverse = (edge.target, edge.source)
             assert reverse in pairs, (
-                f"Competition edge ({edge.source}, {edge.target}) "
-                f"is missing reverse direction"
+                f"Competition edge ({edge.source}, {edge.target}) is missing reverse direction"
             )
 
     def test_supply_chain_categories_non_empty(self) -> None:
@@ -158,18 +151,12 @@ class TestSeedDataCoverage:
 
     def test_tsmc_has_supply_edges(self) -> None:
         """TSMC (TSM) is a major supplier — should have multiple supplies_to."""
-        tsm_supply = [
-            e for e in ALL_EDGES
-            if e.source == "TSM" and e.relation == "supplies_to"
-        ]
+        tsm_supply = [e for e in ALL_EDGES if e.source == "TSM" and e.relation == "supplies_to"]
         assert len(tsm_supply) >= 5
 
     def test_nvidia_has_upstream_dependencies(self) -> None:
         """NVIDIA receives supplies from foundries, memory, and EDA."""
-        nvda_targets = [
-            e for e in ALL_EDGES
-            if e.target == "NVDA" and e.relation == "supplies_to"
-        ]
+        nvda_targets = [e for e in ALL_EDGES if e.target == "NVDA" and e.relation == "supplies_to"]
         sources = {e.source for e in nvda_targets}
         # Should have foundry, memory, and EDA suppliers
         assert "TSM" in sources
@@ -234,9 +221,7 @@ class TestSeedGraphFunction:
         assert mock_database.execute.call_count == len(ALL_EDGES)
 
     @pytest.mark.asyncio
-    async def test_idempotent_uses_upsert(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_idempotent_uses_upsert(self, mock_database: AsyncMock) -> None:
         """seed_graph() uses ON CONFLICT for idempotency."""
         mock_database.fetchrow.return_value = {
             "node_id": "X",

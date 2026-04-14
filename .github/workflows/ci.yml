@@ -15,76 +15,12 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --extra dev
-      - name: Detect changed Python files
-        id: python_changes
-        run: |
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            base_sha="${{ github.event.pull_request.base.sha }}"
-          else
-            base_sha="${{ github.event.before }}"
-          fi
-
-          if [[ -z "$base_sha" || "$base_sha" == "0000000000000000000000000000000000000000" ]]; then
-            base_sha="$(git rev-parse HEAD^)"
-          fi
-
-          mapfile -t python_files < <(
-            git diff --diff-filter=ACMR --name-only "$base_sha" HEAD \
-              | grep -E '\.py$' \
-              || true
-          )
-          mapfile -t test_files < <(
-            git diff --diff-filter=ACMR --name-only "$base_sha" HEAD -- tests \
-              | grep -E '\.py$' \
-              || true
-          )
-
-          {
-            echo "python_count=${#python_files[@]}"
-            echo 'python_files<<EOF'
-            printf '%s\n' "${python_files[@]}"
-            echo 'EOF'
-            echo "test_count=${#test_files[@]}"
-            echo 'test_files<<EOF'
-            printf '%s\n' "${test_files[@]}"
-            echo 'EOF'
-          } >> "$GITHUB_OUTPUT"
-      - name: Compile changed Python files
-        if: steps.python_changes.outputs.python_count != '0'
-        run: |
-          files=()
-          while IFS= read -r file; do
-            [[ -n "$file" ]] && files+=("$file")
-          done <<< "${{ steps.python_changes.outputs.python_files }}"
-          uv run python -m py_compile "${files[@]}"
-      - name: Lint changed Python files
-        if: steps.python_changes.outputs.python_count != '0'
-        run: |
-          files=()
-          while IFS= read -r file; do
-            [[ -n "$file" ]] && files+=("$file")
-          done <<< "${{ steps.python_changes.outputs.python_files }}"
-          uv run ruff check "${files[@]}"
-      - name: Check Python formatting
-        if: steps.python_changes.outputs.python_count != '0'
-        run: |
-          files=()
-          while IFS= read -r file; do
-            [[ -n "$file" ]] && files+=("$file")
-          done <<< "${{ steps.python_changes.outputs.python_files }}"
-          uv run ruff format --check "${files[@]}"
-      - name: Run Python tests
-        if: steps.python_changes.outputs.python_count != '0'
-        run: |
-          if [[ "${{ steps.python_changes.outputs.test_count }}" != '0' ]]; then
-            files=()
-            while IFS= read -r file; do
-              [[ -n "$file" ]] && files+=("$file")
-            done <<< "${{ steps.python_changes.outputs.test_files }}"
-          else
-            files=(tests/test_api/test_health.py)
-          fi
-          uv run pytest -v -m "not integration" "${files[@]}"
+      - name: Lint (full repo)
+        run: uv run ruff check .
+      - name: Check formatting (full repo)
+        run: uv run ruff format --check .
+      - name: Run Python tests (non-integration, full repo)
+        run: uv run pytest -v -m "not integration"
 
   frontend:
     runs-on: ubuntu-latest

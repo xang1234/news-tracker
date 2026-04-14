@@ -6,7 +6,7 @@ without updating all downstream services. All platform adapters MUST output this
 exact structure.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Literal
 
@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 
 def _utc_now() -> datetime:
     """Return current UTC time with timezone info."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Platform(str, Enum):
@@ -166,7 +166,9 @@ class NormalizedDocument(BaseModel):
         default=None,
         ge=0.0,
         le=1.0,
-        description="Computed authority score (0.0-1.0) based on verification, followers, engagement",
+        description=(
+            "Computed authority score (0.0-1.0) based on verification, followers, engagement"
+        ),
     )
 
     # Set by downstream services

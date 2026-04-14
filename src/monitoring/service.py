@@ -11,7 +11,7 @@ module-level pure helpers for testability.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import numpy as np
@@ -129,7 +129,7 @@ class DriftService:
         divergence between them.
         """
         cfg = self._config
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         recent_since = now - timedelta(hours=cfg.embedding_recent_hours)
         baseline_since = now - timedelta(days=cfg.embedding_baseline_days)
 
@@ -202,21 +202,13 @@ class DriftService:
 
         # Shared bin edges for comparable histograms
         all_norms = baseline_norms + recent_norms
-        bin_edges = np.linspace(
-            min(all_norms), max(all_norms), cfg.embedding_num_bins + 1
-        )
+        bin_edges = np.linspace(min(all_norms), max(all_norms), cfg.embedding_num_bins + 1)
 
-        baseline_hist, _ = np.histogram(
-            baseline_norms, bins=bin_edges, density=True
-        )
-        recent_hist, _ = np.histogram(
-            recent_norms, bins=bin_edges, density=True
-        )
+        baseline_hist, _ = np.histogram(baseline_norms, bins=bin_edges, density=True)
+        recent_hist, _ = np.histogram(recent_norms, bins=bin_edges, density=True)
 
         kl = _kl_divergence(baseline_hist, recent_hist)
-        severity = _classify_severity(
-            kl, cfg.embedding_kl_warning, cfg.embedding_kl_critical
-        )
+        severity = _classify_severity(kl, cfg.embedding_kl_warning, cfg.embedding_kl_critical)
 
         return DriftResult(
             drift_type="embedding_drift",
@@ -245,7 +237,7 @@ class DriftService:
         flags if the most recent day exceeds thresholds.
         """
         cfg = self._config
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         since = now - timedelta(days=cfg.fragmentation_lookback_days)
 
         rows = await self._db.fetch(
@@ -306,7 +298,7 @@ class DriftService:
         the baseline window.
         """
         cfg = self._config
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         since = now - timedelta(days=cfg.sentiment_baseline_days)
 
         rows = await self._db.fetch(
@@ -341,10 +333,7 @@ class DriftService:
         mean = float(np.mean(baseline))
         std = float(np.std(baseline))
 
-        if std < 1e-10:
-            zscore = 0.0
-        else:
-            zscore = abs(latest - mean) / std
+        zscore = 0.0 if std < 1e-10 else abs(latest - mean) / std
 
         severity = _classify_severity(
             zscore, cfg.sentiment_zscore_warning, cfg.sentiment_zscore_critical
@@ -379,7 +368,7 @@ class DriftService:
         across all themes.
         """
         cfg = self._config
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         since = now - timedelta(days=cfg.stability_lookback_days)
 
         # Get active themes with centroids
@@ -460,9 +449,7 @@ class DriftService:
             )
 
         avg_distance = float(np.mean(distances))
-        severity = _classify_severity(
-            avg_distance, cfg.stability_warning, cfg.stability_critical
-        )
+        severity = _classify_severity(avg_distance, cfg.stability_warning, cfg.stability_critical)
 
         return DriftResult(
             drift_type="cluster_stability",
@@ -529,12 +516,15 @@ class DriftService:
                 logger.exception(f"Drift check '{name}' failed")
                 report.results.append(
                     DriftResult(
-                        drift_type=name if name in {
+                        drift_type=name
+                        if name
+                        in {
                             "embedding_drift",
                             "theme_fragmentation",
                             "sentiment_calibration",
                             "cluster_stability",
-                        } else "embedding_drift",
+                        }
+                        else "embedding_drift",
                         severity="warning",
                         value=-1.0,
                         thresholds={},

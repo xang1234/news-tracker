@@ -1,6 +1,5 @@
 """Tests for NER configuration."""
 
-import os
 from pathlib import Path
 
 import pytest
@@ -11,9 +10,11 @@ from src.ner.config import NERConfig
 class TestNERConfig:
     """Tests for NERConfig settings."""
 
-    def test_default_values(self):
+    def test_default_values(self, monkeypatch):
         """Should have sensible defaults."""
-        config = NERConfig()
+        for var in ("NER_SPACY_MODEL", "NER_FUZZY_THRESHOLD", "NER_ENABLE_COREFERENCE"):
+            monkeypatch.delenv(var, raising=False)
+        config = NERConfig(_env_file=None)
 
         assert config.spacy_model == "en_core_web_trf"
         assert config.fallback_model == "en_core_web_sm"

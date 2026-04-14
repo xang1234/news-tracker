@@ -14,7 +14,9 @@ from src.keywords.service import KeywordsService
 
 def _mock_keywords() -> list[ExtractedKeyword]:
     return [
-        ExtractedKeyword(text="semiconductor chip", score=0.125, rank=1, lemma="semiconductor chip", count=3),
+        ExtractedKeyword(
+            text="semiconductor chip", score=0.125, rank=1, lemma="semiconductor chip", count=3
+        ),
         ExtractedKeyword(text="HBM3E memory", score=0.108, rank=2, lemma="hbm3e memory", count=2),
         ExtractedKeyword(text="Nvidia", score=0.095, rank=3, lemma="nvidia", count=1),
     ]
@@ -58,7 +60,9 @@ class TestKeywordsEndpoint:
     def test_success(self, client_kw_enabled, mock_keywords_service):
         mock_keywords_service.extract_batch.return_value = [_mock_keywords()]
 
-        resp = client_kw_enabled.post("/keywords", json={"texts": ["Nvidia semiconductor chip news"]})
+        resp = client_kw_enabled.post(
+            "/keywords", json={"texts": ["Nvidia semiconductor chip news"]}
+        )
 
         assert resp.status_code == 200
         data = resp.json()

@@ -7,7 +7,7 @@ Follows the MS-PS (Multi-Signal Persuasion Score) framework with six dimensions:
 authority, evidence, reasoning, risk assessment, actionability, and technical depth.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -72,7 +72,7 @@ class CompellingnessScore(BaseModel):
     )
     tier_used: Literal["rule", "gpt", "claude"] = "rule"
     model_version: str = Field(default="", description="Model ID that produced this score")
-    scored_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    scored_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     cached: bool = Field(default=False, description="Whether this result came from cache")
 
 

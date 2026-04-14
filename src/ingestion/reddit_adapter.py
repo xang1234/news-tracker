@@ -12,7 +12,7 @@ from financial subreddits. Handles:
 import logging
 import re
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -95,8 +95,7 @@ class RedditAdapter(BaseAdapter):
 
         if not self._client_id or not self._client_secret:
             logger.warning(
-                "Reddit API credentials not configured. "
-                "Adapter will not be able to fetch data."
+                "Reddit API credentials not configured. Adapter will not be able to fetch data."
             )
 
     @property
@@ -180,9 +179,7 @@ class RedditAdapter(BaseAdapter):
                     data = response.json()
 
                 except httpx.HTTPStatusError as e:
-                    logger.error(
-                        f"Reddit API error for r/{subreddit}: {e.response.status_code}"
-                    )
+                    logger.error(f"Reddit API error for r/{subreddit}: {e.response.status_code}")
                     continue
                 except Exception as e:
                     logger.error(f"Reddit request failed for r/{subreddit}: {e}")
@@ -214,7 +211,7 @@ class RedditAdapter(BaseAdapter):
 
             # Parse timestamp
             created_utc = post.get("created_utc", 0)
-            timestamp = datetime.fromtimestamp(created_utc, tz=timezone.utc)
+            timestamp = datetime.fromtimestamp(created_utc, tz=UTC)
 
             # Build content from title + selftext
             title = post.get("title", "")
@@ -278,27 +275,27 @@ class RedditAdapter(BaseAdapter):
             Cleaned plain text
         """
         # Remove blockquotes
-        text = re.sub(r'^>+\s*', '', text, flags=re.MULTILINE)
+        text = re.sub(r"^>+\s*", "", text, flags=re.MULTILINE)
 
         # Remove bold/italic markers
-        text = re.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', text)
-        text = re.sub(r'_{1,2}([^_]+)_{1,2}', r'\1', text)
+        text = re.sub(r"\*{1,2}([^*]+)\*{1,2}", r"\1", text)
+        text = re.sub(r"_{1,2}([^_]+)_{1,2}", r"\1", text)
 
         # Remove links but keep text
-        text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+        text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
 
         # Remove code blocks
-        text = re.sub(r'```[^`]*```', '', text)
-        text = re.sub(r'`[^`]+`', '', text)
+        text = re.sub(r"```[^`]*```", "", text)
+        text = re.sub(r"`[^`]+`", "", text)
 
         # Remove strikethrough
-        text = re.sub(r'~~([^~]+)~~', r'\1', text)
+        text = re.sub(r"~~([^~]+)~~", r"\1", text)
 
         # Remove heading markers
-        text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+        text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
 
         # Remove horizontal rules
-        text = re.sub(r'^[-*_]{3,}\s*$', '', text, flags=re.MULTILINE)
+        text = re.sub(r"^[-*_]{3,}\s*$", "", text, flags=re.MULTILINE)
 
         return text
 

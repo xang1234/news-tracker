@@ -83,12 +83,12 @@ class SpamDetector:
 
         # Promotional keywords (case-insensitive)
         self.promo_patterns = [
-            r'\b(join|check out)\s+(my|our)\s+(discord|telegram|channel)\b',
-            r'\bDM\s+me\b',
-            r'\blink\s+in\s+bio\b',
-            r'\bfree\s+(signals?|picks?|tips?)\b',
-            r'\bguaranteed\s+(gains?|profits?|returns?)\b',
-            r'\b\d+%\s+guaranteed\b',
+            r"\b(join|check out)\s+(my|our)\s+(discord|telegram|channel)\b",
+            r"\bDM\s+me\b",
+            r"\blink\s+in\s+bio\b",
+            r"\bfree\s+(signals?|picks?|tips?)\b",
+            r"\bguaranteed\s+(gains?|profits?|returns?)\b",
+            r"\b\d+%\s+guaranteed\b",
         ]
 
     def detect(self, doc: NormalizedDocument) -> tuple[float, list[SpamSignal]]:
@@ -178,11 +178,11 @@ class SpamDetector:
         username = doc.author_name.lower()
 
         # Default Twitter username pattern: word + 6+ numbers
-        if re.match(r'^[a-z]+\d{6,}$', username):
+        if re.match(r"^[a-z]+\d{6,}$", username):
             signals.append(SpamSignal(0.3, "Default username pattern"))
 
         # Crypto/trading guru patterns
-        if any(x in username for x in ['crypto_', 'trading_', 'forex_', '_signals']):
+        if any(x in username for x in ["crypto_", "trading_", "forex_", "_signals"]):
             signals.append(SpamSignal(0.2, "Suspicious username keywords"))
 
         return signals
@@ -234,7 +234,7 @@ class BotDetector:
         signals = []
 
         # Default username pattern
-        if re.match(r'^[A-Za-z]+\d{6,}$', doc.author_name):
+        if re.match(r"^[A-Za-z]+\d{6,}$", doc.author_name):
             signals.append(0.6)
 
         # Very low engagement ratio (followers but no engagement)
@@ -312,28 +312,22 @@ class TickerExtractor:
         # Note: direct/bare symbol extraction is intentionally case-sensitive;
         # we do NOT uppercase the whole input, to avoid false positives like
         # "stop" -> "STOP" when scaling to a large ticker universe.
-        self._cashtag_re = re.compile(
-            r'(?<![A-Za-z0-9_])\$([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,2})?)\b'
-        )
+        self._cashtag_re = re.compile(r"(?<![A-Za-z0-9_])\$([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,2})?)\b")
         self._exchange_re = re.compile(
-            r'\b(?:NASDAQ|NYSE|AMEX|OTC|TSX|LSE|ASX|HKEX|TSE|SSE|SZSE)\s*[:\-]\s*'
-            r'([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,2})?)\b',
+            r"\b(?:NASDAQ|NYSE|AMEX|OTC|TSX|LSE|ASX|HKEX|TSE|SSE|SZSE)\s*[:\-]\s*"
+            r"([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,2})?)\b",
             re.IGNORECASE,
         )
-        self._paren_symbol_re = re.compile(
-            r'\(([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,2})?)\)'
-        )
-        self._bare_symbol_re = re.compile(
-            r'\b[A-Z]{2,5}(?:[.-][A-Z]{1,2})?\b'
-        )
+        self._paren_symbol_re = re.compile(r"\(([A-Za-z]{1,5}(?:[.-][A-Za-z]{1,2})?)\)")
+        self._bare_symbol_re = re.compile(r"\b[A-Z]{2,5}(?:[.-][A-Z]{1,2})?\b")
         self._market_context_re = re.compile(
-            r'\b('
-            r'stock|shares?|ticker|symbol|equity|earnings|guidance|revenue|'
-            r'price|target|pt|upgrade|downgrade|analyst|'
-            r'options?|calls?|puts?|volume|market\s+cap|'
-            r'buy|sell|hold|long|short|'
-            r'nasdaq|nyse|amex|otc'
-            r')\b',
+            r"\b("
+            r"stock|shares?|ticker|symbol|equity|earnings|guidance|revenue|"
+            r"price|target|pt|upgrade|downgrade|analyst|"
+            r"options?|calls?|puts?|volume|market\s+cap|"
+            r"buy|sell|hold|long|short|"
+            r"nasdaq|nyse|amex|otc"
+            r")\b",
             re.IGNORECASE,
         )
 
@@ -349,7 +343,7 @@ class TickerExtractor:
                 if not company_norm:
                     continue
                 escaped = re.escape(company_norm).replace(r"\ ", r"\s+")
-                pattern = re.compile(rf'\b{escaped}\b', re.IGNORECASE)
+                pattern = re.compile(rf"\b{escaped}\b", re.IGNORECASE)
                 self._company_patterns.append((pattern, ticker))
 
     @staticmethod
@@ -358,7 +352,7 @@ class TickerExtractor:
         if not raw:
             return ""
         # Normalize segments while preserving separators like "." and "-"
-        parts = re.split(r'([.-])', raw)
+        parts = re.split(r"([.-])", raw)
         return "".join(p.upper() if p not in {".", "-"} else p for p in parts)
 
     def _has_market_context(self, text: str, start: int, end: int) -> bool:
@@ -374,9 +368,7 @@ class TickerExtractor:
         if self._market_context_re.search(snippet) is not None:
             return True
         # Simple numeric/price context (+5%, -2.3%, $123, 123%)
-        if re.search(r'[\+\-]?\d+(\.\d+)?\s*%|\$\s*\d', snippet):
-            return True
-        return False
+        return bool(re.search(r"[\+\-]?\d+(\.\d+)?\s*%|\$\s*\d", snippet))
 
     def extract(self, text: str) -> list[str]:
         """
@@ -436,9 +428,8 @@ class TickerExtractor:
             for pattern, ticker in self._company_patterns:
                 if ticker in tickers_found:
                     continue
-                if pattern.search(text_lower) is not None:
-                    if ticker in self.tickers:
-                        tickers_found.add(ticker)
+                if pattern.search(text_lower) is not None and ticker in self.tickers:
+                    tickers_found.add(ticker)
 
         # 6) Fuzzy matching for variations (best for small curated maps)
         if self.enable_fuzzy and len(tickers_found) < 3 and len(self.company_map) <= 250:
@@ -472,7 +463,7 @@ class TickerExtractor:
         # Check for keywords (using word boundaries to avoid false positives like "nic" in "nice")
         for keyword in self.keywords:
             # Use regex word boundary for accurate matching
-            if re.search(rf'\b{re.escape(keyword)}\b', text_lower):
+            if re.search(rf"\b{re.escape(keyword)}\b", text_lower):
                 return True
 
         # Check for tickers
@@ -508,13 +499,13 @@ class Preprocessor:
         spam_detector: SpamDetector | None = None,
         bot_detector: BotDetector | None = None,
         ticker_extractor: TickerExtractor | None = None,
-        ner_service: "NERService | None" = None,
+        ner_service: NERService | None = None,
         enable_ner: bool = False,
-        keywords_service: "KeywordsService | None" = None,
+        keywords_service: KeywordsService | None = None,
         enable_keywords: bool = False,
-        event_extractor: "PatternExtractor | None" = None,
+        event_extractor: PatternExtractor | None = None,
         enable_events: bool = False,
-        authority_service: "AuthorityService | None" = None,
+        authority_service: AuthorityService | None = None,
         enable_authority: bool = False,
     ):
         """
@@ -643,8 +634,7 @@ class Preprocessor:
             processed.append(doc)
 
         logger.info(
-            f"Preprocessed batch: {len(docs)} input, "
-            f"{len(processed)} passed, {filtered} filtered"
+            f"Preprocessed batch: {len(docs)} input, {len(processed)} passed, {filtered} filtered"
         )
 
         return processed

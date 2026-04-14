@@ -48,9 +48,7 @@ class TestGetTwitterSources:
         assert first == second == ["SemiAnalysis"]
 
     @pytest.mark.asyncio
-    async def test_refetches_after_ttl(
-        self, service: SourcesService, sample_db_row: dict
-    ) -> None:
+    async def test_refetches_after_ttl(self, service: SourcesService, sample_db_row: dict) -> None:
         service.repository._db.fetch.return_value = [sample_db_row]
         await service.get_twitter_sources()
 
@@ -82,9 +80,7 @@ class TestGetSubstackSources:
     """Tests for cached Substack source retrieval."""
 
     @pytest.mark.asyncio
-    async def test_returns_tuples(
-        self, service: SourcesService, sample_substack_row: dict
-    ) -> None:
+    async def test_returns_tuples(self, service: SourcesService, sample_substack_row: dict) -> None:
         service.repository._db.fetch.return_value = [sample_substack_row]
 
         result = await service.get_substack_sources()
@@ -126,9 +122,7 @@ class TestSeedFromJson:
     """Tests for JSON seed loading."""
 
     @pytest.mark.asyncio
-    async def test_loads_and_upserts(
-        self, service: SourcesService, tmp_path: Path
-    ) -> None:
+    async def test_loads_and_upserts(self, service: SourcesService, tmp_path: Path) -> None:
         seed_data = [
             {
                 "platform": "twitter",
@@ -155,9 +149,7 @@ class TestSeedFromJson:
 
         seed_file = tmp_path / "test_seed.json"
         seed_file.write_text(
-            json.dumps(
-                [{"platform": "twitter", "identifier": "NEW", "display_name": "New"}]
-            )
+            json.dumps([{"platform": "twitter", "identifier": "NEW", "display_name": "New"}])
         )
 
         await service.seed_from_json(seed_file)
@@ -178,9 +170,7 @@ class TestEnsureSeeded:
         mock_database.fetchval.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_skips_when_table_has_data(
-        self, service: SourcesService
-    ) -> None:
+    async def test_skips_when_table_has_data(self, service: SourcesService) -> None:
         service.repository._db.fetchval.return_value = 32
 
         await service.ensure_seeded()
@@ -189,14 +179,10 @@ class TestEnsureSeeded:
         service.repository._db.execute.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_seeds_when_table_empty(
-        self, service: SourcesService
-    ) -> None:
+    async def test_seeds_when_table_empty(self, service: SourcesService) -> None:
         service.repository._db.fetchval.return_value = 0
 
-        with patch.object(
-            service, "seed_from_json", new_callable=AsyncMock
-        ) as mock_seed:
+        with patch.object(service, "seed_from_json", new_callable=AsyncMock) as mock_seed:
             mock_seed.return_value = 32
             await service.ensure_seeded()
             mock_seed.assert_called_once()

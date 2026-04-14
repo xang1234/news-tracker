@@ -1,6 +1,6 @@
 """Tests for PriceDataFeed: caching, yfinance mocking, forward returns."""
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -72,10 +72,14 @@ class TestGetOhlcv:
         fetched_rows = [_make_ohlcv("NVDA", date(2025, 6, 16))]
 
         with patch.object(
-            PriceDataFeed, "_yfinance_download", return_value=fetched_rows,
+            PriceDataFeed,
+            "_yfinance_download",
+            return_value=fetched_rows,
         ):
             result = await feed.get_ohlcv(
-                "NVDA", date(2025, 6, 16), date(2025, 6, 16),
+                "NVDA",
+                date(2025, 6, 16),
+                date(2025, 6, 16),
             )
 
         assert len(result) == 1
@@ -199,20 +203,25 @@ class TestYfinanceDownload:
 
         import pandas as pd
 
-        mock_df = pd.DataFrame({
-            "Open": [100.0],
-            "High": [105.0],
-            "Low": [99.0],
-            "Close": [103.0],
-            "Volume": [1000000],
-        }, index=[pd.Timestamp("2025-06-15")])
+        mock_df = pd.DataFrame(
+            {
+                "Open": [100.0],
+                "High": [105.0],
+                "Low": [99.0],
+                "Close": [103.0],
+                "Volume": [1000000],
+            },
+            index=[pd.Timestamp("2025-06-15")],
+        )
 
         mock_yf = types.ModuleType("yfinance")
         mock_yf.download = lambda *args, **kwargs: mock_df
 
         with patch.dict("sys.modules", {"yfinance": mock_yf}):
             result = PriceDataFeed._yfinance_download(
-                "NVDA", date(2025, 6, 15), date(2025, 6, 15),
+                "NVDA",
+                date(2025, 6, 15),
+                date(2025, 6, 15),
             )
 
         assert len(result) == 1
@@ -230,7 +239,9 @@ class TestYfinanceDownload:
 
         with patch.dict("sys.modules", {"yfinance": mock_yf}):
             result = PriceDataFeed._yfinance_download(
-                "INVALID", date(2025, 6, 15), date(2025, 6, 15),
+                "INVALID",
+                date(2025, 6, 15),
+                date(2025, 6, 15),
             )
 
         assert result == []

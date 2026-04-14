@@ -2,7 +2,6 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 from src.api.app import create_app
@@ -45,9 +44,33 @@ def _make_client(db_healthy: bool = True, redis_healthy: bool = True):
 
         def _fake_xinfo_groups(stream):
             groups_by_stream = {
-                "embedding_queue": [{"name": "embedding_workers", "consumers": 1, "pel-count": 2, "entries-read": 98, "lag": 0}],
-                "sentiment_queue": [{"name": "sentiment_workers", "consumers": 1, "pel-count": 0, "entries-read": 100, "lag": 0}],
-                "clustering_queue": [{"name": "clustering_workers", "consumers": 1, "pel-count": 5, "entries-read": 50, "lag": 10}],
+                "embedding_queue": [
+                    {
+                        "name": "embedding_workers",
+                        "consumers": 1,
+                        "pel-count": 2,
+                        "entries-read": 98,
+                        "lag": 0,
+                    }
+                ],
+                "sentiment_queue": [
+                    {
+                        "name": "sentiment_workers",
+                        "consumers": 1,
+                        "pel-count": 0,
+                        "entries-read": 100,
+                        "lag": 0,
+                    }
+                ],
+                "clustering_queue": [
+                    {
+                        "name": "clustering_workers",
+                        "consumers": 1,
+                        "pel-count": 5,
+                        "entries-read": 50,
+                        "lag": 10,
+                    }
+                ],
             }
             return groups_by_stream.get(stream, [])
 
@@ -57,9 +80,8 @@ def _make_client(db_healthy: bool = True, redis_healthy: bool = True):
         mock_redis.ping = AsyncMock(side_effect=Exception("Connection refused"))
         mock_redis.aclose = AsyncMock()
 
-    with patch("redis.asyncio.from_url", return_value=mock_redis):
-        with TestClient(app) as client:
-            yield client
+    with patch("redis.asyncio.from_url", return_value=mock_redis), TestClient(app) as client:
+        yield client
 
     app.dependency_overrides.clear()
 

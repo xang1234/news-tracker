@@ -1,6 +1,6 @@
 """Tests for the cluster CLI command group."""
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
@@ -8,7 +8,6 @@ import pytest
 from click.testing import CliRunner
 
 from src.cli import main
-
 
 # ── Fixtures ──────────────────────────────────────────────
 
@@ -28,8 +27,8 @@ def _make_theme(theme_id="theme_abc", doc_count=10, stage="emerging"):
         top_tickers=[],
         lifecycle_stage=stage,
         document_count=doc_count,
-        created_at=datetime(2026, 1, 15, tzinfo=timezone.utc),
-        updated_at=datetime(2026, 2, 1, 12, 0, 0, tzinfo=timezone.utc),
+        created_at=datetime(2026, 1, 15, tzinfo=UTC),
+        updated_at=datetime(2026, 2, 1, 12, 0, 0, tzinfo=UTC),
         description=None,
         top_entities=[],
         metadata={},
@@ -82,9 +81,11 @@ class TestClusterFit:
         mock_doc_repo = AsyncMock()
         mock_doc_repo.get_with_embeddings_since = AsyncMock(return_value=[])
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.storage.repository.DocumentRepository", return_value=mock_doc_repo), \
-             patch("src.themes.repository.ThemeRepository"):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.storage.repository.DocumentRepository", return_value=mock_doc_repo),
+            patch("src.themes.repository.ThemeRepository"),
+        ):
             result = runner.invoke(main, ["cluster", "fit", "--days", "7"])
 
         assert result.exit_code == 0
@@ -104,11 +105,13 @@ class TestClusterFit:
 
         mock_theme_obj = MagicMock()
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.storage.repository.DocumentRepository", return_value=mock_doc_repo), \
-             patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo), \
-             patch("src.clustering.service.BERTopicService", return_value=mock_service), \
-             patch("src.clustering.daily_job._cluster_to_theme", return_value=mock_theme_obj):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.storage.repository.DocumentRepository", return_value=mock_doc_repo),
+            patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo),
+            patch("src.clustering.service.BERTopicService", return_value=mock_service),
+            patch("src.clustering.daily_job._cluster_to_theme", return_value=mock_theme_obj),
+        ):
             result = runner.invoke(main, ["cluster", "fit"])
 
         assert result.exit_code == 0
@@ -127,10 +130,12 @@ class TestClusterFit:
         mock_service = MagicMock()
         mock_service.fit.return_value = {}
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.storage.repository.DocumentRepository", return_value=mock_doc_repo), \
-             patch("src.themes.repository.ThemeRepository"), \
-             patch("src.clustering.service.BERTopicService", return_value=mock_service):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.storage.repository.DocumentRepository", return_value=mock_doc_repo),
+            patch("src.themes.repository.ThemeRepository"),
+            patch("src.clustering.service.BERTopicService", return_value=mock_service),
+        ):
             result = runner.invoke(main, ["cluster", "fit"])
 
         assert result.exit_code == 0
@@ -149,11 +154,13 @@ class TestClusterFit:
         mock_service = MagicMock()
         mock_service.fit.return_value = {"theme_err": cluster}
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.storage.repository.DocumentRepository", return_value=mock_doc_repo), \
-             patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo), \
-             patch("src.clustering.service.BERTopicService", return_value=mock_service), \
-             patch("src.clustering.daily_job._cluster_to_theme"):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.storage.repository.DocumentRepository", return_value=mock_doc_repo),
+            patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo),
+            patch("src.clustering.service.BERTopicService", return_value=mock_service),
+            patch("src.clustering.daily_job._cluster_to_theme"),
+        ):
             result = runner.invoke(main, ["cluster", "fit"])
 
         assert result.exit_code == 0
@@ -174,9 +181,11 @@ class TestClusterRun:
         mock_theme_repo = AsyncMock()
         mock_theme_repo.get_all = AsyncMock(return_value=[_make_theme()])
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.storage.repository.DocumentRepository", return_value=mock_doc_repo), \
-             patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.storage.repository.DocumentRepository", return_value=mock_doc_repo),
+            patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo),
+        ):
             result = runner.invoke(main, ["cluster", "run", "--dry-run"])
 
         assert result.exit_code == 0
@@ -198,9 +207,14 @@ class TestClusterRun:
         mock_result.errors = []
         mock_result.elapsed_seconds = 1.23
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.clustering.daily_job.run_daily_clustering",
-                   new_callable=AsyncMock, return_value=mock_result):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch(
+                "src.clustering.daily_job.run_daily_clustering",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ),
+        ):
             result = runner.invoke(main, ["cluster", "run", "--date", "2026-02-06"])
 
         assert result.exit_code == 0
@@ -221,9 +235,14 @@ class TestClusterRun:
         mock_result.errors = ["fetch_docs: timeout"]
         mock_result.elapsed_seconds = 5.0
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.clustering.daily_job.run_daily_clustering",
-                   new_callable=AsyncMock, return_value=mock_result):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch(
+                "src.clustering.daily_job.run_daily_clustering",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ),
+        ):
             result = runner.invoke(main, ["cluster", "run"])
 
         assert result.exit_code == 0
@@ -245,13 +264,25 @@ class TestClusterBackfill:
         mock_result.documents_assigned = 8
         mock_result.errors = []
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.clustering.daily_job.run_daily_clustering",
-                   new_callable=AsyncMock, return_value=mock_result):
-            result = runner.invoke(main, [
-                "cluster", "backfill",
-                "--start", "2026-02-01", "--end", "2026-02-03",
-            ])
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch(
+                "src.clustering.daily_job.run_daily_clustering",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ),
+        ):
+            result = runner.invoke(
+                main,
+                [
+                    "cluster",
+                    "backfill",
+                    "--start",
+                    "2026-02-01",
+                    "--end",
+                    "2026-02-03",
+                ],
+            )
 
         assert result.exit_code == 0
         assert "Backfilling 3 days" in result.output
@@ -264,10 +295,17 @@ class TestClusterBackfill:
         mock_db = _mock_db()
 
         with patch("src.storage.database.Database", return_value=mock_db):
-            result = runner.invoke(main, [
-                "cluster", "backfill",
-                "--start", "2026-02-05", "--end", "2026-02-01",
-            ])
+            result = runner.invoke(
+                main,
+                [
+                    "cluster",
+                    "backfill",
+                    "--start",
+                    "2026-02-05",
+                    "--end",
+                    "2026-02-01",
+                ],
+            )
 
         assert result.exit_code == 0
         assert "start date must be before end date" in result.output
@@ -289,13 +327,21 @@ class TestClusterBackfill:
                 raise ValueError("Some processing error")
             return mock_result
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.clustering.daily_job.run_daily_clustering",
-                   side_effect=side_effect):
-            result = runner.invoke(main, [
-                "cluster", "backfill",
-                "--start", "2026-02-01", "--end", "2026-02-03",
-            ])
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.clustering.daily_job.run_daily_clustering", side_effect=side_effect),
+        ):
+            result = runner.invoke(
+                main,
+                [
+                    "cluster",
+                    "backfill",
+                    "--start",
+                    "2026-02-01",
+                    "--end",
+                    "2026-02-03",
+                ],
+            )
 
         assert result.exit_code == 0
         assert "2 succeeded, 1 failed" in result.output
@@ -318,13 +364,21 @@ class TestClusterBackfill:
                 raise Exception("connection pool exhausted")
             return mock_result
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.clustering.daily_job.run_daily_clustering",
-                   side_effect=side_effect):
-            result = runner.invoke(main, [
-                "cluster", "backfill",
-                "--start", "2026-02-01", "--end", "2026-02-05",
-            ])
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.clustering.daily_job.run_daily_clustering", side_effect=side_effect),
+        ):
+            result = runner.invoke(
+                main,
+                [
+                    "cluster",
+                    "backfill",
+                    "--start",
+                    "2026-02-01",
+                    "--end",
+                    "2026-02-05",
+                ],
+            )
 
         assert result.exit_code == 0
         assert "Fatal: DB connection lost" in result.output
@@ -342,8 +396,10 @@ class TestClusterMerge:
         mock_theme_repo = AsyncMock()
         mock_theme_repo.get_all = AsyncMock(return_value=[_make_theme()])
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo),
+        ):
             result = runner.invoke(main, ["cluster", "merge"])
 
         assert result.exit_code == 0
@@ -359,10 +415,12 @@ class TestClusterMerge:
         mock_service = MagicMock()
         mock_service.merge_similar_themes.return_value = [("theme_a", "theme_b")]
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo), \
-             patch("src.clustering.service.BERTopicService", return_value=mock_service), \
-             patch("src.clustering.daily_job._theme_to_cluster"):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo),
+            patch("src.clustering.service.BERTopicService", return_value=mock_service),
+            patch("src.clustering.daily_job._theme_to_cluster"),
+        ):
             result = runner.invoke(main, ["cluster", "merge", "--dry-run"])
 
         assert result.exit_code == 0
@@ -378,10 +436,12 @@ class TestClusterMerge:
         mock_service = MagicMock()
         mock_service.merge_similar_themes.return_value = []
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo), \
-             patch("src.clustering.service.BERTopicService", return_value=mock_service), \
-             patch("src.clustering.daily_job._theme_to_cluster"):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo),
+            patch("src.clustering.service.BERTopicService", return_value=mock_service),
+            patch("src.clustering.daily_job._theme_to_cluster"),
+        ):
             result = runner.invoke(main, ["cluster", "merge", "--dry-run"])
 
         assert result.exit_code == 0
@@ -394,10 +454,13 @@ class TestClusterMerge:
         mock_theme_repo = AsyncMock()
         mock_theme_repo.get_all = AsyncMock(return_value=themes)
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo), \
-             patch("src.clustering.daily_job._run_weekly_merge",
-                   new_callable=AsyncMock, return_value=1):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo),
+            patch(
+                "src.clustering.daily_job._run_weekly_merge", new_callable=AsyncMock, return_value=1
+            ),
+        ):
             result = runner.invoke(main, ["cluster", "merge"])
 
         assert result.exit_code == 0
@@ -420,14 +483,23 @@ class TestClusterMerge:
             captured_config["instance"] = config
             return config
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo), \
-             patch("src.clustering.service.BERTopicService", return_value=mock_service), \
-             patch("src.clustering.daily_job._theme_to_cluster"), \
-             patch("src.clustering.config.ClusteringConfig", side_effect=capture_config):
-            result = runner.invoke(main, [
-                "cluster", "merge", "--dry-run", "--threshold", "0.80",
-            ])
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo),
+            patch("src.clustering.service.BERTopicService", return_value=mock_service),
+            patch("src.clustering.daily_job._theme_to_cluster"),
+            patch("src.clustering.config.ClusteringConfig", side_effect=capture_config),
+        ):
+            result = runner.invoke(
+                main,
+                [
+                    "cluster",
+                    "merge",
+                    "--dry-run",
+                    "--threshold",
+                    "0.80",
+                ],
+            )
 
         assert result.exit_code == 0
         assert captured_config["instance"].similarity_threshold_merge == 0.80
@@ -444,8 +516,10 @@ class TestClusterStatus:
         mock_theme_repo = AsyncMock()
         mock_theme_repo.get_all = AsyncMock(return_value=[])
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo),
+        ):
             result = runner.invoke(main, ["cluster", "status"])
 
         assert result.exit_code == 0
@@ -463,8 +537,10 @@ class TestClusterStatus:
         mock_theme_repo = AsyncMock()
         mock_theme_repo.get_all = AsyncMock(return_value=themes)
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo),
+        ):
             result = runner.invoke(main, ["cluster", "status"])
 
         assert result.exit_code == 0
@@ -486,8 +562,10 @@ class TestClusterRecomputeCentroids:
         mock_theme_repo = AsyncMock()
         mock_theme_repo.get_all = AsyncMock(return_value=[])
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo),
+        ):
             result = runner.invoke(main, ["cluster", "recompute-centroids"])
 
         assert result.exit_code == 0
@@ -498,16 +576,20 @@ class TestClusterRecomputeCentroids:
         theme = _make_theme("theme_xyz", doc_count=5)
 
         emb = np.random.randn(768).astype(np.float32).tolist()
-        mock_db.fetch = AsyncMock(return_value=[
-            {"embedding": emb},
-            {"embedding": emb},
-        ])
+        mock_db.fetch = AsyncMock(
+            return_value=[
+                {"embedding": emb},
+                {"embedding": emb},
+            ]
+        )
 
         mock_theme_repo = AsyncMock()
         mock_theme_repo.get_all = AsyncMock(return_value=[theme])
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo),
+        ):
             result = runner.invoke(main, ["cluster", "recompute-centroids"])
 
         assert result.exit_code == 0
@@ -524,8 +606,10 @@ class TestClusterRecomputeCentroids:
         mock_theme_repo = AsyncMock()
         mock_theme_repo.get_all = AsyncMock(return_value=[theme])
 
-        with patch("src.storage.database.Database", return_value=mock_db), \
-             patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo):
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch("src.themes.repository.ThemeRepository", return_value=mock_theme_repo),
+        ):
             result = runner.invoke(main, ["cluster", "recompute-centroids"])
 
         assert result.exit_code == 0

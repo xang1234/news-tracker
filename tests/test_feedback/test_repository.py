@@ -1,7 +1,6 @@
 """Tests for FeedbackRepository SQL and parameter passing."""
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, call
+from datetime import UTC, datetime
 
 import pytest
 
@@ -88,7 +87,7 @@ class TestListByEntity:
 
     @pytest.mark.asyncio
     async def test_list_by_entity_returns_feedback(self, repo, mock_database):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         mock_database.fetch.return_value = [
             {
                 "feedback_id": "feedback_aaa111",
@@ -115,7 +114,7 @@ class TestListByEntity:
 
         args = mock_database.fetch.call_args
         assert args[0][3] == 50  # default limit
-        assert args[0][4] == 0   # default offset
+        assert args[0][4] == 0  # default offset
 
 
 class TestGetStats:

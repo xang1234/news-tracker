@@ -3,14 +3,12 @@
 import asyncio
 import time
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from starlette.requests import Request
-import structlog
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_sources_repository
-from src.api.rate_limit import limiter
-from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     BulkCreateSourcesRequest,
     BulkCreateSourcesResponse,
@@ -21,6 +19,8 @@ from src.api.models import (
     TriggerIngestionResponse,
     UpdateSourceRequest,
 )
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.sources.repository import SourcesRepository
 from src.sources.schemas import Source
 
@@ -177,10 +177,7 @@ async def bulk_create_sources(
                 seen.add(normalized)
                 unique_ids.append(normalized)
 
-        sources = [
-            Source(platform=body.platform, identifier=ident)
-            for ident in unique_ids
-        ]
+        sources = [Source(platform=body.platform, identifier=ident) for ident in unique_ids]
 
         created, total = await repo.bulk_create(sources)
         skipped = total - created
@@ -236,9 +233,9 @@ async def trigger_ingestion(
     async def _run_ingestion() -> None:
         global _ingestion_running
         try:
+            from src.api.dependencies import get_database
             from src.services.ingestion_service import IngestionService
             from src.sources.service import SourcesService
-            from src.api.dependencies import get_database
 
             # Load active sources from DB so ingestion respects the UI
             twitter_sources = None
@@ -314,7 +311,9 @@ async def update_source(
         updated = Source(
             platform=existing.platform,
             identifier=existing.identifier,
-            display_name=body.display_name if body.display_name is not None else existing.display_name,
+            display_name=body.display_name
+            if body.display_name is not None
+            else existing.display_name,
             description=body.description if body.description is not None else existing.description,
             is_active=body.is_active if body.is_active is not None else existing.is_active,
             metadata=body.metadata if body.metadata is not None else existing.metadata,

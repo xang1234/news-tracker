@@ -20,16 +20,18 @@ logger = logging.getLogger(__name__)
 
 # Fields allowed in generic update(). Excludes centroid (use update_centroid),
 # theme_id (immutable), and created_at/updated_at (DB-managed).
-_UPDATABLE_FIELDS = frozenset({
-    "name",
-    "description",
-    "top_keywords",
-    "top_tickers",
-    "top_entities",
-    "document_count",
-    "lifecycle_stage",
-    "metadata",
-})
+_UPDATABLE_FIELDS = frozenset(
+    {
+        "name",
+        "description",
+        "top_keywords",
+        "top_tickers",
+        "top_entities",
+        "document_count",
+        "lifecycle_stage",
+        "metadata",
+    }
+)
 
 
 # Default TTL for centroid cache (10 minutes). Centroids drift slowly
@@ -236,7 +238,7 @@ class ThemeRepository:
 
         sql = f"""
             UPDATE themes
-            SET {', '.join(set_parts)}
+            SET {", ".join(set_parts)}
             WHERE theme_id = {where_param}
             RETURNING *
         """

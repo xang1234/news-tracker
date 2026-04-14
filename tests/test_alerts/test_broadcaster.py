@@ -1,8 +1,8 @@
 """Tests for AlertBroadcaster — connection management, filtering, and publish."""
 
 import json
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -22,7 +22,7 @@ def _make_alert(
         severity=severity,
         title="Volume surge detected",
         message="Theme volume z-score exceeds threshold",
-        created_at=datetime(2026, 2, 7, 10, 0, 0, tzinfo=timezone.utc),
+        created_at=datetime(2026, 2, 7, 10, 0, 0, tzinfo=UTC),
     )
 
 
@@ -191,10 +191,12 @@ class TestDispatchMessage:
         ws = _mock_ws()
         broadcaster.connect(ws)
 
-        payload = json.dumps({
-            "type": "alert",
-            "data": {"severity": "warning", "theme_id": "t1"},
-        })
+        payload = json.dumps(
+            {
+                "type": "alert",
+                "data": {"severity": "warning", "theme_id": "t1"},
+            }
+        )
         await broadcaster._dispatch_message(payload)
 
         ws.send_text.assert_called_once()
@@ -207,10 +209,12 @@ class TestDispatchMessage:
         ws = _mock_ws()
         broadcaster.connect(ws, severity="critical")
 
-        payload = json.dumps({
-            "type": "alert",
-            "data": {"severity": "info", "theme_id": "t1"},
-        })
+        payload = json.dumps(
+            {
+                "type": "alert",
+                "data": {"severity": "info", "theme_id": "t1"},
+            }
+        )
         await broadcaster._dispatch_message(payload)
 
         ws.send_text.assert_not_called()
@@ -222,10 +226,12 @@ class TestDispatchMessage:
         ws.send_text.side_effect = RuntimeError("Connection lost")
         broadcaster.connect(ws)
 
-        payload = json.dumps({
-            "type": "alert",
-            "data": {"severity": "warning", "theme_id": "t1"},
-        })
+        payload = json.dumps(
+            {
+                "type": "alert",
+                "data": {"severity": "warning", "theme_id": "t1"},
+            }
+        )
         await broadcaster._dispatch_message(payload)
 
         assert broadcaster.active_connections == 0
@@ -236,10 +242,12 @@ class TestDispatchMessage:
         ws = _mock_ws()
         broadcaster.connect(ws)
 
-        payload = json.dumps({
-            "type": "alert",
-            "data": {"severity": "warning", "theme_id": "t1"},
-        }).encode("utf-8")
+        payload = json.dumps(
+            {
+                "type": "alert",
+                "data": {"severity": "warning", "theme_id": "t1"},
+            }
+        ).encode("utf-8")
         await broadcaster._dispatch_message(payload)
 
         ws.send_text.assert_called_once()
@@ -266,10 +274,12 @@ class TestDispatchMessage:
         broadcaster.connect(ws_warning, severity="warning")
         broadcaster.connect(ws_all)
 
-        payload = json.dumps({
-            "type": "alert",
-            "data": {"severity": "warning", "theme_id": "t1"},
-        })
+        payload = json.dumps(
+            {
+                "type": "alert",
+                "data": {"severity": "warning", "theme_id": "t1"},
+            }
+        )
         await broadcaster._dispatch_message(payload)
 
         ws_critical.send_text.assert_not_called()

@@ -1,11 +1,10 @@
 """Unit tests for VectorStoreManager."""
 
-from datetime import datetime, timedelta, timezone
-
-import pytest
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
-from src.vectorstore.base import VectorSearchFilter, VectorSearchResult
+import pytest
+
 from src.vectorstore.config import VectorStoreConfig
 from src.vectorstore.manager import VectorStoreManager
 
@@ -142,7 +141,7 @@ class TestVectorStoreManagerQuery:
             embedding_service=mock_embedding_service,
         )
 
-        results = await manager.query(
+        await manager.query(
             "semiconductor news",
             filters=sample_filter,
         )
@@ -208,7 +207,7 @@ class TestVectorStoreManagerQuery:
             config=config,
         )
 
-        results = await manager.query_by_theme_centroid(sample_embedding)
+        await manager.query_by_theme_centroid(sample_embedding)
 
         # Verify centroid-specific defaults
         call_args = mock_store.search_by_centroid.call_args
@@ -231,9 +230,7 @@ class TestVectorStoreManagerIngest:
         mock_store.upsert = AsyncMock(return_value=5)
 
         # Mock batch embed to return multiple embeddings
-        mock_embedding_service.embed_batch = AsyncMock(
-            return_value=sample_embeddings[:5]
-        )
+        mock_embedding_service.embed_batch = AsyncMock(return_value=sample_embeddings[:5])
 
         manager = VectorStoreManager(
             vector_store=mock_store,
@@ -338,7 +335,7 @@ class TestVectorStoreManagerCleanup:
         # Verify the cutoff is approximately 90 days ago
         call_args = mock_store.delete_before_timestamp.call_args
         cutoff = call_args[0][0]
-        expected_cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+        expected_cutoff = datetime.now(UTC) - timedelta(days=90)
         # Allow 1 second tolerance for test execution time
         assert abs((cutoff - expected_cutoff).total_seconds()) < 1
 
@@ -360,7 +357,7 @@ class TestVectorStoreManagerCleanup:
         # Verify the cutoff is approximately 30 days ago
         call_args = mock_store.delete_before_timestamp.call_args
         cutoff = call_args[0][0]
-        expected_cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+        expected_cutoff = datetime.now(UTC) - timedelta(days=30)
         assert abs((cutoff - expected_cutoff).total_seconds()) < 1
 
     @pytest.mark.asyncio

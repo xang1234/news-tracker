@@ -1,6 +1,6 @@
 """Tests for alert REST API endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -31,9 +31,7 @@ def _make_alert(
         message=kwargs.pop("message", "Theme theme_abc123 volume z-score 3.5 exceeds threshold"),
         trigger_data=kwargs.pop("trigger_data", {"volume_zscore": 3.5, "threshold": 3.0}),
         acknowledged=acknowledged,
-        created_at=kwargs.pop(
-            "created_at", datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc)
-        ),
+        created_at=kwargs.pop("created_at", datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC)),
         **kwargs,
     )
 

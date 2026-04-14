@@ -6,20 +6,24 @@ represents a user's quality rating on a theme, alert, or document.
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-VALID_ENTITY_TYPES: frozenset[str] = frozenset({
-    "theme",
-    "alert",
-    "document",
-})
+VALID_ENTITY_TYPES: frozenset[str] = frozenset(
+    {
+        "theme",
+        "alert",
+        "document",
+    }
+)
 
-VALID_QUALITY_LABELS: frozenset[str] = frozenset({
-    "useful",
-    "noise",
-    "too_late",
-    "wrong_direction",
-})
+VALID_QUALITY_LABELS: frozenset[str] = frozenset(
+    {
+        "useful",
+        "noise",
+        "too_late",
+        "wrong_direction",
+    }
+)
 
 
 @dataclass
@@ -40,15 +44,11 @@ class Feedback:
     entity_type: str
     entity_id: str
     rating: int
-    feedback_id: str = field(
-        default_factory=lambda: f"feedback_{uuid.uuid4().hex[:12]}"
-    )
+    feedback_id: str = field(default_factory=lambda: f"feedback_{uuid.uuid4().hex[:12]}")
     quality_label: str | None = None
     comment: str | None = None
     user_id: str | None = None
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         if self.entity_type not in VALID_ENTITY_TYPES:
@@ -57,9 +57,7 @@ class Feedback:
                 f"Must be one of: {sorted(VALID_ENTITY_TYPES)}"
             )
         if not (1 <= self.rating <= 5):
-            raise ValueError(
-                f"Invalid rating {self.rating}. Must be between 1 and 5."
-            )
+            raise ValueError(f"Invalid rating {self.rating}. Must be between 1 and 5.")
         if self.quality_label is not None and self.quality_label not in VALID_QUALITY_LABELS:
             raise ValueError(
                 f"Invalid quality_label {self.quality_label!r}. "

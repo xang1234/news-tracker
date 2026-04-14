@@ -119,6 +119,7 @@ async def analyze_sentiment(
 
     except Exception as e:
         import structlog
+
         structlog.get_logger(__name__).error("sentiment_failed", error=str(e), exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

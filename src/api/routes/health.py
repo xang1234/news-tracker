@@ -97,9 +97,7 @@ async def _get_queue_depths(redis_client) -> dict[str, QueueMetrics]:
             entries_read = group_info.get("entries-read")
 
             pending = lag + in_flight if lag is not None else stream_len
-            processed = (
-                max(0, entries_read - in_flight) if entries_read is not None else 0
-            )
+            processed = max(0, entries_read - in_flight) if entries_read is not None else 0
 
             depths[stream] = QueueMetrics(pending=pending, processed=processed)
         except Exception:

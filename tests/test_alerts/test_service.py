@@ -1,14 +1,13 @@
 """Tests for AlertService with mocked Redis and repository."""
 
-import pytest
-from datetime import date, datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import date
+from unittest.mock import AsyncMock
 
 import numpy as np
+import pytest
 
 from src.alerts.config import AlertConfig
 from src.alerts.repository import AlertRepository
-from src.alerts.schemas import Alert
 from src.alerts.service import AlertService
 from src.themes.schemas import Theme, ThemeMetrics
 from src.themes.transitions import LifecycleTransition
@@ -225,7 +224,8 @@ class TestGenerateAlerts:
         ]
         today_map = {
             t.theme_id: _make_metrics(
-                theme_id=t.theme_id, volume_zscore=3.5,
+                theme_id=t.theme_id,
+                volume_zscore=3.5,
             )
             for t in themes
         }

@@ -1,8 +1,6 @@
 """Tests for preprocessing pipeline."""
 
-import pytest
-
-from src.ingestion.deduplication import Deduplicator, DeduplicationIndex
+from src.ingestion.deduplication import DeduplicationIndex, Deduplicator
 from src.ingestion.preprocessor import (
     BotDetector,
     Preprocessor,
@@ -133,14 +131,10 @@ class TestTickerExtractor:
         """Should detect semiconductor-relevant content."""
         extractor = TickerExtractor()
 
-        relevant = extractor.is_semiconductor_relevant(
-            "The new 3nm process node is impressive"
-        )
+        relevant = extractor.is_semiconductor_relevant("The new 3nm process node is impressive")
         assert relevant
 
-        not_relevant = extractor.is_semiconductor_relevant(
-            "The weather is nice today"
-        )
+        not_relevant = extractor.is_semiconductor_relevant("The weather is nice today")
         assert not not_relevant
 
     def test_no_false_positives(self):
@@ -263,7 +257,7 @@ class TestDeduplicationIndex:
         assert index.size == 1
 
         # Same document again
-        result2 = index.insert_if_unique(sample_document)
+        index.insert_if_unique(sample_document)
         # Should still be size 1 (not inserted again)
         assert index.size == 1
 

@@ -1,6 +1,6 @@
 """Tests for entity REST API endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -106,15 +106,15 @@ class TestListEntities:
                     "type": "COMPANY",
                     "normalized": "NVIDIA",
                     "mention_count": 42,
-                    "first_seen": datetime(2026, 1, 1, tzinfo=timezone.utc),
-                    "last_seen": datetime(2026, 2, 5, tzinfo=timezone.utc),
+                    "first_seen": datetime(2026, 1, 1, tzinfo=UTC),
+                    "last_seen": datetime(2026, 2, 5, tzinfo=UTC),
                 },
                 {
                     "type": "TICKER",
                     "normalized": "NVDA",
                     "mention_count": 30,
-                    "first_seen": datetime(2026, 1, 5, tzinfo=timezone.utc),
-                    "last_seen": datetime(2026, 2, 4, tzinfo=timezone.utc),
+                    "first_seen": datetime(2026, 1, 5, tzinfo=UTC),
+                    "last_seen": datetime(2026, 2, 4, tzinfo=UTC),
                 },
             ],
             2,
@@ -300,8 +300,8 @@ class TestEntityDetail:
             "type": "COMPANY",
             "normalized": "NVIDIA",
             "mention_count": 42,
-            "first_seen": datetime(2026, 1, 1, tzinfo=timezone.utc),
-            "last_seen": datetime(2026, 2, 5, tzinfo=timezone.utc),
+            "first_seen": datetime(2026, 1, 1, tzinfo=UTC),
+            "last_seen": datetime(2026, 2, 5, tzinfo=UTC),
             "platforms": {"twitter": 20, "newsfilter": 22},
         }
 
@@ -320,8 +320,8 @@ class TestEntityDetail:
             "type": "COMPANY",
             "normalized": "NVIDIA",
             "mention_count": 42,
-            "first_seen": datetime(2026, 1, 1, tzinfo=timezone.utc),
-            "last_seen": datetime(2026, 2, 5, tzinfo=timezone.utc),
+            "first_seen": datetime(2026, 1, 1, tzinfo=UTC),
+            "last_seen": datetime(2026, 2, 5, tzinfo=UTC),
             "platforms": {"twitter": 20},
         }
         mock_graph_repo.get_node.return_value = {"node_id": "nvidia"}

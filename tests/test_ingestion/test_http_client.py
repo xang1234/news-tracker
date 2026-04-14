@@ -1,7 +1,6 @@
 """Tests for HTTP client infrastructure layer."""
 
 import asyncio
-from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -115,10 +114,10 @@ class TestRetryConfig:
         config = RetryConfig(base_delay=1.0, jitter_factor=0.0)
 
         # Without jitter, should be exact powers of 2
-        assert config.calculate_backoff(0) == 1.0   # 1 * 2^0
-        assert config.calculate_backoff(1) == 2.0   # 1 * 2^1
-        assert config.calculate_backoff(2) == 4.0   # 1 * 2^2
-        assert config.calculate_backoff(3) == 8.0   # 1 * 2^3
+        assert config.calculate_backoff(0) == 1.0  # 1 * 2^0
+        assert config.calculate_backoff(1) == 2.0  # 1 * 2^1
+        assert config.calculate_backoff(2) == 4.0  # 1 * 2^2
+        assert config.calculate_backoff(3) == 8.0  # 1 * 2^3
 
     def test_calculate_backoff_respects_max(self):
         """Should cap backoff at max_backoff_seconds."""
@@ -201,7 +200,12 @@ class TestRetryConfig:
         config = RetryConfig()
 
         assert config.is_retryable_exception(ValueError("bad value")) is False
-        assert config.is_retryable_exception(httpx.HTTPStatusError("error", request=None, response=None)) is False
+        assert (
+            config.is_retryable_exception(
+                httpx.HTTPStatusError("error", request=None, response=None)
+            )
+            is False
+        )
 
 
 class TestHTTPClient:

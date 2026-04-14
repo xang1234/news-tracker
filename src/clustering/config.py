@@ -20,7 +20,7 @@ Parameter Tuning Guide:
       Lower = more stable themes, higher = faster adaptation to new content.
 """
 
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -103,7 +103,7 @@ class ClusteringConfig(BaseSettings):
         le=50,
         description="Number of representative keywords per topic.",
     )
-    nr_topics: Optional[int] = Field(
+    nr_topics: int | None = Field(
         default=None,
         ge=2,
         description="Target number of topics. None = automatic via HDBSCAN.",

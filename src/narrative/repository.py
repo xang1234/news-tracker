@@ -120,20 +120,22 @@ class NarrativeRepository:
             sentiment = row["sentiment"]
             if isinstance(sentiment, str):
                 sentiment = json.loads(sentiment)
-            items.append({
-                "document_id": row["id"],
-                "platform": row["platform"],
-                "title": row["title"],
-                "content_preview": (row["content"] or "")[:300] or None,
-                "url": row["url"],
-                "author_name": row["author_name"],
-                "tickers": row["tickers"] or [],
-                "authority_score": row["authority_score"],
-                "sentiment": sentiment,
-                "timestamp": row["timestamp"],
-                "similarity": row["similarity"],
-                "assigned_at": row["assigned_at"],
-            })
+            items.append(
+                {
+                    "document_id": row["id"],
+                    "platform": row["platform"],
+                    "title": row["title"],
+                    "content_preview": (row["content"] or "")[:300] or None,
+                    "url": row["url"],
+                    "author_name": row["author_name"],
+                    "tickers": row["tickers"] or [],
+                    "authority_score": row["authority_score"],
+                    "sentiment": sentiment,
+                    "timestamp": row["timestamp"],
+                    "similarity": row["similarity"],
+                    "assigned_at": row["assigned_at"],
+                }
+            )
         return items
 
     async def get_recent_buckets(
@@ -162,10 +164,7 @@ class NarrativeRepository:
             """,
             run_id,
         )
-        return {
-            row["trigger_type"]: _row_to_signal_state(row)
-            for row in rows
-        }
+        return {row["trigger_type"]: _row_to_signal_state(row) for row in rows}
 
     async def get_recent_alerts(
         self,
@@ -190,16 +189,18 @@ class NarrativeRepository:
             data = row["trigger_data"]
             if isinstance(data, str):
                 data = json.loads(data)
-            items.append({
-                "alert_id": row["alert_id"],
-                "trigger_type": row["trigger_type"],
-                "severity": row["severity"],
-                "title": row["title"],
-                "message": row["message"],
-                "conviction_score": row["conviction_score"],
-                "created_at": row["created_at"],
-                "trigger_data": data,
-            })
+            items.append(
+                {
+                    "alert_id": row["alert_id"],
+                    "trigger_type": row["trigger_type"],
+                    "severity": row["severity"],
+                    "title": row["title"],
+                    "message": row["message"],
+                    "conviction_score": row["conviction_score"],
+                    "created_at": row["created_at"],
+                    "trigger_data": data,
+                }
+            )
         return items
 
 

@@ -1,6 +1,6 @@
 """Pytest fixtures for scoring tests."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import numpy as np
@@ -45,14 +45,22 @@ def sample_theme(sample_centroid: np.ndarray) -> Theme:
         name="gpu_nvidia_architecture",
         centroid=sample_centroid,
         top_keywords=[
-            "gpu", "nvidia", "architecture", "hbm", "chiplet",
-            "revenue", "growth", "forecast", "capacity", "wafer",
+            "gpu",
+            "nvidia",
+            "architecture",
+            "hbm",
+            "chiplet",
+            "revenue",
+            "growth",
+            "forecast",
+            "capacity",
+            "wafer",
         ],
         top_tickers=["NVDA", "AMD", "INTC"],
         lifecycle_stage="emerging",
         document_count=42,
-        created_at=datetime(2025, 1, 15, 12, 0, 0, tzinfo=timezone.utc),
-        updated_at=datetime(2025, 1, 16, 8, 30, 0, tzinfo=timezone.utc),
+        created_at=datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC),
+        updated_at=datetime(2025, 1, 16, 8, 30, 0, tzinfo=UTC),
         description=(
             "NVIDIA's next-generation GPU architecture leverages chiplet design "
             "and HBM4 integration. Analyst reports indicate 30% revenue growth YoY. "
@@ -103,8 +111,12 @@ def mock_gpt_score() -> CompellingnessScore:
     return CompellingnessScore(
         overall_score=7.5,
         dimensions=DimensionScores(
-            authority=8.0, evidence=7.0, reasoning=7.5,
-            risk=6.5, actionability=8.0, technical=8.0,
+            authority=8.0,
+            evidence=7.0,
+            reasoning=7.5,
+            risk=6.5,
+            actionability=8.0,
+            technical=8.0,
         ),
         summary="Strong semiconductor thesis with solid analyst backing",
         tickers=["NVDA"],
@@ -121,8 +133,12 @@ def mock_claude_score() -> CompellingnessScore:
     return CompellingnessScore(
         overall_score=8.0,
         dimensions=DimensionScores(
-            authority=8.5, evidence=7.5, reasoning=8.0,
-            risk=7.0, actionability=8.5, technical=8.5,
+            authority=8.5,
+            evidence=7.5,
+            reasoning=8.0,
+            risk=7.0,
+            actionability=8.5,
+            technical=8.5,
         ),
         summary="Validates GPT assessment with stronger technical depth",
         tickers=["NVDA", "TSMC"],

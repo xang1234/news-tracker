@@ -6,9 +6,10 @@ computation, and vector storage in a single high-level API.
 """
 
 import math
-import structlog
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
+
+import structlog
 
 from src.embedding.service import EmbeddingService, ModelType
 from src.ingestion.schemas import NormalizedDocument
@@ -242,7 +243,7 @@ class VectorStoreManager:
         if days_to_keep <= 0:
             raise ValueError(f"days_to_keep must be positive, got {days_to_keep}")
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
+        cutoff = datetime.now(UTC) - timedelta(days=days_to_keep)
         deleted = await self._store.delete_before_timestamp(cutoff)
 
         logger.info(

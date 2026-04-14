@@ -1,6 +1,6 @@
 """Tests for temporal sentiment aggregation."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -21,7 +21,7 @@ def aggregator() -> SentimentAggregator:
 @pytest.fixture
 def now() -> datetime:
     """Get current UTC time."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def make_doc(
@@ -37,9 +37,9 @@ def make_doc(
     scores[label] = confidence
     # Distribute remaining probability
     remaining = 1.0 - confidence
-    other_labels = [l for l in scores if l != label]
-    for l in other_labels:
-        scores[l] = remaining / 2
+    other_labels = [other for other in scores if other != label]
+    for other in other_labels:
+        scores[other] = remaining / 2
 
     return DocumentSentiment(
         document_id=doc_id,
@@ -362,10 +362,7 @@ class TestSentimentVelocity:
     def test_stable_sentiment_near_zero_velocity(self, aggregator, now):
         """Test stable sentiment has near-zero velocity."""
         # All positive documents
-        docs = [
-            make_doc(f"d{i}", now - timedelta(days=i), "positive", 0.9)
-            for i in range(7)
-        ]
+        docs = [make_doc(f"d{i}", now - timedelta(days=i), "positive", 0.9) for i in range(7)]
 
         result = aggregator.aggregate_theme_sentiment(
             theme_id="AI_chips",
@@ -434,10 +431,7 @@ class TestExtremeSentimentDetection:
         aggregator = SentimentAggregator()
 
         # All positive documents -> extreme bullish
-        docs = [
-            make_doc(f"d{i}", now - timedelta(hours=i), "positive", 0.9)
-            for i in range(10)
-        ]
+        docs = [make_doc(f"d{i}", now - timedelta(hours=i), "positive", 0.9) for i in range(10)]
 
         result = aggregator.aggregate_theme_sentiment(
             theme_id="AI_chips",

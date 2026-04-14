@@ -1,6 +1,6 @@
 """Tests for feedback REST API endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -29,9 +29,7 @@ def _make_feedback(
         quality_label=kwargs.pop("quality_label", "useful"),
         comment=kwargs.pop("comment", "Good insight"),
         user_id=kwargs.pop("user_id", "test-key"),
-        created_at=kwargs.pop(
-            "created_at", datetime(2026, 2, 5, 10, 0, 0, tzinfo=timezone.utc)
-        ),
+        created_at=kwargs.pop("created_at", datetime(2026, 2, 5, 10, 0, 0, tzinfo=UTC)),
         **kwargs,
     )
 
@@ -70,13 +68,16 @@ class TestCreateFeedback:
         created = _make_feedback()
         mock_feedback_repo.create.return_value = created
 
-        resp = client.post("/feedback", json={
-            "entity_type": "theme",
-            "entity_id": "theme_xyz789",
-            "rating": 4,
-            "quality_label": "useful",
-            "comment": "Good insight",
-        })
+        resp = client.post(
+            "/feedback",
+            json={
+                "entity_type": "theme",
+                "entity_id": "theme_xyz789",
+                "rating": 4,
+                "quality_label": "useful",
+                "comment": "Good insight",
+            },
+        )
 
         assert resp.status_code == 201
         data = resp.json()
@@ -91,11 +92,14 @@ class TestCreateFeedback:
         created = _make_feedback(quality_label=None, comment=None)
         mock_feedback_repo.create.return_value = created
 
-        resp = client.post("/feedback", json={
-            "entity_type": "theme",
-            "entity_id": "theme_xyz789",
-            "rating": 4,
-        })
+        resp = client.post(
+            "/feedback",
+            json={
+                "entity_type": "theme",
+                "entity_id": "theme_xyz789",
+                "rating": 4,
+            },
+        )
 
         assert resp.status_code == 201
 
@@ -104,57 +108,75 @@ class TestCreateFeedback:
             created = _make_feedback(entity_type=et)
             mock_feedback_repo.create.return_value = created
 
-            resp = client.post("/feedback", json={
-                "entity_type": et,
-                "entity_id": "id_1",
-                "rating": 3,
-            })
+            resp = client.post(
+                "/feedback",
+                json={
+                    "entity_type": et,
+                    "entity_id": "id_1",
+                    "rating": 3,
+                },
+            )
             assert resp.status_code == 201
 
     def test_create_invalid_entity_type(self, client, mock_feedback_repo):
-        resp = client.post("/feedback", json={
-            "entity_type": "user",
-            "entity_id": "x",
-            "rating": 3,
-        })
+        resp = client.post(
+            "/feedback",
+            json={
+                "entity_type": "user",
+                "entity_id": "x",
+                "rating": 3,
+            },
+        )
         assert resp.status_code == 422
         assert "Invalid entity_type" in resp.json()["detail"]
 
     def test_create_invalid_quality_label(self, client, mock_feedback_repo):
-        resp = client.post("/feedback", json={
-            "entity_type": "theme",
-            "entity_id": "x",
-            "rating": 3,
-            "quality_label": "bad",
-        })
+        resp = client.post(
+            "/feedback",
+            json={
+                "entity_type": "theme",
+                "entity_id": "x",
+                "rating": 3,
+                "quality_label": "bad",
+            },
+        )
         assert resp.status_code == 422
         assert "Invalid quality_label" in resp.json()["detail"]
 
     def test_create_rating_too_low(self, client, mock_feedback_repo):
-        resp = client.post("/feedback", json={
-            "entity_type": "theme",
-            "entity_id": "x",
-            "rating": 0,
-        })
+        resp = client.post(
+            "/feedback",
+            json={
+                "entity_type": "theme",
+                "entity_id": "x",
+                "rating": 0,
+            },
+        )
         assert resp.status_code == 422
 
     def test_create_rating_too_high(self, client, mock_feedback_repo):
-        resp = client.post("/feedback", json={
-            "entity_type": "theme",
-            "entity_id": "x",
-            "rating": 6,
-        })
+        resp = client.post(
+            "/feedback",
+            json={
+                "entity_type": "theme",
+                "entity_id": "x",
+                "rating": 6,
+            },
+        )
         assert resp.status_code == 422
 
     def test_create_user_id_from_api_key(self, client, mock_feedback_repo):
         created = _make_feedback(user_id="test-key")
         mock_feedback_repo.create.return_value = created
 
-        resp = client.post("/feedback", json={
-            "entity_type": "theme",
-            "entity_id": "x",
-            "rating": 5,
-        })
+        resp = client.post(
+            "/feedback",
+            json={
+                "entity_type": "theme",
+                "entity_id": "x",
+                "rating": 5,
+            },
+        )
 
         assert resp.status_code == 201
         # Verify the Feedback passed to create() has user_id set
@@ -164,18 +186,24 @@ class TestCreateFeedback:
     def test_create_server_error(self, client, mock_feedback_repo):
         mock_feedback_repo.create.side_effect = RuntimeError("DB down")
 
-        resp = client.post("/feedback", json={
-            "entity_type": "theme",
-            "entity_id": "x",
-            "rating": 3,
-        })
+        resp = client.post(
+            "/feedback",
+            json={
+                "entity_type": "theme",
+                "entity_id": "x",
+                "rating": 3,
+            },
+        )
         assert resp.status_code == 500
         assert "Failed to create feedback" in resp.json()["detail"]
 
     def test_create_missing_required_fields(self, client, mock_feedback_repo):
-        resp = client.post("/feedback", json={
-            "entity_type": "theme",
-        })
+        resp = client.post(
+            "/feedback",
+            json={
+                "entity_type": "theme",
+            },
+        )
         assert resp.status_code == 422
 
 

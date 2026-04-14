@@ -1,8 +1,8 @@
 """Unit tests for PgVectorStore implementation."""
 
 import json
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -33,9 +33,7 @@ class TestPgVectorStoreUpsert:
         )
 
         assert result == 1
-        mock_repository.update_embedding.assert_called_once_with(
-            "doc_1", sample_embedding
-        )
+        mock_repository.update_embedding.assert_called_once_with("doc_1", sample_embedding)
 
     @pytest.mark.asyncio
     async def test_upsert_multiple_embeddings(
@@ -66,9 +64,7 @@ class TestPgVectorStoreUpsert:
     ):
         """Test upsert with some failures."""
         # First and third succeed, others fail
-        mock_repository.update_embedding = AsyncMock(
-            side_effect=[True, False, True, False, False]
-        )
+        mock_repository.update_embedding = AsyncMock(side_effect=[True, False, True, False, False])
         store = PgVectorStore(
             database=mock_database,
             repository=mock_repository,
@@ -109,25 +105,27 @@ class TestPgVectorStoreSearch:
         sample_embedding,
     ):
         """Test basic search without filters."""
-        mock_database.fetch = AsyncMock(return_value=[
-            {
-                "id": "doc_1",
-                "platform": "twitter",
-                "url": "https://twitter.com/...",
-                "title": None,
-                "content": "NVIDIA reports strong earnings",
-                "author_name": "analyst",
-                "author_verified": True,
-                "author_followers": 5000,
-                "tickers": ["NVDA"],
-                "theme_ids": [],
-                "spam_score": 0.1,
-                "authority_score": 0.8,
-                "engagement": json.dumps({"likes": 100, "shares": 20}),
-                "timestamp": datetime.now(timezone.utc),
-                "similarity": 0.92,
-            }
-        ])
+        mock_database.fetch = AsyncMock(
+            return_value=[
+                {
+                    "id": "doc_1",
+                    "platform": "twitter",
+                    "url": "https://twitter.com/...",
+                    "title": None,
+                    "content": "NVIDIA reports strong earnings",
+                    "author_name": "analyst",
+                    "author_verified": True,
+                    "author_followers": 5000,
+                    "tickers": ["NVDA"],
+                    "theme_ids": [],
+                    "spam_score": 0.1,
+                    "authority_score": 0.8,
+                    "engagement": json.dumps({"likes": 100, "shares": 20}),
+                    "timestamp": datetime.now(UTC),
+                    "similarity": 0.92,
+                }
+            ]
+        )
 
         store = PgVectorStore(database=mock_database)
         results = await store.search(
@@ -240,7 +238,7 @@ class TestPgVectorStoreSearch:
         mock_database.fetch = AsyncMock(return_value=[])
         store = PgVectorStore(database=mock_database)
 
-        ts = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        ts = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
         filters = VectorSearchFilter(timestamp_after=ts)
         await store.search(
             query_embedding=sample_embedding,
@@ -263,7 +261,7 @@ class TestPgVectorStoreSearch:
         mock_database.fetch = AsyncMock(return_value=[])
         store = PgVectorStore(database=mock_database)
 
-        ts = datetime(2026, 2, 1, 0, 0, 0, tzinfo=timezone.utc)
+        ts = datetime(2026, 2, 1, 0, 0, 0, tzinfo=UTC)
         filters = VectorSearchFilter(timestamp_before=ts)
         await store.search(
             query_embedding=sample_embedding,
@@ -286,8 +284,8 @@ class TestPgVectorStoreSearch:
         mock_database.fetch = AsyncMock(return_value=[])
         store = PgVectorStore(database=mock_database)
 
-        start = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-        end = datetime(2026, 1, 31, 23, 59, 59, tzinfo=timezone.utc)
+        start = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
+        end = datetime(2026, 1, 31, 23, 59, 59, tzinfo=UTC)
         filters = VectorSearchFilter(timestamp_after=start, timestamp_before=end)
         await store.search(
             query_embedding=sample_embedding,
@@ -309,10 +307,12 @@ class TestPgVectorStoreDelete:
     @pytest.mark.asyncio
     async def test_delete_documents(self, mock_database):
         """Test deleting documents."""
-        mock_database.fetch = AsyncMock(return_value=[
-            {"id": "doc_1"},
-            {"id": "doc_2"},
-        ])
+        mock_database.fetch = AsyncMock(
+            return_value=[
+                {"id": "doc_1"},
+                {"id": "doc_2"},
+            ]
+        )
         store = PgVectorStore(database=mock_database)
 
         result = await store.delete(["doc_1", "doc_2", "doc_3"])
@@ -336,24 +336,26 @@ class TestPgVectorStoreGetByIds:
     @pytest.mark.asyncio
     async def test_get_by_ids(self, mock_database):
         """Test getting documents by IDs."""
-        mock_database.fetch = AsyncMock(return_value=[
-            {
-                "id": "doc_1",
-                "platform": "twitter",
-                "url": None,
-                "title": "Test",
-                "content": "Content here",
-                "author_name": "user",
-                "author_verified": False,
-                "author_followers": 100,
-                "tickers": ["NVDA"],
-                "theme_ids": [],
-                "spam_score": 0.0,
-                "authority_score": 0.5,
-                "engagement": "{}",
-                "timestamp": datetime.now(timezone.utc),
-            }
-        ])
+        mock_database.fetch = AsyncMock(
+            return_value=[
+                {
+                    "id": "doc_1",
+                    "platform": "twitter",
+                    "url": None,
+                    "title": "Test",
+                    "content": "Content here",
+                    "author_name": "user",
+                    "author_verified": False,
+                    "author_followers": 100,
+                    "tickers": ["NVDA"],
+                    "theme_ids": [],
+                    "spam_score": 0.0,
+                    "authority_score": 0.5,
+                    "engagement": "{}",
+                    "timestamp": datetime.now(UTC),
+                }
+            ]
+        )
         store = PgVectorStore(database=mock_database)
 
         results = await store.get_by_ids(["doc_1"])
@@ -379,14 +381,16 @@ class TestPgVectorStoreDeleteBeforeTimestamp:
     @pytest.mark.asyncio
     async def test_delete_before_timestamp(self, mock_database):
         """Test deleting documents before a cutoff timestamp."""
-        mock_database.fetch = AsyncMock(return_value=[
-            {"id": "old_doc_1"},
-            {"id": "old_doc_2"},
-            {"id": "old_doc_3"},
-        ])
+        mock_database.fetch = AsyncMock(
+            return_value=[
+                {"id": "old_doc_1"},
+                {"id": "old_doc_2"},
+                {"id": "old_doc_3"},
+            ]
+        )
         store = PgVectorStore(database=mock_database)
 
-        cutoff = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        cutoff = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
         result = await store.delete_before_timestamp(cutoff)
 
         assert result == 3
@@ -402,7 +406,7 @@ class TestPgVectorStoreDeleteBeforeTimestamp:
         mock_database.fetch = AsyncMock(return_value=[])
         store = PgVectorStore(database=mock_database)
 
-        cutoff = datetime(2020, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        cutoff = datetime(2020, 1, 1, 0, 0, 0, tzinfo=UTC)
         result = await store.delete_before_timestamp(cutoff)
 
         assert result == 0

@@ -2,9 +2,8 @@
 
 import asyncio
 import json
-import time
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -19,7 +18,6 @@ from src.alerts.channels import (
 from src.alerts.dispatcher import NotificationConfig, NotificationDispatcher
 from src.alerts.schemas import Alert
 
-
 # ── Fixtures ────────────────────────────────────────────
 
 
@@ -33,7 +31,7 @@ def sample_alert():
         title="Volume surge: AI Chips",
         message="Theme 'AI Chips' volume z-score is 4.5σ above normal",
         trigger_data={"volume_zscore": 4.5, "document_count": 120},
-        created_at=datetime(2026, 2, 7, 12, 0, 0, tzinfo=timezone.utc),
+        created_at=datetime(2026, 2, 7, 12, 0, 0, tzinfo=UTC),
     )
 
 
@@ -114,8 +112,14 @@ class TestWebhookChannel:
         payload = channel._build_payload(sample_alert)
 
         expected_keys = {
-            "alert_id", "theme_id", "trigger_type", "severity",
-            "title", "message", "timestamp", "metadata",
+            "alert_id",
+            "theme_id",
+            "trigger_type",
+            "severity",
+            "title",
+            "message",
+            "timestamp",
+            "metadata",
         }
         assert set(payload.keys()) == expected_keys
         assert payload["timestamp"] == "2026-02-07T12:00:00+00:00"
@@ -124,7 +128,8 @@ class TestWebhookChannel:
     async def test_custom_headers(self, sample_alert):
         headers = {"Authorization": "Bearer test-token"}
         channel = WebhookChannel(
-            url="https://example.com/webhook", headers=headers,
+            url="https://example.com/webhook",
+            headers=headers,
         )
 
         with patch("src.alerts.channels.httpx.AsyncClient") as mock_client_cls:
@@ -369,7 +374,8 @@ class TestNotificationDispatcher:
 
         config = NotificationConfig(retry_max_attempts=1, retry_delays=[0.0])
         dispatcher = NotificationDispatcher(
-            channels=[ch1, ch2], config=config,
+            channels=[ch1, ch2],
+            config=config,
         )
 
         results = await dispatcher.dispatch(sample_alert)
@@ -389,7 +395,8 @@ class TestNotificationDispatcher:
 
         config = NotificationConfig(retry_max_attempts=1, retry_delays=[0.0])
         dispatcher = NotificationDispatcher(
-            channels=[ch1, ch2], config=config,
+            channels=[ch1, ch2],
+            config=config,
         )
 
         results = await dispatcher.dispatch(sample_alert)
@@ -456,7 +463,8 @@ class TestRetryLogic:
         ch.send.side_effect = [False, True]
 
         config = NotificationConfig(
-            retry_max_attempts=3, retry_delays=[0.0, 0.0, 0.0],
+            retry_max_attempts=3,
+            retry_delays=[0.0, 0.0, 0.0],
         )
         dispatcher = NotificationDispatcher(channels=[ch], config=config)
         results = await dispatcher.dispatch(sample_alert)
@@ -471,7 +479,8 @@ class TestRetryLogic:
         ch.send.return_value = False
 
         config = NotificationConfig(
-            retry_max_attempts=3, retry_delays=[0.0, 0.0, 0.0],
+            retry_max_attempts=3,
+            retry_delays=[0.0, 0.0, 0.0],
         )
         dispatcher = NotificationDispatcher(channels=[ch], config=config)
         results = await dispatcher.dispatch(sample_alert)
@@ -487,10 +496,13 @@ class TestRetryLogic:
 
         mock_redis = AsyncMock()
         config = NotificationConfig(
-            retry_max_attempts=1, retry_delays=[0.0],
+            retry_max_attempts=1,
+            retry_delays=[0.0],
         )
         dispatcher = NotificationDispatcher(
-            channels=[ch], config=config, redis_client=mock_redis,
+            channels=[ch],
+            config=config,
+            redis_client=mock_redis,
         )
 
         await dispatcher.dispatch(sample_alert)
@@ -511,10 +523,13 @@ class TestRetryLogic:
         ch.send.return_value = False
 
         config = NotificationConfig(
-            retry_max_attempts=1, retry_delays=[0.0],
+            retry_max_attempts=1,
+            retry_delays=[0.0],
         )
         dispatcher = NotificationDispatcher(
-            channels=[ch], config=config, redis_client=None,
+            channels=[ch],
+            config=config,
+            redis_client=None,
         )
 
         # Should not raise
@@ -531,10 +546,13 @@ class TestRetryLogic:
         mock_redis.lpush.side_effect = ConnectionError("Redis down")
 
         config = NotificationConfig(
-            retry_max_attempts=1, retry_delays=[0.0],
+            retry_max_attempts=1,
+            retry_delays=[0.0],
         )
         dispatcher = NotificationDispatcher(
-            channels=[ch], config=config, redis_client=mock_redis,
+            channels=[ch],
+            config=config,
+            redis_client=mock_redis,
         )
 
         # Should not raise
@@ -586,7 +604,8 @@ class TestDeliveryRecording:
 
         config = NotificationConfig(retry_max_attempts=1, retry_delays=[0.0])
         dispatcher = NotificationDispatcher(
-            channels=[ch1, ch2], config=config,
+            channels=[ch1, ch2],
+            config=config,
         )
 
         with patch("src.alerts.dispatcher.logger") as mock_logger:

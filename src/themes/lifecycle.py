@@ -11,7 +11,6 @@ velocity and volume trends, then applies rule-based thresholds.
 """
 
 import logging
-from typing import Optional
 
 from src.themes.schemas import Theme, ThemeMetrics
 from src.themes.transitions import LifecycleTransition
@@ -91,7 +90,7 @@ class LifecycleClassifier:
         theme: Theme,
         new_stage: str,
         confidence: float = 1.0,
-    ) -> Optional[LifecycleTransition]:
+    ) -> LifecycleTransition | None:
         """Detect if a theme changed lifecycle stage.
 
         Args:

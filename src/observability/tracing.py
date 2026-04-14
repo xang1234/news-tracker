@@ -30,7 +30,7 @@ import logging
 from contextlib import contextmanager
 from typing import Any
 
-from opentelemetry import context, trace
+from opentelemetry import trace
 from opentelemetry.context import Context
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
@@ -228,9 +228,7 @@ def traced(
 # ── Structlog processor for trace correlation ────────────────────────
 
 
-def add_trace_context(
-    logger_: Any, method: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
+def add_trace_context(logger_: Any, method: str, event_dict: dict[str, Any]) -> dict[str, Any]:
     """
     Structlog processor that injects trace_id and span_id into log entries.
 

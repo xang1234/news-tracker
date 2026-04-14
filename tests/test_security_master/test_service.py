@@ -27,7 +27,8 @@ class TestGetAllTickers:
     @pytest.mark.asyncio
     async def test_fetches_from_db_on_first_call(self, service: SecurityMasterService) -> None:
         service.repository._db.fetch.return_value = [
-            {"ticker": "NVDA"}, {"ticker": "AMD"},
+            {"ticker": "NVDA"},
+            {"ticker": "AMD"},
         ]
 
         result = await service.get_all_tickers()
@@ -100,7 +101,9 @@ class TestFuzzySearch:
     """Tests for fuzzy search passthrough."""
 
     @pytest.mark.asyncio
-    async def test_delegates_to_repository(self, service: SecurityMasterService, sample_db_row: dict) -> None:
+    async def test_delegates_to_repository(
+        self, service: SecurityMasterService, sample_db_row: dict
+    ) -> None:
         sample_db_row["sim"] = 0.75
         service.repository._db.fetch.return_value = [sample_db_row]
 
@@ -127,7 +130,9 @@ class TestSeedFromJson:
         service.repository._db.execute.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_invalidates_cache_after_seed(self, service: SecurityMasterService, tmp_path: Path) -> None:
+    async def test_invalidates_cache_after_seed(
+        self, service: SecurityMasterService, tmp_path: Path
+    ) -> None:
         # Prime cache
         service._tickers_cache = {"OLD"}
         service._tickers_cached_at = time.monotonic()

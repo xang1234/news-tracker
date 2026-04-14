@@ -4,10 +4,10 @@ This is the most critical test file — each trigger function is tested
 for boundary conditions, severity classification, and None handling.
 """
 
-import pytest
-from datetime import date, datetime, timezone
+from datetime import date
 
 import numpy as np
+import pytest
 
 from src.alerts.config import AlertConfig
 from src.alerts.triggers import (
@@ -325,7 +325,9 @@ class TestCheckAllTriggers:
 
     def test_empty_when_normal(self, theme, config):
         today = _make_metrics(
-            sentiment_score=0.5, bullish_ratio=0.6, volume_zscore=1.0,
+            sentiment_score=0.5,
+            bullish_ratio=0.6,
+            volume_zscore=1.0,
         )
         yesterday = _make_metrics(sentiment_score=0.4)
         result = check_all_triggers(theme, today, yesterday, config)
@@ -346,7 +348,9 @@ class TestCheckAllTriggers:
 
     def test_no_yesterday_skips_velocity(self, theme, config):
         today = _make_metrics(
-            sentiment_score=0.9, bullish_ratio=0.6, volume_zscore=1.0,
+            sentiment_score=0.9,
+            bullish_ratio=0.6,
+            volume_zscore=1.0,
         )
         result = check_all_triggers(theme, today, None, config)
         types = {a.trigger_type for a in result}
@@ -354,7 +358,9 @@ class TestCheckAllTriggers:
 
     def test_single_trigger_only(self, theme, config):
         today = _make_metrics(
-            sentiment_score=0.5, bullish_ratio=0.6, volume_zscore=3.5,
+            sentiment_score=0.5,
+            bullish_ratio=0.6,
+            volume_zscore=3.5,
         )
         yesterday = _make_metrics(sentiment_score=0.4)
         result = check_all_triggers(theme, today, yesterday, config)

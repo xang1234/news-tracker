@@ -22,7 +22,7 @@ Its value is CONFIRMATION, not discovery.
 import logging
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -86,23 +86,24 @@ def get_source_weight(url: str) -> int:
 
 # Timestamp parsing utilities
 
+
 def _parse_unix_timestamp(value: Any) -> datetime:
     """Parse Unix timestamp to datetime."""
-    return datetime.fromtimestamp(value or 0, tz=timezone.utc)
+    return datetime.fromtimestamp(value or 0, tz=UTC)
 
 
 def _parse_iso_timestamp(value: str) -> datetime:
     """Parse ISO format timestamp (with Z suffix) to datetime."""
     if not value:
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
 def _parse_alpha_vantage_timestamp(value: str) -> datetime:
     """Parse Alpha Vantage format (20231215T143022) to datetime."""
     if not value:
-        return datetime.now(timezone.utc)
-    return datetime.strptime(value[:15], "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
+        return datetime.now(UTC)
+    return datetime.strptime(value[:15], "%Y%m%dT%H%M%S").replace(tzinfo=UTC)
 
 
 @dataclass
@@ -275,20 +276,20 @@ class NewsAdapter(BaseAdapter):
         self._seen_urls: set[str] = set()
 
         if not self._has_any_api_configured():
-            logger.warning(
-                "No news API keys configured. Adapter will not fetch data."
-            )
+            logger.warning("No news API keys configured. Adapter will not fetch data.")
 
     def _has_any_api_configured(self) -> bool:
         """Check if at least one API source is configured."""
-        return any([
-            self._finnhub_key,
-            self._newsapi_key,
-            self._alpha_vantage_key,
-            self._newsfilter_rotator,
-            self._marketaux_rotator,
-            self._finlight_rotator,
-        ])
+        return any(
+            [
+                self._finnhub_key,
+                self._newsapi_key,
+                self._alpha_vantage_key,
+                self._newsfilter_rotator,
+                self._marketaux_rotator,
+                self._finlight_rotator,
+            ]
+        )
 
     @property
     def platform(self) -> Platform:
@@ -303,37 +304,39 @@ class NewsAdapter(BaseAdapter):
         """
         self._seen_urls.clear()
 
-        # Use HTTPClient for new sources (with retry and key rotation)
-        async with HTTPClient(retry_config=self._retry_config) as http_client:
-            # Also create a plain httpx client for legacy sources
-            async with httpx.AsyncClient(timeout=30.0) as legacy_client:
-                # Prioritize Finnhub (most focused on financial news)
-                if self._finnhub_key:
-                    async for article in self._fetch_finnhub(legacy_client):
-                        yield article
+        # Use HTTPClient for new sources (with retry and key rotation); a
+        # plain httpx client handles legacy sources alongside it.
+        async with (
+            HTTPClient(retry_config=self._retry_config) as http_client,
+            httpx.AsyncClient(timeout=30.0) as legacy_client,
+        ):
+            # Prioritize Finnhub (most focused on financial news)
+            if self._finnhub_key:
+                async for article in self._fetch_finnhub(legacy_client):
+                    yield article
 
-                # NewsAPI as fallback/supplement
-                if self._newsapi_key:
-                    async for article in self._fetch_newsapi(legacy_client):
-                        yield article
+            # NewsAPI as fallback/supplement
+            if self._newsapi_key:
+                async for article in self._fetch_newsapi(legacy_client):
+                    yield article
 
-                # Alpha Vantage as tertiary source
-                if self._alpha_vantage_key:
-                    async for article in self._fetch_alpha_vantage(legacy_client):
-                        yield article
+            # Alpha Vantage as tertiary source
+            if self._alpha_vantage_key:
+                async for article in self._fetch_alpha_vantage(legacy_client):
+                    yield article
 
-                # New sources with HTTPClient (retry + key rotation)
-                if self._newsfilter_rotator:
-                    async for article in self._fetch_newsfilter(http_client):
-                        yield article
+            # New sources with HTTPClient (retry + key rotation)
+            if self._newsfilter_rotator:
+                async for article in self._fetch_newsfilter(http_client):
+                    yield article
 
-                if self._marketaux_rotator:
-                    async for article in self._fetch_marketaux(http_client):
-                        yield article
+            if self._marketaux_rotator:
+                async for article in self._fetch_marketaux(http_client):
+                    yield article
 
-                if self._finlight_rotator:
-                    async for article in self._fetch_finlight(http_client):
-                        yield article
+            if self._finlight_rotator:
+                async for article in self._fetch_finlight(http_client):
+                    yield article
 
     async def _fetch_finnhub(
         self,
@@ -351,6 +354,7 @@ class NewsAdapter(BaseAdapter):
 
                 # Get news from last 7 days
                 from datetime import timedelta
+
                 to_date = datetime.now()
                 from_date = to_date - timedelta(days=7)
 

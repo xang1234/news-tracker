@@ -29,7 +29,6 @@ from opentelemetry import context as otel_context
 from src.observability.metrics import get_metrics
 from src.observability.tracing import (
     extract_trace_context,
-    get_tracer,
     inject_trace_context,
     is_tracing_enabled,
 )
@@ -233,9 +232,7 @@ class BaseRedisQueue(ABC, Generic[T]):
                 if "BUSYGROUP" not in str(e):
                     raise
 
-        logger.info(
-            f"Reconnected to Redis, consumer={self._consumer_name}"
-        )
+        logger.info(f"Reconnected to Redis, consumer={self._consumer_name}")
 
     async def __aenter__(self) -> "BaseRedisQueue[T]":
         await self.connect()
@@ -315,7 +312,7 @@ class BaseRedisQueue(ABC, Generic[T]):
                     continue
 
                 # messages is a list of [stream_name, [(id, fields), ...]]
-                for stream_name, msg_list in messages:
+                for _stream_name, msg_list in messages:
                     for msg_id, fields in msg_list:
                         try:
                             job = self._parse_job(msg_id, fields)
@@ -345,16 +342,12 @@ class BaseRedisQueue(ABC, Generic[T]):
                 break
             except redis.ConnectionError as e:
                 delay = backoff.next_delay()
-                logger.warning(
-                    f"Redis connection lost, reconnecting in {delay:.1f}s: {e}"
-                )
+                logger.warning(f"Redis connection lost, reconnecting in {delay:.1f}s: {e}")
                 await asyncio.sleep(delay)
                 await self._reconnect()
             except Exception as e:
                 delay = backoff.next_delay()
-                logger.error(
-                    f"Error consuming messages, retrying in {delay:.1f}s: {e}"
-                )
+                logger.error(f"Error consuming messages, retrying in {delay:.1f}s: {e}")
                 await asyncio.sleep(delay)
 
     async def _reclaim_pending(self, count: int) -> AsyncIterator[T]:
@@ -410,15 +403,11 @@ class BaseRedisQueue(ABC, Generic[T]):
                         f"({delivery_count}/{self._queue_config.max_delivery_attempts}), "
                         f"moving to DLQ"
                     )
-                    await self._move_to_dlq(
-                        msg_id, fields, "max_retries_exceeded"
-                    )
+                    await self._move_to_dlq(msg_id, fields, "max_retries_exceeded")
                     await self.ack(msg_id)
 
                     # Record metric
-                    metrics.dlq_max_retries.labels(
-                        queue=self.stream_config.stream_name
-                    ).inc()
+                    metrics.dlq_max_retries.labels(queue=self.stream_config.stream_name).inc()
                     continue
 
                 try:
@@ -427,9 +416,7 @@ class BaseRedisQueue(ABC, Generic[T]):
                     self._set_job_retry_count(job, delivery_count - 1)
 
                     # Record reclaim metric
-                    metrics.pending_reclaimed.labels(
-                        queue=self.stream_config.stream_name
-                    ).inc()
+                    metrics.pending_reclaimed.labels(queue=self.stream_config.stream_name).inc()
 
                     # Attach trace context from reclaimed message
                     token = None
@@ -452,17 +439,14 @@ class BaseRedisQueue(ABC, Generic[T]):
             # XAUTOCLAIM requires Redis 6.2+
             if "unknown command" in str(e).lower():
                 logger.warning(
-                    "XAUTOCLAIM not available (requires Redis 6.2+), "
-                    "skipping pending reclaim"
+                    "XAUTOCLAIM not available (requires Redis 6.2+), skipping pending reclaim"
                 )
             else:
                 logger.error(f"Error reclaiming pending messages: {e}")
         except Exception as e:
             logger.error(f"Error reclaiming pending messages: {e}")
 
-    async def _get_delivery_counts(
-        self, message_ids: list[str]
-    ) -> dict[str, int]:
+    async def _get_delivery_counts(self, message_ids: list[str]) -> dict[str, int]:
         """
         Get delivery counts for a list of message IDs.
 
@@ -499,7 +483,7 @@ class BaseRedisQueue(ABC, Generic[T]):
         except Exception as e:
             logger.error(f"Error getting delivery counts: {e}")
             # Return default count of 1 for all messages
-            return {msg_id: 1 for msg_id in message_ids}
+            return dict.fromkeys(message_ids, 1)
 
     async def ack(self, message_id: str) -> None:
         """

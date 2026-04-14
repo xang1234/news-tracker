@@ -6,9 +6,8 @@ Stores parameters, results, and error messages for reproducibility.
 
 import json
 import logging
-import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from src.storage.database import Database
@@ -27,9 +26,7 @@ class BacktestRun:
     parameters: dict[str, Any] = field(default_factory=dict)
     results: dict[str, Any] | None = None
     status: str = "running"
-    created_at: datetime = field(
-        default_factory=lambda: datetime.now(timezone.utc)
-    )
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     error_message: str | None = None
 

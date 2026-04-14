@@ -5,11 +5,11 @@ Wraps the existing DocumentRepository and Database classes to provide
 vector operations through the VectorStore abstraction.
 """
 
-import structlog
 from datetime import datetime
 from typing import Any
 
-from src.ingestion.schemas import NormalizedDocument
+import structlog
+
 from src.storage.database import Database
 from src.storage.repository import DocumentRepository
 from src.vectorstore.base import VectorSearchFilter, VectorSearchResult, VectorStore
@@ -75,7 +75,7 @@ class PgVectorStore(VectorStore):
             )
 
         updated = 0
-        for doc_id, embedding in zip(ids, embeddings):
+        for doc_id, embedding in zip(ids, embeddings, strict=True):
             if await self._repo.update_embedding(doc_id, embedding):
                 updated += 1
 

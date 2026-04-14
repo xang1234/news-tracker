@@ -19,7 +19,6 @@ from src.clustering.config import ClusteringConfig
 from src.clustering.schemas import ThemeCluster
 from src.clustering.service import BERTopicService
 
-
 # ──────────────────────────────────────────────────────
 # Fixtures for integration tests
 # ──────────────────────────────────────────────────────
@@ -98,7 +97,10 @@ def three_cluster_data():
     """30 documents in 3 clusters (10 each), well-separated in 768-dim space."""
     n_clusters, n_per = 3, 10
     embeddings, centers, labels = _make_clustered_embeddings(
-        n_clusters=n_clusters, n_per_cluster=n_per, noise_scale=0.05, seed=42,
+        n_clusters=n_clusters,
+        n_per_cluster=n_per,
+        noise_scale=0.05,
+        seed=42,
     )
 
     groups = [
@@ -155,7 +157,9 @@ class TestFitDiscoversThemes:
     """Integration: fit() with real BERTopic discovers themes from synthetic clusters."""
 
     def test_discovers_at_least_two_themes(
-        self, integration_config, three_cluster_data,
+        self,
+        integration_config,
+        three_cluster_data,
     ):
         """Real UMAP+HDBSCAN should find at least 2 themes from 3 distinct clusters."""
         embeddings, documents, doc_ids, _, _ = three_cluster_data
@@ -170,7 +174,9 @@ class TestFitDiscoversThemes:
         assert service.is_initialized
 
     def test_themes_have_valid_structure(
-        self, integration_config, three_cluster_data,
+        self,
+        integration_config,
+        three_cluster_data,
     ):
         """Each discovered theme should have valid ThemeCluster fields."""
         embeddings, documents, doc_ids, _, _ = three_cluster_data
@@ -188,7 +194,9 @@ class TestFitDiscoversThemes:
             assert len(theme.document_ids) == theme.document_count
 
     def test_no_duplicate_document_assignments(
-        self, integration_config, three_cluster_data,
+        self,
+        integration_config,
+        three_cluster_data,
     ):
         """Each document should appear in at most one theme."""
         embeddings, documents, doc_ids, _, _ = three_cluster_data
@@ -202,7 +210,9 @@ class TestFitDiscoversThemes:
         assert len(all_ids) == len(set(all_ids))
 
     def test_outliers_excluded(
-        self, integration_config, three_cluster_data,
+        self,
+        integration_config,
+        three_cluster_data,
     ):
         """No theme should contain outlier documents (topic -1)."""
         embeddings, documents, doc_ids, _, _ = three_cluster_data
@@ -215,7 +225,9 @@ class TestFitDiscoversThemes:
         assert assigned_count <= len(doc_ids)
 
     def test_theme_ids_are_deterministic(
-        self, integration_config, three_cluster_data,
+        self,
+        integration_config,
+        three_cluster_data,
     ):
         """Running fit() twice with same data should produce same theme IDs."""
         embeddings, documents, doc_ids, _, _ = three_cluster_data
@@ -236,7 +248,9 @@ class TestTransformAssignsCorrectly:
     """Integration: transform() assigns new documents to the correct themes."""
 
     def test_new_doc_near_cluster_gets_assigned(
-        self, integration_config, three_cluster_data,
+        self,
+        integration_config,
+        three_cluster_data,
     ):
         """A new embedding near a cluster centroid should be assigned to that theme."""
         embeddings, documents, doc_ids, centers, _ = three_cluster_data
@@ -258,7 +272,9 @@ class TestTransformAssignsCorrectly:
         assert sim > 0.5
 
     def test_distant_doc_becomes_candidate(
-        self, integration_config, three_cluster_data,
+        self,
+        integration_config,
+        three_cluster_data,
     ):
         """An embedding far from all themes should become a new-theme candidate."""
         embeddings, documents, doc_ids, _, _ = three_cluster_data
@@ -281,7 +297,9 @@ class TestTransformAssignsCorrectly:
         assert len(service.new_theme_candidates) == 1
 
     def test_batch_assigns_to_different_themes(
-        self, integration_config, three_cluster_data,
+        self,
+        integration_config,
+        three_cluster_data,
     ):
         """Batch of embeddings near different clusters should go to different themes."""
         embeddings, documents, doc_ids, centers, _ = three_cluster_data
@@ -300,7 +318,9 @@ class TestTransformAssignsCorrectly:
         batch = np.vstack([emb0, emb1]).astype(np.float32)
 
         results = service.transform(
-            ["GPU news", "Memory news"], batch, ["new_001", "new_002"],
+            ["GPU news", "Memory news"],
+            batch,
+            ["new_001", "new_002"],
         )
 
         assert len(results) == 2
@@ -392,11 +412,13 @@ class TestCheckNewThemesIntegration:
         for i in range(30):
             emb = new_center + rng.randn(768) * 0.01
             emb = emb / np.linalg.norm(emb)
-            candidates.append((
-                f"new_cand_{i}",
-                f"Emerging quantum computing chip technology breakthrough {i}",
-                emb.astype(np.float32),
-            ))
+            candidates.append(
+                (
+                    f"new_cand_{i}",
+                    f"Emerging quantum computing chip technology breakthrough {i}",
+                    emb.astype(np.float32),
+                )
+            )
 
         new_themes = service.check_new_themes(candidates)
 
@@ -409,7 +431,9 @@ class TestCheckNewThemesIntegration:
             assert theme.theme_id.startswith("theme_")
 
     def test_rejects_candidates_near_existing(
-        self, integration_config, three_cluster_data,
+        self,
+        integration_config,
+        three_cluster_data,
     ):
         """Candidates near an existing theme centroid should not create a new theme."""
         embeddings, documents, doc_ids, _, _ = three_cluster_data
@@ -428,11 +452,13 @@ class TestCheckNewThemesIntegration:
         for i in range(10):
             emb = existing_centroid + rng.randn(768) * 0.01
             emb = emb / np.linalg.norm(emb)
-            candidates.append((
-                f"near_cand_{i}",
-                f"Very similar topic to existing theme number {i}",
-                emb.astype(np.float32),
-            ))
+            candidates.append(
+                (
+                    f"near_cand_{i}",
+                    f"Very similar topic to existing theme number {i}",
+                    emb.astype(np.float32),
+                )
+            )
 
         new_themes = service.check_new_themes(candidates)
 
@@ -446,7 +472,9 @@ class TestFullPipeline:
     """Integration: end-to-end fit -> transform -> merge -> check_new flow."""
 
     def test_full_pipeline_fit_then_transform(
-        self, integration_config, three_cluster_data,
+        self,
+        integration_config,
+        three_cluster_data,
     ):
         """Full pipeline: fit discovers themes, transform assigns new docs."""
         embeddings, documents, doc_ids, centers, _ = three_cluster_data
@@ -457,7 +485,7 @@ class TestFullPipeline:
         assert len(themes) >= 1
         assert service.is_initialized
 
-        initial_total_docs = sum(t.document_count for t in service._themes.values())
+        sum(t.document_count for t in service._themes.values())
 
         # Phase 2: Transform - assign new documents
         rng = np.random.RandomState(100)
@@ -567,8 +595,10 @@ class TestFitPerformance:
         """Benchmark fit() with 100k documents across 50 clusters."""
         n_clusters, n_per = 50, 2000
         embeddings, _, _ = _make_clustered_embeddings(
-            n_clusters=n_clusters, n_per_cluster=n_per,
-            noise_scale=0.08, seed=42,
+            n_clusters=n_clusters,
+            n_per_cluster=n_per,
+            noise_scale=0.08,
+            seed=42,
         )
         n_total = n_clusters * n_per
         documents = [f"Benchmark document {i} about financial topic" for i in range(n_total)]
@@ -601,7 +631,10 @@ class TestTransformPerformance:
         """Benchmark transform() assigning 10k docs to existing themes."""
         # First, fit on a smaller dataset to establish themes
         fit_embs, fit_centers, _ = _make_clustered_embeddings(
-            n_clusters=20, n_per_cluster=100, noise_scale=0.05, seed=42,
+            n_clusters=20,
+            n_per_cluster=100,
+            noise_scale=0.05,
+            seed=42,
         )
         fit_docs = [f"Training document {i}" for i in range(2000)]
         fit_ids = [f"train_{i:04d}" for i in range(2000)]
@@ -631,7 +664,7 @@ class TestTransformPerformance:
         elapsed = time.monotonic() - start
 
         assert len(results) == n_new
-        print(f"\ntransform() 10k docs: {elapsed:.4f}s ({n_new/elapsed:.0f} docs/sec)")
+        print(f"\ntransform() 10k docs: {elapsed:.4f}s ({n_new / elapsed:.0f} docs/sec)")
 
     def test_batch_assignment_performance(self):
         """Benchmark batch cosine similarity with many themes."""
@@ -676,5 +709,5 @@ class TestTransformPerformance:
         assert elapsed < 5.0, f"Batch assignment too slow: {elapsed:.2f}s"
         print(
             f"\nbatch assignment 5k docs x 100 themes: {elapsed:.4f}s "
-            f"({n_docs/elapsed:.0f} docs/sec)"
+            f"({n_docs / elapsed:.0f} docs/sec)"
         )

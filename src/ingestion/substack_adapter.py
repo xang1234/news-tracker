@@ -15,7 +15,7 @@ import html
 import logging
 import re
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
 
@@ -95,7 +95,7 @@ class SubstackAdapter(BaseAdapter):
         Yields raw article data from configured publications.
         """
         async with httpx.AsyncClient(timeout=30.0) as client:
-            for slug, name, description in self._publications:
+            for slug, name, _description in self._publications:
                 feed_url = self._get_feed_url(slug)
 
                 try:
@@ -114,9 +114,7 @@ class SubstackAdapter(BaseAdapter):
                     feed = feedparser.parse(response.text)
 
                 except httpx.HTTPStatusError as e:
-                    logger.error(
-                        f"Substack feed error for {name}: {e.response.status_code}"
-                    )
+                    logger.error(f"Substack feed error for {name}: {e.response.status_code}")
                     continue
                 except Exception as e:
                     logger.error(f"Substack request failed for {name}: {e}")
@@ -221,15 +219,16 @@ class SubstackAdapter(BaseAdapter):
             if parsed_field in entry and entry[parsed_field]:
                 try:
                     import time
+
                     return datetime.fromtimestamp(
                         time.mktime(entry[parsed_field]),
-                        tz=timezone.utc,
+                        tz=UTC,
                     )
                 except Exception:
                     pass
 
         # Fallback to now
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
 
     def _get_entry_id(self, entry: dict[str, Any]) -> str:
         """Extract unique ID from RSS entry using stable hash."""
@@ -270,7 +269,7 @@ class SubstackAdapter(BaseAdapter):
         text = html.unescape(text)
 
         # Remove excessive whitespace
-        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r"\s+", " ", text)
 
         return text.strip()
 

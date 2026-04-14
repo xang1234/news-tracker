@@ -1,8 +1,6 @@
 """Tests for event API endpoints."""
 
-from datetime import datetime, timezone
-
-import pytest
+from datetime import UTC, datetime
 
 from tests.test_api.conftest import _make_theme
 
@@ -35,7 +33,7 @@ def _make_event_row(
         "span_start": 0,
         "span_end": 50,
         "extractor_version": "1.0",
-        "created_at": created_at or datetime(2026, 2, 5, 12, 0, 0, tzinfo=timezone.utc),
+        "created_at": created_at or datetime(2026, 2, 5, 12, 0, 0, tzinfo=UTC),
     }
 
 
@@ -49,8 +47,12 @@ class TestGetThemeEvents:
         events = [
             _make_event_row(event_id="e1", tickers=["TSM"], actor="TSMC"),
             _make_event_row(
-                event_id="e2", tickers=["NVDA"], event_type="product_launch",
-                actor="NVIDIA", action="launched", object="H200 GPU",
+                event_id="e2",
+                tickers=["NVDA"],
+                event_type="product_launch",
+                actor="NVIDIA",
+                action="launched",
+                object="H200 GPU",
             ),
         ]
         mock_doc_repo.get_events_by_tickers.return_value = events
@@ -98,8 +100,10 @@ class TestGetThemeEvents:
         assert resp.status_code == 200
         # Verify the filter was passed through to the repo
         call_kwargs = mock_doc_repo.get_events_by_tickers.call_args
-        assert call_kwargs.kwargs.get("event_type") == "capacity_expansion" or \
-               call_kwargs[1].get("event_type") == "capacity_expansion"
+        assert (
+            call_kwargs.kwargs.get("event_type") == "capacity_expansion"
+            or call_kwargs[1].get("event_type") == "capacity_expansion"
+        )
 
     def test_invalid_event_type(self, client, mock_theme_repo):
         theme = _make_theme()
@@ -143,12 +147,22 @@ class TestGetThemeEvents:
         # Two events with same composite key from different docs
         events = [
             _make_event_row(
-                event_id="e1", doc_id="d1", actor="TSMC", action="is expanding",
-                object="fab capacity", time_ref="Q3 2026", tickers=["TSM"],
+                event_id="e1",
+                doc_id="d1",
+                actor="TSMC",
+                action="is expanding",
+                object="fab capacity",
+                time_ref="Q3 2026",
+                tickers=["TSM"],
             ),
             _make_event_row(
-                event_id="e2", doc_id="d2", actor="TSMC", action="is expanding",
-                object="fab capacity", time_ref="Q3 2026", tickers=["TSM"],
+                event_id="e2",
+                doc_id="d2",
+                actor="TSMC",
+                action="is expanding",
+                object="fab capacity",
+                time_ref="Q3 2026",
+                tickers=["TSM"],
             ),
         ]
         mock_doc_repo.get_events_by_tickers.return_value = events
@@ -166,12 +180,18 @@ class TestGetThemeEvents:
 
         events = [
             _make_event_row(
-                event_id="e1", doc_id="d1", actor="TSMC",
-                event_type="capacity_expansion", tickers=["TSM"],
+                event_id="e1",
+                doc_id="d1",
+                actor="TSMC",
+                event_type="capacity_expansion",
+                tickers=["TSM"],
             ),
             _make_event_row(
-                event_id="e2", doc_id="d2", actor="Intel",
-                event_type="capacity_expansion", tickers=["TSM"],
+                event_id="e2",
+                doc_id="d2",
+                actor="Intel",
+                event_type="capacity_expansion",
+                tickers=["TSM"],
             ),
         ]
         mock_doc_repo.get_events_by_tickers.return_value = events
@@ -188,16 +208,25 @@ class TestGetThemeEvents:
 
         events = [
             _make_event_row(
-                event_id="e1", doc_id="d1", event_type="capacity_expansion",
-                actor="TSMC", tickers=["TSM"],
+                event_id="e1",
+                doc_id="d1",
+                event_type="capacity_expansion",
+                actor="TSMC",
+                tickers=["TSM"],
             ),
             _make_event_row(
-                event_id="e2", doc_id="d2", event_type="product_launch",
-                actor="NVIDIA", tickers=["NVDA"],
+                event_id="e2",
+                doc_id="d2",
+                event_type="product_launch",
+                actor="NVIDIA",
+                tickers=["NVDA"],
             ),
             _make_event_row(
-                event_id="e3", doc_id="d3", event_type="product_launch",
-                actor="AMD", tickers=["NVDA"],
+                event_id="e3",
+                doc_id="d3",
+                event_type="product_launch",
+                actor="AMD",
+                tickers=["NVDA"],
             ),
         ]
         mock_doc_repo.get_events_by_tickers.return_value = events
@@ -237,9 +266,18 @@ class TestGetThemeEvents:
         event = resp.json()["events"][0]
 
         expected_fields = {
-            "event_id", "doc_id", "event_type", "actor", "action",
-            "object", "time_ref", "quantity", "tickers", "confidence",
-            "source_doc_ids", "created_at",
+            "event_id",
+            "doc_id",
+            "event_type",
+            "actor",
+            "action",
+            "object",
+            "time_ref",
+            "quantity",
+            "tickers",
+            "confidence",
+            "source_doc_ids",
+            "created_at",
         }
         assert expected_fields.issubset(set(event.keys()))
 

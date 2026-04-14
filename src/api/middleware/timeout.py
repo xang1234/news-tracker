@@ -28,9 +28,8 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         # Skip WebSocket upgrades and excluded paths
-        if (
-            request.headers.get("upgrade", "").lower() == "websocket"
-            or any(request.url.path.startswith(p) for p in _EXCLUDED_PREFIXES)
+        if request.headers.get("upgrade", "").lower() == "websocket" or any(
+            request.url.path.startswith(p) for p in _EXCLUDED_PREFIXES
         ):
             return await call_next(request)
 

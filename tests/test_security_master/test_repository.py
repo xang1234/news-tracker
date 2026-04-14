@@ -73,9 +73,7 @@ class TestGetByTicker:
     """Tests for single-ticker lookup."""
 
     @pytest.mark.asyncio
-    async def test_found(
-        self, mock_database: AsyncMock, sample_db_row: dict
-    ) -> None:
+    async def test_found(self, mock_database: AsyncMock, sample_db_row: dict) -> None:
         mock_database.fetchrow.return_value = sample_db_row
         repo = SecurityMasterRepository(mock_database)
 
@@ -96,9 +94,7 @@ class TestGetByTicker:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_with_exchange(
-        self, mock_database: AsyncMock, sample_korean_row: dict
-    ) -> None:
+    async def test_with_exchange(self, mock_database: AsyncMock, sample_korean_row: dict) -> None:
         mock_database.fetchrow.return_value = sample_korean_row
         repo = SecurityMasterRepository(mock_database)
 
@@ -113,9 +109,7 @@ class TestGetAllActive:
     """Tests for fetching all active securities."""
 
     @pytest.mark.asyncio
-    async def test_returns_list(
-        self, mock_database: AsyncMock, sample_db_row: dict
-    ) -> None:
+    async def test_returns_list(self, mock_database: AsyncMock, sample_db_row: dict) -> None:
         mock_database.fetch.return_value = [sample_db_row]
         repo = SecurityMasterRepository(mock_database)
 
@@ -154,9 +148,7 @@ class TestGetCompanyToTickerMap:
     """Tests for company name mapping."""
 
     @pytest.mark.asyncio
-    async def test_builds_map_from_name_and_aliases(
-        self, mock_database: AsyncMock
-    ) -> None:
+    async def test_builds_map_from_name_and_aliases(self, mock_database: AsyncMock) -> None:
         mock_database.fetch.return_value = [
             {
                 "ticker": "NVDA",

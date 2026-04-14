@@ -12,6 +12,7 @@ Components:
 - NotificationConfig / NotificationDispatcher: Dispatch orchestration
 """
 
+from src.alerts.broadcaster import AlertBroadcaster
 from src.alerts.channels import (
     CircuitBreaker,
     NotificationChannel,
@@ -28,7 +29,6 @@ from src.alerts.schemas import (
     AlertSeverity,
     AlertTriggerType,
 )
-from src.alerts.broadcaster import AlertBroadcaster
 from src.alerts.service import AlertService
 
 __all__ = [

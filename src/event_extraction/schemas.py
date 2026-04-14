@@ -5,7 +5,7 @@ structured events extracted from financial text.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -68,7 +68,7 @@ class EventRecord:
     quantity: str | None = None
     tickers: list[str] = field(default_factory=list)
     confidence: float = 0.7
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         """Convert event to dictionary for JSON serialization."""
@@ -104,7 +104,7 @@ class EventRecord:
         if isinstance(created_at, str):
             created_at = datetime.fromisoformat(created_at)
         elif created_at is None:
-            created_at = datetime.now(timezone.utc)
+            created_at = datetime.now(UTC)
 
         return cls(
             event_id=data.get("event_id", str(uuid4())),

@@ -1,21 +1,17 @@
 """Tests for ThemeRankingService — pure computation and async orchestrator."""
 
 import math
-from datetime import date, datetime, timedelta, timezone
+from datetime import date
 from unittest.mock import AsyncMock
 
 import numpy as np
 import pytest
 
 from src.themes.ranking import (
-    LIFECYCLE_MULTIPLIERS,
-    STRATEGY_CONFIGS,
-    RankedTheme,
     RankingConfig,
     ThemeRankingService,
 )
 from src.themes.schemas import Theme, ThemeMetrics
-
 
 # ── Helpers ──────────────────────────────────────────────
 
@@ -335,9 +331,7 @@ class TestGetActionable:
         mock_repo = AsyncMock()
         mock_repo.get_all = AsyncMock(return_value=themes)
         mock_repo.get_metrics_range = AsyncMock(
-            side_effect=lambda tid, start, end: (
-                [metrics_t1] if tid == "t1" else []
-            )
+            side_effect=lambda tid, start, end: ([metrics_t1] if tid == "t1" else [])
         )
 
         service = ThemeRankingService(theme_repo=mock_repo)

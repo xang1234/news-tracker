@@ -18,8 +18,7 @@ Usage:
 
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 
@@ -38,9 +37,9 @@ class DocumentSentiment:
     timestamp: datetime
     label: str  # "positive", "negative", "neutral"
     confidence: float
-    scores: Dict[str, float]  # {"positive": p, "negative": n, "neutral": u}
-    authority_score: Optional[float] = None
-    platform: Optional[str] = None
+    scores: dict[str, float]  # {"positive": p, "negative": n, "neutral": u}
+    authority_score: float | None = None
+    platform: str | None = None
 
     def __post_init__(self) -> None:
         """Validate fields after initialization."""
@@ -58,8 +57,8 @@ class AggregatedSentiment:
     Contains weighted sentiment ratios, velocity metrics, and extreme detection flags.
     """
 
-    theme_id: Optional[str]
-    ticker: Optional[str]
+    theme_id: str | None
+    ticker: str | None
     window_start: datetime
     window_end: datetime
     document_count: int
@@ -71,14 +70,14 @@ class AggregatedSentiment:
 
     # Quality metrics
     avg_confidence: float
-    avg_authority: Optional[float]
+    avg_authority: float | None
 
     # Alpha signals
-    sentiment_velocity: Optional[float] = None  # Rate of change (slope)
-    extreme_sentiment: Optional[str] = None  # "extreme_bullish" or "extreme_bearish"
+    sentiment_velocity: float | None = None  # Rate of change (slope)
+    extreme_sentiment: str | None = None  # "extreme_bullish" or "extreme_bearish"
 
     # Metadata
-    daily_bullish_ratios: List[Tuple[datetime, float]] = field(default_factory=list)
+    daily_bullish_ratios: list[tuple[datetime, float]] = field(default_factory=list)
 
 
 class SentimentAggregator:
@@ -103,10 +102,10 @@ class SentimentAggregator:
 
     def __init__(
         self,
-        config: Optional[SentimentConfig] = None,
-        decay_rate: Optional[float] = None,
-        authority_weight: Optional[float] = None,
-        confidence_weight: Optional[float] = None,
+        config: SentimentConfig | None = None,
+        decay_rate: float | None = None,
+        authority_weight: float | None = None,
+        confidence_weight: float | None = None,
     ):
         """
         Initialize the aggregator.
@@ -121,15 +120,16 @@ class SentimentAggregator:
 
         # Allow parameter overrides for testing/customization
         self._decay_rate = (
-            decay_rate if decay_rate is not None
-            else self._config.aggregation_decay_rate
+            decay_rate if decay_rate is not None else self._config.aggregation_decay_rate
         )
         self._authority_weight = (
-            authority_weight if authority_weight is not None
+            authority_weight
+            if authority_weight is not None
             else self._config.aggregation_authority_weight
         )
         self._confidence_weight = (
-            confidence_weight if confidence_weight is not None
+            confidence_weight
+            if confidence_weight is not None
             else self._config.aggregation_confidence_weight
         )
 
@@ -164,11 +164,11 @@ class SentimentAggregator:
 
     def aggregate_theme_sentiment(
         self,
-        theme_id: Optional[str],
-        ticker: Optional[str],
-        document_sentiments: List[DocumentSentiment],
+        theme_id: str | None,
+        ticker: str | None,
+        document_sentiments: list[DocumentSentiment],
         window_days: int = 7,
-        reference_time: Optional[datetime] = None,
+        reference_time: datetime | None = None,
     ) -> AggregatedSentiment:
         """
         Aggregate sentiment for a theme or ticker over a time window.
@@ -183,12 +183,13 @@ class SentimentAggregator:
         Returns:
             AggregatedSentiment with weighted ratios and alpha signals
         """
-        ref_time = reference_time or datetime.now(timezone.utc)
+        ref_time = reference_time or datetime.now(UTC)
         window_start = ref_time - timedelta(days=window_days)
 
         # Filter to window
         in_window = [
-            doc for doc in document_sentiments
+            doc
+            for doc in document_sentiments
             if doc.timestamp >= window_start and doc.timestamp <= ref_time
         ]
 
@@ -268,24 +269,26 @@ class SentimentAggregator:
             neutral_ratio=round(neutral_ratio, 4),
             avg_confidence=round(avg_confidence, 4),
             avg_authority=round(avg_authority, 4) if avg_authority is not None else None,
-            sentiment_velocity=round(sentiment_velocity, 4) if sentiment_velocity is not None else None,
+            sentiment_velocity=round(sentiment_velocity, 4)
+            if sentiment_velocity is not None
+            else None,
             extreme_sentiment=extreme_sentiment,
             daily_bullish_ratios=daily_ratios,
         )
 
     def _compute_daily_ratios(
         self,
-        docs: List[DocumentSentiment],
+        docs: list[DocumentSentiment],
         window_start: datetime,
         window_end: datetime,
-    ) -> List[Tuple[datetime, float]]:
+    ) -> list[tuple[datetime, float]]:
         """
         Compute daily bullish ratios for velocity calculation.
 
         Groups documents by date and computes bullish ratio per day.
         """
         # Group by date
-        by_date: Dict[datetime.date, List[DocumentSentiment]] = {}
+        by_date: dict[datetime.date, list[DocumentSentiment]] = {}
         for doc in docs:
             date = doc.timestamp.date()
             if date not in by_date:
@@ -300,15 +303,15 @@ class SentimentAggregator:
             total = len(day_docs)
             ratio = positive_count / total if total > 0 else 0.5
             # Use noon of the date as timestamp
-            dt = datetime.combine(date, datetime.min.time().replace(hour=12), tzinfo=timezone.utc)
+            dt = datetime.combine(date, datetime.min.time().replace(hour=12), tzinfo=UTC)
             daily_ratios.append((dt, ratio))
 
         return daily_ratios
 
     def compute_sentiment_velocity(
         self,
-        daily_ratios: List[Tuple[datetime, float]],
-    ) -> Optional[float]:
+        daily_ratios: list[tuple[datetime, float]],
+    ) -> float | None:
         """
         Compute sentiment velocity using linear regression.
 
@@ -346,7 +349,7 @@ class SentimentAggregator:
     def detect_extreme_sentiment(
         self,
         bullish_ratio: float,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Detect extreme sentiment conditions (crowded trades).
 
@@ -365,7 +368,7 @@ class SentimentAggregator:
             return "extreme_bearish"
         return None
 
-    def get_config_summary(self) -> Dict[str, float]:
+    def get_config_summary(self) -> dict[str, float]:
         """Get current aggregation configuration."""
         return {
             "decay_rate": self._decay_rate,

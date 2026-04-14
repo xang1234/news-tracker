@@ -17,7 +17,7 @@ import hashlib
 import json
 import logging
 import re
-from datetime import date, datetime, timezone
+from datetime import date
 from typing import Any
 
 from src.scoring.circuit_breaker import CircuitOpenError
@@ -31,7 +31,7 @@ from src.scoring.prompts import (
     RISK_KEYWORDS,
     TECHNICAL_KEYWORDS,
 )
-from src.scoring.schemas import CompellingnessScore, DimensionScores, ThesisInput
+from src.scoring.schemas import CompellingnessScore, DimensionScores
 
 logger = logging.getLogger(__name__)
 
@@ -396,7 +396,9 @@ class CompellingnessService:
                     "summary": gpt_score.summary,
                 }
                 claude_score = await llm.score_with_anthropic(
-                    thesis_text, context, previous_scores=previous,
+                    thesis_text,
+                    context,
+                    previous_scores=previous,
                 )
                 if claude_score is not None:
                     await self._record_spend("anthropic")
@@ -432,7 +434,8 @@ class CompellingnessService:
     # ── Batch Scoring ────────────────────────────────────
 
     async def score_themes_batch(
-        self, themes: list[Any],
+        self,
+        themes: list[Any],
     ) -> list[CompellingnessScore]:
         """Score multiple themes with per-theme error isolation.
 
@@ -470,12 +473,8 @@ class CompellingnessService:
         llm = self._llm_client
         return {
             **self._stats,
-            "openai_circuit": (
-                llm.openai_breaker.state.value if llm else "not_initialized"
-            ),
-            "anthropic_circuit": (
-                llm.anthropic_breaker.state.value if llm else "not_initialized"
-            ),
+            "openai_circuit": (llm.openai_breaker.state.value if llm else "not_initialized"),
+            "anthropic_circuit": (llm.anthropic_breaker.state.value if llm else "not_initialized"),
             "memory_budgets": dict(self._memory_budgets),
         }
 

@@ -116,9 +116,7 @@ class DocumentQueue(BaseRedisQueue[QueueMessage]):
             approximate=True,  # More efficient trimming
         )
 
-        logger.debug(
-            f"Published document {doc.id} to stream, message_id={message_id}"
-        )
+        logger.debug(f"Published document {doc.id} to stream, message_id={message_id}")
         return str(message_id)
 
     async def publish_batch(self, docs: list[NormalizedDocument]) -> list[str]:

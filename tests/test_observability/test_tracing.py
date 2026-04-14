@@ -127,9 +127,8 @@ class TestTracedContextManager:
         """traced() should record exceptions and set error status."""
         tracer = get_tracer("test")
 
-        with pytest.raises(ValueError, match="test error"):
-            with traced(tracer, "failing_op"):
-                raise ValueError("test error")
+        with pytest.raises(ValueError, match="test error"), traced(tracer, "failing_op"):
+            raise ValueError("test error")
 
         spans = _exporter.get_finished_spans()
         assert len(spans) == 1

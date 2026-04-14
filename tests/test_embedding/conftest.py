@@ -75,8 +75,7 @@ def mock_tokenizer():
         # Return placeholder text
         return " ".join(["word"] * len(tokens))
 
-    def call_side_effect(text, return_tensors=None, truncation=True,
-                        max_length=512, padding=True):
+    def call_side_effect(text, return_tensors=None, truncation=True, max_length=512, padding=True):
         # Simple mock tokenization
         if isinstance(text, str):
             seq_len = max(min(len(text.split()), max_length), 1)

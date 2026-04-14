@@ -1,21 +1,21 @@
 """Event endpoints for theme-linked event retrieval."""
 
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from starlette.requests import Request
-import structlog
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import get_document_repository, get_theme_repository
-from src.api.rate_limit import limiter
-from src.config.settings import get_settings as _get_settings
 from src.api.models import (
     ErrorResponse,
     ThemeEventItem,
     ThemeEventsResponse,
 )
+from src.api.rate_limit import limiter
+from src.config.settings import get_settings as _get_settings
 from src.event_extraction.schemas import VALID_EVENT_TYPES
 from src.event_extraction.theme_integration import EventThemeLinker, ThemeWithEvents
 from src.storage.repository import DocumentRepository
@@ -49,12 +49,8 @@ async def get_theme_events(
         default=None,
         description="Filter by event type (e.g., capacity_expansion, product_launch)",
     ),
-    days: int = Query(
-        default=7, ge=1, le=90, description="Lookback window in days"
-    ),
-    limit: int = Query(
-        default=20, ge=1, le=200, description="Maximum events to return"
-    ),
+    days: int = Query(default=7, ge=1, le=90, description="Lookback window in days"),
+    limit: int = Query(default=20, ge=1, le=200, description="Maximum events to return"),
     api_key: str = Depends(verify_api_key),
     theme_repo: ThemeRepository = Depends(get_theme_repository),
     doc_repo: DocumentRepository = Depends(get_document_repository),
@@ -92,7 +88,7 @@ async def get_theme_events(
                 latency_ms=round(latency_ms, 2),
             )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         since = now - timedelta(days=days)
 
         # Over-fetch to account for dedup losses

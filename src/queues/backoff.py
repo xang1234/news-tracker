@@ -47,7 +47,7 @@ class ExponentialBackoff:
     def next_delay(self) -> float:
         """Calculate and return the next backoff delay, incrementing the attempt counter."""
         delay = min(
-            self.base_delay * (self.multiplier ** self._attempt),
+            self.base_delay * (self.multiplier**self._attempt),
             self.max_delay,
         )
         # Add random jitter: ±jitter_range fraction of delay

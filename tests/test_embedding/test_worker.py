@@ -1,6 +1,6 @@
 """Tests for EmbeddingWorker."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,7 +23,7 @@ def sample_documents() -> list[NormalizedDocument]:
             id=f"doc_{i}",
             platform=Platform.NEWS,
             url=f"https://example.com/article/{i}",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             author_id=f"author_{i}",
             author_name=f"Author {i}",
             content=f"Financial news content about semiconductors number {i}",
@@ -137,10 +137,7 @@ class TestEmbeddingWorkerProcessing:
         worker._repository = mock_repository
 
         # Create jobs for first 3 documents
-        jobs = [
-            EmbeddingJob(message_id=f"msg_{i}", document_id=f"doc_{i}")
-            for i in range(3)
-        ]
+        jobs = [EmbeddingJob(message_id=f"msg_{i}", document_id=f"doc_{i}") for i in range(3)]
 
         await worker._process_batch(jobs)
 
@@ -312,7 +309,8 @@ class TestEmbeddingWorkerRunOnce:
 
             # Patch repository creation
             with patch.object(
-                worker, "_fetch_documents",
+                worker,
+                "_fetch_documents",
                 return_value=list(doc_map.values()),
             ):
                 worker._repository = mock_repo
@@ -381,10 +379,7 @@ class TestEmbeddingWorkerClusteringIntegration:
             )
             worker._repository = mock_repository
 
-            jobs = [
-                EmbeddingJob(message_id=f"msg_{i}", document_id=f"doc_{i}")
-                for i in range(3)
-            ]
+            jobs = [EmbeddingJob(message_id=f"msg_{i}", document_id=f"doc_{i}") for i in range(3)]
 
             await worker._process_batch(jobs)
 
@@ -425,9 +420,7 @@ class TestEmbeddingWorkerClusteringIntegration:
             )
             worker._repository = mock_repository
 
-            jobs = [
-                EmbeddingJob(message_id="msg_0", document_id="doc_0")
-            ]
+            jobs = [EmbeddingJob(message_id="msg_0", document_id="doc_0")]
 
             await worker._process_batch(jobs)
 
@@ -445,9 +438,7 @@ class TestEmbeddingWorkerClusteringIntegration:
     ):
         """Clustering enqueue failure should not affect embedding processing."""
         mock_clustering_queue = AsyncMock(spec=ClusteringQueue)
-        mock_clustering_queue.publish = AsyncMock(
-            side_effect=Exception("Redis connection lost")
-        )
+        mock_clustering_queue.publish = AsyncMock(side_effect=Exception("Redis connection lost"))
 
         config = EmbeddingConfig(batch_size=4)
 
@@ -466,9 +457,7 @@ class TestEmbeddingWorkerClusteringIntegration:
             )
             worker._repository = mock_repository
 
-            jobs = [
-                EmbeddingJob(message_id="msg_0", document_id="doc_0")
-            ]
+            jobs = [EmbeddingJob(message_id="msg_0", document_id="doc_0")]
 
             # Should NOT raise even though clustering enqueue fails
             await worker._process_batch(jobs)
@@ -513,9 +502,7 @@ class TestEmbeddingWorkerClusteringIntegration:
             )
             worker._repository = mock_repo
 
-            jobs = [
-                EmbeddingJob(message_id="msg_0", document_id="doc_0")
-            ]
+            jobs = [EmbeddingJob(message_id="msg_0", document_id="doc_0")]
 
             await worker._process_batch(jobs)
 

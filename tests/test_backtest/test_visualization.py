@@ -20,15 +20,17 @@ def results_with_data() -> BacktestResults:
     base_returns = [0.02, -0.01, 0.03, -0.005, 0.015, -0.02, 0.04, 0.01, -0.03, 0.025]
     base_scores = [5.0, 4.0, 6.5, 3.5, 5.5, 2.0, 7.0, 4.5, 3.0, 6.0]
 
-    for i, (ret, score) in enumerate(zip(base_returns, base_scores)):
-        daily.append(DailyBacktestResult(
-            date=date(2025, 6, 2 + i),
-            ranked_themes=[{"score": score, "theme_id": f"t{i}"}],
-            top_n_tickers=["NVDA", "AMD"],
-            top_n_avg_return=ret,
-            direction_correct=ret > 0,
-            theme_count=10,
-        ))
+    for i, (ret, score) in enumerate(zip(base_returns, base_scores, strict=False)):
+        daily.append(
+            DailyBacktestResult(
+                date=date(2025, 6, 2 + i),
+                ranked_themes=[{"score": score, "theme_id": f"t{i}"}],
+                top_n_tickers=["NVDA", "AMD"],
+                top_n_avg_return=ret,
+                direction_correct=ret > 0,
+                theme_count=10,
+            )
+        )
 
     return BacktestResults(
         run_id="run_test_viz",
@@ -109,14 +111,16 @@ def multi_month_results() -> BacktestResults:
             d = date(2025, month, day)
             if d.weekday() < 5:
                 ret = 0.01 * ((-1) ** day_num) + 0.002
-                daily.append(DailyBacktestResult(
-                    date=d,
-                    ranked_themes=[{"score": 4.0 + day_num * 0.1, "theme_id": f"t{day_num}"}],
-                    top_n_tickers=["NVDA"],
-                    top_n_avg_return=ret,
-                    direction_correct=ret > 0,
-                    theme_count=10,
-                ))
+                daily.append(
+                    DailyBacktestResult(
+                        date=d,
+                        ranked_themes=[{"score": 4.0 + day_num * 0.1, "theme_id": f"t{day_num}"}],
+                        top_n_tickers=["NVDA"],
+                        top_n_avg_return=ret,
+                        direction_correct=ret > 0,
+                        theme_count=10,
+                    )
+                )
                 day_num += 1
 
     return BacktestResults(

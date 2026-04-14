@@ -180,8 +180,12 @@ class LLMClient:
                             "technical": {"type": "number"},
                         },
                         "required": [
-                            "authority", "evidence", "reasoning",
-                            "risk", "actionability", "technical",
+                            "authority",
+                            "evidence",
+                            "reasoning",
+                            "risk",
+                            "actionability",
+                            "technical",
                         ],
                     },
                     "summary": {"type": "string"},
@@ -218,7 +222,9 @@ class LLMClient:
                 if block.type == "tool_use" and block.name == "submit_score":
                     raw_json = json.dumps(block.input)
                     return self._parse_score_response(
-                        raw_json, tier="claude", model=self._config.anthropic_model,
+                        raw_json,
+                        tier="claude",
+                        model=self._config.anthropic_model,
                     )
             logger.warning("Anthropic response contained no tool_use block")
             return None
@@ -247,9 +253,7 @@ class LLMClient:
             dims_data = data.get("dimensions", {})
             dimensions = DimensionScores(**dims_data)
 
-            evidence_quotes = [
-                EvidenceQuote(**eq) for eq in data.get("evidence_quotes", [])
-            ]
+            evidence_quotes = [EvidenceQuote(**eq) for eq in data.get("evidence_quotes", [])]
 
             return CompellingnessScore(
                 overall_score=float(data["overall_score"]),
