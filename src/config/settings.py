@@ -65,7 +65,7 @@ class Settings(BaseSettings):
 
     # XUI (Twitter browser ingestion with adaptive guardrails)
     twitter_xui_enabled: bool = Field(
-        default=True,
+        default=False,
         description="Enable xui browser ingestion for Twitter data",
     )
     twitter_xui_command: str = Field(
@@ -262,6 +262,12 @@ class Settings(BaseSettings):
     # Sources
     sources_enabled: bool = Field(
         default=False, description="Enable database-backed source management"
+    )
+    sources_trigger_lock_ttl_seconds: int = Field(
+        default=3600,
+        ge=60,
+        le=86_400,
+        description="TTL for the distributed manual-ingestion lock",
     )
 
     # Drift Detection

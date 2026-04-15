@@ -1,11 +1,12 @@
-"""
-Dependency injection for FastAPI endpoints.
-"""
+"""FastAPI dependencies backed by app-scoped services."""
+
+from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator
+from typing import Literal, cast
 
 import redis.asyncio as redis
+from fastapi import FastAPI, Request
 
 from src.alerts.broadcaster import AlertBroadcaster
 from src.alerts.repository import AlertRepository
@@ -37,608 +38,448 @@ from src.storage.database import Database
 from src.storage.repository import DocumentRepository
 from src.themes.ranking import ThemeRankingService
 from src.themes.repository import ThemeRepository
+from src.vectorstore.config import VectorStoreConfig
 from src.vectorstore.manager import VectorStoreManager
-
-# Async init lock — prevents duplicate instances under concurrent startup
-_init_lock = asyncio.Lock()
-
-# Global service instances (initialized on first request)
-_embedding_service: EmbeddingService | None = None
-_sentiment_service: SentimentService | None = None
-_redis_client: redis.Redis | None = None
-_vector_store_manager: VectorStoreManager | None = None
-_database: Database | None = None
-_theme_repository: ThemeRepository | None = None
-_document_repository: DocumentRepository | None = None
-_sentiment_aggregator: SentimentAggregator | None = None
-_ranking_service: ThemeRankingService | None = None
-_alert_repository: AlertRepository | None = None
-_narrative_repository: NarrativeRepository | None = None
-_causal_graph: CausalGraph | None = None
-_propagation_service: SentimentPropagation | None = None
-_feedback_repository: FeedbackRepository | None = None
-_alert_broadcaster: AlertBroadcaster | None = None
-_graph_repository: GraphRepository | None = None
-_ner_service: NERService | None = None
-_keywords_service: KeywordsService | None = None
-_pattern_extractor: PatternExtractor | None = None
-_security_master_repository: SecurityMasterRepository | None = None
-_sources_repository: SourcesRepository | None = None
-_publish_service: PublishService | None = None
-_assertion_repository: AssertionRepository | None = None
-_claim_repository: ClaimRepository | None = None
+from src.vectorstore.pgvector_store import PgVectorStore
 
 
-async def get_database() -> Database:
-    """Get database instance (singleton)."""
-    global _database
+class AppServices:
+    """App-scoped service container with lazy initialization."""
 
-    if _database is None:
-        async with _init_lock:
-            if _database is None:
-                _database = Database()
-                await _database.connect()
+    def __init__(self) -> None:
+        self._settings = get_settings()
+        self._init_lock = asyncio.Lock()
 
-    return _database
+        self.database: Database | None = None
+        self.redis_client: redis.Redis | None = None
+        self.embedding_service: EmbeddingService | None = None
+        self.sentiment_service: SentimentService | None = None
+        self.vector_store_manager: VectorStoreManager | None = None
+        self.theme_repository: ThemeRepository | None = None
+        self.document_repository: DocumentRepository | None = None
+        self.sentiment_aggregator: SentimentAggregator | None = None
+        self.ranking_service: ThemeRankingService | None = None
+        self.alert_repository: AlertRepository | None = None
+        self.narrative_repository: NarrativeRepository | None = None
+        self.causal_graph: CausalGraph | None = None
+        self.propagation_service: SentimentPropagation | None = None
+        self.feedback_repository: FeedbackRepository | None = None
+        self.alert_broadcaster: AlertBroadcaster | None = None
+        self.graph_repository: GraphRepository | None = None
+        self.ner_service: NERService | None = None
+        self.keywords_service: KeywordsService | None = None
+        self.pattern_extractor: PatternExtractor | None = None
+        self.security_master_repository: SecurityMasterRepository | None = None
+        self.sources_repository: SourcesRepository | None = None
+        self.publish_service: PublishService | None = None
+        self.assertion_repository: AssertionRepository | None = None
+        self.claim_repository: ClaimRepository | None = None
 
+    async def get_database(self) -> Database:
+        if self.database is None:
+            async with self._init_lock:
+                if self.database is None:
+                    self.database = Database()
+                    await self.database.connect()
+        return self.database
 
-async def get_redis_client() -> AsyncGenerator[redis.Redis, None]:
-    """Get Redis client for caching."""
-    global _redis_client
-
-    if _redis_client is None:
-        async with _init_lock:
-            if _redis_client is None:
-                settings = get_settings()
-                _redis_client = redis.from_url(
-                    str(settings.redis_url),
-                    encoding="utf-8",
-                    decode_responses=True,
-                )
-
-    yield _redis_client
-
-
-async def get_embedding_service() -> EmbeddingService:
-    """
-    Get embedding service instance.
-
-    Creates a singleton service with Redis caching enabled.
-    """
-    global _embedding_service, _redis_client
-
-    if _embedding_service is None:
-        async with _init_lock:
-            if _embedding_service is None:
-                settings = get_settings()
-
-                if _redis_client is None:
-                    _redis_client = redis.from_url(
-                        str(settings.redis_url),
-                        encoding="utf-8",
-                        decode_responses=True,
-                    )
-
-                config = EmbeddingConfig(
-                    model_name=settings.embedding_model_name,
-                    batch_size=settings.embedding_batch_size,
-                    use_fp16=settings.embedding_use_fp16,
-                    backend=settings.embedding_backend,
-                    device=settings.embedding_device,
-                    execution_provider=settings.embedding_execution_provider,
-                    onnx_model_path=settings.embedding_onnx_model_path,
-                    onnx_minilm_model_path=settings.embedding_minilm_onnx_model_path,
-                    cache_enabled=settings.embedding_cache_enabled,
-                    cache_ttl_hours=settings.embedding_cache_ttl_hours,
-                )
-
-                _embedding_service = EmbeddingService(
-                    config=config,
-                    redis_client=_redis_client,
-                )
-
-    return _embedding_service
-
-
-async def get_sentiment_service() -> SentimentService:
-    """
-    Get sentiment service instance.
-
-    Creates a singleton service with Redis caching enabled.
-    """
-    global _sentiment_service, _redis_client
-
-    if _sentiment_service is None:
-        async with _init_lock:
-            if _sentiment_service is None:
-                settings = get_settings()
-
-                if _redis_client is None:
-                    _redis_client = redis.from_url(
-                        str(settings.redis_url),
-                        encoding="utf-8",
-                        decode_responses=True,
-                    )
-
-                config = SentimentConfig(
-                    model_name=settings.sentiment_model_name,
-                    batch_size=settings.sentiment_batch_size,
-                    use_fp16=settings.sentiment_use_fp16,
-                    backend=settings.sentiment_backend,
-                    device=settings.sentiment_device,
-                    execution_provider=settings.sentiment_execution_provider,
-                    onnx_model_path=settings.sentiment_onnx_model_path,
-                    stream_name=settings.sentiment_stream_name,
-                    consumer_group=settings.sentiment_consumer_group,
-                    cache_enabled=settings.sentiment_cache_enabled,
-                    cache_ttl_hours=settings.sentiment_cache_ttl_hours,
-                    enable_entity_sentiment=settings.sentiment_enable_entity_sentiment,
-                )
-
-                _sentiment_service = SentimentService(
-                    config=config,
-                    redis_client=_redis_client,
-                )
-
-    return _sentiment_service
-
-
-async def get_vector_store_manager() -> "VectorStoreManager":
-    """
-    Get vector store manager instance.
-
-    Creates a singleton manager with Database, PgVectorStore, and EmbeddingService.
-    """
-    global _vector_store_manager, _database, _embedding_service, _redis_client
-
-    if _vector_store_manager is None:
-        async with _init_lock:
-            if _vector_store_manager is None:
-                from src.storage.repository import DocumentRepository
-                from src.vectorstore.config import VectorStoreConfig
-                from src.vectorstore.pgvector_store import PgVectorStore
-
-                settings = get_settings()
-
-                if _database is None:
-                    _database = Database()
-                    await _database.connect()
-
-                if _embedding_service is None:
-                    if _redis_client is None:
-                        _redis_client = redis.from_url(
-                            str(settings.redis_url),
+    async def get_redis_client(self) -> redis.Redis:
+        if self.redis_client is None:
+            async with self._init_lock:
+                if self.redis_client is None:
+                    self.redis_client = cast(
+                        redis.Redis,
+                        redis.from_url(
+                            str(self._settings.redis_url),
                             encoding="utf-8",
                             decode_responses=True,
-                        )
-
-                    config = EmbeddingConfig(
-                        model_name=settings.embedding_model_name,
-                        batch_size=settings.embedding_batch_size,
-                        use_fp16=settings.embedding_use_fp16,
-                        backend=settings.embedding_backend,
-                        device=settings.embedding_device,
-                        execution_provider=settings.embedding_execution_provider,
-                        onnx_model_path=settings.embedding_onnx_model_path,
-                        onnx_minilm_model_path=settings.embedding_minilm_onnx_model_path,
-                        cache_enabled=settings.embedding_cache_enabled,
-                        cache_ttl_hours=settings.embedding_cache_ttl_hours,
+                        ),
                     )
-                    _embedding_service = EmbeddingService(
+        return self.redis_client
+
+    async def get_embedding_service(self) -> EmbeddingService:
+        if self.embedding_service is None:
+            redis_client = await self.get_redis_client()
+            async with self._init_lock:
+                if self.embedding_service is None:
+                    self.embedding_service = EmbeddingService(
+                        config=EmbeddingConfig(
+                            model_name=self._settings.embedding_model_name,
+                            batch_size=self._settings.embedding_batch_size,
+                            use_fp16=self._settings.embedding_use_fp16,
+                            backend=cast(
+                                Literal["auto", "torch", "onnx"],
+                                self._settings.embedding_backend,
+                            ),
+                            device=cast(
+                                Literal["auto", "cpu", "cuda", "mps"],
+                                self._settings.embedding_device,
+                            ),
+                            execution_provider=cast(
+                                Literal["auto", "cpu", "cuda", "coreml"],
+                                self._settings.embedding_execution_provider,
+                            ),
+                            onnx_model_path=self._settings.embedding_onnx_model_path,
+                            onnx_minilm_model_path=self._settings.embedding_minilm_onnx_model_path,
+                            cache_enabled=self._settings.embedding_cache_enabled,
+                            cache_ttl_hours=self._settings.embedding_cache_ttl_hours,
+                        ),
+                        redis_client=redis_client,
+                    )
+        return self.embedding_service
+
+    async def get_sentiment_service(self) -> SentimentService:
+        if self.sentiment_service is None:
+            redis_client = await self.get_redis_client()
+            async with self._init_lock:
+                if self.sentiment_service is None:
+                    self.sentiment_service = SentimentService(
+                        config=SentimentConfig(
+                            model_name=self._settings.sentiment_model_name,
+                            batch_size=self._settings.sentiment_batch_size,
+                            use_fp16=self._settings.sentiment_use_fp16,
+                            backend=cast(
+                                Literal["auto", "torch", "onnx"],
+                                self._settings.sentiment_backend,
+                            ),
+                            device=cast(
+                                Literal["auto", "cpu", "cuda", "mps"],
+                                self._settings.sentiment_device,
+                            ),
+                            execution_provider=cast(
+                                Literal["auto", "cpu", "cuda", "coreml"],
+                                self._settings.sentiment_execution_provider,
+                            ),
+                            onnx_model_path=self._settings.sentiment_onnx_model_path,
+                            stream_name=self._settings.sentiment_stream_name,
+                            consumer_group=self._settings.sentiment_consumer_group,
+                            cache_enabled=self._settings.sentiment_cache_enabled,
+                            cache_ttl_hours=self._settings.sentiment_cache_ttl_hours,
+                            enable_entity_sentiment=self._settings.sentiment_enable_entity_sentiment,
+                        ),
+                        redis_client=redis_client,
+                    )
+        return self.sentiment_service
+
+    async def get_vector_store_manager(self) -> VectorStoreManager:
+        if self.vector_store_manager is None:
+            database = await self.get_database()
+            embedding_service = await self.get_embedding_service()
+            async with self._init_lock:
+                if self.vector_store_manager is None:
+                    repository = DocumentRepository(database)
+                    config = VectorStoreConfig(
+                        default_limit=self._settings.vectorstore_default_limit,
+                        default_threshold=self._settings.vectorstore_default_threshold,
+                        centroid_default_limit=self._settings.vectorstore_centroid_limit,
+                        centroid_default_threshold=self._settings.vectorstore_centroid_threshold,
+                    )
+                    vector_store = PgVectorStore(
+                        database=database,
+                        repository=repository,
                         config=config,
-                        redis_client=_redis_client,
                     )
-
-                repository = DocumentRepository(_database)
-                vector_store_config = VectorStoreConfig(
-                    default_limit=settings.vectorstore_default_limit,
-                    default_threshold=settings.vectorstore_default_threshold,
-                    centroid_default_limit=settings.vectorstore_centroid_limit,
-                    centroid_default_threshold=settings.vectorstore_centroid_threshold,
-                )
-                vector_store = PgVectorStore(
-                    database=_database,
-                    repository=repository,
-                    config=vector_store_config,
-                )
-                _vector_store_manager = VectorStoreManager(
-                    vector_store=vector_store,
-                    embedding_service=_embedding_service,
-                    config=vector_store_config,
-                )
-
-    return _vector_store_manager
-
-
-async def get_theme_repository() -> ThemeRepository:
-    """
-    Get theme repository instance.
-
-    Creates a singleton repository backed by the shared Database.
-    """
-    global _theme_repository, _database
-
-    if _theme_repository is None:
-        async with _init_lock:
-            if _theme_repository is None:
-                if _database is None:
-                    _database = Database()
-                    await _database.connect()
-
-                _theme_repository = ThemeRepository(_database)
-
-    return _theme_repository
-
-
-async def get_document_repository() -> DocumentRepository:
-    """
-    Get document repository instance.
-
-    Creates a singleton repository backed by the shared Database.
-    """
-    global _document_repository, _database
-
-    if _document_repository is None:
-        async with _init_lock:
-            if _document_repository is None:
-                if _database is None:
-                    _database = Database()
-                    await _database.connect()
-
-                _document_repository = DocumentRepository(_database)
-
-    return _document_repository
-
-
-async def get_ranking_service() -> ThemeRankingService:
-    """
-    Get ranking service instance.
-
-    Creates a singleton service backed by the shared ThemeRepository.
-    """
-    global _ranking_service, _theme_repository, _database
-
-    if _ranking_service is None:
-        async with _init_lock:
-            if _ranking_service is None:
-                if _theme_repository is None:
-                    if _database is None:
-                        _database = Database()
-                        await _database.connect()
-                    _theme_repository = ThemeRepository(_database)
-
-                _ranking_service = ThemeRankingService(theme_repo=_theme_repository)
-
-    return _ranking_service
-
-
-async def get_alert_repository() -> AlertRepository:
-    """
-    Get alert repository instance.
-
-    Creates a singleton repository backed by the shared Database.
-    """
-    global _alert_repository, _database
-
-    if _alert_repository is None:
-        async with _init_lock:
-            if _alert_repository is None:
-                if _database is None:
-                    _database = Database()
-                    await _database.connect()
-
-                _alert_repository = AlertRepository(_database)
-
-    return _alert_repository
-
-
-async def get_narrative_repository() -> NarrativeRepository:
-    """Get narrative repository instance."""
-    global _narrative_repository, _database
-
-    if _narrative_repository is None:
-        async with _init_lock:
-            if _narrative_repository is None:
-                if _database is None:
-                    _database = Database()
-                    await _database.connect()
-
-                _narrative_repository = NarrativeRepository(_database)
-
-    return _narrative_repository
-
-
-async def get_feedback_repository() -> FeedbackRepository:
-    """
-    Get feedback repository instance.
-
-    Creates a singleton repository backed by the shared Database.
-    """
-    global _feedback_repository, _database
-
-    if _feedback_repository is None:
-        async with _init_lock:
-            if _feedback_repository is None:
-                if _database is None:
-                    _database = Database()
-                    await _database.connect()
-
-                _feedback_repository = FeedbackRepository(_database)
-
-    return _feedback_repository
-
-
-def get_sentiment_aggregator() -> SentimentAggregator:
-    """
-    Get sentiment aggregator instance.
-
-    Stateless aggregator — no DB or async needed.
-    """
-    global _sentiment_aggregator
-
-    if _sentiment_aggregator is None:
-        _sentiment_aggregator = SentimentAggregator()
-
-    return _sentiment_aggregator
-
-
-async def get_graph_repository() -> GraphRepository:
-    """Get graph repository instance (singleton)."""
-    global _graph_repository, _database
-
-    if _graph_repository is None:
-        async with _init_lock:
-            if _graph_repository is None:
-                if _database is None:
-                    _database = Database()
-                    await _database.connect()
-
-                _graph_repository = GraphRepository(_database)
-
-    return _graph_repository
-
-
-async def get_causal_graph() -> CausalGraph:
-    """
-    Get causal graph instance.
-
-    Creates a singleton CausalGraph backed by the shared Database.
-    """
-    global _causal_graph, _database
-
-    if _causal_graph is None:
-        async with _init_lock:
-            if _causal_graph is None:
-                if _database is None:
-                    _database = Database()
-                    await _database.connect()
-
-                _causal_graph = CausalGraph(_database, config=GraphConfig())
-
-    return _causal_graph
-
-
-async def get_propagation_service() -> SentimentPropagation:
-    """
-    Get sentiment propagation service instance.
-
-    Creates a singleton service backed by the shared CausalGraph.
-    """
-    global _propagation_service, _causal_graph, _database
-
-    if _propagation_service is None:
-        async with _init_lock:
-            if _propagation_service is None:
-                if _causal_graph is None:
-                    if _database is None:
-                        _database = Database()
-                        await _database.connect()
-                    _causal_graph = CausalGraph(_database, config=GraphConfig())
-
-                _propagation_service = SentimentPropagation(
-                    graph=_causal_graph,
-                    config=GraphConfig(),
-                )
-
-    return _propagation_service
-
-
-async def get_alert_broadcaster() -> AlertBroadcaster:
-    """Get or create the alert broadcaster singleton.
-
-    Initializes the broadcaster, connects to Redis, and starts the
-    background subscriber task. Called during app lifespan startup.
-    """
-    global _alert_broadcaster, _redis_client
-
-    if _alert_broadcaster is None:
-        async with _init_lock:
-            if _alert_broadcaster is None:
-                settings = get_settings()
-
-                if _redis_client is None:
-                    _redis_client = redis.from_url(
-                        str(settings.redis_url),
-                        encoding="utf-8",
-                        decode_responses=True,
+                    self.vector_store_manager = VectorStoreManager(
+                        vector_store=vector_store,
+                        embedding_service=embedding_service,
+                        config=config,
                     )
+        return self.vector_store_manager
 
-                _alert_broadcaster = AlertBroadcaster(
-                    max_connections=settings.ws_alerts_max_connections,
-                    heartbeat_interval=settings.ws_alerts_heartbeat_seconds,
-                )
-                await _alert_broadcaster.start(_redis_client)
+    async def get_theme_repository(self) -> ThemeRepository:
+        if self.theme_repository is None:
+            database = await self.get_database()
+            async with self._init_lock:
+                if self.theme_repository is None:
+                    self.theme_repository = ThemeRepository(database)
+        return self.theme_repository
 
-    return _alert_broadcaster
+    async def get_document_repository(self) -> DocumentRepository:
+        if self.document_repository is None:
+            database = await self.get_database()
+            async with self._init_lock:
+                if self.document_repository is None:
+                    self.document_repository = DocumentRepository(database)
+        return self.document_repository
+
+    async def get_ranking_service(self) -> ThemeRankingService:
+        if self.ranking_service is None:
+            theme_repository = await self.get_theme_repository()
+            async with self._init_lock:
+                if self.ranking_service is None:
+                    self.ranking_service = ThemeRankingService(theme_repo=theme_repository)
+        return self.ranking_service
+
+    async def get_alert_repository(self) -> AlertRepository:
+        if self.alert_repository is None:
+            database = await self.get_database()
+            async with self._init_lock:
+                if self.alert_repository is None:
+                    self.alert_repository = AlertRepository(database)
+        return self.alert_repository
+
+    async def get_narrative_repository(self) -> NarrativeRepository:
+        if self.narrative_repository is None:
+            database = await self.get_database()
+            async with self._init_lock:
+                if self.narrative_repository is None:
+                    self.narrative_repository = NarrativeRepository(database)
+        return self.narrative_repository
+
+    async def get_feedback_repository(self) -> FeedbackRepository:
+        if self.feedback_repository is None:
+            database = await self.get_database()
+            async with self._init_lock:
+                if self.feedback_repository is None:
+                    self.feedback_repository = FeedbackRepository(database)
+        return self.feedback_repository
+
+    def get_sentiment_aggregator(self) -> SentimentAggregator:
+        if self.sentiment_aggregator is None:
+            self.sentiment_aggregator = SentimentAggregator()
+        return self.sentiment_aggregator
+
+    async def get_graph_repository(self) -> GraphRepository:
+        if self.graph_repository is None:
+            database = await self.get_database()
+            async with self._init_lock:
+                if self.graph_repository is None:
+                    self.graph_repository = GraphRepository(database)
+        return self.graph_repository
+
+    async def get_causal_graph(self) -> CausalGraph:
+        if self.causal_graph is None:
+            database = await self.get_database()
+            async with self._init_lock:
+                if self.causal_graph is None:
+                    self.causal_graph = CausalGraph(database, config=GraphConfig())
+        return self.causal_graph
+
+    async def get_propagation_service(self) -> SentimentPropagation:
+        if self.propagation_service is None:
+            causal_graph = await self.get_causal_graph()
+            async with self._init_lock:
+                if self.propagation_service is None:
+                    self.propagation_service = SentimentPropagation(
+                        graph=causal_graph,
+                        config=GraphConfig(),
+                    )
+        return self.propagation_service
+
+    async def get_alert_broadcaster(self) -> AlertBroadcaster:
+        if self.alert_broadcaster is None:
+            redis_client = await self.get_redis_client()
+            async with self._init_lock:
+                if self.alert_broadcaster is None:
+                    broadcaster = AlertBroadcaster(
+                        max_connections=self._settings.ws_alerts_max_connections,
+                        heartbeat_interval=self._settings.ws_alerts_heartbeat_seconds,
+                    )
+                    await broadcaster.start(redis_client)
+                    self.alert_broadcaster = broadcaster
+        return self.alert_broadcaster
+
+    def get_ner_service(self) -> NERService:
+        if self.ner_service is None:
+            self.ner_service = NERService(config=NERConfig())
+        return self.ner_service
+
+    def get_keywords_service(self) -> KeywordsService:
+        if self.keywords_service is None:
+            self.keywords_service = KeywordsService(config=KeywordsConfig())
+        return self.keywords_service
+
+    def get_pattern_extractor(self) -> PatternExtractor:
+        if self.pattern_extractor is None:
+            self.pattern_extractor = PatternExtractor(config=EventExtractionConfig())
+        return self.pattern_extractor
+
+    async def get_security_master_repository(self) -> SecurityMasterRepository:
+        if self.security_master_repository is None:
+            database = await self.get_database()
+            async with self._init_lock:
+                if self.security_master_repository is None:
+                    self.security_master_repository = SecurityMasterRepository(database)
+        return self.security_master_repository
+
+    async def get_sources_repository(self) -> SourcesRepository:
+        if self.sources_repository is None:
+            database = await self.get_database()
+            async with self._init_lock:
+                if self.sources_repository is None:
+                    self.sources_repository = SourcesRepository(database)
+        return self.sources_repository
+
+    async def get_publish_service(self) -> PublishService:
+        if self.publish_service is None:
+            database = await self.get_database()
+            async with self._init_lock:
+                if self.publish_service is None:
+                    self.publish_service = PublishService(repository=PublishRepository(database))
+        return self.publish_service
+
+    async def get_assertion_repository(self) -> AssertionRepository:
+        if self.assertion_repository is None:
+            database = await self.get_database()
+            async with self._init_lock:
+                if self.assertion_repository is None:
+                    self.assertion_repository = AssertionRepository(database)
+        return self.assertion_repository
+
+    async def get_claim_repository(self) -> ClaimRepository:
+        if self.claim_repository is None:
+            database = await self.get_database()
+            async with self._init_lock:
+                if self.claim_repository is None:
+                    self.claim_repository = ClaimRepository(database)
+        return self.claim_repository
+
+    async def close(self) -> None:
+        if self.alert_broadcaster is not None:
+            await self.alert_broadcaster.stop()
+            self.alert_broadcaster = None
+
+        if self.embedding_service is not None:
+            await self.embedding_service.close()
+            self.embedding_service = None
+
+        if self.sentiment_service is not None:
+            await self.sentiment_service.close()
+            self.sentiment_service = None
+
+        self.vector_store_manager = None
+        self.theme_repository = None
+        self.document_repository = None
+        self.sentiment_aggregator = None
+        self.ranking_service = None
+        self.alert_repository = None
+        self.narrative_repository = None
+        self.causal_graph = None
+        self.propagation_service = None
+        self.feedback_repository = None
+        self.graph_repository = None
+        self.ner_service = None
+        self.keywords_service = None
+        self.pattern_extractor = None
+        self.security_master_repository = None
+        self.sources_repository = None
+        self.publish_service = None
+        self.assertion_repository = None
+        self.claim_repository = None
+
+        if self.redis_client is not None:
+            await self.redis_client.close()
+            self.redis_client = None
+
+        if self.database is not None:
+            await self.database.close()
+            self.database = None
 
 
-async def stop_alert_broadcaster() -> None:
-    """Stop the alert broadcaster (called during shutdown)."""
-    global _alert_broadcaster
-
-    if _alert_broadcaster is not None:
-        await _alert_broadcaster.stop()
-        _alert_broadcaster = None
-
-
-def get_ner_service() -> NERService:
-    """Get NER service instance (CPU-only, no Redis needed)."""
-    global _ner_service
-
-    if _ner_service is None:
-        _ner_service = NERService(config=NERConfig())
-
-    return _ner_service
+def ensure_app_services(app: FastAPI) -> AppServices:
+    """Attach and return the app-scoped service container."""
+    services = getattr(app.state, "services", None)
+    if services is None:
+        services = AppServices()
+        app.state.services = services
+    return services
 
 
-def get_keywords_service() -> KeywordsService:
-    """Get keywords service instance (CPU-only, no Redis needed)."""
-    global _keywords_service
-
-    if _keywords_service is None:
-        _keywords_service = KeywordsService(config=KeywordsConfig())
-
-    return _keywords_service
+def _get_services(request: Request) -> AppServices:
+    return ensure_app_services(request.app)
 
 
-def get_pattern_extractor() -> PatternExtractor:
-    """Get pattern extractor instance (CPU-only, no Redis needed)."""
-    global _pattern_extractor
-
-    if _pattern_extractor is None:
-        _pattern_extractor = PatternExtractor(config=EventExtractionConfig())
-
-    return _pattern_extractor
+async def get_database(request: Request) -> Database:
+    return await _get_services(request).get_database()
 
 
-async def get_security_master_repository() -> SecurityMasterRepository:
-    """Get security master repository instance (singleton)."""
-    global _security_master_repository, _database
-
-    if _security_master_repository is None:
-        async with _init_lock:
-            if _security_master_repository is None:
-                if _database is None:
-                    _database = Database()
-                    await _database.connect()
-
-                _security_master_repository = SecurityMasterRepository(_database)
-
-    return _security_master_repository
+async def get_redis_client(request: Request) -> redis.Redis:
+    return await _get_services(request).get_redis_client()
 
 
-async def get_sources_repository() -> SourcesRepository:
-    """Get sources repository instance (singleton)."""
-    global _sources_repository, _database
-
-    if _sources_repository is None:
-        async with _init_lock:
-            if _sources_repository is None:
-                if _database is None:
-                    _database = Database()
-                    await _database.connect()
-
-                _sources_repository = SourcesRepository(_database)
-
-    return _sources_repository
+async def get_embedding_service(request: Request) -> EmbeddingService:
+    return await _get_services(request).get_embedding_service()
 
 
-async def get_publish_service() -> PublishService:
-    """Get publish service instance (singleton)."""
-    global _publish_service, _database
-
-    if _publish_service is None:
-        async with _init_lock:
-            if _publish_service is None:
-                if _database is None:
-                    _database = Database()
-                    await _database.connect()
-
-                _publish_service = PublishService(repository=PublishRepository(_database))
-
-    return _publish_service
+async def get_sentiment_service(request: Request) -> SentimentService:
+    return await _get_services(request).get_sentiment_service()
 
 
-async def get_assertion_repository() -> AssertionRepository:
-    """Get assertion repository instance (singleton)."""
-    global _assertion_repository, _database
-
-    if _assertion_repository is None:
-        async with _init_lock:
-            if _assertion_repository is None:
-                if _database is None:
-                    _database = Database()
-                    await _database.connect()
-
-                _assertion_repository = AssertionRepository(_database)
-
-    return _assertion_repository
+async def get_vector_store_manager(request: Request) -> VectorStoreManager:
+    return await _get_services(request).get_vector_store_manager()
 
 
-async def get_claim_repository() -> ClaimRepository:
-    """Get claim repository instance (singleton)."""
-    global _claim_repository, _database
-
-    if _claim_repository is None:
-        async with _init_lock:
-            if _claim_repository is None:
-                if _database is None:
-                    _database = Database()
-                    await _database.connect()
-
-                _claim_repository = ClaimRepository(_database)
-
-    return _claim_repository
+async def get_theme_repository(request: Request) -> ThemeRepository:
+    return await _get_services(request).get_theme_repository()
 
 
-async def cleanup_dependencies() -> None:
-    """Clean up global dependencies on shutdown."""
-    global _embedding_service, _sentiment_service, _redis_client, _vector_store_manager, _database
-    global _theme_repository, _document_repository, _sentiment_aggregator, _ranking_service
-    global _alert_repository, _feedback_repository, _causal_graph
-    global _propagation_service, _alert_broadcaster
-    global _graph_repository, _ner_service, _keywords_service
-    global _pattern_extractor, _security_master_repository
-    global _sources_repository, _publish_service
-    global _assertion_repository, _claim_repository
-    global _narrative_repository
+async def get_document_repository(request: Request) -> DocumentRepository:
+    return await _get_services(request).get_document_repository()
 
-    _vector_store_manager = None
-    _narrative_repository = None
-    _theme_repository = None
-    _ner_service = None
-    _keywords_service = None
-    _pattern_extractor = None
-    _document_repository = None
-    _sentiment_aggregator = None
-    _ranking_service = None
-    _alert_repository = None
-    _feedback_repository = None
-    _causal_graph = None
-    _propagation_service = None
-    _graph_repository = None
-    _security_master_repository = None
-    _sources_repository = None
-    _publish_service = None
-    _assertion_repository = None
-    _claim_repository = None
 
-    if _alert_broadcaster is not None:
-        await _alert_broadcaster.stop()
-        _alert_broadcaster = None
+async def get_ranking_service(request: Request) -> ThemeRankingService:
+    return await _get_services(request).get_ranking_service()
 
-    if _embedding_service is not None:
-        await _embedding_service.close()
-        _embedding_service = None
 
-    if _sentiment_service is not None:
-        await _sentiment_service.close()
-        _sentiment_service = None
+async def get_alert_repository(request: Request) -> AlertRepository:
+    return await _get_services(request).get_alert_repository()
 
-    if _database is not None:
-        await _database.close()
-        _database = None
 
-    if _redis_client is not None:
-        await _redis_client.close()
-        _redis_client = None
+async def get_narrative_repository(request: Request) -> NarrativeRepository:
+    return await _get_services(request).get_narrative_repository()
+
+
+async def get_feedback_repository(request: Request) -> FeedbackRepository:
+    return await _get_services(request).get_feedback_repository()
+
+
+def get_sentiment_aggregator(request: Request) -> SentimentAggregator:
+    return _get_services(request).get_sentiment_aggregator()
+
+
+async def get_graph_repository(request: Request) -> GraphRepository:
+    return await _get_services(request).get_graph_repository()
+
+
+async def get_causal_graph(request: Request) -> CausalGraph:
+    return await _get_services(request).get_causal_graph()
+
+
+async def get_propagation_service(request: Request) -> SentimentPropagation:
+    return await _get_services(request).get_propagation_service()
+
+
+async def get_alert_broadcaster(request: Request) -> AlertBroadcaster:
+    return await _get_services(request).get_alert_broadcaster()
+
+
+def get_ner_service(request: Request) -> NERService:
+    return _get_services(request).get_ner_service()
+
+
+def get_keywords_service(request: Request) -> KeywordsService:
+    return _get_services(request).get_keywords_service()
+
+
+def get_pattern_extractor(request: Request) -> PatternExtractor:
+    return _get_services(request).get_pattern_extractor()
+
+
+async def get_security_master_repository(request: Request) -> SecurityMasterRepository:
+    return await _get_services(request).get_security_master_repository()
+
+
+async def get_sources_repository(request: Request) -> SourcesRepository:
+    return await _get_services(request).get_sources_repository()
+
+
+async def get_publish_service(request: Request) -> PublishService:
+    return await _get_services(request).get_publish_service()
+
+
+async def get_assertion_repository(request: Request) -> AssertionRepository:
+    return await _get_services(request).get_assertion_repository()
+
+
+async def get_claim_repository(request: Request) -> ClaimRepository:
+    return await _get_services(request).get_claim_repository()

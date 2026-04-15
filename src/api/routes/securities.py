@@ -6,15 +6,15 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from starlette.requests import Request
 
-from src.api.auth import verify_api_key
-from src.api.dependencies import get_security_master_repository
-from src.api.models import (
+from src.api.admin_models import (
     CreateSecurityRequest,
-    ErrorResponse,
     SecuritiesListResponse,
     SecurityItem,
     UpdateSecurityRequest,
 )
+from src.api.auth import verify_api_key
+from src.api.dependencies import get_security_master_repository
+from src.api.models import ErrorResponse
 from src.api.rate_limit import limiter
 from src.config.settings import get_settings as _get_settings
 from src.security_master.repository import SecurityMasterRepository
@@ -178,6 +178,8 @@ async def update_security(
         await repo.upsert(updated)
 
         result = await repo.get_by_ticker(updated.ticker, updated.exchange)
+        if result is None:
+            raise HTTPException(status_code=500, detail="Security update failed")
         logger.info("Security updated", ticker=ticker, exchange=exchange)
         return _security_to_item(result)
     except HTTPException:

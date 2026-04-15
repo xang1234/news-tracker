@@ -2,16 +2,18 @@
 FastAPI application factory.
 """
 
+import asyncio
 import time
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
-from src.api.dependencies import cleanup_dependencies, get_alert_broadcaster, stop_alert_broadcaster
+from src.api.dependencies import ensure_app_services
 from src.api.middleware.timeout import TimeoutMiddleware
 from src.api.routes import (
     alerts,
@@ -34,16 +36,20 @@ from src.api.routes import (
     themes,
     ws_alerts,
 )
-from src.api.routes.ws_alerts import set_broadcaster
 from src.config.settings import get_settings
 
 logger = structlog.get_logger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan handler."""
-    logger.info("Embedding API starting up")
+    services = ensure_app_services(app)
+    app.state.background_tasks = set()
+    if not hasattr(app.state, "alert_broadcaster"):
+        app.state.alert_broadcaster = None
+
+    logger.info("News Tracker API starting up")
 
     # Initialize tracing if enabled
     settings = get_settings()
@@ -56,31 +62,35 @@ async def lifespan(app: FastAPI):
         )
     if settings.ws_alerts_enabled:
         try:
-            broadcaster = await get_alert_broadcaster()
-            set_broadcaster(broadcaster)
+            broadcaster = await services.get_alert_broadcaster()
+            app.state.alert_broadcaster = broadcaster
             logger.info("WebSocket alert broadcaster started")
         except Exception as e:
             logger.warning("Failed to start WebSocket alert broadcaster: %s", e)
 
-    # Initialize sources table and seed data when enabled
+    # Seed reference data only after migrations have created the table.
     if settings.sources_enabled:
         try:
-            from src.api.dependencies import get_sources_repository
             from src.sources.service import SourcesService
 
-            repo = await get_sources_repository()
-            await repo.create_table()
-            svc = SourcesService(repo._db)
+            svc = SourcesService(await services.get_database())
             await svc.ensure_seeded()
-            logger.info("Sources table initialized and seeded")
+            logger.info("Sources reference data seeded")
         except Exception as e:
             logger.warning("Failed to initialize sources: %s", e)
 
     yield
 
-    logger.info("Embedding API shutting down")
-    await stop_alert_broadcaster()
-    await cleanup_dependencies()
+    logger.info("News Tracker API shutting down")
+
+    background_tasks = tuple(app.state.background_tasks)
+    for task in background_tasks:
+        task.cancel()
+    if background_tasks:
+        await asyncio.gather(*background_tasks, return_exceptions=True)
+
+    await services.close()
+    app.state.alert_broadcaster = None
 
 
 def create_app() -> FastAPI:
@@ -113,14 +123,17 @@ def create_app() -> FastAPI:
     ]
 
     app = FastAPI(
-        title="News Tracker Embedding API",
+        title="News Tracker API",
         description="""
-API for generating embeddings from financial text using FinBERT and MiniLM models.
+API for ingesting high-signal semiconductor research, enriching documents,
+surfacing themes, and generating alerts.
 
-## Models
+## Workflow
 
-- **FinBERT**: 768-dimensional embeddings optimized for financial text
-- **MiniLM**: 384-dimensional lightweight embeddings for fast processing
+- **Ingestion**: Collect source material from configured feeds
+- **Enrichment**: Add embeddings, sentiment, entities, keywords, and events
+- **Themes**: Cluster documents and track lifecycle changes
+- **Alerts**: Surface significant changes for review
 
 ## Authentication
 
@@ -153,7 +166,7 @@ Requires `X-API-KEY` header for all requests except `/health`.
 
     # Request logging, correlation ID, and tracing middleware
     @app.middleware("http")
-    async def log_requests(request: Request, call_next):
+    async def log_requests(request: Request, call_next) -> Response:
         from src.observability.tracing import get_tracer, is_tracing_enabled
 
         # Correlation ID: use incoming header or generate a new one
@@ -214,7 +227,7 @@ Requires `X-API-KEY` header for all requests except `/health`.
 
     # Exception handler
     @app.exception_handler(Exception)
-    async def global_exception_handler(request: Request, exc: Exception):
+    async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         logger.error(f"Unhandled exception: {exc}", exc_info=True)
         return JSONResponse(
             status_code=500,
@@ -244,9 +257,9 @@ Requires `X-API-KEY` header for all requests except `/health`.
 
     # Root endpoint
     @app.get("/", include_in_schema=False)
-    async def root():
+    async def root() -> dict[str, str]:
         return {
-            "service": "News Tracker Embedding API",
+            "service": "News Tracker API",
             "version": "0.1.0",
             "docs": "/docs",
         }

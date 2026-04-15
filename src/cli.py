@@ -171,22 +171,20 @@ def init_db() -> None:
     import pathlib
 
     from src.storage.database import Database
-    from src.storage.repository import DocumentRepository
+    from src.storage.migrations import apply_migrations
 
     async def run():
         db = Database()
         await db.connect()
 
-        repo = DocumentRepository(db)
-        await repo.create_tables()
-
-        # Apply all migration files in order
         migrations_dir = pathlib.Path(__file__).resolve().parent.parent / "migrations"
         if migrations_dir.is_dir():
-            for sql_file in sorted(migrations_dir.glob("*.sql")):
-                sql = sql_file.read_text()
-                await db.execute(sql)
-                click.echo(f"Applied migration: {sql_file.name}")
+            applied = await apply_migrations(db)
+            if applied:
+                for migration_name in applied:
+                    click.echo(f"Applied migration: {migration_name}")
+            else:
+                click.echo("No pending migrations")
 
         # Also seed sources if feature is enabled
         from src.config.settings import get_settings

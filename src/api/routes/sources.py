@@ -1,24 +1,28 @@
 """Sources Admin endpoints — CRUD for the sources table."""
 
+from __future__ import annotations
+
 import asyncio
 import time
+import uuid
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from redis.asyncio import Redis
 from starlette.requests import Request
 
-from src.api.auth import verify_api_key
-from src.api.dependencies import get_sources_repository
-from src.api.models import (
+from src.api.admin_models import (
     BulkCreateSourcesRequest,
     BulkCreateSourcesResponse,
     CreateSourceRequest,
-    ErrorResponse,
     SourceItem,
     SourcesListResponse,
     TriggerIngestionResponse,
     UpdateSourceRequest,
 )
+from src.api.auth import verify_api_key
+from src.api.dependencies import get_redis_client, get_sources_repository
+from src.api.models import ErrorResponse
 from src.api.rate_limit import limiter
 from src.config.settings import get_settings as _get_settings
 from src.sources.repository import SourcesRepository
@@ -27,9 +31,13 @@ from src.sources.schemas import Source
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
-# In-memory flag + task set for manual ingestion
-_ingestion_running = False
-_background_tasks: set[asyncio.Task] = set()  # prevent GC of fire-and-forget tasks
+_INGESTION_LOCK_KEY = "sources:trigger-ingestion:lock"
+_RELEASE_LOCK_SCRIPT = """
+if redis.call('get', KEYS[1]) == ARGV[1] then
+    return redis.call('del', KEYS[1])
+end
+return 0
+"""
 
 
 def _require_sources_enabled() -> None:
@@ -217,23 +225,26 @@ async def bulk_create_sources(
 async def trigger_ingestion(
     request: Request,
     api_key: str = Depends(verify_api_key),
+    redis_client: Redis = Depends(get_redis_client),
 ) -> TriggerIngestionResponse:
     _require_sources_enabled()
 
-    global _ingestion_running
-    if _ingestion_running:
+    settings = _get_settings()
+    owner_token = uuid.uuid4().hex
+    lock_acquired = await redis_client.set(
+        _INGESTION_LOCK_KEY,
+        owner_token,
+        ex=settings.sources_trigger_lock_ttl_seconds,
+        nx=True,
+    )
+    if not lock_acquired:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Ingestion is already running",
         )
 
-    # Set flag synchronously (before any await) to prevent TOCTOU race
-    _ingestion_running = True
-
     async def _run_ingestion() -> None:
-        global _ingestion_running
         try:
-            from src.api.dependencies import get_database
             from src.services.ingestion_service import IngestionService
             from src.sources.service import SourcesService
 
@@ -242,9 +253,8 @@ async def trigger_ingestion(
             reddit_sources = None
             substack_sources = None
 
-            settings = _get_settings()
             if settings.sources_enabled:
-                db = await get_database()
+                db = await request.app.state.services.get_database()
                 svc = SourcesService(db)
                 twitter_sources = await svc.get_twitter_sources()
                 reddit_sources = await svc.get_reddit_sources()
@@ -265,12 +275,20 @@ async def trigger_ingestion(
         except Exception as e:
             logger.error("Manual ingestion failed", error=str(e), exc_info=True)
         finally:
-            _ingestion_running = False
+            try:
+                await redis_client.execute_command(
+                    "EVAL",
+                    _RELEASE_LOCK_SCRIPT,
+                    1,
+                    _INGESTION_LOCK_KEY,
+                    owner_token,
+                )
+            except Exception as e:
+                logger.warning("Failed to release ingestion lock", error=str(e), exc_info=True)
 
-    # Save reference to prevent GC of fire-and-forget task
     task = asyncio.create_task(_run_ingestion())
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
+    request.app.state.background_tasks.add(task)
+    task.add_done_callback(request.app.state.background_tasks.discard)
 
     return TriggerIngestionResponse(
         status="started",
@@ -321,6 +339,8 @@ async def update_source(
         await repo.upsert(updated)
 
         result = await repo.get_by_key(updated.platform, updated.identifier)
+        if result is None:
+            raise HTTPException(status_code=500, detail="Source update failed")
         logger.info("Source updated", platform=platform, identifier=identifier)
         return _source_to_item(result)
     except HTTPException:

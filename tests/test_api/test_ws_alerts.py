@@ -11,7 +11,6 @@ from starlette.websockets import WebSocketDisconnect
 from src.alerts.broadcaster import AlertBroadcaster
 from src.alerts.schemas import Alert
 from src.api.app import create_app
-from src.api.routes.ws_alerts import set_broadcaster
 
 
 def _make_alert(
@@ -40,7 +39,7 @@ def broadcaster():
 def app_enabled(broadcaster):
     """FastAPI app with ws_alerts_enabled=True."""
     app = create_app()
-    set_broadcaster(broadcaster)
+    app.state.alert_broadcaster = broadcaster
 
     with patch("src.api.routes.ws_alerts.get_settings") as mock_settings:
         settings = mock_settings.return_value
@@ -48,7 +47,7 @@ def app_enabled(broadcaster):
         settings.api_keys = None  # dev mode
         yield app
 
-    set_broadcaster(None)
+    app.state.alert_broadcaster = None
     app.dependency_overrides.clear()
 
 
@@ -56,7 +55,7 @@ def app_enabled(broadcaster):
 def app_disabled():
     """FastAPI app with ws_alerts_enabled=False."""
     app = create_app()
-    set_broadcaster(None)
+    app.state.alert_broadcaster = None
 
     with patch("src.api.routes.ws_alerts.get_settings") as mock_settings:
         settings = mock_settings.return_value
@@ -71,7 +70,7 @@ def app_disabled():
 def app_auth_required(broadcaster):
     """FastAPI app with API key auth enforced."""
     app = create_app()
-    set_broadcaster(broadcaster)
+    app.state.alert_broadcaster = broadcaster
 
     with patch("src.api.routes.ws_alerts.get_settings") as mock_settings:
         settings = mock_settings.return_value
@@ -79,7 +78,7 @@ def app_auth_required(broadcaster):
         settings.api_keys = "secret-key-1,secret-key-2"
         yield app
 
-    set_broadcaster(None)
+    app.state.alert_broadcaster = None
     app.dependency_overrides.clear()
 
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Radio, Plus, Upload, ChevronLeft, ChevronRight, RefreshCw, Shield } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { MetricCard, MetricCardSkeleton } from '@/components/domain/MetricCard';
@@ -61,7 +62,10 @@ function buildSecurityApiFilters(f: SecuritiesFilterValues, offset: number): Api
 }
 
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('sources');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const initialTab: SettingsTab = requestedTab === 'securities' ? 'securities' : 'sources';
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
 
   // --- Sources state ---
   const [srcFiltersOpen, setSrcFiltersOpen] = useState(false);
@@ -114,6 +118,16 @@ export default function Settings() {
   const redditCount = sources.data?.sources.filter((s) => s.platform === 'reddit').length ?? 0;
   const substackCount = sources.data?.sources.filter((s) => s.platform === 'substack').length ?? 0;
 
+  useEffect(() => {
+    const nextTab: SettingsTab = requestedTab === 'securities' ? 'securities' : 'sources';
+    setActiveTab((current) => (current === nextTab ? current : nextTab));
+  }, [requestedTab]);
+
+  const selectTab = (tab: SettingsTab) => {
+    setActiveTab(tab);
+    setSearchParams(tab === 'sources' ? {} : { tab }, { replace: true });
+  };
+
   return (
     <>
       <Header title="Settings" />
@@ -127,7 +141,7 @@ export default function Settings() {
                 type="button"
                 role="tab"
                 aria-selected={activeTab === t}
-                onClick={() => setActiveTab(t)}
+                onClick={() => selectTab(t)}
                 className={cn(
                   'border-b-2 px-4 py-2.5 text-sm font-medium transition-colors',
                   activeTab === t

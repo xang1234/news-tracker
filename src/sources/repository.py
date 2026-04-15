@@ -5,28 +5,9 @@ import logging
 
 from src.sources.schemas import Source
 from src.storage.database import Database
+from src.storage.migrations import apply_migrations
 
 logger = logging.getLogger(__name__)
-
-# SQL for table creation (mirrors migration 014)
-_CREATE_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS sources (
-    platform     TEXT NOT NULL,
-    identifier   TEXT NOT NULL,
-    display_name TEXT NOT NULL DEFAULT '',
-    description  TEXT NOT NULL DEFAULT '',
-    is_active    BOOLEAN NOT NULL DEFAULT TRUE,
-    metadata     JSONB NOT NULL DEFAULT '{}',
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (platform, identifier)
-);
-
-CREATE INDEX IF NOT EXISTS idx_sources_platform
-    ON sources(platform);
-CREATE INDEX IF NOT EXISTS idx_sources_platform_active
-    ON sources(platform, is_active) WHERE is_active = TRUE;
-"""
 
 _UPSERT_SQL = """
 INSERT INTO sources (platform, identifier, display_name, description, is_active, metadata)
@@ -94,9 +75,9 @@ class SourcesRepository:
         self._db = database
 
     async def create_table(self) -> None:
-        """Create the sources table and indexes (idempotent)."""
-        await self._db.execute(_CREATE_TABLE_SQL)
-        logger.info("Sources table ensured")
+        """Backward-compatible schema helper for sources."""
+        await apply_migrations(self._db)
+        logger.info("Sources schema ensured via migrations")
 
     async def upsert(self, source: Source) -> None:
         """Insert or update a single source."""
