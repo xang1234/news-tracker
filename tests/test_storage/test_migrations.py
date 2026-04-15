@@ -8,19 +8,31 @@ from pathlib import Path
 
 import pytest
 
-from src.storage.migrations import Migration, apply_migrations
+from src.storage.migrations import Migration, apply_migrations, list_migrations
+
+_MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
 
 
 class RecordingDatabase:
     """Small async DB stub for migration-runner tests."""
 
-    def __init__(self, *, legacy_schema: bool) -> None:
-        self.legacy_schema = legacy_schema
+    def __init__(
+        self,
+        *,
+        tables: set[str] | None = None,
+        columns: dict[str, set[str]] | None = None,
+    ) -> None:
+        self.tables = set(tables or set())
+        self.columns = {
+            table: set(table_columns) for table, table_columns in (columns or {}).items()
+        }
         self.applied_migrations: set[str] = set()
         self.executed_sql: list[str] = []
 
     async def execute(self, query: str, *args: object) -> str:
         self.executed_sql.append(query)
+        if "CREATE TABLE IF NOT EXISTS schema_migrations" in query:
+            self.tables.add("schema_migrations")
         return "OK"
 
     async def fetch(self, query: str, *args: object) -> list[dict[str, str]]:
@@ -29,8 +41,16 @@ class RecordingDatabase:
         return []
 
     async def fetchval(self, query: str, *args: object) -> bool:
-        if "table_name = 'documents'" in query:
-            return self.legacy_schema
+        normalized = " ".join(query.split())
+        if "FROM information_schema.tables" in normalized:
+            if "table_name <> 'schema_migrations'" in normalized:
+                return bool(self.tables - {"schema_migrations"})
+            table_name = str(args[0])
+            return table_name in self.tables
+        if "FROM information_schema.columns" in normalized:
+            table_name = str(args[0])
+            column_name = str(args[1])
+            return column_name in self.columns.get(table_name, set())
         return False
 
     @asynccontextmanager
@@ -49,43 +69,100 @@ class RecordingConnection:
         return "OK"
 
 
-def _write_migration(path: Path, sql: str) -> Migration:
-    path.write_text(sql, encoding="utf-8")
-    return Migration(version=int(path.name.split("_", 1)[0]), name=path.name, path=path)
+def _migration(name: str) -> Migration:
+    return Migration(
+        version=int(name.split("_", 1)[0]),
+        name=name,
+        path=_MIGRATIONS_DIR / name,
+    )
+
+
+def test_list_migrations_orders_initial_schema_before_embedding_upgrade() -> None:
+    names = [migration.name for migration in list_migrations()]
+
+    assert names.index("001_initial_schema.sql") < names.index("001_embedding_vector_768.sql")
+    assert names.index("001_embedding_vector_768.sql") < names.index(
+        "002_add_minilm_embedding.sql",
+    )
 
 
 @pytest.mark.asyncio
-async def test_apply_migrations_baselines_legacy_schema(monkeypatch, tmp_path: Path) -> None:
-    migration_001 = _write_migration(tmp_path / "001_initial.sql", "SELECT 1;")
-    migration_028 = _write_migration(tmp_path / "028_existing.sql", "SELECT 28;")
-    migration_029 = _write_migration(tmp_path / "029_reconcile.sql", "SELECT 29;")
-    db = RecordingDatabase(legacy_schema=True)
+async def test_apply_migrations_skips_only_satisfied_legacy_steps(
+    monkeypatch,
+) -> None:
+    migration_001 = _migration("001_initial_schema.sql")
+    migration_001_embedding = _migration("001_embedding_vector_768.sql")
+    migration_004 = _migration("004_add_themes_and_metrics.sql")
+    migration_030 = _migration("030_reconcile_embedding_schema.sql")
+    db = RecordingDatabase(
+        tables={"documents", "processing_metrics"},
+        columns={"documents": set()},
+    )
 
     monkeypatch.setattr(
         "src.storage.migrations.list_migrations",
-        lambda: [migration_001, migration_028, migration_029],
+        lambda: [migration_001, migration_001_embedding, migration_004, migration_030],
     )
 
     executed = await apply_migrations(db)  # type: ignore[arg-type]
 
-    assert executed == ["029_reconcile.sql"]
-    assert "001_initial.sql" in db.applied_migrations
-    assert "028_existing.sql" in db.applied_migrations
-    assert "029_reconcile.sql" in db.applied_migrations
+    assert executed == [
+        "004_add_themes_and_metrics.sql",
+        "030_reconcile_embedding_schema.sql",
+    ]
+    assert db.applied_migrations == {
+        "001_initial_schema.sql",
+        "001_embedding_vector_768.sql",
+        "004_add_themes_and_metrics.sql",
+        "030_reconcile_embedding_schema.sql",
+    }
 
 
 @pytest.mark.asyncio
-async def test_apply_migrations_runs_all_on_fresh_database(monkeypatch, tmp_path: Path) -> None:
-    migration_001 = _write_migration(tmp_path / "001_initial.sql", "SELECT 1;")
-    migration_002 = _write_migration(tmp_path / "002_followup.sql", "SELECT 2;")
-    db = RecordingDatabase(legacy_schema=False)
+async def test_apply_migrations_repairs_partial_legacy_schema_without_blanket_baseline(
+    monkeypatch,
+) -> None:
+    migration_001 = _migration("001_initial_schema.sql")
+    migration_001_embedding = _migration("001_embedding_vector_768.sql")
+    migration_004 = _migration("004_add_themes_and_metrics.sql")
+    migration_006 = _migration("006_add_alerts_table.sql")
+    db = RecordingDatabase(tables={"documents"})
 
     monkeypatch.setattr(
         "src.storage.migrations.list_migrations",
-        lambda: [migration_001, migration_002],
+        lambda: [migration_001, migration_001_embedding, migration_004, migration_006],
     )
 
     executed = await apply_migrations(db)  # type: ignore[arg-type]
 
-    assert executed == ["001_initial.sql", "002_followup.sql"]
-    assert db.applied_migrations == {"001_initial.sql", "002_followup.sql"}
+    assert executed == [
+        "001_initial_schema.sql",
+        "004_add_themes_and_metrics.sql",
+        "006_add_alerts_table.sql",
+    ]
+    assert "001_embedding_vector_768.sql" in db.applied_migrations
+    assert "006_add_alerts_table.sql" in db.applied_migrations
+
+
+@pytest.mark.asyncio
+async def test_apply_migrations_still_skips_destructive_legacy_step_on_rerun(
+    monkeypatch,
+) -> None:
+    migration_001_embedding = _migration("001_embedding_vector_768.sql")
+    migration_004 = _migration("004_add_themes_and_metrics.sql")
+    migration_030 = _migration("030_reconcile_embedding_schema.sql")
+    db = RecordingDatabase(tables={"documents", "processing_metrics"})
+    db.applied_migrations.add("001_initial_schema.sql")
+
+    monkeypatch.setattr(
+        "src.storage.migrations.list_migrations",
+        lambda: [migration_001_embedding, migration_004, migration_030],
+    )
+
+    executed = await apply_migrations(db)  # type: ignore[arg-type]
+
+    assert executed == [
+        "004_add_themes_and_metrics.sql",
+        "030_reconcile_embedding_schema.sql",
+    ]
+    assert "001_embedding_vector_768.sql" in db.applied_migrations

@@ -12,8 +12,11 @@ from src.storage.database import Database
 logger = logging.getLogger(__name__)
 
 _MIGRATION_NAME_RE = re.compile(r"^(?P<version>\d+)_.*\.sql$")
-_LEGACY_BASELINE_VERSION = 28
 _MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
+_SAME_VERSION_PRIORITIES = {
+    "001_initial_schema.sql": 0,
+    "001_embedding_vector_768.sql": 1,
+}
 
 
 @dataclass(frozen=True)
@@ -40,7 +43,15 @@ def list_migrations() -> list[Migration]:
                 path=path,
             )
         )
-    return sorted(migrations, key=lambda migration: (migration.version, migration.name))
+    return sorted(migrations, key=_migration_sort_key)
+
+
+def _migration_sort_key(migration: Migration) -> tuple[int, int, str]:
+    return (
+        migration.version,
+        _SAME_VERSION_PRIORITIES.get(migration.name, 100),
+        migration.name,
+    )
 
 
 async def apply_migrations(db: Database) -> list[str]:
@@ -49,18 +60,14 @@ async def apply_migrations(db: Database) -> list[str]:
 
     migrations = list_migrations()
     applied = await _get_applied_migrations(db)
-    if not applied and await _has_legacy_schema(db):
-        legacy_names = [
-            migration.name
-            for migration in migrations
-            if migration.version <= _LEGACY_BASELINE_VERSION
-        ]
-        if legacy_names:
-            await _mark_migrations_applied(db, legacy_names)
-            applied.update(legacy_names)
+    pending = [migration for migration in migrations if migration.name not in applied]
+    if await _has_existing_schema(db):
+        skipped = await _skip_satisfied_legacy_migrations(db, pending)
+        if skipped:
+            applied.update(skipped)
             logger.info(
-                "Baselined legacy schema without replaying historical migrations",
-                extra={"count": len(legacy_names)},
+                "Marked satisfied legacy migrations as applied",
+                extra={"count": len(skipped)},
             )
 
     executed: list[str] = []
@@ -101,7 +108,7 @@ async def _get_applied_migrations(db: Database) -> set[str]:
     return {str(row["migration_name"]) for row in rows}
 
 
-async def _has_legacy_schema(db: Database) -> bool:
+async def _has_existing_schema(db: Database) -> bool:
     return bool(
         await db.fetchval(
             """
@@ -109,9 +116,77 @@ async def _has_legacy_schema(db: Database) -> bool:
                 SELECT 1
                 FROM information_schema.tables
                 WHERE table_schema = 'public'
-                  AND table_name = 'documents'
+                  AND table_name <> 'schema_migrations'
             )
             """
+        )
+    )
+
+
+async def _skip_satisfied_legacy_migrations(
+    db: Database,
+    migrations: list[Migration],
+) -> set[str]:
+    skipped: set[str] = set()
+
+    for migration in migrations:
+        if await _legacy_migration_is_satisfied(db, migration.name):
+            await _mark_migrations_applied(db, [migration.name])
+            skipped.add(migration.name)
+
+    return skipped
+
+
+async def _legacy_migration_is_satisfied(db: Database, migration_name: str) -> bool:
+    if migration_name == "001_initial_schema.sql":
+        return await _table_exists(db, "documents") and await _table_exists(
+            db,
+            "processing_metrics",
+        )
+    if migration_name == "001_embedding_vector_768.sql":
+        return await _table_exists(db, "documents")
+    if migration_name == "002_add_minilm_embedding.sql":
+        return await _column_exists(db, "documents", "embedding_minilm")
+    if migration_name == "003_add_authority_score.sql":
+        return await _column_exists(db, "documents", "authority_score")
+    if migration_name == "004_add_themes_and_metrics.sql":
+        return await _table_exists(db, "themes") and await _table_exists(
+            db,
+            "theme_metrics",
+        )
+    return False
+
+
+async def _table_exists(db: Database, table_name: str) -> bool:
+    return bool(
+        await db.fetchval(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                  AND table_name = $1
+            )
+            """,
+            table_name,
+        )
+    )
+
+
+async def _column_exists(db: Database, table_name: str, column_name: str) -> bool:
+    return bool(
+        await db.fetchval(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = $1
+                  AND column_name = $2
+            )
+            """,
+            table_name,
+            column_name,
         )
     )
 
