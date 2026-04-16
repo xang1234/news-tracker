@@ -506,3 +506,75 @@ def test_list_claims_dedupes_and_paginates() -> None:
     assert body["total"] == 3
     assert len(body["claims"]) == 1
     assert body["claims"][0]["claim_id"] == "claim_1"
+
+
+def test_list_assertions_empty_assertion_id_falls_back_to_object_id() -> None:
+    fake_db = _FakeDB()
+    fake_db.rows.append(
+        {
+            "object_id": "obj_assert_empty_id",
+            "object_type": "assertion",
+            "publish_state": "published",
+            "contract_version": "1.0.0",
+            "lane": "narrative",
+            "run_id": "run_empty",
+            "valid_from": None,
+            "valid_to": None,
+            "created_at": _ts(14),
+            "updated_at": _ts(14),
+            "payload": {
+                "assertion_id": "",
+                "subject_concept_id": "concept_empty_assertion",
+                "predicate": "depends_on",
+                "object_concept_id": "concept_target",
+                "confidence": 0.55,
+                "status": "active",
+                "support_count": 1,
+                "contradiction_count": 0,
+                "source_diversity": 1,
+            },
+        }
+    )
+    client = _make_client(fake_db)
+
+    resp = client.get("/intel/assertions?concept_id=concept_empty_assertion")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["assertions"][0]["assertion_id"] == "obj_assert_empty_id"
+
+
+def test_list_claims_empty_claim_id_falls_back_to_object_id() -> None:
+    fake_db = _FakeDB()
+    fake_db.rows.append(
+        {
+            "object_id": "obj_claim_empty_id",
+            "object_type": "claim",
+            "publish_state": "published",
+            "contract_version": "1.0.0",
+            "lane": "narrative",
+            "run_id": "run_empty",
+            "valid_from": None,
+            "valid_to": None,
+            "created_at": _ts(15),
+            "updated_at": _ts(15),
+            "payload": {
+                "claim_id": "",
+                "claim_key": "key_empty",
+                "source_id": "doc_empty",
+                "source_type": "news",
+                "subject_text": "Empty Id Corp",
+                "predicate": "depends_on",
+                "object_text": "HBM",
+                "confidence": 0.6,
+                "status": "active",
+            },
+        }
+    )
+    client = _make_client(fake_db)
+
+    resp = client.get("/intel/claims?source_id=doc_empty")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["claims"][0]["claim_id"] == "obj_claim_empty_id"

@@ -340,9 +340,10 @@ def _row_to_assertion_response(row, payload: dict[str, Any]) -> AssertionRespons
     predicate = _as_str(payload.get("predicate"))
     if not subject or not predicate:
         return None
+    assertion_id = _as_str(payload.get("assertion_id")) or _as_str(row["object_id"])
 
     return AssertionResponse(
-        assertion_id=_as_str(payload.get("assertion_id"), default=_as_str(row["object_id"])),
+        assertion_id=assertion_id,
         subject_concept_id=subject,
         predicate=predicate,
         object_concept_id=payload.get("object_concept_id"),
@@ -373,7 +374,7 @@ def _row_to_claim_response(row, payload: dict[str, Any]) -> ClaimResponse | None
     if not subject_text or not predicate or not source_id:
         return None
 
-    claim_id = _as_str(payload.get("claim_id"), default=_as_str(row["object_id"]))
+    claim_id = _as_str(payload.get("claim_id")) or _as_str(row["object_id"])
     return ClaimResponse(
         claim_id=claim_id,
         claim_key=_as_str(payload.get("claim_key"), default=claim_id),
