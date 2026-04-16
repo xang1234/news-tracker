@@ -321,6 +321,17 @@ def _as_str(value: Any, default: str = "") -> str:
     return str(value)
 
 
+def _confidence_expr() -> str:
+    """SQL expression that safely parses confidence into float with 0.0 fallback."""
+    return (
+        "CASE "
+        "WHEN jsonb_typeof(payload->'confidence') = 'number' THEN (payload->>'confidence')::double precision "
+        "WHEN (payload->>'confidence') ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (payload->>'confidence')::double precision "
+        "ELSE 0.0 "
+        "END"
+    )
+
+
 def _row_to_assertion_response(row, payload: dict[str, Any]) -> AssertionResponse | None:
     """Map a published assertion object to API response shape."""
     subject = _as_str(payload.get("subject_concept_id"))
@@ -574,31 +585,61 @@ async def _list_assertions_impl(
         conditions.append(f"payload->>'status' = ${idx}")
         params.append(assertion_status)
         idx += 1
+    if min_confidence is not None:
+        conditions.append(f"{_confidence_expr()} >= ${idx}")
+        params.append(min_confidence)
+        idx += 1
 
     where = " AND ".join(conditions)
-    rows = await db.fetch(
+    count_row = await db.fetchrow(
         f"""
-        SELECT *
-        FROM intel_pub.published_objects
-        WHERE {where}
-        ORDER BY created_at DESC
+        WITH filtered AS (
+            SELECT *,
+                   COALESCE(NULLIF(payload->>'assertion_id', ''), object_id) AS assertion_dedupe_id
+            FROM intel_pub.published_objects
+            WHERE {where}
+        ),
+        latest AS (
+            SELECT DISTINCT ON (assertion_dedupe_id) *
+            FROM filtered
+            ORDER BY assertion_dedupe_id, created_at DESC
+        )
+        SELECT count(*) AS cnt FROM latest
         """,
         *params,
     )
+    total = int(count_row["cnt"]) if count_row is not None else 0
 
-    parsed: list[AssertionResponse] = []
+    limit_idx = len(params) + 1
+    page_params = [*params, limit, offset]
+    rows = await db.fetch(
+        f"""
+        WITH filtered AS (
+            SELECT *,
+                   COALESCE(NULLIF(payload->>'assertion_id', ''), object_id) AS assertion_dedupe_id
+            FROM intel_pub.published_objects
+            WHERE {where}
+        ),
+        latest AS (
+            SELECT DISTINCT ON (assertion_dedupe_id) *
+            FROM filtered
+            ORDER BY assertion_dedupe_id, created_at DESC
+        )
+        SELECT * FROM latest
+        ORDER BY created_at DESC
+        LIMIT ${limit_idx} OFFSET ${limit_idx + 1}
+        """,
+        *page_params,
+    )
+
+    assertions: list[AssertionResponse] = []
     for row in rows:
         payload = _parse_payload(row["payload"])
         assertion = _row_to_assertion_response(row, payload)
         if assertion is None:
             continue
-        if min_confidence is not None and assertion.confidence < min_confidence:
-            continue
-        parsed.append(assertion)
-
-    total = len(parsed)
-    page = parsed[offset : offset + limit]
-    return AssertionListResponse(assertions=page, total=total)
+        assertions.append(assertion)
+    return AssertionListResponse(assertions=assertions, total=total)
 
 
 @router.get(
@@ -653,27 +694,43 @@ async def get_assertion_detail(
 
     claim_rows = await db.fetch(
         """
-        SELECT *
-        FROM intel_pub.published_objects
-        WHERE object_type = 'claim'
-          AND publish_state = 'published'
+        WITH linked AS (
+            SELECT *,
+                   COALESCE(NULLIF(payload->>'claim_id', ''), object_id) AS claim_dedupe_id
+            FROM intel_pub.published_objects
+            WHERE object_type = 'claim'
+              AND publish_state = 'published'
+              AND (
+                    payload->>'assertion_id' = $1
+                    OR payload->>'linked_assertion_id' = $1
+                    OR COALESCE(payload->'assertion_ids', '[]'::jsonb) ? $1
+                    OR EXISTS (
+                        SELECT 1
+                        FROM jsonb_array_elements(COALESCE(payload->'links', '[]'::jsonb)) AS link
+                        WHERE link->>'assertion_id' = $1
+                    )
+                    OR COALESCE(NULLIF(payload->>'claim_id', ''), object_id) = ANY($2::text[])
+                  )
+        ),
+        latest AS (
+            SELECT DISTINCT ON (claim_dedupe_id) *
+            FROM linked
+            ORDER BY claim_dedupe_id, created_at DESC
+        )
+        SELECT * FROM latest
         ORDER BY created_at DESC
         """,
+        canonical_assertion_id,
+        list(embedded_ids),
     )
     claims_by_id: dict[str, ClaimResponse] = {}
     for claim_row in claim_rows:
         claim_payload = _parse_payload(claim_row["payload"])
-        if not _claim_payload_references_assertion(
-            claim_payload,
-            canonical_assertion_id,
-            embedded_claim_ids=embedded_ids,
-            object_id=claim_row["object_id"],
-        ):
-            continue
         parsed_claim = _row_to_claim_response(claim_row, claim_payload)
         if parsed_claim is None:
             continue
-        claims_by_id[parsed_claim.claim_id] = parsed_claim
+        if parsed_claim.claim_id not in claims_by_id:
+            claims_by_id[parsed_claim.claim_id] = parsed_claim
 
     claim_link_items: list[ClaimLinkItem] = []
     seen_claim_ids: set[str] = set()
@@ -763,17 +820,6 @@ async def _list_claims_impl(
         params.append(claim_status)
         idx += 1
 
-    where = " AND ".join(conditions)
-    rows = await db.fetch(
-        f"""
-        SELECT *
-        FROM intel_pub.published_objects
-        WHERE {where}
-        ORDER BY created_at DESC
-        """,
-        *params,
-    )
-
     embedded_claim_ids: set[str] = set()
     if assertion_id is not None:
         assertion_row = await db.fetchrow(
@@ -792,24 +838,74 @@ async def _list_claims_impl(
             assertion_payload = _parse_payload(assertion_row["payload"])
             embedded_claim_ids = set(_extract_assertion_claim_ids(assertion_payload))
 
-    parsed_claims: list[ClaimResponse] = []
+    if assertion_id is not None:
+        conditions.append(
+            f"""(
+                payload->>'assertion_id' = ${idx}
+                OR payload->>'linked_assertion_id' = ${idx}
+                OR COALESCE(payload->'assertion_ids', '[]'::jsonb) ? ${idx}
+                OR EXISTS (
+                    SELECT 1
+                    FROM jsonb_array_elements(COALESCE(payload->'links', '[]'::jsonb)) AS link
+                    WHERE link->>'assertion_id' = ${idx}
+                )
+                OR COALESCE(NULLIF(payload->>'claim_id', ''), object_id) = ANY(${idx + 1}::text[])
+            )"""
+        )
+        params.append(assertion_id)
+        params.append(list(embedded_claim_ids))
+        idx += 2
+
+    where = " AND ".join(conditions)
+    count_row = await db.fetchrow(
+        f"""
+        WITH filtered AS (
+            SELECT *,
+                   COALESCE(NULLIF(payload->>'claim_id', ''), object_id) AS claim_dedupe_id
+            FROM intel_pub.published_objects
+            WHERE {where}
+        ),
+        latest AS (
+            SELECT DISTINCT ON (claim_dedupe_id) *
+            FROM filtered
+            ORDER BY claim_dedupe_id, created_at DESC
+        )
+        SELECT count(*) AS cnt FROM latest
+        """,
+        *params,
+    )
+    total = int(count_row["cnt"]) if count_row is not None else 0
+
+    limit_idx = len(params) + 1
+    page_params = [*params, limit, offset]
+    rows = await db.fetch(
+        f"""
+        WITH filtered AS (
+            SELECT *,
+                   COALESCE(NULLIF(payload->>'claim_id', ''), object_id) AS claim_dedupe_id
+            FROM intel_pub.published_objects
+            WHERE {where}
+        ),
+        latest AS (
+            SELECT DISTINCT ON (claim_dedupe_id) *
+            FROM filtered
+            ORDER BY claim_dedupe_id, created_at DESC
+        )
+        SELECT * FROM latest
+        ORDER BY created_at DESC
+        LIMIT ${limit_idx} OFFSET ${limit_idx + 1}
+        """,
+        *page_params,
+    )
+
+    claims: list[ClaimResponse] = []
     for row in rows:
         payload = _parse_payload(row["payload"])
-        if assertion_id is not None and not _claim_payload_references_assertion(
-            payload,
-            assertion_id,
-            embedded_claim_ids=embedded_claim_ids,
-            object_id=row["object_id"],
-        ):
-            continue
         claim = _row_to_claim_response(row, payload)
         if claim is None:
             continue
-        parsed_claims.append(claim)
-
-    total = len(parsed_claims)
-    page = parsed_claims[offset : offset + limit]
-    return ClaimListResponse(claims=page, total=total)
+        claims.append(claim)
+    return ClaimListResponse(claims=claims, total=total)
 
 
 @router.get(
