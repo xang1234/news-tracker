@@ -5,7 +5,7 @@ has infrastructure-oriented routes (run metadata, manifest pointers,
 review transitions). This module exposes:
 
     - Aggregate lane health + quality scorecard
-    - Assertion and claim browsing
+    - Assertion and claim browsing from published objects
     - Divergence alerts from published objects
     - Theme basket membership and path explanations
 """
@@ -23,14 +23,10 @@ from pydantic import BaseModel, Field
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import (
-    get_assertion_repository,
-    get_claim_repository,
     get_database,
     get_publish_service,
 )
 from src.api.models import ErrorResponse
-from src.assertions.repository import AssertionRepository
-from src.claims.repository import ClaimRepository
 from src.contracts.intelligence.lanes import ALL_LANES
 from src.publish.lane_health import compute_lane_health
 from src.publish.service import PublishService
@@ -249,71 +245,6 @@ class BasketPathResponse(BaseModel):
 # -- Helper functions -------------------------------------------------------
 
 
-def _assertion_to_response(a) -> AssertionResponse:
-    return AssertionResponse(
-        assertion_id=a.assertion_id,
-        subject_concept_id=a.subject_concept_id,
-        predicate=a.predicate,
-        object_concept_id=a.object_concept_id,
-        confidence=a.confidence,
-        status=a.status,
-        valid_from=a.valid_from,
-        valid_to=a.valid_to,
-        support_count=a.support_count,
-        contradiction_count=a.contradiction_count,
-        first_seen_at=a.first_seen_at,
-        last_evidence_at=a.last_evidence_at,
-        source_diversity=a.source_diversity,
-        metadata=a.metadata,
-        created_at=a.created_at,
-        updated_at=a.updated_at,
-    )
-
-
-def _claim_to_response(c) -> ClaimResponse:
-    return ClaimResponse(
-        claim_id=c.claim_id,
-        claim_key=c.claim_key,
-        lane=c.lane,
-        run_id=c.run_id,
-        source_id=c.source_id,
-        source_type=c.source_type,
-        source_text=c.source_text,
-        subject_text=c.subject_text,
-        subject_concept_id=c.subject_concept_id,
-        predicate=c.predicate,
-        object_text=c.object_text,
-        object_concept_id=c.object_concept_id,
-        confidence=c.confidence,
-        extraction_method=c.extraction_method,
-        claim_valid_from=c.claim_valid_from,
-        claim_valid_to=c.claim_valid_to,
-        source_published_at=c.source_published_at,
-        contract_version=c.contract_version,
-        status=c.status,
-        metadata=c.metadata,
-        created_at=c.created_at,
-        updated_at=c.updated_at,
-    )
-
-
-def _claim_to_summary(c) -> ClaimSummary:
-    return ClaimSummary(
-        claim_id=c.claim_id,
-        lane=c.lane,
-        source_id=c.source_id,
-        source_type=getattr(c, "source_type", ""),
-        subject_text=c.subject_text,
-        predicate=c.predicate,
-        object_text=c.object_text,
-        confidence=c.confidence,
-        extraction_method=getattr(c, "extraction_method", ""),
-        status=c.status,
-        created_at=getattr(c, "created_at", None),
-        source_published_at=c.source_published_at,
-    )
-
-
 def _parse_payload(value: Any) -> dict[str, Any]:
     """Parse a JSONB payload that may be str, dict, or None."""
     if value is None:
@@ -352,17 +283,179 @@ def _row_to_published_object(row, payload: dict[str, Any]) -> PublishedObjectIte
     )
 
 
-async def _batch_fetch_claims(claim_repo: ClaimRepository, claim_ids: list[str]):
-    """Fetch multiple claims, falling back to sequential if no batch method."""
-    if not claim_ids:
-        return []
-    # Use batch method if available, else sequential
-    if hasattr(claim_repo, "get_claims_by_ids"):
-        return await claim_repo.get_claims_by_ids(claim_ids)
-    import asyncio
+def _parse_dt(value: Any, fallback: datetime | None = None) -> datetime | None:
+    """Parse ISO datetime-like payload fields defensively."""
+    if value is None:
+        return fallback
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return fallback
+    return fallback
 
-    results = await asyncio.gather(*(claim_repo.get_claim(cid) for cid in claim_ids))
-    return [c for c in results if c is not None]
+
+def _as_float(value: Any, default: float = 0.0) -> float:
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_int(value: Any, default: int = 0) -> int:
+    try:
+        if value is None:
+            return default
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_str(value: Any, default: str = "") -> str:
+    if value is None:
+        return default
+    return str(value)
+
+
+def _row_to_assertion_response(row, payload: dict[str, Any]) -> AssertionResponse | None:
+    """Map a published assertion object to API response shape."""
+    subject = _as_str(payload.get("subject_concept_id"))
+    predicate = _as_str(payload.get("predicate"))
+    if not subject or not predicate:
+        return None
+
+    return AssertionResponse(
+        assertion_id=_as_str(payload.get("assertion_id"), default=_as_str(row["object_id"])),
+        subject_concept_id=subject,
+        predicate=predicate,
+        object_concept_id=payload.get("object_concept_id"),
+        confidence=_as_float(payload.get("confidence"), default=0.0),
+        status=_as_str(payload.get("status"), default="active"),
+        valid_from=_parse_dt(payload.get("valid_from"), fallback=row.get("valid_from")),
+        valid_to=_parse_dt(payload.get("valid_to"), fallback=row.get("valid_to")),
+        support_count=_as_int(payload.get("support_count"), default=0),
+        contradiction_count=_as_int(payload.get("contradiction_count"), default=0),
+        first_seen_at=_parse_dt(payload.get("first_seen_at")),
+        last_evidence_at=_parse_dt(payload.get("last_evidence_at")),
+        source_diversity=_as_int(payload.get("source_diversity"), default=0),
+        metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
+        created_at=_parse_dt(payload.get("created_at"), fallback=row["created_at"]) or row["created_at"],
+        updated_at=_parse_dt(payload.get("updated_at"), fallback=row["updated_at"]) or row["updated_at"],
+    )
+
+
+def _row_to_claim_response(row, payload: dict[str, Any]) -> ClaimResponse | None:
+    """Map a published claim object to API response shape."""
+    subject_text = _as_str(payload.get("subject_text"))
+    predicate = _as_str(payload.get("predicate"))
+    source_id = _as_str(payload.get("source_id"))
+    if not subject_text or not predicate or not source_id:
+        return None
+
+    claim_id = _as_str(payload.get("claim_id"), default=_as_str(row["object_id"]))
+    return ClaimResponse(
+        claim_id=claim_id,
+        claim_key=_as_str(payload.get("claim_key"), default=claim_id),
+        lane=_as_str(row["lane"]),
+        run_id=row.get("run_id"),
+        source_id=source_id,
+        source_type=_as_str(payload.get("source_type")),
+        source_text=payload.get("source_text"),
+        subject_text=subject_text,
+        subject_concept_id=payload.get("subject_concept_id"),
+        predicate=predicate,
+        object_text=payload.get("object_text"),
+        object_concept_id=payload.get("object_concept_id"),
+        confidence=_as_float(payload.get("confidence"), default=0.0),
+        extraction_method=_as_str(payload.get("extraction_method")),
+        claim_valid_from=_parse_dt(payload.get("claim_valid_from"), fallback=row.get("valid_from")),
+        claim_valid_to=_parse_dt(payload.get("claim_valid_to"), fallback=row.get("valid_to")),
+        source_published_at=_parse_dt(payload.get("source_published_at")),
+        contract_version=_as_str(
+            payload.get("contract_version"),
+            default=_as_str(row["contract_version"]),
+        ),
+        status=_as_str(payload.get("status"), default="active"),
+        metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
+        created_at=_parse_dt(payload.get("created_at"), fallback=row["created_at"]),
+        updated_at=_parse_dt(payload.get("updated_at"), fallback=row["updated_at"]),
+    )
+
+
+def _claim_response_to_summary(claim: ClaimResponse) -> ClaimSummary:
+    return ClaimSummary(
+        claim_id=claim.claim_id,
+        lane=claim.lane,
+        source_id=claim.source_id,
+        source_type=claim.source_type,
+        subject_text=claim.subject_text,
+        predicate=claim.predicate,
+        object_text=claim.object_text,
+        confidence=claim.confidence,
+        extraction_method=claim.extraction_method,
+        status=claim.status,
+        created_at=claim.created_at,
+        source_published_at=claim.source_published_at,
+    )
+
+
+def _extract_assertion_claim_links(payload: dict[str, Any]) -> list[tuple[str, str, float]]:
+    """Read optional embedded claim links from an assertion payload."""
+    claim_links = payload.get("claim_links")
+    if not isinstance(claim_links, list):
+        return []
+    links: list[tuple[str, str, float]] = []
+    for link in claim_links:
+        if not isinstance(link, dict):
+            continue
+        claim_id = _as_str(link.get("claim_id"))
+        if not claim_id:
+            continue
+        link_type = _as_str(link.get("link_type"), default="support")
+        contribution_weight = _as_float(link.get("contribution_weight"), default=1.0)
+        links.append((claim_id, link_type, contribution_weight))
+    return links
+
+
+def _extract_assertion_claim_ids(payload: dict[str, Any]) -> list[str]:
+    """Extract optional claim id references from an assertion payload."""
+    ids: list[str] = []
+    raw_ids = payload.get("claim_ids")
+    if isinstance(raw_ids, list):
+        ids.extend(_as_str(i) for i in raw_ids if _as_str(i))
+    ids.extend(link[0] for link in _extract_assertion_claim_links(payload))
+    # preserve order while de-duplicating
+    return list(dict.fromkeys(ids))
+
+
+def _claim_payload_references_assertion(
+    payload: dict[str, Any],
+    assertion_id: str,
+    embedded_claim_ids: set[str] | None = None,
+    object_id: str | None = None,
+) -> bool:
+    """Best-effort matcher for claim→assertion linkage in published payloads."""
+    if payload.get("assertion_id") == assertion_id:
+        return True
+    if payload.get("linked_assertion_id") == assertion_id:
+        return True
+    assertion_ids = payload.get("assertion_ids")
+    if isinstance(assertion_ids, list) and assertion_id in assertion_ids:
+        return True
+    links = payload.get("links")
+    if isinstance(links, list):
+        for link in links:
+            if isinstance(link, dict) and link.get("assertion_id") == assertion_id:
+                return True
+    if embedded_claim_ids:
+        claim_id = _as_str(payload.get("claim_id"), default=object_id or "")
+        if claim_id and claim_id in embedded_claim_ids:
+            return True
+    return False
 
 
 # -- Endpoints --------------------------------------------------------------
@@ -449,11 +542,11 @@ async def list_assertions(
     limit: int = Query(default=50, ge=1, le=200, description="Max results"),
     offset: int = Query(default=0, ge=0, description="Results offset"),
     api_key: str = Depends(verify_api_key),  # noqa: B008
-    repo: AssertionRepository = Depends(get_assertion_repository),  # noqa: B008
+    db: Database = Depends(get_database),  # noqa: B008
 ) -> AssertionListResponse:
     try:
         return await _list_assertions_impl(
-            concept_id, predicate, assertion_status, min_confidence, limit, offset, repo
+            concept_id, predicate, assertion_status, min_confidence, limit, offset, db
         )
     except UndefinedTableError:
         logger.warning("intel_schema_missing", endpoint="assertions")
@@ -461,33 +554,51 @@ async def list_assertions(
 
 
 async def _list_assertions_impl(
-    concept_id, predicate, assertion_status, min_confidence, limit, offset, repo
+    concept_id, predicate, assertion_status, min_confidence, limit, offset, db
 ):
-    fetch_limit = max(500, (limit + offset) * 2)
+    conditions = ["object_type = $1", "publish_state = 'published'"]
+    params: list[Any] = ["assertion"]
+    idx = 2
+
     if concept_id is not None:
-        assertions = await repo.list_for_concept(concept_id, limit=fetch_limit)
-        if predicate is not None:
-            assertions = [a for a in assertions if a.predicate == predicate]
-        if assertion_status is not None:
-            assertions = [a for a in assertions if a.status == assertion_status]
-        if min_confidence is not None:
-            assertions = [a for a in assertions if a.confidence >= min_confidence]
-    else:
-        assertions = await repo.list_assertions(
-            predicate=predicate,
-            status=assertion_status,
-            limit=fetch_limit,
+        conditions.append(
+            f"(payload->>'subject_concept_id' = ${idx} OR payload->>'object_concept_id' = ${idx})"
         )
-        if min_confidence is not None:
-            assertions = [a for a in assertions if a.confidence >= min_confidence]
+        params.append(concept_id)
+        idx += 1
+    if predicate is not None:
+        conditions.append(f"payload->>'predicate' = ${idx}")
+        params.append(predicate)
+        idx += 1
+    if assertion_status is not None:
+        conditions.append(f"payload->>'status' = ${idx}")
+        params.append(assertion_status)
+        idx += 1
 
-    total = len(assertions)
-    page = assertions[offset : offset + limit]
-
-    return AssertionListResponse(
-        assertions=[_assertion_to_response(a) for a in page],
-        total=total,
+    where = " AND ".join(conditions)
+    rows = await db.fetch(
+        f"""
+        SELECT *
+        FROM intel_pub.published_objects
+        WHERE {where}
+        ORDER BY created_at DESC
+        """,
+        *params,
     )
+
+    parsed: list[AssertionResponse] = []
+    for row in rows:
+        payload = _parse_payload(row["payload"])
+        assertion = _row_to_assertion_response(row, payload)
+        if assertion is None:
+            continue
+        if min_confidence is not None and assertion.confidence < min_confidence:
+            continue
+        parsed.append(assertion)
+
+    total = len(parsed)
+    page = parsed[offset : offset + limit]
+    return AssertionListResponse(assertions=page, total=total)
 
 
 @router.get(
@@ -503,44 +614,100 @@ async def _list_assertions_impl(
 async def get_assertion_detail(
     assertion_id: str,
     api_key: str = Depends(verify_api_key),  # noqa: B008
-    assertion_repo: AssertionRepository = Depends(get_assertion_repository),  # noqa: B008
-    claim_repo: ClaimRepository = Depends(get_claim_repository),  # noqa: B008
+    db: Database = Depends(get_database),  # noqa: B008
 ) -> AssertionDetailResponse:
     try:
-        assertion = await assertion_repo.get_assertion(assertion_id)
+        row = await db.fetchrow(
+            """
+            SELECT *
+            FROM intel_pub.published_objects
+            WHERE object_type = 'assertion'
+              AND publish_state = 'published'
+              AND (object_id = $1 OR payload->>'assertion_id' = $1)
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            assertion_id,
+        )
     except UndefinedTableError:
         logger.warning("intel_schema_missing", endpoint="assertion_detail")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Intelligence schema not initialized"
         ) from None
-    if assertion is None:
+    if row is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Assertion not found: {assertion_id}",
         )
+    payload = _parse_payload(row["payload"])
+    assertion = _row_to_assertion_response(row, payload)
+    if assertion is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Published assertion payload is invalid: {assertion_id}",
+        )
 
-    links = await assertion_repo.get_links_for_assertion(assertion_id)
+    canonical_assertion_id = assertion.assertion_id
+    embedded_links = _extract_assertion_claim_links(payload)
+    embedded_ids = set(_extract_assertion_claim_ids(payload))
 
-    # Batch-fetch all linked claims to avoid N+1
-    claim_ids = [link.claim_id for link in links]
-    claims_by_id = {c.claim_id: c for c in await _batch_fetch_claims(claim_repo, claim_ids)}
+    claim_rows = await db.fetch(
+        """
+        SELECT *
+        FROM intel_pub.published_objects
+        WHERE object_type = 'claim'
+          AND publish_state = 'published'
+        ORDER BY created_at DESC
+        """,
+    )
+    claims_by_id: dict[str, ClaimResponse] = {}
+    for claim_row in claim_rows:
+        claim_payload = _parse_payload(claim_row["payload"])
+        if not _claim_payload_references_assertion(
+            claim_payload,
+            canonical_assertion_id,
+            embedded_claim_ids=embedded_ids,
+            object_id=claim_row["object_id"],
+        ):
+            continue
+        parsed_claim = _row_to_claim_response(claim_row, claim_payload)
+        if parsed_claim is None:
+            continue
+        claims_by_id[parsed_claim.claim_id] = parsed_claim
 
     claim_link_items: list[ClaimLinkItem] = []
-    for link in links:
-        claim = claims_by_id.get(link.claim_id)
-        summary = _claim_to_summary(claim) if claim else None
+    seen_claim_ids: set[str] = set()
+
+    for claim_id, link_type, contribution_weight in embedded_links:
+        claim = claims_by_id.get(claim_id)
+        summary = _claim_response_to_summary(claim) if claim else None
         claim_link_items.append(
             ClaimLinkItem(
-                assertion_id=link.assertion_id,
-                claim_id=link.claim_id,
-                link_type=link.link_type,
-                contribution_weight=link.contribution_weight,
+                assertion_id=canonical_assertion_id,
+                claim_id=claim_id,
+                link_type=link_type,
+                contribution_weight=contribution_weight,
                 claim=summary,
+            )
+        )
+        seen_claim_ids.add(claim_id)
+
+    # If embedded links are absent/incomplete, synthesize links from claim payloads.
+    for claim_id, claim in claims_by_id.items():
+        if claim_id in seen_claim_ids:
+            continue
+        claim_link_items.append(
+            ClaimLinkItem(
+                assertion_id=canonical_assertion_id,
+                claim_id=claim_id,
+                link_type="support",
+                contribution_weight=1.0,
+                claim=_claim_response_to_summary(claim),
             )
         )
 
     return AssertionDetailResponse(
-        assertion=_assertion_to_response(assertion),
+        assertion=assertion,
         claim_links=claim_link_items,
     )
 
@@ -565,12 +732,11 @@ async def list_claims(
     limit: int = Query(default=50, ge=1, le=200, description="Max results"),
     offset: int = Query(default=0, ge=0, description="Results offset"),
     api_key: str = Depends(verify_api_key),  # noqa: B008
-    claim_repo: ClaimRepository = Depends(get_claim_repository),  # noqa: B008
-    assertion_repo: AssertionRepository = Depends(get_assertion_repository),  # noqa: B008
+    db: Database = Depends(get_database),  # noqa: B008
 ) -> ClaimListResponse:
     try:
         return await _list_claims_impl(
-            assertion_id, lane, source_id, claim_status, limit, offset, claim_repo, assertion_repo
+            assertion_id, lane, source_id, claim_status, limit, offset, db
         )
     except UndefinedTableError:
         logger.warning("intel_schema_missing", endpoint="claims")
@@ -578,35 +744,72 @@ async def list_claims(
 
 
 async def _list_claims_impl(
-    assertion_id, lane, source_id, claim_status, limit, offset, claim_repo, assertion_repo
+    assertion_id, lane, source_id, claim_status, limit, offset, db
 ):
-    if assertion_id is not None:
-        links = await assertion_repo.get_links_for_assertion(assertion_id)
-        claim_ids = [link.claim_id for link in links]
-        claims = await _batch_fetch_claims(claim_repo, claim_ids)
-        # Apply optional filters
-        if lane is not None:
-            claims = [c for c in claims if c.lane == lane]
-        if source_id is not None:
-            claims = [c for c in claims if c.source_id == source_id]
-        if claim_status is not None:
-            claims = [c for c in claims if c.status == claim_status]
-    else:
-        fetch_limit = max(500, (limit + offset) * 2)
-        claims = await claim_repo.list_claims(
-            lane=lane,
-            source_id=source_id,
-            status=claim_status,
-            limit=fetch_limit,
-        )
+    conditions = ["object_type = $1", "publish_state = 'published'"]
+    params: list[Any] = ["claim"]
+    idx = 2
 
-    total = len(claims)
-    claims = claims[offset : offset + limit]
+    if lane is not None:
+        conditions.append(f"lane = ${idx}")
+        params.append(lane)
+        idx += 1
+    if source_id is not None:
+        conditions.append(f"payload->>'source_id' = ${idx}")
+        params.append(source_id)
+        idx += 1
+    if claim_status is not None:
+        conditions.append(f"payload->>'status' = ${idx}")
+        params.append(claim_status)
+        idx += 1
 
-    return ClaimListResponse(
-        claims=[_claim_to_response(c) for c in claims],
-        total=total,
+    where = " AND ".join(conditions)
+    rows = await db.fetch(
+        f"""
+        SELECT *
+        FROM intel_pub.published_objects
+        WHERE {where}
+        ORDER BY created_at DESC
+        """,
+        *params,
     )
+
+    embedded_claim_ids: set[str] = set()
+    if assertion_id is not None:
+        assertion_row = await db.fetchrow(
+            """
+            SELECT payload
+            FROM intel_pub.published_objects
+            WHERE object_type = 'assertion'
+              AND publish_state = 'published'
+              AND (object_id = $1 OR payload->>'assertion_id' = $1)
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            assertion_id,
+        )
+        if assertion_row is not None:
+            assertion_payload = _parse_payload(assertion_row["payload"])
+            embedded_claim_ids = set(_extract_assertion_claim_ids(assertion_payload))
+
+    parsed_claims: list[ClaimResponse] = []
+    for row in rows:
+        payload = _parse_payload(row["payload"])
+        if assertion_id is not None and not _claim_payload_references_assertion(
+            payload,
+            assertion_id,
+            embedded_claim_ids=embedded_claim_ids,
+            object_id=row["object_id"],
+        ):
+            continue
+        claim = _row_to_claim_response(row, payload)
+        if claim is None:
+            continue
+        parsed_claims.append(claim)
+
+    total = len(parsed_claims)
+    page = parsed_claims[offset : offset + limit]
+    return ClaimListResponse(claims=page, total=total)
 
 
 @router.get(
