@@ -62,7 +62,6 @@ class Database:
         Establish database connection pool.
 
         Creates a connection pool with the configured size limits.
-        Also runs initialization queries (e.g., enabling pgvector).
         """
         try:
             self._pool = await asyncpg.create_pool(
@@ -71,11 +70,6 @@ class Database:
                 max_size=self._max_size,
                 command_timeout=60,
             )
-
-            # Initialize database (enable extensions, etc.)
-            async with self._pool.acquire() as conn:
-                # Enable pgvector extension
-                await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
             logger.info(f"Database connected (pool: {self._min_size}-{self._max_size})")
 

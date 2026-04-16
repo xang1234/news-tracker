@@ -153,11 +153,7 @@ const router = createBrowserRouter([
       },
       {
         path: 'securities',
-        element: <Navigate to="/settings" replace />,
-      },
-      {
-        path: 'monitoring',
-        element: <Navigate to="/" replace />,
+        element: <Navigate to="/settings?tab=securities" replace />,
       },
       {
         path: 'settings',

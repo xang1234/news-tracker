@@ -1,10 +1,10 @@
 # News Tracker — Web UI
 
-React single-page application for the News Tracker platform. Provides dashboards for browsing documents, exploring themes and entities, monitoring alerts, visualizing the causal graph, and testing NLP endpoints.
+React single-page application for the News Tracker analyst workflow. It centers source operations, document review, theme exploration, alert triage, and a small set of playground tools.
 
 ## Stack
 
-- **React 18** with TypeScript
+- **React 19** with TypeScript
 - **Vite** for builds and HMR
 - **Tailwind CSS** for styling (persistent dark theme)
 - **React Query** for server state management
@@ -17,7 +17,7 @@ Requires Node.js 18+ (22 recommended).
 
 ```bash
 npm install                      # Install dependencies
-npx vite                         # Dev server at http://localhost:5173
+npm run dev                      # Dev server at http://localhost:5151
 npx tsc --noEmit                 # Type check (zero output = success)
 npx eslint .                     # Lint
 npx vite build                   # Production build
@@ -60,14 +60,13 @@ src/
 | Causal Graph | `/graph` | Interactive graph visualization and propagation |
 | Entity Explorer | `/entities` | Entity list with trending and search |
 | Entity Detail | `/entities/:type/:normalized` | Entity stats, co-occurrence, sentiment, merge |
-| Securities | `/securities` | Security master CRUD |
-| Monitoring | `/monitoring` | Drift detection and system health |
+| Settings | `/settings` | Source operations and security master administration |
+| Securities | `/securities` | Alias to the securities tab under settings |
 | Embed Playground | `/playground/embed` | Test embedding endpoint |
 | Sentiment Playground | `/playground/sentiment` | Test sentiment analysis |
 | NER Playground | `/playground/ner` | Test entity extraction |
 | Keywords Playground | `/playground/keywords` | Test keyword extraction |
 | Events Playground | `/playground/events` | Test event extraction |
-| Settings | `/settings` | Configuration and preferences |
 
 ## Conventions
 

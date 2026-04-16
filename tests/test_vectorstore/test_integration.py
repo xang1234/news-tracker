@@ -30,15 +30,18 @@ async def integration_db():
 
     from src.config.settings import get_settings
     from src.storage.database import Database
+    from src.storage.migrations import apply_migrations
 
     settings = get_settings()
     db = Database(database_url=str(settings.database_url))
 
     try:
         await db.connect()
-        yield db
     except Exception as e:
         pytest.skip(f"Database not available: {e}")
+    try:
+        await apply_migrations(db)
+        yield db
     finally:
         await db.close()
 
@@ -103,7 +106,6 @@ class TestPgVectorStoreIntegration:
 
         # Create repository and store
         repo = DocumentRepository(integration_db)
-        await repo.create_tables()
         store = PgVectorStore(database=integration_db, repository=repo)
 
         # Insert test documents first
@@ -148,7 +150,6 @@ class TestPgVectorStoreIntegration:
         from src.vectorstore.pgvector_store import PgVectorStore
 
         repo = DocumentRepository(integration_db)
-        await repo.create_tables()
         store = PgVectorStore(database=integration_db, repository=repo)
 
         # Insert and embed documents
@@ -200,7 +201,6 @@ class TestVectorStoreManagerIntegration:
 
         # Create components
         repo = DocumentRepository(integration_db)
-        await repo.create_tables()
         store = PgVectorStore(database=integration_db, repository=repo)
 
         # Use CPU for tests

@@ -181,7 +181,6 @@ class ProcessingService:
 
         # Create repository
         self._repository = DocumentRepository(self._database)
-        await self._repository.create_tables()
 
         # Create claim repository if extraction is enabled
         if self._claim_extraction_enabled:
@@ -253,6 +252,7 @@ class ProcessingService:
         if not batch:
             return
 
+        assert self._repository is not None
         start_time = time.monotonic()
         processed = 0
         filtered = 0
@@ -455,7 +455,6 @@ class ProcessingService:
         """
         await self._database.connect()
         self._repository = DocumentRepository(self._database)
-        await self._repository.create_tables()
 
         stats = {
             "total": len(docs),

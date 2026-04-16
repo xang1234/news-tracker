@@ -118,7 +118,7 @@ Evaluates theme ranking strategies against historical price data. Point-in-time 
 
 All ML models use lazy loading (deferred until first use) and content-hash caching in Redis.
 
-### Drift Detection
+### Internal Monitoring
 
 Four monitoring checks detect model and data drift:
 
@@ -131,7 +131,7 @@ Four monitoring checks detect model and data drift:
 
 ## Web UI
 
-A React single-page application (React 18 + TypeScript + Vite + Tailwind CSS + React Query + Zustand) with 18 lazy-loaded pages:
+A React single-page application (React 19 + TypeScript + Vite + Tailwind CSS + React Query + Zustand) focused on the primary analyst workflow: source operations, document review, theme exploration, and alert triage.
 
 | Page | Route | Purpose |
 |------|-------|---------|
@@ -145,10 +145,9 @@ A React single-page application (React 18 + TypeScript + Vite + Tailwind CSS + R
 | Graph | `/graph` | Interactive causal graph visualization |
 | Entities | `/entities` | Entity explorer with trending view |
 | Entity Detail | `/entities/:type/:name` | Stats, documents, co-occurrence, sentiment |
-| Securities | `/securities` | Security master CRUD |
-| Monitoring | `/monitoring` | Drift detection and system health |
+| Settings | `/settings` | Source operations and security master administration |
+| Securities | `/securities` | Alias to the securities tab under settings |
 | Playgrounds | `/playground/*` | Interactive testing for embed, sentiment, NER, keywords, events |
-| Settings | `/settings` | Configuration and preferences |
 
 The UI uses a persistent dark theme and renders all server state through React Query hooks with typed request/response interfaces.
 
@@ -172,7 +171,7 @@ uv run news-tracker run-once --mock
 uv run news-tracker serve
 
 # Start the frontend (requires Node.js 18+)
-cd frontend && npm install && npx vite
+cd frontend && npm install && npm run dev
 ```
 
 ## Docker Compose
@@ -323,9 +322,9 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/news_tracker
 REDIS_URL=redis://localhost:6379/0
 API_KEYS=key1,key2               # Comma-separated; empty = dev mode (no auth)
 
-# Data sources (each adapter has its own credentials)
+# Data sources (xui is opt-in)
 TWITTER_BEARER_TOKEN=...
-TWITTER_XUI_ENABLED=true
+TWITTER_XUI_ENABLED=false
 TWITTER_XUI_COMMAND=xui
 TWITTER_XUI_CONFIG_PATH=/home/appuser/.config/xui-reader/config.toml
 TWITTER_XUI_PROFILE=default
@@ -381,7 +380,7 @@ src/
 ├── graph/           # Causal graph (recursive CTE) + sentiment propagation
 ├── ingestion/       # Platform adapters, Redis queue, preprocessing
 ├── keywords/        # TextRank keyword extraction
-├── monitoring/      # 4-check drift detection
+├── monitoring/      # Internal drift and health checks
 ├── ner/             # spaCy NER + EntityRuler + fastcoref
 ├── observability/   # Logging, Prometheus metrics, OTLP tracing
 ├── queues/          # Redis Streams base queue with backoff
@@ -397,7 +396,7 @@ frontend/src/
 ├── api/             # Axios client, query key factory, typed hooks
 ├── components/      # Layout shell + domain components (with Skeleton variants)
 ├── lib/             # Constants, formatters, Tailwind utilities
-├── pages/           # 18 lazy-loaded route components
+├── pages/           # Route components (settings owns source/security admin)
 └── stores/          # Zustand stores (auth, UI state)
 ```
 

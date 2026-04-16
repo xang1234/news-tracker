@@ -4,39 +4,9 @@ import logging
 
 from src.security_master.schemas import Security
 from src.storage.database import Database
+from src.storage.migrations import apply_migrations
 
 logger = logging.getLogger(__name__)
-
-# SQL for table creation (mirrors migration 008)
-_CREATE_TABLE_SQL = """
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
-
-CREATE TABLE IF NOT EXISTS securities (
-    ticker      TEXT NOT NULL,
-    exchange    TEXT NOT NULL DEFAULT 'US',
-    name        TEXT NOT NULL DEFAULT '',
-    aliases     TEXT[] NOT NULL DEFAULT '{}',
-    sector      TEXT NOT NULL DEFAULT '',
-    country     TEXT NOT NULL DEFAULT 'US',
-    currency    TEXT NOT NULL DEFAULT 'USD',
-    figi        TEXT,
-    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (ticker, exchange)
-);
-
-CREATE INDEX IF NOT EXISTS idx_securities_ticker
-    ON securities(ticker);
-CREATE INDEX IF NOT EXISTS idx_securities_name_trgm
-    ON securities USING GIN (name gin_trgm_ops);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_securities_figi
-    ON securities(figi) WHERE figi IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_securities_active
-    ON securities(is_active) WHERE is_active = TRUE;
-CREATE INDEX IF NOT EXISTS idx_securities_sector
-    ON securities(sector);
-"""
 
 _UPSERT_SQL = """
 INSERT INTO securities (ticker, exchange, name, aliases, sector, country, currency, figi, is_active)
@@ -95,9 +65,9 @@ class SecurityMasterRepository:
         self._db = database
 
     async def create_table(self) -> None:
-        """Create the securities table and indexes (idempotent)."""
-        await self._db.execute(_CREATE_TABLE_SQL)
-        logger.info("Securities table ensured")
+        """Backward-compatible schema helper for securities."""
+        await apply_migrations(self._db)
+        logger.info("Securities schema ensured via migrations")
 
     async def upsert(self, security: Security) -> None:
         """Insert or update a single security."""

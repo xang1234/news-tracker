@@ -13,7 +13,8 @@ Features:
 
 import asyncio
 import time
-from typing import Any
+from collections.abc import Sequence
+from typing import Any, cast
 
 import structlog
 
@@ -29,6 +30,15 @@ from src.ingestion.twitter_adapter import TwitterAdapter
 from src.observability.metrics import get_metrics
 
 logger = structlog.get_logger(__name__)
+
+
+class IngestionConfigurationError(RuntimeError):
+    """Raised when ingestion is started without a usable real-source configuration."""
+
+
+def _has_selected_sources(sources: Sequence[object] | None) -> bool:
+    """Treat explicit empty source overrides as a disabled platform selection."""
+    return sources is None or len(sources) > 0
 
 
 class IngestionService:
@@ -67,7 +77,7 @@ class IngestionService:
 
         self._poll_interval = settings.poll_interval_seconds
         self._running = False
-        self._tasks: list[asyncio.Task] = []
+        self._tasks: list[asyncio.Task[None]] = []
         self._metrics = get_metrics()
 
         # Initialize queue
@@ -77,13 +87,19 @@ class IngestionService:
         if adapters:
             self._adapters = adapters
         elif use_mock:
-            self._adapters = create_mock_adapters()
+            self._adapters = cast(dict[Platform, BaseAdapter], create_mock_adapters())
         else:
             self._adapters = self._create_adapters(
                 settings,
                 twitter_sources=twitter_sources,
                 reddit_sources=reddit_sources,
                 substack_sources=substack_sources,
+            )
+
+        if not self._adapters and not use_mock:
+            raise IngestionConfigurationError(
+                "No ingestion sources are configured. Set real source credentials "
+                "or run with --mock for synthetic data."
             )
 
         logger.info(
@@ -94,7 +110,7 @@ class IngestionService:
 
     def _create_adapters(
         self,
-        settings,
+        settings: Any,
         *,
         twitter_sources: list[str] | None = None,
         reddit_sources: list[str] | None = None,
@@ -105,10 +121,12 @@ class IngestionService:
         When source lists are provided (from the sources DB), they override
         the hardcoded defaults. Pass None to use adapter defaults.
         """
-        adapters = {}
+        adapters: dict[Platform, BaseAdapter] = {}
 
         # Twitter (xui primary with API backup)
-        if settings.twitter_configured or settings.xui_configured:
+        if (settings.twitter_configured or settings.xui_configured) and _has_selected_sources(
+            twitter_sources,
+        ):
             kwargs = {"rate_limit": settings.twitter_rate_limit}
             if twitter_sources is not None:
                 kwargs["xui_usernames"] = twitter_sources
@@ -117,21 +135,28 @@ class IngestionService:
                 logger.info("Twitter adapter enabled (xui primary, API backup)")
             else:
                 logger.info("Twitter adapter enabled (xui only)")
+        elif settings.twitter_configured or settings.xui_configured:
+            logger.info("Twitter adapter disabled (no active sources configured)")
 
         # Reddit
-        if settings.reddit_configured:
+        if settings.reddit_configured and _has_selected_sources(reddit_sources):
             kwargs = {"rate_limit": settings.reddit_rate_limit}
             if reddit_sources is not None:
                 kwargs["subreddits"] = reddit_sources
             adapters[Platform.REDDIT] = RedditAdapter(**kwargs)
             logger.info("Reddit adapter enabled")
+        elif settings.reddit_configured:
+            logger.info("Reddit adapter disabled (no active sources configured)")
 
         # Substack (always available - uses public RSS)
-        kwargs = {"rate_limit": settings.substack_rate_limit}
-        if substack_sources is not None:
-            kwargs["publications"] = substack_sources
-        adapters[Platform.SUBSTACK] = SubstackAdapter(**kwargs)
-        logger.info("Substack adapter enabled")
+        if _has_selected_sources(substack_sources):
+            kwargs = {"rate_limit": settings.substack_rate_limit}
+            if substack_sources is not None:
+                kwargs["publications"] = substack_sources
+            adapters[Platform.SUBSTACK] = SubstackAdapter(**kwargs)
+            logger.info("Substack adapter enabled")
+        else:
+            logger.info("Substack adapter disabled (no active sources configured)")
 
         # News APIs
         if settings.news_api_configured:
@@ -140,10 +165,12 @@ class IngestionService:
             )
             logger.info("News adapter enabled")
 
-        # If no adapters configured, use mock
+        # Normal startup should never silently switch to mock adapters.
         if not adapters:
-            logger.warning("No API credentials configured, using mock adapters")
-            return create_mock_adapters()
+            raise IngestionConfigurationError(
+                "No ingestion sources are configured. Set real source credentials "
+                "or run with --mock for synthetic data."
+            )
 
         return adapters
 

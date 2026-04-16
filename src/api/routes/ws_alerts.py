@@ -12,27 +12,12 @@ import logging
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
-from src.alerts.broadcaster import AlertBroadcaster
 from src.alerts.schemas import VALID_SEVERITIES
 from src.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Module-level broadcaster reference, set during app lifespan
-_broadcaster: AlertBroadcaster | None = None
-
-
-def set_broadcaster(broadcaster: AlertBroadcaster) -> None:
-    """Set the module-level broadcaster (called during app startup)."""
-    global _broadcaster
-    _broadcaster = broadcaster
-
-
-def get_broadcaster() -> AlertBroadcaster | None:
-    """Get the current broadcaster instance."""
-    return _broadcaster
 
 
 def _validate_api_key(api_key: str | None) -> bool:
@@ -91,7 +76,7 @@ async def ws_alerts(
         await ws.close(code=1008, reason=f"Invalid severity: {severity}")
         return
 
-    broadcaster = _broadcaster
+    broadcaster = getattr(ws.app.state, "alert_broadcaster", None)
     if broadcaster is None:
         await ws.close(code=1011, reason="Broadcaster not available")
         return
