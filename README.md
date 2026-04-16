@@ -1,404 +1,264 @@
 # News Tracker
 
-A full-stack financial news intelligence platform focused on the semiconductor industry. It ingests content from social media, newsletters, and news APIs, enriches it with NLP (entity recognition, sentiment, keywords, event extraction), clusters documents into tradeable themes, models causal supply chain relationships, and surfaces actionable alerts — all backed by a REST/WebSocket API and React dashboard.
+News Tracker is a producer-side intelligence system for semiconductors: it ingests multi-source evidence, resolves claims into assertions, builds lane outputs (narrative, filing, structural, backtest), and publishes manifest-keyed objects for downstream consumers.
 
-## Design Intent
+## Why Teams Use This
 
-The semiconductor supply chain is dense with signal: a single TSMC capacity announcement ripples through fabless designers, equipment suppliers, and end-market companies. News Tracker is built to capture that signal across platforms, enrich it into structured intelligence, and surface the themes that matter for investment decisions.
+- Reduce time-to-insight from raw documents to explainable intelligence artifacts.
+- Compare narrative momentum vs filing-confirmed adoption before making decisions.
+- Surface second-order exposure paths with auditable structural rationale.
+- Replay runs and publication state point-in-time through manifests and lineage.
 
-Key design goals:
+## Quick Start (Utility-First)
 
-- **Multi-source triangulation.** No single platform tells the full story. Combining Twitter, Reddit, Substack, and financial news APIs provides breadth and corroboration.
-- **Opt-in complexity.** Every NLP and analytics feature is behind a feature flag, disabled by default. A deployment can start as a simple ingestion pipeline and graduate to full ML enrichment as needs grow.
-- **Streaming architecture.** Redis Streams decouple ingestion from processing from analysis. Workers scale independently and propagate trace context across boundaries.
-- **Domain-tuned models.** FinBERT (not general-purpose BERT) for embeddings and sentiment. spaCy EntityRuler for semiconductor-specific entities before statistical NER runs.
-
-## Architecture
-
-```
-                    ┌────────────────────────────────────────────────────────┐
-                    │                     Data Sources                       │
-                    │  Twitter  ·  Reddit  ·  Substack  ·  Finnhub          │
-                    │  NewsAPI  ·  Newsfilter  ·  Marketaux  ·  Finlight    │
-                    └──────────────────────┬─────────────────────────────────┘
-                                           ▼
-                                ┌─────────────────────┐
-                                │  Platform Adapters   │
-                                │  (rate-limited I/O)  │
-                                └──────────┬──────────┘
-                                           ▼
-                                ┌─────────────────────┐
-                                │    Redis Streams     │
-                                │   (document_queue)   │
-                                └──────────┬──────────┘
-                                           ▼
-                                ┌─────────────────────┐
-                                │  Processing Pipeline │
-                                │  Spam · Dedup · NER  │
-                                │  Keywords · Events   │
-                                │  Tickers · Authority │
-                                └──────────┬──────────┘
-                                           │
-                    ┌──────────────────────┼──────────────────────┐
-                    ▼                      ▼                      ▼
-          ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-          │  embedding_queue │  │ sentiment_queue   │  │ clustering_queue  │
-          └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘
-                   ▼                     ▼                      ▼
-          ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-          │ EmbeddingWorker  │  │ SentimentWorker   │  │ ClusteringWorker │
-          │ FinBERT · MiniLM │  │ FinBERT sentiment │  │ pgvector HNSW    │
-          └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘
-                   └──────────────────────┼──────────────────────┘
-                                          ▼
-                        ┌─────────────────────────────────┐
-                        │     PostgreSQL  +  pgvector       │
-                        │  Documents · Themes · Graph       │
-                        │  Alerts · Backtest · Securities   │
-                        └────────────────┬────────────────┘
-                                         │
-                    ┌────────────────────┼────────────────────┐
-                    ▼                    ▼                    ▼
-          ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
-          │   FastAPI REST   │ │  WebSocket /ws/   │ │   React Web UI   │
-          │   API + CORS     │ │  alerts (pub/sub) │ │   (18 pages)     │
-          └──────────────────┘ └──────────────────┘ └──────────────────┘
-```
-
-### How data flows
-
-1. **Adapters** fetch raw content from each platform, respecting per-source rate limits. Each adapter implements `_fetch_raw()` (I/O with rate limiting) and `_transform()` (normalization into `NormalizedDocument`). News APIs support multiple API keys with round-robin rotation.
-
-2. **Redis Streams** buffer documents between stages. Workers use consumer groups (`XREADGROUP`) with automatic claim (`XAUTOCLAIM`) for at-least-once delivery. Failed messages get exponential backoff. W3C `traceparent` fields propagate distributed traces across worker boundaries.
-
-3. **Processing** runs spam detection, MinHash deduplication, ticker extraction, and optional NER/keywords/events. Each enrichment stage is independently gated by a feature flag.
-
-4. **Workers** consume from dedicated queues. The embedding worker selects FinBERT (768-dim) for long-form financial content and MiniLM (384-dim) for short social posts (<300 chars). The sentiment worker runs ProsusAI/finbert with optional entity-level context windows. The clustering worker assigns documents to themes in real-time via pgvector HNSW cosine similarity.
-
-5. **PostgreSQL + pgvector** stores everything: documents with dual embedding columns, themes with EMA-updated centroids, a causal supply chain graph, alerts, backtest results, and a security master. HNSW indexes enable sub-millisecond semantic search.
-
-## Key Subsystems
-
-### Theme Clustering
-
-Dual-path clustering combines offline discovery with real-time assignment:
-
-- **Batch** (daily cron): BERTopic (UMAP + HDBSCAN + c-TF-IDF) discovers themes from recent documents. Produces deterministic theme IDs via `theme_{sha256(sorted_topic_words)[:12]}`.
-- **Real-time**: ClusteringWorker assigns each incoming document to existing themes via cosine similarity against centroids. Three tiers — strong match (updates centroid via EMA), weak match (assigns without update), or new candidate.
-
-Themes have lifecycle stages (`emerging → active → mature → declining → dead`) and are ranked by actionability for swing or position trading, producing tiered output (Tier 1/2/3).
-
-### Causal Graph
-
-A directed graph models the semiconductor supply chain (~50 nodes, 100+ edges). Node types: company, technology, product, market_segment. Edge types: `supplies_to`, `competes_with`, `depends_on`, `manufactures`, `develops`.
-
-Sentiment propagation runs BFS through causal edges. Edge weights carry sign — `competes_with` flips impact direction (Samsung bad news → TSMC slight positive). The first-arrival-wins rule prevents double-counting at deeper hops. Traversal uses recursive CTEs with cycle detection (`NOT node_id = ANY(path)`).
-
-### Alerts & Notifications
-
-Stateless trigger functions evaluate conditions (volume spike, sentiment shift, new theme, authority change) and persist alerts with deduplication via Redis `SET NX`. Notifications dispatch to Webhook and Slack channels, each wrapped in a circuit breaker. Failures never block alert persistence. Real-time alerts stream to WebSocket clients via Redis pub/sub fan-out.
-
-### Authority Scoring
-
-Bayesian model with Beta prior smoothing: `(correct + alpha) / (total + alpha + beta)`. New sources ramp linearly over a 30-day probation period. Tier-based base weights (anonymous 1.0 / verified 5.0 / research 10.0) and exponential time decay ensure established, accurate sources outrank noisy ones.
-
-### Backtesting
-
-Evaluates theme ranking strategies against historical price data. Point-in-time queries filter on `fetched_at` (ingestion time), not `timestamp` (publication time), to prevent look-ahead bias. Produces Sharpe ratio, max drawdown, hit rate, and cumulative returns. Matplotlib visualization generates comparison charts.
-
-### NLP Pipeline
-
-| Stage | Model / Method | Output |
-|-------|---------------|--------|
-| **Embeddings** | FinBERT (768-dim) / MiniLM (384-dim) | Vector representations, cached by content hash |
-| **Sentiment** | ProsusAI/finbert | Document + entity-level pos/neg/neutral with confidence |
-| **NER** | spaCy transformer + EntityRuler + fastcoref | TICKER, COMPANY, PRODUCT, TECHNOLOGY, METRIC entities |
-| **Keywords** | TextRank (rapid-textrank) | Top-N keywords with relevance scores |
-| **Events** | Regex SVO patterns + time normalization | Structured events with investment signal classification |
-
-All ML models use lazy loading (deferred until first use) and content-hash caching in Redis.
-
-### Internal Monitoring
-
-Four monitoring checks detect model and data drift:
-
-| Check | Metric | Frequency |
-|-------|--------|-----------|
-| Embedding | KL divergence on L2 norm distributions | Hourly |
-| Fragmentation | Cluster count and singleton ratio | Daily |
-| Sentiment | Z-score deviation from baseline | Daily |
-| Centroid Stability | Cosine distance of theme centroids over time | Daily |
-
-## Web UI
-
-A React single-page application (React 19 + TypeScript + Vite + Tailwind CSS + React Query + Zustand) focused on the primary analyst workflow: source operations, document review, theme exploration, and alert triage.
-
-| Page | Route | Purpose |
-|------|-------|---------|
-| Dashboard | `/` | System overview, key metrics, recent activity |
-| Search | `/search` | Semantic similarity search with filters |
-| Documents | `/documents` | Browse and filter ingested documents |
-| Document Detail | `/documents/:id` | Full content with entities, keywords, events, sentiment |
-| Themes | `/themes` | Theme explorer by lifecycle stage |
-| Theme Detail | `/themes/:id` | Documents, sentiment, metrics, events, graph links |
-| Alerts | `/alerts` | Alert center with severity/trigger filters |
-| Graph | `/graph` | Interactive causal graph visualization |
-| Entities | `/entities` | Entity explorer with trending view |
-| Entity Detail | `/entities/:type/:name` | Stats, documents, co-occurrence, sentiment |
-| Settings | `/settings` | Source operations and security master administration |
-| Securities | `/securities` | Alias to the securities tab under settings |
-| Playgrounds | `/playground/*` | Interactive testing for embed, sentiment, NER, keywords, events |
-
-The UI uses a persistent dark theme and renders all server state through React Query hooks with typed request/response interfaces.
-
-## Quick Start
+### 1) Boot Local Stack
 
 ```bash
-# Install Python dependencies
 uv sync --extra dev
-
-# Start infrastructure
 docker compose up -d
-
-# Initialize schema and seed data
 uv run news-tracker init-db
+```
+
+### 2) Create Reproducible Mock State
+
+```bash
+uv run news-tracker run-once --mock
 uv run news-tracker graph seed
 
-# Run a mock ingestion cycle
-uv run news-tracker run-once --mock
+# Optional (for non-empty Themes view screenshots)
+uv run news-tracker run-once --mock --with-embeddings
+uv run news-tracker daily-clustering --date YYYY-MM-DD
+```
 
-# Start the API server
+### 3) Run API + Frontend
+
+```bash
 uv run news-tracker serve
-
-# Start the frontend (requires Node.js 18+)
 cd frontend && npm install && npm run dev
 ```
 
-## Docker Compose
-
-`docker compose up -d` launches the full stack:
-
-| Service | Port | Role |
-|---------|------|------|
-| PostgreSQL + pgvector | 5432 | Document storage, vector search (HNSW indexes) |
-| Redis | 6379 | Streams (queues), pub/sub (alerts), caching |
-| Prometheus | 9090 | Metrics scraping + alert rules |
-| AlertManager | 9093 | Alert routing |
-| Grafana | 3000 | Auto-provisioned dashboards (admin/admin) |
-| Jaeger | 16686 | Distributed tracing (OTLP gRPC on 4317) |
-| API server | 8001 | FastAPI application |
-| Workers | — | Ingestion, embedding, sentiment, clustering |
-| Frontend | 5151 | React dev server (Vite) |
-
-### XUI Twitter Setup (No Bearer Token)
-
-If you are using xui instead of `TWITTER_BEARER_TOKEN`, do this once on the host:
+### 4) Capture UI Evidence with Playwright
 
 ```bash
-mkdir -p runtime/xui
-
-uvx --from 'git+https://github.com/xang1234/xui.git' \
-  --with 'rich>=13.0' --with 'typer>=0.12' \
-  xui config init --path runtime/xui/config.toml
-
-uvx --from 'git+https://github.com/xang1234/xui.git' \
-  --with 'rich>=13.0' --with 'typer>=0.12' \
-  xui profiles create default --path runtime/xui/config.toml
-
-uvx --from 'git+https://github.com/xang1234/xui.git' \
-  --with 'rich>=13.0' --with 'typer>=0.12' \
-  xui auth login --profile default --path runtime/xui/config.toml
+FRONTEND_PORT=5151   # If occupied, use the actual Vite port from startup logs
+mkdir -p output/playwright
+npx --yes playwright screenshot "http://localhost:${FRONTEND_PORT}/" output/playwright/dashboard.png
+npx --yes playwright screenshot "http://localhost:${FRONTEND_PORT}/themes" output/playwright/themes.png
+npx --yes playwright screenshot "http://localhost:${FRONTEND_PORT}/graph" output/playwright/graph.png
 ```
 
-`docker-compose.yml` mounts `./runtime/xui` into backend containers at
-`/home/appuser/.config/xui-reader`, so worker ingestion reuses your authenticated session state.
-For private repos, store PAT in a local secret file (not `.env`) so it is not passed into
-runtime container environment:
+## Core Operator Views
+
+### Dashboard (System + Lane Signal)
+
+![Dashboard overview](output/playwright/dashboard.png)
+
+Use this for quick triage:
+
+- Is ingestion/processing moving?
+- Are lane health states publish-ready?
+- Are queue backlogs stable?
+
+### Themes (Narrative Discovery Surface)
+
+![Themes view](output/playwright/themes.png)
+
+Use this to inspect theme volume, lifecycle stage, and ranking-oriented context. If empty, run clustering jobs and confirm ingestion throughput.
+
+### Graph (Structural Exposure Surface)
+
+![Graph view](output/playwright/graph.png)
+
+Use this to explore two complementary graph layers:
+
+- Manual causal graph (`causal_nodes` / `causal_edges`): node types `ticker`, `theme`, `technology`; edge relations `depends_on`, `supplies_to`, `competes_with`, `drives`, `blocks`.
+- Assertion-derived structural relations (`src/graph/structural.py`): broader concept predicates (for example `customer_of`, `uses_technology`, `component_of`) with sign, freshness, corroboration, and assertion lineage. During `news-tracker graph sync`, these map into causal-edge relations for traversal APIs.
+
+## Q88 Producer Boundary (Authoritative Architecture)
+
+The system is documented around this producer contract:
+
+1. Source documents and filings produce evidence claims.
+2. Claims are resolved into assertions (current-belief layer).
+3. Assertions feed lane-specific computations.
+4. Lane outputs are published as manifest-keyed objects.
+5. Downstream consumers read published surfaces, not WIP tables.
+
+Key publication concepts:
+
+- `news_intel.lane_runs`: lane execution lifecycle.
+- `intel_pub.manifests`: versioned publication units.
+- `intel_pub.manifest_pointers`: active serving pointer per lane.
+- `intel_pub.published_objects`: published, lineaged payloads.
+- `intel_pub.read_model`: stable consumer read surface.
+
+## Data Science / ML Techniques by Lane
+
+| Lane | Techniques | Primary Outputs | Why It Matters |
+|---|---|---|---|
+| Narrative | Component scoring: attention, corroboration, confirmation, novelty/persistence | Narrative run payloads, rollups, signals | Distinguishes real cross-platform momentum from noise |
+| Filing | Section-weighted adoption scoring, fact alignment, temporal consistency, divergence classification | Adoption payloads, divergence alerts, issuer summaries | Tests whether narrative claims are operationally reflected in filings |
+| Structural | Assertion-derived typed relations, 1/2-hop path scoring, basket assembly | Path explanations, basket summaries, structural relations | Surfaces second-order beneficiaries/risks with traceable rationale |
+| Backtest | Point-in-time replay over published states | Backtest/evaluation artifacts | Validates decision utility under historical constraints |
+
+### Narrative Lane Scoring
+
+Narrative scoring is decomposed into four inspectable components:
+
+- Attention: velocity + acceleration + doc mass.
+- Corroboration: platform spread + source diversity + spread speed.
+- Confirmation: authority alignment + crowd agreement.
+- Novelty/Persistence: recency decay vs duration persistence.
+
+Composite scores are weighted and capped, then exposed for ranking/explanation workflows.
+
+### Filing Lane Scoring
+
+Filing adoption score combines:
+
+- Section coverage
+- Section depth
+- Fact alignment
+- Temporal consistency
+
+Divergence logic classifies structured reason codes such as:
+
+- `narrative_without_filing`
+- `filing_without_narrative`
+- `adverse_drift`
+- `contradictory_drift`
+- `lagging_adoption`
+
+### Structural Lane Scoring
+
+Structural path scoring is explanation-first, not opaque graph embedding:
+
+- Edge score: `confidence * freshness * corroboration`
+- Path score: product of edge scores with hop decay
+- Path sign: product of edge signs
+
+Path outputs keep decomposed factors and assertion lineage.
+
+## Explainability: “Why Did This Surface?”
+
+This system is designed so surfaced outputs can be audited without recomputing everything live.
+
+### Assertion-Level Explainability
+
+Resolved assertions expose confidence context via:
+
+- top-level fields: `support_count`, `contradiction_count`, `source_diversity`, `valid_from`, `valid_to`, `first_seen_at`, `last_evidence_at`
+- `metadata.breakdown`: `base`, `freshness`, `diversity`, `support_ratio`, `review_bonus`
+
+### Structural Path Explainability
+
+Published path explanations include:
+
+- `hops`, `path_score`, `path_sign`
+- `confidence_product`, `freshness_product`, `corroboration_product`, `hop_decay`
+- `assertion_ids` and edge predicate sequence
+
+### Filing Divergence Explainability
+
+Divergence payloads include reason code, severity, human-readable summary, and structured evidence fields for UI and audit workflows.
+
+## Data Flow (Practical)
+
+1. Adapters fetch and normalize source content.
+2. Processing pipeline runs spam filtering, deduplication, extraction/enrichment.
+3. Lane logic computes narrative/filing/structural outputs.
+4. Publish layer creates/updates manifests and object state.
+5. Consumers query published objects/read-model surfaces.
+
+## API Surfaces
+
+- Infrastructure/publish endpoints: `src/api/routes/intel.py`
+- User-facing intelligence endpoints: `src/api/routes/intel_surface.py`
+- Graph endpoints: `src/api/routes/graph.py`
+
+Start docs:
+
+- API docs: `http://localhost:8001/docs`
+
+## CLI Reference (Most Used)
 
 ```bash
-mkdir -p .secrets
-printf '%s' 'github_pat_xxx' > .secrets/xui_github_token
-chmod 600 .secrets/xui_github_token
-```
+# Core runtime
+news-tracker serve
+news-tracker worker
+news-tracker init-db
+news-tracker health
 
-Compose passes this file as a BuildKit secret during image build, so the token value is not
-expanded into Docker build command logs.
+# Mock ingestion and cleanup
+news-tracker run-once --mock
+news-tracker cleanup --days 90 --dry-run
 
-If Google shows "This browser or app may not be secure" during `xui auth login`, use a real
-local Google Chrome instance via CDP for auth capture:
+# Clustering and ranking workflows
+news-tracker daily-clustering --date YYYY-MM-DD
+news-tracker cluster status
 
-```bash
-# macOS: start real Google Chrome with DevTools endpoint
-/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome \
-  --remote-debugging-port=9222 \
-  --user-data-dir="$HOME/.xui-chrome-profile" \
-  --no-first-run --no-default-browser-check
-
-# in another terminal, run auth using a temporary auth-only config
-./scripts/xui-auth-login.sh default
-```
-
-To reuse an existing Chrome profile/session, quit all Chrome windows first, then launch with your
-normal Chrome user data dir and (optionally) profile directory:
-
-```bash
-/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome \
-  --remote-debugging-port=9222 \
-  --user-data-dir="$HOME/Library/Application Support/Google/Chrome" \
-  --profile-directory="Default"
-```
-
-This helper uses `runtime/xui/config.auth.toml` for login only (with `cdp_url` and headful mode),
-while ingestion keeps using `runtime/xui/config.toml` in Docker.
-
-## CLI
-
-All commands are available via the `news-tracker` entry point.
-
-```bash
-# Core
-news-tracker serve                        # FastAPI server
-news-tracker worker                       # Ingestion + processing loop
-news-tracker embedding-worker             # FinBERT/MiniLM embedding generation
-news-tracker sentiment-worker             # Sentiment analysis
-news-tracker clustering-worker            # Real-time theme assignment
-news-tracker init-db                      # Initialize schema
-news-tracker health                       # Check dependencies
-
-# Ingestion
-news-tracker run-once [--mock] [--with-embeddings] [--with-sentiment] [--verify]
-news-tracker cleanup [--days 90] [--dry-run]
-
-# Clustering
-news-tracker daily-clustering [--date YYYY-MM-DD]
-news-tracker cluster fit|run|backfill|merge|status|recompute-centroids
-
-# Search
-news-tracker vector-search "query" [--limit N] [--platform X] [--ticker Y]
+# Graph and monitoring
+news-tracker graph seed
+news-tracker drift check-quick
+news-tracker drift check-daily
+news-tracker drift report
 
 # Backtesting
-news-tracker backtest run --start YYYY-MM-DD --end YYYY-MM-DD [--strategy swing|position]
+news-tracker backtest run --start YYYY-MM-DD --end YYYY-MM-DD --strategy swing
 news-tracker backtest plot --run-id <id>
-
-# Graph & Monitoring
-news-tracker graph seed
-news-tracker drift check-quick|check-daily|report
 ```
 
-## Feature Flags
-
-Every enrichment and analytics feature is opt-in via environment variable:
-
-| Feature | Flag | What it enables |
-|---------|------|-----------------|
-| NER | `NER_ENABLED` | spaCy entity recognition + coreference resolution |
-| Keywords | `KEYWORDS_ENABLED` | TextRank keyword extraction |
-| Events | `EVENTS_ENABLED` | SVO event extraction + time normalization |
-| Clustering | `CLUSTERING_ENABLED` | BERTopic discovery + real-time assignment |
-| Volume Metrics | `VOLUME_METRICS_ENABLED` | EMA-based volume and velocity tracking |
-| Ranking | `RANKING_ENABLED` | Theme actionability scoring (swing/position) |
-| Graph | `GRAPH_ENABLED` | Causal supply chain graph traversal |
-| Propagation | `PROPAGATION_ENABLED` | Sentiment propagation through graph edges |
-| Alerts | `ALERTS_ENABLED` | Volume spike, sentiment shift, new theme triggers |
-| Notifications | `NOTIFICATIONS_ENABLED` | Webhook + Slack channels with circuit breakers |
-| Backtest | `BACKTEST_ENABLED` | Historical strategy backtesting |
-| Scoring | `SCORING_ENABLED` | LLM compellingness scoring (rule → GPT → Claude) |
-| Security Master | `SECURITY_MASTER_ENABLED` | DB-backed ticker lookup with fuzzy search |
-| Authority | `AUTHORITY_ENABLED` | Bayesian source authority scoring |
-| Drift Detection | `DRIFT_ENABLED` | Embedding, fragmentation, sentiment, stability checks |
-| Tracing | `TRACING_ENABLED` | OpenTelemetry distributed tracing (OTLP → Jaeger) |
-| WebSocket Alerts | `WS_ALERTS_ENABLED` | Real-time alert streaming via WebSocket |
-| Rate Limiting | `RATE_LIMIT_ENABLED` | Per-endpoint rate limiting (slowapi) |
-
-Each feature has its own `ENV_PREFIX_*` namespace for fine-grained configuration. See `src/config/settings.py` for the full reference.
-
-## Configuration
-
-Settings are managed via environment variables (Pydantic BaseSettings). Key groups:
+## Configuration Essentials
 
 ```bash
 # Infrastructure
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/news_tracker
 REDIS_URL=redis://localhost:6379/0
-API_KEYS=key1,key2               # Comma-separated; empty = dev mode (no auth)
+API_KEYS=key1,key2
 
-# Data sources (xui is opt-in)
-TWITTER_BEARER_TOKEN=...
-TWITTER_XUI_ENABLED=false
-TWITTER_XUI_COMMAND=xui
-TWITTER_XUI_CONFIG_PATH=/home/appuser/.config/xui-reader/config.toml
-TWITTER_XUI_PROFILE=default
-TWITTER_XUI_USERNAMES=nvidia,amd,tsla
-TWITTER_XUI_TIMEOUT_MS=90000
-REDDIT_CLIENT_ID=... REDDIT_CLIENT_SECRET=...
-NEWSFILTER_API_KEYS=k1,k2,k3    # Comma-separated for key rotation
-MARKETAUX_API_KEYS=...
-FINLIGHT_API_KEYS=...
-
-# ML models
+# Model selection
 EMBEDDING_MODEL_NAME=ProsusAI/finbert
 SENTIMENT_MODEL_NAME=ProsusAI/finbert
 NER_SPACY_MODEL=en_core_web_trf
 
-# Processing
+# Processing thresholds
 SPAM_THRESHOLD=0.7
 DUPLICATE_THRESHOLD=0.85
 ```
 
-## Observability
+Feature flags are opt-in and grouped by subsystem (`*_ENABLED`). See `src/config/settings.py` for full settings.
 
-- **Tracing:** OpenTelemetry with OTLP gRPC exporter to Jaeger. W3C `traceparent` propagated through Redis Streams so traces span worker boundaries.
-- **Metrics:** Prometheus scraping with auto-provisioned Grafana dashboards. Workers expose `/metrics` on configurable ports.
-- **Logging:** structlog with correlation ID contextvars. `X-Request-ID` / `X-Correlation-ID` headers propagate through the request lifecycle.
-- **Health:** Three-tier status — `unhealthy` (DB down) → `degraded` (Redis down) → `healthy` — with per-subsystem detail.
+## Observability and Reliability
+
+- Tracing: OpenTelemetry with OTLP export.
+- Metrics: Prometheus + Grafana dashboards.
+- Logging: structured logs with request correlation.
+- Lane health semantics: freshness, quality, quarantine, publish readiness.
 
 ## Development
 
 ```bash
-uv sync --extra dev                              # Install with test dependencies
-uv run pytest tests/ -v                          # Run all tests
-uv run pytest tests/ -v -m "not integration"     # Skip integration tests
-uv run pytest tests/test_embedding/test_service.py -v  # Single file
-docker build -t news-tracker .                   # Build Docker image
+uv sync --extra dev
+uv run pytest tests/ -v
+uv run pytest tests/ -v -m "not integration"
 ```
 
-Tests mirror the source tree (`tests/test_<module>/test_<file>.py`). Every service module follows the convention of `config.py`, `service.py`, and `__init__.py` with `__all__` exports.
+Project layout highlights:
 
-## Project Structure
+- `src/contracts/intelligence/`: producer contract definitions
+- `src/publish/`: manifest/pointer/object lifecycle and export
+- `src/assertions/`: aggregation, derived edges, recompute
+- `src/narrative/`, `src/filing/`, `src/graph/`: lane-specific methods
+- `src/api/`: REST/WebSocket routes
+- `frontend/`: React app and domain views
 
-```
-src/
-├── alerts/          # Triggers, notifications (webhook + Slack), WebSocket broadcast
-├── api/             # FastAPI routes, middleware, rate limiting
-├── authority/       # Bayesian source authority scoring
-├── backtest/        # Historical simulation engine + visualization
-├── clustering/      # BERTopic (batch) + ClusteringWorker (real-time)
-├── config/          # Pydantic settings, ticker lists, source config
-├── embedding/       # FinBERT + MiniLM dual-model service + worker
-├── event_extraction/# SVO pattern extraction + time normalization
-├── feedback/        # User quality ratings
-├── graph/           # Causal graph (recursive CTE) + sentiment propagation
-├── ingestion/       # Platform adapters, Redis queue, preprocessing
-├── keywords/        # TextRank keyword extraction
-├── monitoring/      # Internal drift and health checks
-├── ner/             # spaCy NER + EntityRuler + fastcoref
-├── observability/   # Logging, Prometheus metrics, OTLP tracing
-├── queues/          # Redis Streams base queue with backoff
-├── scoring/         # 3-tier LLM compellingness scoring
-├── security_master/ # Ticker database with pg_trgm fuzzy search
-├── sentiment/       # FinBERT sentiment service + worker
-├── sources/         # Platform source management
-├── storage/         # asyncpg database + document repository
-├── themes/          # Lifecycle, volume metrics, ranking
-└── vectorstore/     # pgvector HNSW semantic search
+## Roadmap / In Progress
 
-frontend/src/
-├── api/             # Axios client, query key factory, typed hooks
-├── components/      # Layout shell + domain components (with Skeleton variants)
-├── lib/             # Constants, formatters, Tailwind utilities
-├── pages/           # Route components (settings owns source/security admin)
-└── stores/          # Zustand stores (auth, UI state)
-```
+- Tightening end-to-end lane publication orchestration across all lanes.
+- Expanding parity between lane payload producers and `intel_surface` consumer expectations.
+- Continuing migration of mixed UX reads to published-object surfaces where WIP table access still exists.
+- Improving screenshot/data fixtures for richer non-empty local demo states.
+- Continuing contract-level hardening and replay validations for operational cutover.
 
 ## License
 
