@@ -166,3 +166,18 @@ async def test_apply_migrations_still_skips_destructive_legacy_step_on_rerun(
         "030_reconcile_embedding_schema.sql",
     ]
     assert "001_embedding_vector_768.sql" in db.applied_migrations
+
+
+def test_runtime_reconcile_migration_guards_platform_authority_index() -> None:
+    sql = (_MIGRATIONS_DIR / "029_reconcile_runtime_schema.sql").read_text(encoding="utf-8")
+
+    assert "idx_documents_platform_authority" in sql
+    assert "information_schema.columns" in sql
+    assert "column_name = 'embedding'" in sql
+
+
+def test_embedding_reconcile_migration_preserves_legacy_conflict_column() -> None:
+    sql = (_MIGRATIONS_DIR / "030_reconcile_embedding_schema.sql").read_text(encoding="utf-8")
+
+    assert "RENAME COLUMN embedding TO embedding_conflict_384" in sql
+    assert "DROP COLUMN embedding" not in sql

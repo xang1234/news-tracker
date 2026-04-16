@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from typing import Literal, cast
 
 import redis.asyncio as redis
@@ -49,6 +50,7 @@ class AppServices:
     def __init__(self) -> None:
         self._settings = get_settings()
         self._init_lock = asyncio.Lock()
+        self._init_lock_sync = threading.Lock()
 
         self.database: Database | None = None
         self.redis_client: redis.Redis | None = None
@@ -236,7 +238,9 @@ class AppServices:
 
     def get_sentiment_aggregator(self) -> SentimentAggregator:
         if self.sentiment_aggregator is None:
-            self.sentiment_aggregator = SentimentAggregator()
+            with self._init_lock_sync:
+                if self.sentiment_aggregator is None:
+                    self.sentiment_aggregator = SentimentAggregator()
         return self.sentiment_aggregator
 
     async def get_graph_repository(self) -> GraphRepository:
@@ -281,17 +285,23 @@ class AppServices:
 
     def get_ner_service(self) -> NERService:
         if self.ner_service is None:
-            self.ner_service = NERService(config=NERConfig())
+            with self._init_lock_sync:
+                if self.ner_service is None:
+                    self.ner_service = NERService(config=NERConfig())
         return self.ner_service
 
     def get_keywords_service(self) -> KeywordsService:
         if self.keywords_service is None:
-            self.keywords_service = KeywordsService(config=KeywordsConfig())
+            with self._init_lock_sync:
+                if self.keywords_service is None:
+                    self.keywords_service = KeywordsService(config=KeywordsConfig())
         return self.keywords_service
 
     def get_pattern_extractor(self) -> PatternExtractor:
         if self.pattern_extractor is None:
-            self.pattern_extractor = PatternExtractor(config=EventExtractionConfig())
+            with self._init_lock_sync:
+                if self.pattern_extractor is None:
+                    self.pattern_extractor = PatternExtractor(config=EventExtractionConfig())
         return self.pattern_extractor
 
     async def get_security_master_repository(self) -> SecurityMasterRepository:

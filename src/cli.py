@@ -168,8 +168,6 @@ def worker(mock: bool, metrics_port: int) -> None:
 @main.command("init-db")
 def init_db() -> None:
     """Initialize the database schema."""
-    import pathlib
-
     from src.storage.database import Database
     from src.storage.migrations import apply_migrations
 
@@ -177,14 +175,12 @@ def init_db() -> None:
         db = Database()
         await db.connect()
 
-        migrations_dir = pathlib.Path(__file__).resolve().parent.parent / "migrations"
-        if migrations_dir.is_dir():
-            applied = await apply_migrations(db)
-            if applied:
-                for migration_name in applied:
-                    click.echo(f"Applied migration: {migration_name}")
-            else:
-                click.echo("No pending migrations")
+        applied = await apply_migrations(db)
+        if applied:
+            for migration_name in applied:
+                click.echo(f"Applied migration: {migration_name}")
+        else:
+            click.echo("No pending migrations")
 
         # Also seed sources if feature is enabled
         from src.config.settings import get_settings

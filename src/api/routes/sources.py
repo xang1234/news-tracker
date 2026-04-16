@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from typing import TYPE_CHECKING
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -28,6 +29,9 @@ from src.config.settings import get_settings as _get_settings
 from src.sources.repository import SourcesRepository
 from src.sources.schemas import Source
 
+if TYPE_CHECKING:
+    from src.services.ingestion_service import IngestionService
+
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
@@ -38,6 +42,39 @@ if redis.call('get', KEYS[1]) == ARGV[1] then
 end
 return 0
 """
+
+
+async def _release_ingestion_lock(redis_client: Redis, owner_token: str) -> None:
+    await redis_client.execute_command(
+        "EVAL",
+        _RELEASE_LOCK_SCRIPT,
+        1,
+        _INGESTION_LOCK_KEY,
+        owner_token,
+    )
+
+
+async def _build_ingestion_service(request: Request) -> IngestionService:
+    from src.services.ingestion_service import IngestionService
+    from src.sources.service import SourcesService
+
+    settings = _get_settings()
+    twitter_sources = None
+    reddit_sources = None
+    substack_sources = None
+
+    if settings.sources_enabled:
+        db = await request.app.state.services.get_database()
+        svc = SourcesService(db)
+        twitter_sources = await svc.get_twitter_sources()
+        reddit_sources = await svc.get_reddit_sources()
+        substack_sources = await svc.get_substack_sources()
+
+    return IngestionService(
+        twitter_sources=twitter_sources,
+        reddit_sources=reddit_sources,
+        substack_sources=substack_sources,
+    )
 
 
 def _require_sources_enabled() -> None:
@@ -243,28 +280,32 @@ async def trigger_ingestion(
             detail="Ingestion is already running",
         )
 
+    try:
+        service = await _build_ingestion_service(request)
+    except Exception as exc:
+        from src.services.ingestion_service import IngestionConfigurationError
+
+        try:
+            await _release_ingestion_lock(redis_client, owner_token)
+        except Exception as release_error:
+            logger.warning(
+                "Failed to release ingestion lock after preflight failure",
+                error=str(release_error),
+                exc_info=True,
+            )
+
+        if isinstance(exc, IngestionConfigurationError):
+            logger.warning("Manual ingestion misconfigured", error=str(exc))
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+
+        logger.error("Manual ingestion preflight failed", error=str(exc), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to start ingestion") from exc
+
     async def _run_ingestion() -> None:
         try:
-            from src.services.ingestion_service import IngestionService
-            from src.sources.service import SourcesService
-
-            # Load active sources from DB so ingestion respects the UI
-            twitter_sources = None
-            reddit_sources = None
-            substack_sources = None
-
-            if settings.sources_enabled:
-                db = await request.app.state.services.get_database()
-                svc = SourcesService(db)
-                twitter_sources = await svc.get_twitter_sources()
-                reddit_sources = await svc.get_reddit_sources()
-                substack_sources = await svc.get_substack_sources()
-
-            service = IngestionService(
-                twitter_sources=twitter_sources,
-                reddit_sources=reddit_sources,
-                substack_sources=substack_sources,
-            )
             results = await service.run_once()
             total = sum(results.values())
             logger.info(
@@ -276,13 +317,7 @@ async def trigger_ingestion(
             logger.error("Manual ingestion failed", error=str(e), exc_info=True)
         finally:
             try:
-                await redis_client.execute_command(
-                    "EVAL",
-                    _RELEASE_LOCK_SCRIPT,
-                    1,
-                    _INGESTION_LOCK_KEY,
-                    owner_token,
-                )
+                await _release_ingestion_lock(redis_client, owner_token)
             except Exception as e:
                 logger.warning("Failed to release ingestion lock", error=str(e), exc_info=True)
 

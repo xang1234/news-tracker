@@ -64,8 +64,7 @@ function buildSecurityApiFilters(f: SecuritiesFilterValues, offset: number): Api
 export default function Settings() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
-  const initialTab: SettingsTab = requestedTab === 'securities' ? 'securities' : 'sources';
-  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
+  const activeTab: SettingsTab = requestedTab === 'securities' ? 'securities' : 'sources';
 
   // --- Sources state ---
   const [srcFiltersOpen, setSrcFiltersOpen] = useState(false);
@@ -118,13 +117,7 @@ export default function Settings() {
   const redditCount = sources.data?.sources.filter((s) => s.platform === 'reddit').length ?? 0;
   const substackCount = sources.data?.sources.filter((s) => s.platform === 'substack').length ?? 0;
 
-  useEffect(() => {
-    const nextTab: SettingsTab = requestedTab === 'securities' ? 'securities' : 'sources';
-    setActiveTab((current) => (current === nextTab ? current : nextTab));
-  }, [requestedTab]);
-
   const selectTab = (tab: SettingsTab) => {
-    setActiveTab(tab);
     setSearchParams(tab === 'sources' ? {} : { tab }, { replace: true });
   };
 

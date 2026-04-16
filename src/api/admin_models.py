@@ -2,6 +2,16 @@
 
 from pydantic import BaseModel, Field, field_validator
 
+_ALLOWED_SOURCE_PLATFORMS = {"twitter", "reddit", "substack"}
+
+
+def _validate_source_platform(value: str) -> str:
+    normalized = value.lower()
+    if normalized not in _ALLOWED_SOURCE_PLATFORMS:
+        allowed = ", ".join(sorted(_ALLOWED_SOURCE_PLATFORMS))
+        raise ValueError(f"platform must be one of: {allowed}")
+    return normalized
+
 
 class SecurityItem(BaseModel):
     """Single security record."""
@@ -91,10 +101,7 @@ class CreateSourceRequest(BaseModel):
     @field_validator("platform")
     @classmethod
     def validate_platform(cls, value: str) -> str:
-        allowed = {"twitter", "reddit", "substack"}
-        if value.lower() not in allowed:
-            raise ValueError(f"platform must be one of: {', '.join(sorted(allowed))}")
-        return value.lower()
+        return _validate_source_platform(value)
 
 
 class BulkCreateSourcesRequest(BaseModel):
@@ -111,10 +118,7 @@ class BulkCreateSourcesRequest(BaseModel):
     @field_validator("platform")
     @classmethod
     def validate_platform(cls, value: str) -> str:
-        allowed = {"twitter", "reddit", "substack"}
-        if value.lower() not in allowed:
-            raise ValueError(f"platform must be one of: {', '.join(sorted(allowed))}")
-        return value.lower()
+        return _validate_source_platform(value)
 
     @field_validator("identifiers")
     @classmethod

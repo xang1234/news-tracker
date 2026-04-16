@@ -37,10 +37,11 @@ async def integration_db():
 
     try:
         await db.connect()
-        await apply_migrations(db)
-        yield db
     except Exception as e:
         pytest.skip(f"Database not available: {e}")
+    await apply_migrations(db)
+    try:
+        yield db
     finally:
         await db.close()
 

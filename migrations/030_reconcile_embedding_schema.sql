@@ -40,7 +40,22 @@ BEGIN
               AND attribute.attnum > 0
               AND NOT attribute.attisdropped
         ) THEN
-            ALTER TABLE documents DROP COLUMN embedding;
+            IF EXISTS (
+                SELECT 1
+                FROM pg_attribute AS attribute
+                JOIN pg_class AS table_class ON table_class.oid = attribute.attrelid
+                JOIN pg_namespace AS namespace ON namespace.oid = table_class.relnamespace
+                WHERE namespace.nspname = 'public'
+                  AND table_class.relname = 'documents'
+                  AND attribute.attname = 'embedding_conflict_384'
+                  AND attribute.attnum > 0
+                  AND NOT attribute.attisdropped
+            ) THEN
+                RAISE EXCEPTION
+                    'Cannot preserve documents.embedding: embedding_legacy_384 and embedding_conflict_384 already exist';
+            END IF;
+
+            ALTER TABLE documents RENAME COLUMN embedding TO embedding_conflict_384;
         ELSE
             ALTER TABLE documents RENAME COLUMN embedding TO embedding_legacy_384;
         END IF;

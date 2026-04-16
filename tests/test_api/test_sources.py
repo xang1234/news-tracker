@@ -9,6 +9,7 @@ from fastapi import HTTPException
 
 from src.api.routes.sources import _INGESTION_LOCK_KEY, trigger_ingestion
 from src.ingestion.schemas import Platform
+from src.services.ingestion_service import IngestionConfigurationError
 
 
 def _build_request() -> SimpleNamespace:
@@ -60,7 +61,35 @@ async def test_trigger_ingestion_returns_conflict_when_lock_exists() -> None:
         await trigger_ingestion(request=request, api_key="test-key", redis_client=redis_client)
 
     assert exc_info.value.status_code == 409
-    redis_client.eval.assert_not_called()
+    redis_client.execute_command.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_trigger_ingestion_returns_error_when_preflight_fails() -> None:
+    request = _build_request()
+    redis_client = AsyncMock()
+    redis_client.set.return_value = True
+
+    settings = SimpleNamespace(
+        sources_enabled=True,
+        sources_trigger_lock_ttl_seconds=3600,
+    )
+
+    with (
+        patch("src.api.routes.sources._get_settings", return_value=settings),
+        patch("src.sources.service.SourcesService", _FakeSourcesService),
+        patch(
+            "src.services.ingestion_service.IngestionService",
+            side_effect=IngestionConfigurationError("No ingestion sources are configured."),
+        ),
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        await trigger_ingestion(request=request, api_key="test-key", redis_client=redis_client)
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "No ingestion sources are configured."
+    assert not request.app.state.background_tasks
+    redis_client.execute_command.assert_awaited_once()
 
 
 @pytest.mark.asyncio
