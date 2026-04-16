@@ -35,6 +35,20 @@ class _FakeSourcesService:
         return [("semianalysis", "SemiAnalysis", "Semiconductor deep dives")]
 
 
+class _EmptySourcesService:
+    def __init__(self, db) -> None:
+        self._db = db
+
+    async def get_twitter_sources(self) -> list[str]:
+        return []
+
+    async def get_reddit_sources(self) -> list[str]:
+        return []
+
+    async def get_substack_sources(self) -> list[tuple[str, str, str]]:
+        return []
+
+
 class _FakeIngestionService:
     def __init__(self, **kwargs) -> None:
         self.kwargs = kwargs
@@ -88,6 +102,45 @@ async def test_trigger_ingestion_returns_error_when_preflight_fails() -> None:
 
     assert exc_info.value.status_code == 503
     assert exc_info.value.detail == "No ingestion sources are configured."
+    assert not request.app.state.background_tasks
+    redis_client.execute_command.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_trigger_ingestion_returns_503_when_all_active_sources_are_disabled() -> None:
+    request = _build_request()
+    redis_client = AsyncMock()
+    redis_client.set.return_value = True
+
+    route_settings = SimpleNamespace(
+        sources_enabled=True,
+        sources_trigger_lock_ttl_seconds=3600,
+    )
+    service_settings = SimpleNamespace(
+        poll_interval_seconds=60,
+        twitter_configured=False,
+        xui_configured=False,
+        twitter_rate_limit=10,
+        reddit_configured=False,
+        reddit_rate_limit=10,
+        substack_rate_limit=10,
+        news_api_configured=False,
+        news_rate_limit=10,
+    )
+
+    with (
+        patch("src.api.routes.sources._get_settings", return_value=route_settings),
+        patch("src.services.ingestion_service.get_settings", return_value=service_settings),
+        patch("src.sources.service.SourcesService", _EmptySourcesService),
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        await trigger_ingestion(request=request, api_key="test-key", redis_client=redis_client)
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == (
+        "No ingestion sources are configured. Set real source credentials "
+        "or run with --mock for synthetic data."
+    )
     assert not request.app.state.background_tasks
     redis_client.execute_command.assert_awaited_once()
 

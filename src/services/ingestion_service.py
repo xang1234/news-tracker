@@ -13,6 +13,7 @@ Features:
 
 import asyncio
 import time
+from collections.abc import Sequence
 from typing import Any, cast
 
 import structlog
@@ -33,6 +34,11 @@ logger = structlog.get_logger(__name__)
 
 class IngestionConfigurationError(RuntimeError):
     """Raised when ingestion is started without a usable real-source configuration."""
+
+
+def _has_selected_sources(sources: Sequence[object] | None) -> bool:
+    """Treat explicit empty source overrides as a disabled platform selection."""
+    return sources is None or len(sources) > 0
 
 
 class IngestionService:
@@ -118,7 +124,9 @@ class IngestionService:
         adapters: dict[Platform, BaseAdapter] = {}
 
         # Twitter (xui primary with API backup)
-        if settings.twitter_configured or settings.xui_configured:
+        if (settings.twitter_configured or settings.xui_configured) and _has_selected_sources(
+            twitter_sources,
+        ):
             kwargs = {"rate_limit": settings.twitter_rate_limit}
             if twitter_sources is not None:
                 kwargs["xui_usernames"] = twitter_sources
@@ -127,21 +135,28 @@ class IngestionService:
                 logger.info("Twitter adapter enabled (xui primary, API backup)")
             else:
                 logger.info("Twitter adapter enabled (xui only)")
+        elif settings.twitter_configured or settings.xui_configured:
+            logger.info("Twitter adapter disabled (no active sources configured)")
 
         # Reddit
-        if settings.reddit_configured:
+        if settings.reddit_configured and _has_selected_sources(reddit_sources):
             kwargs = {"rate_limit": settings.reddit_rate_limit}
             if reddit_sources is not None:
                 kwargs["subreddits"] = reddit_sources
             adapters[Platform.REDDIT] = RedditAdapter(**kwargs)
             logger.info("Reddit adapter enabled")
+        elif settings.reddit_configured:
+            logger.info("Reddit adapter disabled (no active sources configured)")
 
         # Substack (always available - uses public RSS)
-        kwargs = {"rate_limit": settings.substack_rate_limit}
-        if substack_sources is not None:
-            kwargs["publications"] = substack_sources
-        adapters[Platform.SUBSTACK] = SubstackAdapter(**kwargs)
-        logger.info("Substack adapter enabled")
+        if _has_selected_sources(substack_sources):
+            kwargs = {"rate_limit": settings.substack_rate_limit}
+            if substack_sources is not None:
+                kwargs["publications"] = substack_sources
+            adapters[Platform.SUBSTACK] = SubstackAdapter(**kwargs)
+            logger.info("Substack adapter enabled")
+        else:
+            logger.info("Substack adapter disabled (no active sources configured)")
 
         # News APIs
         if settings.news_api_configured:
