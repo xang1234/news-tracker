@@ -1,5 +1,7 @@
 """Admin API models for sources and securities."""
 
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
 _ALLOWED_SOURCE_PLATFORMS = {"twitter", "reddit", "substack"}
@@ -103,6 +105,14 @@ class CreateSourceRequest(BaseModel):
     def validate_platform(cls, value: str) -> str:
         return _validate_source_platform(value)
 
+    @field_validator("identifier")
+    @classmethod
+    def validate_identifier(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("identifier must contain at least one non-empty character")
+        return cleaned
+
 
 class BulkCreateSourcesRequest(BaseModel):
     """Request to bulk-create sources for a single platform."""
@@ -144,7 +154,7 @@ class BulkCreateSourcesResponse(BaseModel):
 class TriggerIngestionResponse(BaseModel):
     """Response model for triggering manual ingestion."""
 
-    status: str = Field(..., description="Trigger status: started or already_running")
+    status: Literal["started"] = Field(..., description="Trigger status: started")
     message: str = Field(..., description="Human-readable status message")
 
 

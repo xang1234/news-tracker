@@ -64,9 +64,17 @@ class RecordingConnection:
 
     async def execute(self, query: str, *args: object) -> str:
         self.database.executed_sql.append(query)
+        if "CREATE TABLE IF NOT EXISTS schema_migrations" in query:
+            self.database.tables.add("schema_migrations")
         if "INSERT INTO schema_migrations" in query:
             self.database.applied_migrations.add(str(args[0]))
         return "OK"
+
+    async def fetch(self, query: str, *args: object) -> list[dict[str, str]]:
+        return await self.database.fetch(query, *args)
+
+    async def fetchval(self, query: str, *args: object) -> bool:
+        return await self.database.fetchval(query, *args)
 
 
 def _migration(name: str) -> Migration:
@@ -84,6 +92,16 @@ def test_list_migrations_orders_initial_schema_before_embedding_upgrade() -> Non
     assert names.index("001_embedding_vector_768.sql") < names.index(
         "002_add_minilm_embedding.sql",
     )
+
+
+def test_list_migrations_rejects_invalid_filenames(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "001_valid_migration.sql").write_text("-- ok", encoding="utf-8")
+    (tmp_path / "bad.sql").write_text("-- bad", encoding="utf-8")
+
+    monkeypatch.setattr("src.storage.migrations._MIGRATIONS_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="Invalid migration filename 'bad.sql'"):
+        list_migrations()
 
 
 @pytest.mark.asyncio
@@ -181,3 +199,24 @@ def test_embedding_reconcile_migration_preserves_legacy_conflict_column() -> Non
 
     assert "RENAME COLUMN embedding TO embedding_conflict_384" in sql
     assert "DROP COLUMN embedding" not in sql
+
+
+def test_embedding_reconcile_migration_recreates_platform_authority_index() -> None:
+    sql = (_MIGRATIONS_DIR / "030_reconcile_embedding_schema.sql").read_text(encoding="utf-8")
+
+    assert "CREATE INDEX IF NOT EXISTS idx_documents_platform_authority" in sql
+
+
+@pytest.mark.asyncio
+async def test_apply_migrations_uses_advisory_lock(monkeypatch) -> None:
+    migration_001 = _migration("001_initial_schema.sql")
+    db = RecordingDatabase()
+
+    monkeypatch.setattr(
+        "src.storage.migrations.list_migrations",
+        lambda: [migration_001],
+    )
+
+    await apply_migrations(db)  # type: ignore[arg-type]
+
+    assert any("pg_advisory_xact_lock" in query for query in db.executed_sql)

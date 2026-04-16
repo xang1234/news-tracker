@@ -71,3 +71,7 @@ CREATE INDEX IF NOT EXISTS idx_documents_embedding_hnsw
     ON documents
     USING hnsw (embedding vector_cosine_ops)
     WITH (m = 16, ef_construction = 64);
+
+CREATE INDEX IF NOT EXISTS idx_documents_platform_authority
+    ON documents(platform, authority_score DESC)
+    WHERE authority_score IS NOT NULL AND embedding IS NOT NULL;

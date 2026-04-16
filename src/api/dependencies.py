@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 from typing import Literal, cast
 
@@ -43,6 +44,8 @@ from src.vectorstore.config import VectorStoreConfig
 from src.vectorstore.manager import VectorStoreManager
 from src.vectorstore.pgvector_store import PgVectorStore
 
+logger = logging.getLogger(__name__)
+
 
 class AppServices:
     """App-scoped service container with lazy initialization."""
@@ -81,8 +84,9 @@ class AppServices:
         if self.database is None:
             async with self._init_lock:
                 if self.database is None:
-                    self.database = Database()
-                    await self.database.connect()
+                    database = Database()
+                    await database.connect()
+                    self.database = database
         return self.database
 
     async def get_redis_client(self) -> redis.Redis:
@@ -345,17 +349,34 @@ class AppServices:
         return self.claim_repository
 
     async def close(self) -> None:
-        if self.alert_broadcaster is not None:
-            await self.alert_broadcaster.stop()
-            self.alert_broadcaster = None
+        async def _close_async_resource(
+            resource_name: str,
+            resource: object | None,
+            closer_name: str,
+        ) -> None:
+            if resource is None:
+                return
+            try:
+                closer = getattr(resource, closer_name)
+                await closer()
+            except Exception:
+                logger.warning(
+                    "Failed to close app service resource %s",
+                    resource_name,
+                    exc_info=True,
+                )
 
-        if self.embedding_service is not None:
-            await self.embedding_service.close()
-            self.embedding_service = None
+        broadcaster = self.alert_broadcaster
+        self.alert_broadcaster = None
+        await _close_async_resource("alert_broadcaster", broadcaster, "stop")
 
-        if self.sentiment_service is not None:
-            await self.sentiment_service.close()
-            self.sentiment_service = None
+        embedding_service = self.embedding_service
+        self.embedding_service = None
+        await _close_async_resource("embedding_service", embedding_service, "close")
+
+        sentiment_service = self.sentiment_service
+        self.sentiment_service = None
+        await _close_async_resource("sentiment_service", sentiment_service, "close")
 
         self.vector_store_manager = None
         self.theme_repository = None
@@ -377,13 +398,13 @@ class AppServices:
         self.assertion_repository = None
         self.claim_repository = None
 
-        if self.redis_client is not None:
-            await self.redis_client.close()
-            self.redis_client = None
+        redis_client = self.redis_client
+        self.redis_client = None
+        await _close_async_resource("redis_client", redis_client, "close")
 
-        if self.database is not None:
-            await self.database.close()
-            self.database = None
+        database = self.database
+        self.database = None
+        await _close_async_resource("database", database, "close")
 
 
 def ensure_app_services(app: FastAPI) -> AppServices:
