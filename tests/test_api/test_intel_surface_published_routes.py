@@ -97,6 +97,52 @@ class _FakeDB:
                 },
             },
             {
+                "object_id": "obj_assert_3_new",
+                "object_type": "assertion",
+                "publish_state": "published",
+                "contract_version": "1.0.0",
+                "lane": "narrative",
+                "run_id": "run_1",
+                "valid_from": None,
+                "valid_to": None,
+                "created_at": _ts(5),
+                "updated_at": _ts(5),
+                "payload": {
+                    "assertion_id": "asrt_3",
+                    "subject_concept_id": "concept_issuer_hynix",
+                    "predicate": "depends_on",
+                    "object_concept_id": "concept_tech_hbm",
+                    "confidence": 0.1,
+                    "status": "active",
+                    "support_count": 1,
+                    "contradiction_count": 0,
+                    "source_diversity": 1,
+                },
+            },
+            {
+                "object_id": "obj_assert_3_old",
+                "object_type": "assertion",
+                "publish_state": "published",
+                "contract_version": "1.0.0",
+                "lane": "narrative",
+                "run_id": "run_0",
+                "valid_from": None,
+                "valid_to": None,
+                "created_at": _ts(4),
+                "updated_at": _ts(4),
+                "payload": {
+                    "assertion_id": "asrt_3",
+                    "subject_concept_id": "concept_issuer_hynix",
+                    "predicate": "depends_on",
+                    "object_concept_id": "concept_tech_hbm",
+                    "confidence": 0.9,
+                    "status": "active",
+                    "support_count": 4,
+                    "contradiction_count": 0,
+                    "source_diversity": 2,
+                },
+            },
+            {
                 "object_id": "obj_claim_1_new",
                 "object_type": "claim",
                 "publish_state": "published",
@@ -246,7 +292,7 @@ class _FakeDB:
     def _filtered_assertions(self, query: str, params: tuple[Any, ...]) -> list[dict[str, Any]]:
         assert params and params[0] == "assertion"
         idx = 1
-        rows = self._published_rows("assertion")
+        rows = self._dedupe_latest(self._published_rows("assertion"), self._assertion_key)
 
         if "subject_concept_id" in query:
             concept_id = params[idx]
@@ -269,12 +315,12 @@ class _FakeDB:
             min_conf = float(params[idx])
             rows = [r for r in rows if float(r["payload"].get("confidence", 0.0)) >= min_conf]
 
-        return self._dedupe_latest(rows, self._assertion_key)
+        return sorted(rows, key=lambda r: r["created_at"], reverse=True)
 
     def _filtered_claims(self, query: str, params: tuple[Any, ...]) -> list[dict[str, Any]]:
         assert params and params[0] == "claim"
         idx = 1
-        rows = self._published_rows("claim")
+        rows = self._dedupe_latest(self._published_rows("claim"), self._claim_key)
 
         if "lane = $" in query:
             lane = params[idx]
@@ -300,7 +346,7 @@ class _FakeDB:
                 )
             ]
 
-        return self._dedupe_latest(rows, self._claim_key)
+        return sorted(rows, key=lambda r: r["created_at"], reverse=True)
 
     async def fetch(self, query: str, *params):
         if "intel_pub.published_objects" not in query:
@@ -344,7 +390,10 @@ class _FakeDB:
             assertions = [
                 r
                 for r in self._published_rows("assertion")
-                if r["object_id"] == assertion_id or r["payload"].get("assertion_id") == assertion_id
+                if (
+                    r["object_id"] == assertion_id
+                    or r["payload"].get("assertion_id") == assertion_id
+                )
             ]
             if not assertions:
                 return None
@@ -356,7 +405,10 @@ class _FakeDB:
             assertions = [
                 r
                 for r in self._published_rows("assertion")
-                if r["object_id"] == assertion_id or r["payload"].get("assertion_id") == assertion_id
+                if (
+                    r["object_id"] == assertion_id
+                    or r["payload"].get("assertion_id") == assertion_id
+                )
             ]
             if not assertions:
                 return None
@@ -384,8 +436,8 @@ def test_list_assertions_reads_from_published_objects_only() -> None:
     resp = client.get("/intel/assertions")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["total"] == 2
-    assert [a["assertion_id"] for a in body["assertions"]] == ["asrt_1", "asrt_2"]
+    assert body["total"] == 3
+    assert [a["assertion_id"] for a in body["assertions"]] == ["asrt_1", "asrt_2", "asrt_3"]
 
     resp = client.get("/intel/assertions?min_confidence=0.8")
     assert resp.status_code == 200
@@ -399,9 +451,26 @@ def test_list_assertions_dedupes_and_paginates() -> None:
     resp = client.get("/intel/assertions?limit=1&offset=1")
     assert resp.status_code == 200
     body = resp.json()
-    assert body["total"] == 2
+    assert body["total"] == 3
     assert len(body["assertions"]) == 1
     assert body["assertions"][0]["assertion_id"] == "asrt_2"
+
+
+def test_list_assertions_filters_apply_to_latest_versions_only() -> None:
+    client = _make_client(_FakeDB())
+    resp = client.get("/intel/assertions?min_confidence=0.6")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert [a["assertion_id"] for a in body["assertions"]] == ["asrt_1"]
+
+    # asrt_3 has an older high-confidence version but latest is low-confidence.
+    # It must be excluded after latest-only filtering.
+    resp = client.get("/intel/assertions?predicate=depends_on&min_confidence=0.5")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 0
+    assert body["assertions"] == []
 
 
 def test_get_assertion_detail_joins_published_claims_uses_latest_claim_version() -> None:

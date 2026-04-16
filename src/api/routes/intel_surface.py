@@ -325,8 +325,10 @@ def _confidence_expr() -> str:
     """SQL expression that safely parses confidence into float with 0.0 fallback."""
     return (
         "CASE "
-        "WHEN jsonb_typeof(payload->'confidence') = 'number' THEN (payload->>'confidence')::double precision "
-        "WHEN (payload->>'confidence') ~ '^-?[0-9]+(\\.[0-9]+)?$' THEN (payload->>'confidence')::double precision "
+        "WHEN jsonb_typeof(payload->'confidence') = 'number' "
+        "THEN (payload->>'confidence')::double precision "
+        "WHEN (payload->>'confidence') ~ '^-?[0-9]+(\\.[0-9]+)?$' "
+        "THEN (payload->>'confidence')::double precision "
         "ELSE 0.0 "
         "END"
     )
@@ -354,8 +356,12 @@ def _row_to_assertion_response(row, payload: dict[str, Any]) -> AssertionRespons
         last_evidence_at=_parse_dt(payload.get("last_evidence_at")),
         source_diversity=_as_int(payload.get("source_diversity"), default=0),
         metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
-        created_at=_parse_dt(payload.get("created_at"), fallback=row["created_at"]) or row["created_at"],
-        updated_at=_parse_dt(payload.get("updated_at"), fallback=row["updated_at"]) or row["updated_at"],
+        created_at=(
+            _parse_dt(payload.get("created_at"), fallback=row["created_at"]) or row["created_at"]
+        ),
+        updated_at=(
+            _parse_dt(payload.get("updated_at"), fallback=row["updated_at"]) or row["updated_at"]
+        ),
     )
 
 
@@ -567,44 +573,49 @@ async def list_assertions(
 async def _list_assertions_impl(
     concept_id, predicate, assertion_status, min_confidence, limit, offset, db
 ):
-    conditions = ["object_type = $1", "publish_state = 'published'"]
-    params: list[Any] = ["assertion"]
-    idx = 2
+    base_where = "object_type = $1 AND publish_state = 'published'"
+    base_params: list[Any] = ["assertion"]
+    latest_conditions: list[str] = []
+    latest_params: list[Any] = []
 
     if concept_id is not None:
-        conditions.append(
-            f"(payload->>'subject_concept_id' = ${idx} OR payload->>'object_concept_id' = ${idx})"
+        param_idx = len(base_params) + len(latest_params) + 1
+        latest_conditions.append(
+            f"(payload->>'subject_concept_id' = ${param_idx} "
+            f"OR payload->>'object_concept_id' = ${param_idx})"
         )
-        params.append(concept_id)
-        idx += 1
+        latest_params.append(concept_id)
     if predicate is not None:
-        conditions.append(f"payload->>'predicate' = ${idx}")
-        params.append(predicate)
-        idx += 1
+        param_idx = len(base_params) + len(latest_params) + 1
+        latest_conditions.append(f"payload->>'predicate' = ${param_idx}")
+        latest_params.append(predicate)
     if assertion_status is not None:
-        conditions.append(f"payload->>'status' = ${idx}")
-        params.append(assertion_status)
-        idx += 1
+        param_idx = len(base_params) + len(latest_params) + 1
+        latest_conditions.append(f"payload->>'status' = ${param_idx}")
+        latest_params.append(assertion_status)
     if min_confidence is not None:
-        conditions.append(f"{_confidence_expr()} >= ${idx}")
-        params.append(min_confidence)
-        idx += 1
+        param_idx = len(base_params) + len(latest_params) + 1
+        latest_conditions.append(f"{_confidence_expr()} >= ${param_idx}")
+        latest_params.append(min_confidence)
 
-    where = " AND ".join(conditions)
+    latest_where = " AND ".join(latest_conditions) if latest_conditions else "TRUE"
+    params = [*base_params, *latest_params]
     count_row = await db.fetchrow(
         f"""
-        WITH filtered AS (
+        WITH all_versions AS (
             SELECT *,
                    COALESCE(NULLIF(payload->>'assertion_id', ''), object_id) AS assertion_dedupe_id
             FROM intel_pub.published_objects
-            WHERE {where}
+            WHERE {base_where}
         ),
         latest AS (
             SELECT DISTINCT ON (assertion_dedupe_id) *
-            FROM filtered
+            FROM all_versions
             ORDER BY assertion_dedupe_id, created_at DESC
         )
-        SELECT count(*) AS cnt FROM latest
+        SELECT count(*) AS cnt
+        FROM latest
+        WHERE {latest_where}
         """,
         *params,
     )
@@ -614,18 +625,20 @@ async def _list_assertions_impl(
     page_params = [*params, limit, offset]
     rows = await db.fetch(
         f"""
-        WITH filtered AS (
+        WITH all_versions AS (
             SELECT *,
                    COALESCE(NULLIF(payload->>'assertion_id', ''), object_id) AS assertion_dedupe_id
             FROM intel_pub.published_objects
-            WHERE {where}
+            WHERE {base_where}
         ),
         latest AS (
             SELECT DISTINCT ON (assertion_dedupe_id) *
-            FROM filtered
+            FROM all_versions
             ORDER BY assertion_dedupe_id, created_at DESC
         )
-        SELECT * FROM latest
+        SELECT *
+        FROM latest
+        WHERE {latest_where}
         ORDER BY created_at DESC
         LIMIT ${limit_idx} OFFSET ${limit_idx + 1}
         """,
@@ -800,25 +813,24 @@ async def list_claims(
         return ClaimListResponse(claims=[], total=0)
 
 
-async def _list_claims_impl(
-    assertion_id, lane, source_id, claim_status, limit, offset, db
-):
-    conditions = ["object_type = $1", "publish_state = 'published'"]
-    params: list[Any] = ["claim"]
-    idx = 2
+async def _list_claims_impl(assertion_id, lane, source_id, claim_status, limit, offset, db):
+    base_where = "object_type = $1 AND publish_state = 'published'"
+    base_params: list[Any] = ["claim"]
+    latest_conditions: list[str] = []
+    latest_params: list[Any] = []
 
     if lane is not None:
-        conditions.append(f"lane = ${idx}")
-        params.append(lane)
-        idx += 1
+        param_idx = len(base_params) + len(latest_params) + 1
+        latest_conditions.append(f"lane = ${param_idx}")
+        latest_params.append(lane)
     if source_id is not None:
-        conditions.append(f"payload->>'source_id' = ${idx}")
-        params.append(source_id)
-        idx += 1
+        param_idx = len(base_params) + len(latest_params) + 1
+        latest_conditions.append(f"payload->>'source_id' = ${param_idx}")
+        latest_params.append(source_id)
     if claim_status is not None:
-        conditions.append(f"payload->>'status' = ${idx}")
-        params.append(claim_status)
-        idx += 1
+        param_idx = len(base_params) + len(latest_params) + 1
+        latest_conditions.append(f"payload->>'status' = ${param_idx}")
+        latest_params.append(claim_status)
 
     embedded_claim_ids: set[str] = set()
     if assertion_id is not None:
@@ -839,38 +851,43 @@ async def _list_claims_impl(
             embedded_claim_ids = set(_extract_assertion_claim_ids(assertion_payload))
 
     if assertion_id is not None:
-        conditions.append(
+        assertion_idx = len(base_params) + len(latest_params) + 1
+        embedded_idx = assertion_idx + 1
+        latest_conditions.append(
             f"""(
-                payload->>'assertion_id' = ${idx}
-                OR payload->>'linked_assertion_id' = ${idx}
-                OR COALESCE(payload->'assertion_ids', '[]'::jsonb) ? ${idx}
+                payload->>'assertion_id' = ${assertion_idx}
+                OR payload->>'linked_assertion_id' = ${assertion_idx}
+                OR COALESCE(payload->'assertion_ids', '[]'::jsonb) ? ${assertion_idx}
                 OR EXISTS (
                     SELECT 1
                     FROM jsonb_array_elements(COALESCE(payload->'links', '[]'::jsonb)) AS link
-                    WHERE link->>'assertion_id' = ${idx}
+                    WHERE link->>'assertion_id' = ${assertion_idx}
                 )
-                OR COALESCE(NULLIF(payload->>'claim_id', ''), object_id) = ANY(${idx + 1}::text[])
+                OR COALESCE(NULLIF(payload->>'claim_id', ''), object_id)
+                    = ANY(${embedded_idx}::text[])
             )"""
         )
-        params.append(assertion_id)
-        params.append(list(embedded_claim_ids))
-        idx += 2
+        latest_params.append(assertion_id)
+        latest_params.append(list(embedded_claim_ids))
 
-    where = " AND ".join(conditions)
+    latest_where = " AND ".join(latest_conditions) if latest_conditions else "TRUE"
+    params = [*base_params, *latest_params]
     count_row = await db.fetchrow(
         f"""
-        WITH filtered AS (
+        WITH all_versions AS (
             SELECT *,
                    COALESCE(NULLIF(payload->>'claim_id', ''), object_id) AS claim_dedupe_id
             FROM intel_pub.published_objects
-            WHERE {where}
+            WHERE {base_where}
         ),
         latest AS (
             SELECT DISTINCT ON (claim_dedupe_id) *
-            FROM filtered
+            FROM all_versions
             ORDER BY claim_dedupe_id, created_at DESC
         )
-        SELECT count(*) AS cnt FROM latest
+        SELECT count(*) AS cnt
+        FROM latest
+        WHERE {latest_where}
         """,
         *params,
     )
@@ -880,18 +897,20 @@ async def _list_claims_impl(
     page_params = [*params, limit, offset]
     rows = await db.fetch(
         f"""
-        WITH filtered AS (
+        WITH all_versions AS (
             SELECT *,
                    COALESCE(NULLIF(payload->>'claim_id', ''), object_id) AS claim_dedupe_id
             FROM intel_pub.published_objects
-            WHERE {where}
+            WHERE {base_where}
         ),
         latest AS (
             SELECT DISTINCT ON (claim_dedupe_id) *
-            FROM filtered
+            FROM all_versions
             ORDER BY claim_dedupe_id, created_at DESC
         )
-        SELECT * FROM latest
+        SELECT *
+        FROM latest
+        WHERE {latest_where}
         ORDER BY created_at DESC
         LIMIT ${limit_idx} OFFSET ${limit_idx + 1}
         """,
