@@ -157,3 +157,61 @@ class TestSentimentWorker:
         mock_queue.nack.assert_not_called()
         assert mock_repo.update_sentiment.await_count == 2
         assert mock_queue.ack.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_process_batch_nacks_plain_jobs_on_batch_result_mismatch(
+        self,
+        mock_queue,
+        mock_database,
+        mock_sentiment_service,
+    ):
+        """Should nack all plain jobs without acking when batch result count mismatches."""
+        config = SentimentConfig(enable_entity_sentiment=True, batch_size=4)
+        worker = SentimentWorker(
+            queue=mock_queue,
+            database=mock_database,
+            sentiment_service=mock_sentiment_service,
+            config=config,
+        )
+
+        plain_doc_one = _make_document(
+            "doc_plain_1",
+            title="Plain title one",
+            content="Plain content one",
+        )
+        plain_doc_two = _make_document(
+            "doc_plain_2",
+            title="Plain title two",
+            content="Plain content two",
+        )
+
+        mock_sentiment_service.analyze_batch.return_value = [
+            {"label": "positive", "confidence": 0.91}
+        ]
+
+        mock_repo = AsyncMock(spec=DocumentRepository)
+        mock_repo.get_by_ids = AsyncMock(return_value=[plain_doc_one, plain_doc_two])
+        mock_repo.update_sentiment = AsyncMock(return_value=True)
+        worker._repository = mock_repo
+
+        metrics = MagicMock()
+        jobs = [
+            SentimentJob(message_id="msg_plain_1", document_id="doc_plain_1"),
+            SentimentJob(message_id="msg_plain_2", document_id="doc_plain_2"),
+        ]
+
+        with patch("src.sentiment.worker.get_metrics", return_value=metrics):
+            await worker._process_batch(jobs)
+
+        mock_sentiment_service.analyze_batch.assert_awaited_once_with(
+            [
+                "Plain title one. Plain content one",
+                "Plain title two. Plain content two",
+            ]
+        )
+        mock_repo.update_sentiment.assert_not_called()
+        mock_queue.ack.assert_not_called()
+        assert mock_queue.nack.await_args_list == [
+            call("msg_plain_1", "analyze_batch returned 1 results for 2 jobs"),
+            call("msg_plain_2", "analyze_batch returned 1 results for 2 jobs"),
+        ]

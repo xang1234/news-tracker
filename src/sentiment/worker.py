@@ -284,7 +284,12 @@ class SentimentWorker:
                 texts = [text for _, _, text in plain_jobs]
                 results = await self._sentiment_service.analyze_batch(texts)
 
-                for (job, doc, _), result in zip(plain_jobs, results, strict=True):
+                if len(results) != len(plain_jobs):
+                    raise ValueError(
+                        f"analyze_batch returned {len(results)} results for {len(plain_jobs)} jobs"
+                    )
+
+                for (job, doc, _), result in zip(plain_jobs, results, strict=False):
                     try:
                         success = await self._repository.update_sentiment(job.document_id, result)
 
