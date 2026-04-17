@@ -311,6 +311,16 @@ class DocumentRepository:
 
         return self._row_to_document(row)
 
+    async def get_by_ids(self, doc_ids: list[str]) -> list[NormalizedDocument]:
+        """Get documents by IDs in the caller's requested order."""
+        if not doc_ids:
+            return []
+
+        sql = "SELECT * FROM documents WHERE id = ANY($1::text[])"
+        rows = await self._db.fetch(sql, doc_ids)
+        documents_by_id = {row["id"]: self._row_to_document(row) for row in rows}
+        return [documents_by_id[doc_id] for doc_id in doc_ids if doc_id in documents_by_id]
+
     async def exists(self, doc_id: str) -> bool:
         """
         Check if document exists.
