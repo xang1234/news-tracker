@@ -29,6 +29,13 @@ from src.storage.repository import DocumentRepository
 
 logger = logging.getLogger(__name__)
 
+_COMPARE_AND_DELETE_LUA = """
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+    return redis.call('DEL', KEYS[1])
+end
+return 0
+"""
+
 
 @dataclass
 class DuplicateResult:
@@ -548,7 +555,7 @@ class SharedDeduplicator:
                 )
             await redis_client.set(self._warm_key, "1", ex=86_400)
         finally:
-            await redis_client.delete(self._warm_lock_key)
+            await self._release_lock(self._warm_lock_key, warm_token)
 
     async def _candidate_document_ids(self, signature: list[int]) -> set[str]:
         redis_client = self._redis_client
@@ -590,8 +597,14 @@ class SharedDeduplicator:
     async def _release_locks(self, lock_tokens: dict[str, str]) -> None:
         if self._redis is None:
             return
-        for lock_key in lock_tokens:
-            await self._redis.delete(lock_key)
+        for lock_key, token in lock_tokens.items():
+            await self._release_lock(lock_key, token)
+
+    async def _release_lock(self, lock_key: str, token: str) -> int:
+        """Release a Redis lock only if we still own it."""
+        if self._redis is None:
+            return 0
+        return int(await self._redis.eval(_COMPARE_AND_DELETE_LUA, 1, lock_key, token))
 
     def build_exact_fingerprint(self, doc: NormalizedDocument) -> str:
         """Build a deterministic exact fingerprint across workers and restarts."""

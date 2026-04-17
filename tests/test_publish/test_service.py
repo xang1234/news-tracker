@@ -146,6 +146,16 @@ class InMemoryPublishRepository:
         return sum(1 for manifest_key, _ in self.read_model_records if manifest_key == manifest_id)
 
 
+class LegacyPublishRepository:
+    """Older repository shape with no read-model methods."""
+
+    def __init__(self) -> None:
+        self._delegate = InMemoryPublishRepository()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._delegate, name)
+
+
 # -- Fixtures --------------------------------------------------------------
 
 
@@ -265,6 +275,14 @@ class TestManifestLifecycle:
         sealed = await service.seal_manifest(m.manifest_id)
         assert sealed.object_count == 1
         assert await service._count_materialized_read_model_records(m.manifest_id) == 1
+
+    async def test_seal_manifest_supports_legacy_repository_shape(self) -> None:
+        service = PublishService(repository=LegacyPublishRepository())
+        run_id = await _make_run(service, LANE_NARRATIVE)
+        manifest = await service.create_manifest(LANE_NARRATIVE, run_id)
+        sealed = await service.seal_manifest(manifest.manifest_id)
+        assert sealed.published_at is not None
+        assert await service._count_materialized_read_model_records(manifest.manifest_id) == 0
 
     async def test_seal_rejects_non_published_objects(self, service: PublishService) -> None:
         run_id, m = await _make_manifest(service)

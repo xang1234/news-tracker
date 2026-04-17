@@ -256,6 +256,18 @@ def _parse_payload(value: Any) -> dict[str, Any]:
     return dict(value)
 
 
+def _row_value(row: Any, key: str, default: Any = None) -> Any:
+    """Read an optional row field from dict-like or asyncpg rows."""
+    if row is None:
+        return default
+    if isinstance(row, dict):
+        return row.get(key, default)
+    try:
+        return row[key]
+    except (KeyError, IndexError):
+        return default
+
+
 def _row_to_divergence_item(row, payload: dict[str, Any]) -> DivergenceItem:
     """Flatten a published_objects row + parsed payload into a DivergenceItem."""
     return DivergenceItem(
@@ -352,6 +364,8 @@ def _row_to_assertion_response(row, payload: dict[str, Any]) -> AssertionRespons
     if not subject or not predicate:
         return None
     assertion_id = _as_str(payload.get("assertion_id")) or _as_str(row["object_id"])
+    row_created_at = _row_value(row, "created_at")
+    row_updated_at = _row_value(row, "updated_at", row_created_at)
 
     return AssertionResponse(
         assertion_id=assertion_id,
@@ -360,20 +374,16 @@ def _row_to_assertion_response(row, payload: dict[str, Any]) -> AssertionRespons
         object_concept_id=payload.get("object_concept_id"),
         confidence=_as_float(payload.get("confidence"), default=0.0),
         status=_as_str(payload.get("status"), default="active"),
-        valid_from=_parse_dt(payload.get("valid_from"), fallback=row.get("valid_from")),
-        valid_to=_parse_dt(payload.get("valid_to"), fallback=row.get("valid_to")),
+        valid_from=_parse_dt(payload.get("valid_from"), fallback=_row_value(row, "valid_from")),
+        valid_to=_parse_dt(payload.get("valid_to"), fallback=_row_value(row, "valid_to")),
         support_count=_as_int(payload.get("support_count"), default=0),
         contradiction_count=_as_int(payload.get("contradiction_count"), default=0),
         first_seen_at=_parse_dt(payload.get("first_seen_at")),
         last_evidence_at=_parse_dt(payload.get("last_evidence_at")),
         source_diversity=_as_int(payload.get("source_diversity"), default=0),
         metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
-        created_at=(
-            _parse_dt(payload.get("created_at"), fallback=row["created_at"]) or row["created_at"]
-        ),
-        updated_at=(
-            _parse_dt(payload.get("updated_at"), fallback=row["updated_at"]) or row["updated_at"]
-        ),
+        created_at=_parse_dt(payload.get("created_at"), fallback=row_created_at) or row_created_at,
+        updated_at=_parse_dt(payload.get("updated_at"), fallback=row_updated_at) or row_updated_at,
     )
 
 
@@ -386,11 +396,13 @@ def _row_to_claim_response(row, payload: dict[str, Any]) -> ClaimResponse | None
         return None
 
     claim_id = _as_str(payload.get("claim_id")) or _as_str(row["object_id"])
+    row_created_at = _row_value(row, "created_at")
+    row_updated_at = _row_value(row, "updated_at", row_created_at)
     return ClaimResponse(
         claim_id=claim_id,
         claim_key=_as_str(payload.get("claim_key"), default=claim_id),
         lane=_as_str(row["lane"]),
-        run_id=row.get("run_id"),
+        run_id=_row_value(row, "run_id"),
         source_id=source_id,
         source_type=_as_str(payload.get("source_type")),
         source_text=payload.get("source_text"),
@@ -401,8 +413,14 @@ def _row_to_claim_response(row, payload: dict[str, Any]) -> ClaimResponse | None
         object_concept_id=payload.get("object_concept_id"),
         confidence=_as_float(payload.get("confidence"), default=0.0),
         extraction_method=_as_str(payload.get("extraction_method")),
-        claim_valid_from=_parse_dt(payload.get("claim_valid_from"), fallback=row.get("valid_from")),
-        claim_valid_to=_parse_dt(payload.get("claim_valid_to"), fallback=row.get("valid_to")),
+        claim_valid_from=_parse_dt(
+            payload.get("claim_valid_from"),
+            fallback=_row_value(row, "valid_from"),
+        ),
+        claim_valid_to=_parse_dt(
+            payload.get("claim_valid_to"),
+            fallback=_row_value(row, "valid_to"),
+        ),
         source_published_at=_parse_dt(payload.get("source_published_at")),
         contract_version=_as_str(
             payload.get("contract_version"),
@@ -410,8 +428,8 @@ def _row_to_claim_response(row, payload: dict[str, Any]) -> ClaimResponse | None
         ),
         status=_as_str(payload.get("status"), default="active"),
         metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
-        created_at=_parse_dt(payload.get("created_at"), fallback=row["created_at"]),
-        updated_at=_parse_dt(payload.get("updated_at"), fallback=row["updated_at"]),
+        created_at=_parse_dt(payload.get("created_at"), fallback=row_created_at),
+        updated_at=_parse_dt(payload.get("updated_at"), fallback=row_updated_at),
     )
 
 

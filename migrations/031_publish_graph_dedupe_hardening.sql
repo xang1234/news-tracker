@@ -98,7 +98,8 @@ INSERT INTO intel_pub.read_model (
     lineage,
     published_at,
     metadata,
-    created_at
+    created_at,
+    updated_at
 )
 SELECT
     'rm_' || substr(
@@ -124,7 +125,8 @@ SELECT
         'manifest_object_count', m.object_count,
         'backfilled_from', 'published_objects'
     ),
-    po.created_at
+    po.created_at,
+    po.updated_at
 FROM intel_pub.published_objects po
 JOIN intel_pub.manifests m
   ON m.manifest_id = po.manifest_id

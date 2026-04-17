@@ -32,11 +32,13 @@ class ReadModelRepository:
         INSERT INTO intel_pub.read_model (
             record_id, manifest_id, object_id, object_type, lane,
             contract_version, publish_state, source_ids, run_id,
-            valid_from, valid_to, payload, lineage, published_at, metadata
+            valid_from, valid_to, payload, lineage, published_at, metadata,
+            created_at, updated_at
         ) VALUES (
             $1, $2, $3, $4, $5,
             $6, $7, $8, $9,
-            $10, $11, $12, $13, $14, $15
+            $10, $11, $12, $13, $14, $15,
+            $16, $17
         )
         ON CONFLICT (manifest_id, object_id) DO UPDATE
         SET record_id = EXCLUDED.record_id,
@@ -51,7 +53,9 @@ class ReadModelRepository:
             payload = EXCLUDED.payload,
             lineage = EXCLUDED.lineage,
             published_at = EXCLUDED.published_at,
-            metadata = EXCLUDED.metadata
+            metadata = EXCLUDED.metadata,
+            created_at = EXCLUDED.created_at,
+            updated_at = EXCLUDED.updated_at
         """
 
         params = [
@@ -71,6 +75,8 @@ class ReadModelRepository:
                 json.dumps(record.lineage),
                 record.published_at,
                 json.dumps(record.metadata),
+                record.created_at,
+                record.updated_at,
             )
             for record in records
         ]

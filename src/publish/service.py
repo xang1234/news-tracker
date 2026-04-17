@@ -30,6 +30,7 @@ from src.contracts.intelligence.db_schemas import (
 from src.contracts.intelligence.lanes import validate_lane
 from src.contracts.intelligence.ownership import OwnershipPolicy
 from src.contracts.intelligence.version import ContractRegistry
+from src.publish._read_model_fallback import InMemoryReadModelRepository
 from src.publish.read_model import ReadModelBuilder
 from src.publish.read_model_repository import ReadModelRepository
 from src.publish.repository import PublishRepository
@@ -105,10 +106,30 @@ class PublishService:
         read_model_builder: ReadModelBuilder | None = None,
     ) -> None:
         self._repo = repository
-        self._read_model_repo = read_model_repository
-        if self._read_model_repo is None and hasattr(repository, "upsert_records"):
-            self._read_model_repo = repository
+        self._read_model_repo = self._resolve_read_model_repository(
+            repository,
+            read_model_repository=read_model_repository,
+        )
         self._read_model_builder = read_model_builder or ReadModelBuilder()
+
+    @staticmethod
+    def _resolve_read_model_repository(
+        repository: PublishRepository,
+        *,
+        read_model_repository: ReadModelRepository | Any | None,
+    ) -> ReadModelRepository | Any:
+        """Resolve the read-model repository without breaking older callers."""
+        if read_model_repository is not None:
+            return read_model_repository
+        if hasattr(repository, "upsert_records") and hasattr(repository, "count_records_for_manifest"):
+            return repository
+        if isinstance(repository, PublishRepository):
+            return ReadModelRepository(repository._db)
+        logger.warning(
+            "publish_service_using_ephemeral_read_model: repository_type=%s",
+            type(repository).__name__,
+        )
+        return InMemoryReadModelRepository()
 
     async def _materialize_read_model(
         self,
@@ -116,17 +137,11 @@ class PublishService:
         objects: list[PublishedObject],
     ) -> int:
         """Persist read-model rows for a sealed manifest."""
-        if self._read_model_repo is None:
-            raise ValueError(
-                "Read-model repository is not configured; cannot materialize sealed manifests"
-            )
         records = self._read_model_builder.build(manifest, objects, published_only=True)
         return await self._read_model_repo.upsert_records(records)
 
     async def _count_materialized_read_model_records(self, manifest_id: str) -> int:
         """Count read-model rows materialized for a manifest."""
-        if self._read_model_repo is None:
-            return 0
         return await self._read_model_repo.count_records_for_manifest(manifest_id)
 
     # -- Lane run lifecycle ------------------------------------------------

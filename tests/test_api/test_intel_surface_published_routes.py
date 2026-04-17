@@ -539,6 +539,21 @@ def test_get_assertion_detail_joins_published_claims_uses_latest_claim_version()
     assert claim_1["claim"]["source_id"] == "doc_1_new"
 
 
+def test_list_assertions_tolerates_missing_updated_at_column() -> None:
+    fake_db = _FakeDB()
+    for row in fake_db.rows:
+        if row["object_id"] == "obj_assert_1_new":
+            row.pop("updated_at")
+            break
+    client = _make_client(fake_db)
+
+    resp = client.get("/intel/assertions")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["assertions"][0]["assertion_id"] == "asrt_1"
+    assert body["assertions"][0]["updated_at"] == body["assertions"][0]["created_at"]
+
+
 def test_list_claims_filters_by_assertion_using_published_payloads() -> None:
     client = _make_client(_FakeDB())
     resp = client.get("/intel/claims?assertion_id=asrt_1")

@@ -53,6 +53,16 @@ class FakeRedis:
     async def close(self) -> None:
         return None
 
+    async def get(self, key: str) -> str | None:
+        return self.values.get(key)
+
+    async def eval(self, script: str, numkeys: int, key: str, token: str) -> int:
+        del numkeys
+        assert "redis.call('GET', KEYS[1])" in script
+        if self.values.get(key) != token:
+            return 0
+        return await self.delete(key)
+
 
 class FakeRepository:
     def __init__(self) -> None:
@@ -146,3 +156,17 @@ async def test_shared_deduplicator_warms_redis_from_persisted_signatures_for_nea
     assert second_result.is_duplicate is True
     assert second_result.duplicate_type == "near"
     assert second_result.canonical_document_id == original.id
+
+
+@pytest.mark.asyncio
+async def test_shared_deduplicator_does_not_delete_a_newer_lock_owner() -> None:
+    deduplicator = SharedDeduplicator(FakeDatabase(), redis_client=FakeRedis(), threshold=0.5)
+
+    redis_client = deduplicator._redis_client
+    lock_key = "dedupe:lsh:band:0:test:lock"
+    await redis_client.set(lock_key, "new-owner")
+
+    released = await deduplicator._release_lock(lock_key, "stale-owner")
+
+    assert released == 0
+    assert await redis_client.get(lock_key) == "new-owner"

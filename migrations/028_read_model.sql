@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS intel_pub.read_model (
     published_at        TIMESTAMPTZ,
     -- Extensible
     metadata            JSONB NOT NULL DEFAULT '{}',
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Consumer queries by manifest (get all objects in a publication)
