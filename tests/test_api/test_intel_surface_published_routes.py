@@ -19,9 +19,14 @@ def _ts(hour: int) -> datetime:
 
 class _FakeDB:
     def __init__(self) -> None:
+        self.active_pointers = {
+            "narrative": "manifest_narrative_active",
+            "filing": "manifest_filing_active",
+        }
         self.rows = [
             {
                 "object_id": "obj_assert_1_new",
+                "manifest_id": "manifest_narrative_active",
                 "object_type": "assertion",
                 "publish_state": "published",
                 "contract_version": "1.0.0",
@@ -52,6 +57,7 @@ class _FakeDB:
             },
             {
                 "object_id": "obj_assert_1_old",
+                "manifest_id": "manifest_narrative_prev",
                 "object_type": "assertion",
                 "publish_state": "published",
                 "contract_version": "1.0.0",
@@ -75,6 +81,7 @@ class _FakeDB:
             },
             {
                 "object_id": "obj_assert_2",
+                "manifest_id": "manifest_narrative_active",
                 "object_type": "assertion",
                 "publish_state": "published",
                 "contract_version": "1.0.0",
@@ -98,6 +105,7 @@ class _FakeDB:
             },
             {
                 "object_id": "obj_assert_3_new",
+                "manifest_id": "manifest_narrative_active",
                 "object_type": "assertion",
                 "publish_state": "published",
                 "contract_version": "1.0.0",
@@ -121,6 +129,7 @@ class _FakeDB:
             },
             {
                 "object_id": "obj_assert_3_old",
+                "manifest_id": "manifest_narrative_prev",
                 "object_type": "assertion",
                 "publish_state": "published",
                 "contract_version": "1.0.0",
@@ -144,6 +153,7 @@ class _FakeDB:
             },
             {
                 "object_id": "obj_claim_1_new",
+                "manifest_id": "manifest_narrative_active",
                 "object_type": "claim",
                 "publish_state": "published",
                 "contract_version": "1.0.0",
@@ -168,6 +178,7 @@ class _FakeDB:
             },
             {
                 "object_id": "obj_claim_1_old",
+                "manifest_id": "manifest_narrative_prev",
                 "object_type": "claim",
                 "publish_state": "published",
                 "contract_version": "1.0.0",
@@ -192,6 +203,7 @@ class _FakeDB:
             },
             {
                 "object_id": "obj_claim_2",
+                "manifest_id": "manifest_narrative_active",
                 "object_type": "claim",
                 "publish_state": "published",
                 "contract_version": "1.0.0",
@@ -216,6 +228,7 @@ class _FakeDB:
             },
             {
                 "object_id": "obj_claim_3",
+                "manifest_id": "manifest_filing_active",
                 "object_type": "claim",
                 "publish_state": "published",
                 "contract_version": "1.0.0",
@@ -238,10 +251,39 @@ class _FakeDB:
                     "assertion_id": "asrt_other",
                 },
             },
+            {
+                "object_id": "obj_assert_unactivated",
+                "manifest_id": "manifest_narrative_sealed",
+                "object_type": "assertion",
+                "publish_state": "published",
+                "contract_version": "1.0.0",
+                "lane": "narrative",
+                "run_id": "run_3",
+                "valid_from": None,
+                "valid_to": None,
+                "created_at": _ts(14),
+                "updated_at": _ts(14),
+                "payload": {
+                    "assertion_id": "asrt_unactivated",
+                    "subject_concept_id": "concept_issuer_broadcom",
+                    "predicate": "supplies_to",
+                    "object_concept_id": "concept_issuer_google",
+                    "confidence": 0.91,
+                    "status": "active",
+                    "support_count": 4,
+                    "contradiction_count": 0,
+                    "source_diversity": 2,
+                },
+            },
         ]
 
-    def _published_rows(self, object_type: str | None = None) -> list[dict[str, Any]]:
-        rows = [r for r in self.rows if r["publish_state"] == "published"]
+    def _active_rows(self, object_type: str | None = None) -> list[dict[str, Any]]:
+        rows = [
+            r
+            for r in self.rows
+            if r["publish_state"] == "published"
+            and self.active_pointers.get(r["lane"]) == r["manifest_id"]
+        ]
         if object_type is not None:
             rows = [r for r in rows if r["object_type"] == object_type]
         return sorted(rows, key=lambda r: r["created_at"], reverse=True)
@@ -292,7 +334,7 @@ class _FakeDB:
     def _filtered_assertions(self, query: str, params: tuple[Any, ...]) -> list[dict[str, Any]]:
         assert params and params[0] == "assertion"
         idx = 1
-        rows = self._dedupe_latest(self._published_rows("assertion"), self._assertion_key)
+        rows = self._dedupe_latest(self._active_rows("assertion"), self._assertion_key)
 
         if "subject_concept_id" in query:
             concept_id = params[idx]
@@ -320,7 +362,7 @@ class _FakeDB:
     def _filtered_claims(self, query: str, params: tuple[Any, ...]) -> list[dict[str, Any]]:
         assert params and params[0] == "claim"
         idx = 1
-        rows = self._dedupe_latest(self._published_rows("claim"), self._claim_key)
+        rows = self._dedupe_latest(self._active_rows("claim"), self._claim_key)
 
         if "lane = $" in query:
             lane = params[idx]
@@ -349,13 +391,13 @@ class _FakeDB:
         return sorted(rows, key=lambda r: r["created_at"], reverse=True)
 
     async def fetch(self, query: str, *params):
-        if "intel_pub.published_objects" not in query:
+        if "intel_pub.read_model" not in query:
             return []
 
         if "claim_dedupe_id" in query and "object_type = 'claim'" in query:
             assertion_id = str(params[0])
             embedded_claim_ids = set(params[1])
-            rows = self._published_rows("claim")
+            rows = self._active_rows("claim")
             rows = [
                 r
                 for r in rows
@@ -382,14 +424,14 @@ class _FakeDB:
         return []
 
     async def fetchrow(self, query: str, *params):
-        if "intel_pub.published_objects" not in query:
+        if "intel_pub.read_model" not in query:
             return None
 
         if "SELECT payload" in query and "object_type = 'assertion'" in query:
             assertion_id = params[0]
             assertions = [
                 r
-                for r in self._published_rows("assertion")
+                for r in self._active_rows("assertion")
                 if (
                     r["object_id"] == assertion_id
                     or r["payload"].get("assertion_id") == assertion_id
@@ -404,7 +446,7 @@ class _FakeDB:
             assertion_id = params[0]
             assertions = [
                 r
-                for r in self._published_rows("assertion")
+                for r in self._active_rows("assertion")
                 if (
                     r["object_id"] == assertion_id
                     or r["payload"].get("assertion_id") == assertion_id
@@ -431,7 +473,7 @@ def _make_client(fake_db: _FakeDB) -> TestClient:
     return TestClient(app)
 
 
-def test_list_assertions_reads_from_published_objects_only() -> None:
+def test_list_assertions_reads_from_active_read_model_only() -> None:
     client = _make_client(_FakeDB())
     resp = client.get("/intel/assertions")
     assert resp.status_code == 200
@@ -473,6 +515,15 @@ def test_list_assertions_filters_apply_to_latest_versions_only() -> None:
     assert body["assertions"] == []
 
 
+def test_list_assertions_excludes_sealed_but_unactivated_manifest_rows() -> None:
+    client = _make_client(_FakeDB())
+    resp = client.get("/intel/assertions")
+    assert resp.status_code == 200
+    body = resp.json()
+    assertion_ids = [item["assertion_id"] for item in body["assertions"]]
+    assert "asrt_unactivated" not in assertion_ids
+
+
 def test_get_assertion_detail_joins_published_claims_uses_latest_claim_version() -> None:
     client = _make_client(_FakeDB())
     resp = client.get("/intel/assertions/asrt_1")
@@ -486,6 +537,21 @@ def test_get_assertion_detail_joins_published_claims_uses_latest_claim_version()
 
     claim_1 = next(item for item in body["claim_links"] if item["claim_id"] == "claim_1")
     assert claim_1["claim"]["source_id"] == "doc_1_new"
+
+
+def test_list_assertions_tolerates_missing_updated_at_column() -> None:
+    fake_db = _FakeDB()
+    for row in fake_db.rows:
+        if row["object_id"] == "obj_assert_1_new":
+            row.pop("updated_at")
+            break
+    client = _make_client(fake_db)
+
+    resp = client.get("/intel/assertions")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["assertions"][0]["assertion_id"] == "asrt_1"
+    assert body["assertions"][0]["updated_at"] == body["assertions"][0]["created_at"]
 
 
 def test_list_claims_filters_by_assertion_using_published_payloads() -> None:
@@ -513,6 +579,7 @@ def test_list_assertions_empty_assertion_id_falls_back_to_object_id() -> None:
     fake_db.rows.append(
         {
             "object_id": "obj_assert_empty_id",
+            "manifest_id": "manifest_narrative_active",
             "object_type": "assertion",
             "publish_state": "published",
             "contract_version": "1.0.0",
@@ -549,6 +616,7 @@ def test_list_claims_empty_claim_id_falls_back_to_object_id() -> None:
     fake_db.rows.append(
         {
             "object_id": "obj_claim_empty_id",
+            "manifest_id": "manifest_narrative_active",
             "object_type": "claim",
             "publish_state": "published",
             "contract_version": "1.0.0",

@@ -142,8 +142,23 @@ class TestAddEdge:
 
     @pytest.mark.asyncio
     async def test_insert_sql(self, mock_database: AsyncMock) -> None:
-        """add_edge() uses ON CONFLICT with source_doc_ids merge."""
+        """add_edge() upserts a legacy support row and refreshes the aggregate edge."""
         repo = GraphRepository(mock_database)
+        mock_database.fetch.return_value = [
+            {
+                "source": "TSMC",
+                "target": "NVDA",
+                "relation": "supplies_to",
+                "support_key": "legacy::TSMC::NVDA::supplies_to",
+                "origin_kind": "legacy",
+                "confidence": 0.9,
+                "source_doc_ids": ["doc_001"],
+                "active": True,
+                "metadata": "{}",
+                "created_at": datetime(2025, 1, 1, tzinfo=UTC),
+                "updated_at": datetime(2025, 1, 1, tzinfo=UTC),
+            }
+        ]
 
         await repo.add_edge(
             source="TSMC",
@@ -153,29 +168,34 @@ class TestAddEdge:
             source_doc_ids=["doc_001"],
         )
 
-        args = mock_database.execute.call_args
-        sql = args[0][0]
-        assert "INSERT INTO causal_edges" in sql
-        assert "ON CONFLICT (source, target, relation) DO UPDATE" in sql
-        assert "DISTINCT unnest" in sql
+        first_execute = mock_database.execute.call_args_list[0]
+        sql = first_execute[0][0]
+        assert "INSERT INTO causal_edge_supports" in sql
+        assert "ON CONFLICT (source, target, relation, support_key) DO UPDATE" in sql
 
-        params = args[0][1:]
+        params = first_execute[0][1:]
         assert params[0] == "TSMC"
         assert params[1] == "NVDA"
         assert params[2] == "supplies_to"
-        assert params[3] == 0.9
-        assert params[4] == ["doc_001"]
+        assert params[3] == "legacy::TSMC::NVDA::supplies_to"
+        assert params[4] == "legacy"
+        assert params[5] == 0.9
+        assert params[6] == ["doc_001"]
+
+        refresh_sql = mock_database.execute.call_args_list[-1][0][0]
+        assert "INSERT INTO causal_edges" in refresh_sql
 
     @pytest.mark.asyncio
     async def test_default_empty_lists(self, mock_database: AsyncMock) -> None:
         """add_edge() defaults to empty source_doc_ids and metadata."""
         repo = GraphRepository(mock_database)
+        mock_database.fetch.return_value = []
 
         await repo.add_edge("A", "B", "drives")
 
-        params = mock_database.execute.call_args[0][1:]
-        assert params[4] == []  # source_doc_ids
-        assert json.loads(params[5]) == {}  # metadata
+        params = mock_database.execute.call_args_list[0][0][1:]
+        assert params[6] == []  # source_doc_ids
+        assert json.loads(params[8]) == {}  # metadata
 
 
 class TestRemoveEdge:
@@ -184,7 +204,8 @@ class TestRemoveEdge:
     @pytest.mark.asyncio
     async def test_deleted(self, mock_database: AsyncMock) -> None:
         """remove_edge() returns True when edge existed."""
-        mock_database.execute.return_value = "DELETE 1"
+        mock_database.execute.side_effect = ["UPDATE 1", "DELETE 1"]
+        mock_database.fetch.return_value = []
         repo = GraphRepository(mock_database)
 
         assert await repo.remove_edge("A", "B", "drives") is True
@@ -192,7 +213,8 @@ class TestRemoveEdge:
     @pytest.mark.asyncio
     async def test_not_found(self, mock_database: AsyncMock) -> None:
         """remove_edge() returns False when edge didn't exist."""
-        mock_database.execute.return_value = "DELETE 0"
+        mock_database.execute.side_effect = ["UPDATE 0", "DELETE 0"]
+        mock_database.fetch.return_value = []
         repo = GraphRepository(mock_database)
 
         assert await repo.remove_edge("A", "B", "drives") is False

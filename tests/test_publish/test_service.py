@@ -18,6 +18,7 @@ from src.contracts.intelligence.db_schemas import (
     PublishedObject,
 )
 from src.contracts.intelligence.lanes import LANE_FILING, LANE_NARRATIVE
+from src.publish.read_model import ReadModelRecord
 from src.publish.service import PublishService
 
 # -- In-memory mock repository ---------------------------------------------
@@ -31,6 +32,7 @@ class InMemoryPublishRepository:
         self.manifests: dict[str, Manifest] = {}
         self.pointers: dict[str, ManifestPointer] = {}
         self.objects: dict[str, PublishedObject] = {}
+        self.read_model_records: dict[tuple[str, str], ReadModelRecord] = {}
 
     async def create_lane_run(self, run: LaneRun) -> LaneRun:
         self.runs[run.run_id] = run
@@ -135,6 +137,24 @@ class InMemoryPublishRepository:
             results = [o for o in results if o.publish_state == publish_state]
         return sorted(results, key=lambda o: o.created_at)
 
+    async def upsert_records(self, records: list[ReadModelRecord]) -> int:
+        for record in records:
+            self.read_model_records[(record.manifest_id, record.object_id)] = record
+        return len(records)
+
+    async def count_records_for_manifest(self, manifest_id: str) -> int:
+        return sum(1 for manifest_key, _ in self.read_model_records if manifest_key == manifest_id)
+
+
+class LegacyPublishRepository:
+    """Older repository shape with no read-model methods."""
+
+    def __init__(self) -> None:
+        self._delegate = InMemoryPublishRepository()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._delegate, name)
+
 
 # -- Fixtures --------------------------------------------------------------
 
@@ -146,7 +166,7 @@ def repo() -> InMemoryPublishRepository:
 
 @pytest.fixture()
 def service(repo: InMemoryPublishRepository) -> PublishService:
-    return PublishService(repository=repo)
+    return PublishService(repository=repo, read_model_repository=repo)
 
 
 # -- Lane run lifecycle tests ----------------------------------------------
@@ -254,6 +274,15 @@ class TestManifestLifecycle:
         await service.transition_object(obj.object_id, "published")
         sealed = await service.seal_manifest(m.manifest_id)
         assert sealed.object_count == 1
+        assert await service._count_materialized_read_model_records(m.manifest_id) == 1
+
+    async def test_seal_manifest_supports_legacy_repository_shape(self) -> None:
+        service = PublishService(repository=LegacyPublishRepository())
+        run_id = await _make_run(service, LANE_NARRATIVE)
+        manifest = await service.create_manifest(LANE_NARRATIVE, run_id)
+        sealed = await service.seal_manifest(manifest.manifest_id)
+        assert sealed.published_at is not None
+        assert await service._count_materialized_read_model_records(manifest.manifest_id) == 0
 
     async def test_seal_rejects_non_published_objects(self, service: PublishService) -> None:
         run_id, m = await _make_manifest(service)
@@ -358,6 +387,27 @@ class TestPointerAdvancement:
         await service.seal_manifest(m.manifest_id)
         with pytest.raises(ValueError, match="not 'completed'"):
             await service.advance_pointer(LANE_NARRATIVE, m.manifest_id)
+
+    async def test_pointer_requires_materialized_read_model(
+        self,
+        service: PublishService,
+        repo: InMemoryPublishRepository,
+    ) -> None:
+        run = await service.create_run(LANE_NARRATIVE)
+        await service.start_run(run.run_id)
+        await service.complete_run(run.run_id)
+        manifest = await service.create_manifest(LANE_NARRATIVE, run.run_id)
+        obj = await service.add_object(
+            manifest.manifest_id,
+            object_type="claim",
+            lane=LANE_NARRATIVE,
+            run_id=run.run_id,
+        )
+        await service.transition_object(obj.object_id, "published")
+        manifest = await service.seal_manifest(manifest.manifest_id)
+        repo.read_model_records.clear()
+        with pytest.raises(ValueError, match="materialized read-model record"):
+            await service.advance_pointer(LANE_NARRATIVE, manifest.manifest_id)
 
     async def test_get_pointer_empty(self, service: PublishService) -> None:
         assert await service.get_pointer(LANE_NARRATIVE) is None

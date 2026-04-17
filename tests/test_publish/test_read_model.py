@@ -150,6 +150,16 @@ class TestBuildRecord:
         assert record.valid_from == t1
         assert record.valid_to == t2
 
+    def test_carries_source_timestamps(self) -> None:
+        builder = ReadModelBuilder()
+        manifest = _make_manifest()
+        created_at = datetime(2025, 2, 1, 8, 30, tzinfo=UTC)
+        updated_at = datetime(2025, 2, 1, 9, 45, tzinfo=UTC)
+        obj = _make_object(created_at=created_at, updated_at=updated_at)
+        record = builder.build_record(manifest, obj)
+        assert record.created_at == created_at
+        assert record.updated_at == updated_at
+
     def test_rejects_non_publishable_type(self) -> None:
         builder = ReadModelBuilder()
         manifest = _make_manifest()
@@ -310,3 +320,8 @@ class TestMigration028:
         sql = self._load_sql()
         for col in ("payload", "lineage", "metadata"):
             assert col in sql
+
+    def test_timestamp_columns(self) -> None:
+        sql = self._load_sql()
+        assert "created_at" in sql
+        assert "updated_at" in sql

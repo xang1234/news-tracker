@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, RedisDsn
+from pydantic import Field, PostgresDsn, RedisDsn, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -147,7 +147,15 @@ class Settings(BaseSettings):
     api_keys: str | None = None  # Comma-separated API keys, None = no auth (dev mode)
 
     # CORS
-    cors_origins: str = Field(default="*", description="Comma-separated allowed CORS origins")
+    cors_origins: str = Field(
+        default=(
+            "http://localhost:5173,"
+            "http://127.0.0.1:5173,"
+            "http://localhost:4173,"
+            "http://127.0.0.1:4173"
+        ),
+        description="Comma-separated allowed CORS origins",
+    )
     cors_allow_credentials: bool = Field(default=True, description="Allow CORS credentials")
 
     # Request timeout
@@ -375,6 +383,11 @@ class Settings(BaseSettings):
         return self.environment == "production"
 
     @property
+    def cors_origin_list(self) -> list[str]:
+        """Return configured CORS origins as a parsed list."""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @property
     def twitter_configured(self) -> bool:
         """Check if Twitter API is configured."""
         return self.twitter_bearer_token is not None
@@ -402,6 +415,15 @@ class Settings(BaseSettings):
                 self.finlight_api_keys,
             ]
         )
+
+    @model_validator(mode="after")
+    def validate_cors_settings(self) -> "Settings":
+        """Reject invalid wildcard-plus-credentials CORS settings."""
+        if self.cors_allow_credentials and "*" in self.cors_origin_list:
+            raise ValueError(
+                "cors_allow_credentials=True is incompatible with wildcard CORS origins"
+            )
+        return self
 
 
 @lru_cache

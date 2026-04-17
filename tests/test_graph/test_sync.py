@@ -100,15 +100,16 @@ class TestGraphSync:
         sync_service._assertion_repo.list_assertions = AsyncMock(
             side_effect=lambda status, limit: ([assertion] if status == "active" else [])
         )
-        sync_service._graph_repo.get_edge = AsyncMock(return_value=None)
-        sync_service._graph_repo.add_edge = AsyncMock()
+        sync_service._graph_repo.list_edge_supports = AsyncMock(return_value=[])
+        sync_service._graph_repo.upsert_edge_support = AsyncMock()
+        sync_service._graph_repo.refresh_edge = AsyncMock()
 
         result = await sync_service.sync()
 
         assert result.assertions_read >= 1
         assert result.edges_synced == 1
-        sync_service._graph_repo.add_edge.assert_called_once()
-        call_kwargs = sync_service._graph_repo.add_edge.call_args
+        sync_service._graph_repo.upsert_edge_support.assert_called_once()
+        call_kwargs = sync_service._graph_repo.upsert_edge_support.call_args
         assert call_kwargs.kwargs["source"] == "TSMC"
         assert call_kwargs.kwargs["target"] == "NVDA"
         assert call_kwargs.kwargs["relation"] == "supplies_to"
@@ -140,12 +141,12 @@ class TestGraphSync:
 
         # Mock an existing seed edge (no source_doc_ids)
         seed_edge = MagicMock()
-        seed_edge.source_doc_ids = []  # Seed edge indicator
+        seed_edge.origin_kind = "legacy"
 
         sync_service._assertion_repo.list_assertions = AsyncMock(
             side_effect=lambda status, limit: ([assertion] if status == "active" else [])
         )
-        sync_service._graph_repo.get_edge = AsyncMock(return_value=seed_edge)
+        sync_service._graph_repo.list_edge_supports = AsyncMock(return_value=[seed_edge])
 
         result = await sync_service.sync()
 
@@ -163,13 +164,14 @@ class TestGraphSync:
         )
 
         seed_edge = MagicMock()
-        seed_edge.source_doc_ids = []
+        seed_edge.origin_kind = "legacy"
 
         sync_service._assertion_repo.list_assertions = AsyncMock(
             side_effect=lambda status, limit: ([assertion] if status == "active" else [])
         )
-        sync_service._graph_repo.get_edge = AsyncMock(return_value=seed_edge)
-        sync_service._graph_repo.add_edge = AsyncMock()
+        sync_service._graph_repo.list_edge_supports = AsyncMock(return_value=[seed_edge])
+        sync_service._graph_repo.upsert_edge_support = AsyncMock()
+        sync_service._graph_repo.refresh_edge = AsyncMock()
 
         result = await sync_service.sync()
 
@@ -188,15 +190,17 @@ class TestGraphSync:
         sync_service._assertion_repo.list_assertions = AsyncMock(
             side_effect=lambda status, limit: ([retracted] if status == "retracted" else [])
         )
-        sync_service._graph_repo.remove_edge = AsyncMock(return_value=True)
+        sync_service._graph_repo.deactivate_edge_support = AsyncMock(return_value=True)
+        sync_service._graph_repo.refresh_edge = AsyncMock()
 
         result = await sync_service.sync()
 
         assert result.edges_removed == 1
-        sync_service._graph_repo.remove_edge.assert_called_once_with(
+        sync_service._graph_repo.deactivate_edge_support.assert_called_once_with(
             "TSMC",
             "NVDA",
             "supplies_to",
+            support_key=retracted.assertion_id,
         )
 
     @pytest.mark.asyncio
@@ -211,13 +215,14 @@ class TestGraphSync:
         sync_service._assertion_repo.list_assertions = AsyncMock(
             side_effect=lambda status, limit: ([assertion] if status == "active" else [])
         )
-        sync_service._graph_repo.get_edge = AsyncMock(return_value=None)
-        sync_service._graph_repo.add_edge = AsyncMock()
+        sync_service._graph_repo.list_edge_supports = AsyncMock(return_value=[])
+        sync_service._graph_repo.upsert_edge_support = AsyncMock()
+        sync_service._graph_repo.refresh_edge = AsyncMock()
 
         result = await sync_service.sync()
 
         assert result.edges_synced == 1
-        call_kwargs = sync_service._graph_repo.add_edge.call_args.kwargs
+        call_kwargs = sync_service._graph_repo.upsert_edge_support.call_args.kwargs
         assert call_kwargs["relation"] == "depends_on"  # customer_of → depends_on
 
     @pytest.mark.asyncio
@@ -240,9 +245,10 @@ class TestGraphSync:
         sync_service._assertion_repo.list_assertions = AsyncMock(
             side_effect=lambda status, limit: ([assertion] if status == "active" else [])
         )
-        sync_service._graph_repo.get_edge = AsyncMock(return_value=None)
+        sync_service._graph_repo.list_edge_supports = AsyncMock(return_value=[])
         sync_service._graph_repo.get_node = AsyncMock(return_value=None)
-        sync_service._graph_repo.add_edge = AsyncMock()
+        sync_service._graph_repo.upsert_edge_support = AsyncMock()
+        sync_service._graph_repo.refresh_edge = AsyncMock()
 
         await sync_service.sync()
 
@@ -260,10 +266,11 @@ class TestGraphSync:
         sync_service._assertion_repo.list_assertions = AsyncMock(
             side_effect=lambda status, limit: ([assertion] if status == "active" else [])
         )
-        sync_service._graph_repo.get_edge = AsyncMock(return_value=None)
+        sync_service._graph_repo.list_edge_supports = AsyncMock(return_value=[])
         # Nodes already exist
         sync_service._graph_repo.get_node = AsyncMock(return_value=MagicMock())
-        sync_service._graph_repo.add_edge = AsyncMock()
+        sync_service._graph_repo.upsert_edge_support = AsyncMock()
+        sync_service._graph_repo.refresh_edge = AsyncMock()
 
         await sync_service.sync()
 
@@ -277,17 +284,18 @@ class TestGraphSync:
         sync_service._assertion_repo.list_assertions = AsyncMock(
             side_effect=lambda status, limit: ([assertion] if status == "active" else [])
         )
-        sync_service._graph_repo.get_edge = AsyncMock(return_value=None)
-        sync_service._graph_repo.add_edge = AsyncMock()
+        sync_service._graph_repo.list_edge_supports = AsyncMock(return_value=[])
+        sync_service._graph_repo.upsert_edge_support = AsyncMock()
+        sync_service._graph_repo.refresh_edge = AsyncMock()
 
         result = await sync_service.sync()
 
         assert result.edges_synced == 1
-        # add_edge called twice: AMD→INTC and INTC→AMD
-        assert sync_service._graph_repo.add_edge.call_count == 2
+        # Two support rows are written: AMD→INTC and INTC→AMD
+        assert sync_service._graph_repo.upsert_edge_support.call_count == 2
         call_pairs = [
             (c.kwargs["source"], c.kwargs["target"])
-            for c in sync_service._graph_repo.add_edge.call_args_list
+            for c in sync_service._graph_repo.upsert_edge_support.call_args_list
         ]
         assert ("AMD", "INTC") in call_pairs
         assert ("INTC", "AMD") in call_pairs
@@ -305,14 +313,15 @@ class TestGraphSync:
         sync_service._assertion_repo.list_assertions = AsyncMock(
             side_effect=lambda status, limit: ([retracted] if status == "retracted" else [])
         )
-        sync_service._graph_repo.remove_edge = AsyncMock(return_value=True)
+        sync_service._graph_repo.deactivate_edge_support = AsyncMock(return_value=True)
+        sync_service._graph_repo.refresh_edge = AsyncMock()
 
         result = await sync_service.sync()
 
         assert result.edges_removed == 2
         remove_calls = [
             (c.args[0], c.args[1], c.args[2])
-            for c in sync_service._graph_repo.remove_edge.call_args_list
+            for c in sync_service._graph_repo.deactivate_edge_support.call_args_list
         ]
         assert ("AMD", "INTC", "competes_with") in remove_calls
         assert ("INTC", "AMD", "competes_with") in remove_calls

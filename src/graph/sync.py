@@ -8,8 +8,9 @@ Design decisions:
   ``source_doc_ids``.  Evidence-backed edges carry document lineage.
 - When an evidence edge matches a seed edge (same source/target/relation),
   the evidence confidence is used if ``support_count >= min_evidence_to_supersede``.
-- Retracted assertions cause their edges to be removed.
-- The sync is idempotent — ``add_edge()`` uses ON CONFLICT upsert.
+- Retracted assertions deactivate their support rows and recompute the
+  aggregate edge projection.
+- The sync is idempotent — support rows are keyed per assertion.
 
 Usage:
     service = GraphSyncService(database)
@@ -145,29 +146,11 @@ class GraphSyncService:
                     f"Error syncing edge {edge.source_concept_id}→{edge.target_concept_id}: {e}"
                 )
 
-        # Remove edges from retracted assertions
+        # Remove supports from retracted assertions
         _, retracted_edges = derive_edges(retracted, confidence_threshold=0.0)
         for edge in retracted_edges:
             try:
-                relation = self._map_predicate(edge.predicate)
-                if relation is None:
-                    continue
-                removed = await self._graph_repo.remove_edge(
-                    edge.source_concept_id,
-                    edge.target_concept_id,
-                    relation,
-                )
-                if removed:
-                    result.edges_removed += 1
-                # competes_with: also remove the reverse edge
-                if relation == "competes_with":
-                    reverse_removed = await self._graph_repo.remove_edge(
-                        edge.target_concept_id,
-                        edge.source_concept_id,
-                        relation,
-                    )
-                    if reverse_removed:
-                        result.edges_removed += 1
+                result.edges_removed += await self._remove_edge_support(edge)
             except Exception as e:
                 result.errors.append(
                     f"Error removing edge {edge.source_concept_id}→{edge.target_concept_id}: {e}"
@@ -193,16 +176,14 @@ class GraphSyncService:
             return
 
         # Only supersede seed edges when we have enough evidence
-        existing = await self._graph_repo.get_edge(
+        supports = await self._graph_repo.list_edge_supports(
             edge.source_concept_id,
             edge.target_concept_id,
             relation,
+            active_only=True,
         )
-        if (
-            existing is not None
-            and not existing.source_doc_ids
-            and edge.support_count < self._min_evidence
-        ):
+        has_legacy_support = any(support.origin_kind == "legacy" for support in supports)
+        if has_legacy_support and edge.support_count < self._min_evidence:
             # This is a seed edge — only override with sufficient evidence
             result.edges_skipped += 1
             return
@@ -214,48 +195,107 @@ class GraphSyncService:
             if existing_node is None:
                 await self._graph.ensure_node(concept_id)
 
-        # Build source_doc_ids from assertion metadata
-        source_doc_ids: list[str] = []
-        if edge.assertion_id:
-            source_doc_ids.append(edge.assertion_id)
-
+        source_doc_ids = self._extract_source_doc_ids(edge)
         metadata: dict[str, Any] = {
             "assertion_id": edge.assertion_id,
             "support_count": edge.support_count,
             "contradiction_count": edge.contradiction_count,
             "source_diversity": edge.source_diversity,
             "synced_from": "assertion",
+            "assertion_metadata": edge.metadata,
         }
 
-        await self._graph_repo.add_edge(
+        await self._graph_repo.upsert_edge_support(
             source=edge.source_concept_id,
             target=edge.target_concept_id,
             relation=relation,
+            support_key=edge.assertion_id,
+            origin_kind="assertion",
             confidence=edge.confidence,
             source_doc_ids=source_doc_ids,
             metadata=metadata,
         )
+        await self._graph_repo.refresh_edge(
+            edge.source_concept_id,
+            edge.target_concept_id,
+            relation,
+        )
 
         # competes_with requires explicit bidirectional edges (A→B and B→A)
         if relation == "competes_with":
-            # Check seed protection for the reverse direction too
-            reverse_existing = await self._graph_repo.get_edge(
+            reverse_supports = await self._graph_repo.list_edge_supports(
                 edge.target_concept_id,
                 edge.source_concept_id,
                 relation,
+                active_only=True,
             )
-            if not (
-                reverse_existing is not None
-                and not reverse_existing.source_doc_ids
-                and edge.support_count < self._min_evidence
-            ):
-                await self._graph_repo.add_edge(
+            reverse_has_legacy = any(
+                support.origin_kind == "legacy" for support in reverse_supports
+            )
+            if not (reverse_has_legacy and edge.support_count < self._min_evidence):
+                await self._graph_repo.upsert_edge_support(
                     source=edge.target_concept_id,
                     target=edge.source_concept_id,
                     relation=relation,
+                    support_key=edge.assertion_id,
+                    origin_kind="assertion",
                     confidence=edge.confidence,
                     source_doc_ids=source_doc_ids,
                     metadata=metadata,
                 )
+                await self._graph_repo.refresh_edge(
+                    edge.target_concept_id,
+                    edge.source_concept_id,
+                    relation,
+                )
 
         result.edges_synced += 1
+
+    @staticmethod
+    def _extract_source_doc_ids(edge: DerivedEdge) -> list[str]:
+        """Best-effort lineage extraction for edge supports."""
+        metadata = edge.metadata if isinstance(edge.metadata, dict) else {}
+        lineage_ids = metadata.get("source_doc_ids") or metadata.get("source_ids")
+        if isinstance(lineage_ids, list):
+            parsed = [str(lineage_id) for lineage_id in lineage_ids if lineage_id]
+            if parsed:
+                return parsed
+        return [edge.assertion_id] if edge.assertion_id else []
+
+    async def _remove_edge_support(self, edge: DerivedEdge) -> int:
+        """Deactivate one assertion support and refresh affected triples."""
+        relation = self._map_predicate(edge.predicate)
+        if relation is None:
+            return 0
+
+        removed_count = 0
+        removed = await self._graph_repo.deactivate_edge_support(
+            edge.source_concept_id,
+            edge.target_concept_id,
+            relation,
+            support_key=edge.assertion_id,
+        )
+        await self._graph_repo.refresh_edge(
+            edge.source_concept_id,
+            edge.target_concept_id,
+            relation,
+        )
+        if removed:
+            removed_count += 1
+
+        if relation == "competes_with":
+            reverse_removed = await self._graph_repo.deactivate_edge_support(
+                edge.target_concept_id,
+                edge.source_concept_id,
+                relation,
+                support_key=edge.assertion_id,
+            )
+            await self._graph_repo.refresh_edge(
+                edge.target_concept_id,
+                edge.source_concept_id,
+                relation,
+            )
+            if reverse_removed:
+                removed_count += 1
+
+        return removed_count

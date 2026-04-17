@@ -55,22 +55,24 @@ class TestAddEdge:
         """add_edge() uses config default_confidence when not specified."""
         config = GraphConfig(default_confidence=0.75)
         graph = CausalGraph(mock_database, config=config)
+        mock_database.fetch.return_value = []
 
         await graph.add_edge("A", "B", "drives")
 
-        params = mock_database.execute.call_args[0][1:]
-        assert params[3] == 0.75
+        params = mock_database.execute.call_args_list[0][0][1:]
+        assert params[5] == 0.75
 
     @pytest.mark.asyncio
     async def test_explicit_confidence_overrides_config(self, mock_database: AsyncMock) -> None:
         """Explicit confidence overrides config default."""
         config = GraphConfig(default_confidence=0.75)
         graph = CausalGraph(mock_database, config=config)
+        mock_database.fetch.return_value = []
 
         await graph.add_edge("A", "B", "drives", confidence=0.5)
 
-        params = mock_database.execute.call_args[0][1:]
-        assert params[3] == 0.5
+        params = mock_database.execute.call_args_list[0][0][1:]
+        assert params[5] == 0.5
 
 
 class TestTraversalDepthClamping:
@@ -136,7 +138,8 @@ class TestRemoveEdge:
     @pytest.mark.asyncio
     async def test_delegates_to_repository(self, mock_database: AsyncMock) -> None:
         """remove_edge() delegates to GraphRepository."""
-        mock_database.execute.return_value = "DELETE 1"
+        mock_database.execute.side_effect = ["UPDATE 1", "DELETE 1"]
+        mock_database.fetch.return_value = []
         graph = CausalGraph(mock_database)
 
         result = await graph.remove_edge("A", "B", "drives")
@@ -145,7 +148,8 @@ class TestRemoveEdge:
     @pytest.mark.asyncio
     async def test_returns_false_when_not_found(self, mock_database: AsyncMock) -> None:
         """remove_edge() returns False when edge doesn't exist."""
-        mock_database.execute.return_value = "DELETE 0"
+        mock_database.execute.side_effect = ["UPDATE 0", "DELETE 0"]
+        mock_database.fetch.return_value = []
         graph = CausalGraph(mock_database)
 
         result = await graph.remove_edge("A", "B", "drives")

@@ -256,6 +256,18 @@ def _parse_payload(value: Any) -> dict[str, Any]:
     return dict(value)
 
 
+def _row_value(row: Any, key: str, default: Any = None) -> Any:
+    """Read an optional row field from dict-like or asyncpg rows."""
+    if row is None:
+        return default
+    if isinstance(row, dict):
+        return row.get(key, default)
+    try:
+        return row[key]
+    except (KeyError, IndexError):
+        return default
+
+
 def _row_to_divergence_item(row, payload: dict[str, Any]) -> DivergenceItem:
     """Flatten a published_objects row + parsed payload into a DivergenceItem."""
     return DivergenceItem(
@@ -334,6 +346,17 @@ def _confidence_expr() -> str:
     )
 
 
+_ACTIVE_READ_MODEL_CTE = """
+active_read_model AS (
+    SELECT rm.*
+    FROM intel_pub.read_model rm
+    JOIN intel_pub.manifest_pointers mp
+      ON mp.lane = rm.lane
+     AND mp.manifest_id = rm.manifest_id
+)
+"""
+
+
 def _row_to_assertion_response(row, payload: dict[str, Any]) -> AssertionResponse | None:
     """Map a published assertion object to API response shape."""
     subject = _as_str(payload.get("subject_concept_id"))
@@ -341,6 +364,8 @@ def _row_to_assertion_response(row, payload: dict[str, Any]) -> AssertionRespons
     if not subject or not predicate:
         return None
     assertion_id = _as_str(payload.get("assertion_id")) or _as_str(row["object_id"])
+    row_created_at = _row_value(row, "created_at")
+    row_updated_at = _row_value(row, "updated_at", row_created_at)
 
     return AssertionResponse(
         assertion_id=assertion_id,
@@ -349,20 +374,16 @@ def _row_to_assertion_response(row, payload: dict[str, Any]) -> AssertionRespons
         object_concept_id=payload.get("object_concept_id"),
         confidence=_as_float(payload.get("confidence"), default=0.0),
         status=_as_str(payload.get("status"), default="active"),
-        valid_from=_parse_dt(payload.get("valid_from"), fallback=row.get("valid_from")),
-        valid_to=_parse_dt(payload.get("valid_to"), fallback=row.get("valid_to")),
+        valid_from=_parse_dt(payload.get("valid_from"), fallback=_row_value(row, "valid_from")),
+        valid_to=_parse_dt(payload.get("valid_to"), fallback=_row_value(row, "valid_to")),
         support_count=_as_int(payload.get("support_count"), default=0),
         contradiction_count=_as_int(payload.get("contradiction_count"), default=0),
         first_seen_at=_parse_dt(payload.get("first_seen_at")),
         last_evidence_at=_parse_dt(payload.get("last_evidence_at")),
         source_diversity=_as_int(payload.get("source_diversity"), default=0),
         metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
-        created_at=(
-            _parse_dt(payload.get("created_at"), fallback=row["created_at"]) or row["created_at"]
-        ),
-        updated_at=(
-            _parse_dt(payload.get("updated_at"), fallback=row["updated_at"]) or row["updated_at"]
-        ),
+        created_at=_parse_dt(payload.get("created_at"), fallback=row_created_at) or row_created_at,
+        updated_at=_parse_dt(payload.get("updated_at"), fallback=row_updated_at) or row_updated_at,
     )
 
 
@@ -375,11 +396,13 @@ def _row_to_claim_response(row, payload: dict[str, Any]) -> ClaimResponse | None
         return None
 
     claim_id = _as_str(payload.get("claim_id")) or _as_str(row["object_id"])
+    row_created_at = _row_value(row, "created_at")
+    row_updated_at = _row_value(row, "updated_at", row_created_at)
     return ClaimResponse(
         claim_id=claim_id,
         claim_key=_as_str(payload.get("claim_key"), default=claim_id),
         lane=_as_str(row["lane"]),
-        run_id=row.get("run_id"),
+        run_id=_row_value(row, "run_id"),
         source_id=source_id,
         source_type=_as_str(payload.get("source_type")),
         source_text=payload.get("source_text"),
@@ -390,8 +413,14 @@ def _row_to_claim_response(row, payload: dict[str, Any]) -> ClaimResponse | None
         object_concept_id=payload.get("object_concept_id"),
         confidence=_as_float(payload.get("confidence"), default=0.0),
         extraction_method=_as_str(payload.get("extraction_method")),
-        claim_valid_from=_parse_dt(payload.get("claim_valid_from"), fallback=row.get("valid_from")),
-        claim_valid_to=_parse_dt(payload.get("claim_valid_to"), fallback=row.get("valid_to")),
+        claim_valid_from=_parse_dt(
+            payload.get("claim_valid_from"),
+            fallback=_row_value(row, "valid_from"),
+        ),
+        claim_valid_to=_parse_dt(
+            payload.get("claim_valid_to"),
+            fallback=_row_value(row, "valid_to"),
+        ),
         source_published_at=_parse_dt(payload.get("source_published_at")),
         contract_version=_as_str(
             payload.get("contract_version"),
@@ -399,8 +428,8 @@ def _row_to_claim_response(row, payload: dict[str, Any]) -> ClaimResponse | None
         ),
         status=_as_str(payload.get("status"), default="active"),
         metadata=payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {},
-        created_at=_parse_dt(payload.get("created_at"), fallback=row["created_at"]),
-        updated_at=_parse_dt(payload.get("updated_at"), fallback=row["updated_at"]),
+        created_at=_parse_dt(payload.get("created_at"), fallback=row_created_at),
+        updated_at=_parse_dt(payload.get("updated_at"), fallback=row_updated_at),
     )
 
 
@@ -603,10 +632,11 @@ async def _list_assertions_impl(
     params = [*base_params, *latest_params]
     count_row = await db.fetchrow(
         f"""
-        WITH all_versions AS (
+        WITH {_ACTIVE_READ_MODEL_CTE},
+        all_versions AS (
             SELECT *,
                    COALESCE(NULLIF(payload->>'assertion_id', ''), object_id) AS assertion_dedupe_id
-            FROM intel_pub.published_objects
+            FROM active_read_model
             WHERE {base_where}
         ),
         latest AS (
@@ -626,10 +656,11 @@ async def _list_assertions_impl(
     page_params = [*params, limit, offset]
     rows = await db.fetch(
         f"""
-        WITH all_versions AS (
+        WITH {_ACTIVE_READ_MODEL_CTE},
+        all_versions AS (
             SELECT *,
                    COALESCE(NULLIF(payload->>'assertion_id', ''), object_id) AS assertion_dedupe_id
-            FROM intel_pub.published_objects
+            FROM active_read_model
             WHERE {base_where}
         ),
         latest AS (
@@ -674,8 +705,15 @@ async def get_assertion_detail(
     try:
         row = await db.fetchrow(
             """
+            WITH active_read_model AS (
+                SELECT rm.*
+                FROM intel_pub.read_model rm
+                JOIN intel_pub.manifest_pointers mp
+                  ON mp.lane = rm.lane
+                 AND mp.manifest_id = rm.manifest_id
+            )
             SELECT *
-            FROM intel_pub.published_objects
+            FROM active_read_model
             WHERE object_type = 'assertion'
               AND publish_state = 'published'
               AND (object_id = $1 OR payload->>'assertion_id' = $1)
@@ -708,10 +746,17 @@ async def get_assertion_detail(
 
     claim_rows = await db.fetch(
         """
-        WITH linked AS (
+        WITH active_read_model AS (
+            SELECT rm.*
+            FROM intel_pub.read_model rm
+            JOIN intel_pub.manifest_pointers mp
+              ON mp.lane = rm.lane
+             AND mp.manifest_id = rm.manifest_id
+        ),
+        linked AS (
             SELECT *,
                    COALESCE(NULLIF(payload->>'claim_id', ''), object_id) AS claim_dedupe_id
-            FROM intel_pub.published_objects
+            FROM active_read_model
             WHERE object_type = 'claim'
               AND publish_state = 'published'
               AND (
@@ -837,8 +882,15 @@ async def _list_claims_impl(assertion_id, lane, source_id, claim_status, limit, 
     if assertion_id is not None:
         assertion_row = await db.fetchrow(
             """
+            WITH active_read_model AS (
+                SELECT rm.*
+                FROM intel_pub.read_model rm
+                JOIN intel_pub.manifest_pointers mp
+                  ON mp.lane = rm.lane
+                 AND mp.manifest_id = rm.manifest_id
+            )
             SELECT payload
-            FROM intel_pub.published_objects
+            FROM active_read_model
             WHERE object_type = 'assertion'
               AND publish_state = 'published'
               AND (object_id = $1 OR payload->>'assertion_id' = $1)
@@ -875,10 +927,11 @@ async def _list_claims_impl(assertion_id, lane, source_id, claim_status, limit, 
     params = [*base_params, *latest_params]
     count_row = await db.fetchrow(
         f"""
-        WITH all_versions AS (
+        WITH {_ACTIVE_READ_MODEL_CTE},
+        all_versions AS (
             SELECT *,
                    COALESCE(NULLIF(payload->>'claim_id', ''), object_id) AS claim_dedupe_id
-            FROM intel_pub.published_objects
+            FROM active_read_model
             WHERE {base_where}
         ),
         latest AS (
@@ -898,10 +951,11 @@ async def _list_claims_impl(assertion_id, lane, source_id, claim_status, limit, 
     page_params = [*params, limit, offset]
     rows = await db.fetch(
         f"""
-        WITH all_versions AS (
+        WITH {_ACTIVE_READ_MODEL_CTE},
+        all_versions AS (
             SELECT *,
                    COALESCE(NULLIF(payload->>'claim_id', ''), object_id) AS claim_dedupe_id
-            FROM intel_pub.published_objects
+            FROM active_read_model
             WHERE {base_where}
         ),
         latest AS (
@@ -982,7 +1036,10 @@ async def _list_divergence_impl(severity, reason_code, issuer, theme, limit, off
     where = " AND ".join(conditions)
 
     count_row = await db.fetchrow(
-        f"SELECT count(*) AS cnt FROM intel_pub.published_objects WHERE {where}",
+        f"""
+        WITH {_ACTIVE_READ_MODEL_CTE}
+        SELECT count(*) AS cnt FROM active_read_model WHERE {where}
+        """,
         *params,
     )
     total = count_row["cnt"] if count_row else 0
@@ -990,7 +1047,8 @@ async def _list_divergence_impl(severity, reason_code, issuer, theme, limit, off
     params.extend([limit, offset])
     rows = await db.fetch(
         f"""
-        SELECT * FROM intel_pub.published_objects
+        WITH {_ACTIVE_READ_MODEL_CTE}
+        SELECT * FROM active_read_model
         WHERE {where}
         ORDER BY created_at DESC
         LIMIT ${idx} OFFSET ${idx + 1}
@@ -1003,8 +1061,9 @@ async def _list_divergence_impl(severity, reason_code, issuer, theme, limit, off
     # Severity counts from full filtered set
     sev_rows = await db.fetch(
         f"""
+        WITH {_ACTIVE_READ_MODEL_CTE}
         SELECT payload->>'severity' AS sev, count(*) AS cnt
-        FROM intel_pub.published_objects
+        FROM active_read_model
         WHERE {where}
         GROUP BY payload->>'severity'
         """,
@@ -1039,7 +1098,14 @@ async def get_issuer_divergence(
     try:
         rows = await db.fetch(
             """
-            SELECT * FROM intel_pub.published_objects
+            WITH active_read_model AS (
+                SELECT rm.*
+                FROM intel_pub.read_model rm
+                JOIN intel_pub.manifest_pointers mp
+                  ON mp.lane = rm.lane
+                 AND mp.manifest_id = rm.manifest_id
+            )
+            SELECT * FROM active_read_model
             WHERE object_type IN ('divergence', 'adoption', 'drift')
               AND publish_state = 'published'
               AND payload->>'issuer_concept_id' = $1
@@ -1095,7 +1161,14 @@ async def get_basket_members(
     try:
         rows = await db.fetch(
             """
-            SELECT * FROM intel_pub.published_objects
+            WITH active_read_model AS (
+                SELECT rm.*
+                FROM intel_pub.read_model rm
+                JOIN intel_pub.manifest_pointers mp
+                  ON mp.lane = rm.lane
+                 AND mp.manifest_id = rm.manifest_id
+            )
+            SELECT * FROM active_read_model
             WHERE object_type = 'basket' AND publish_state = 'published'
               AND payload->>'theme_id' = $1
             ORDER BY created_at DESC
@@ -1148,7 +1221,14 @@ async def get_basket_path(
     try:
         rows = await db.fetch(
             """
-            SELECT * FROM intel_pub.published_objects
+            WITH active_read_model AS (
+                SELECT rm.*
+                FROM intel_pub.read_model rm
+                JOIN intel_pub.manifest_pointers mp
+                  ON mp.lane = rm.lane
+                 AND mp.manifest_id = rm.manifest_id
+            )
+            SELECT * FROM active_read_model
             WHERE object_type = 'basket' AND publish_state = 'published'
               AND payload->>'theme_id' = $1
             ORDER BY created_at DESC

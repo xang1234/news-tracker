@@ -70,6 +70,8 @@ class ReadModelRecord:
     lineage: dict[str, Any] = field(default_factory=dict)
     published_at: datetime | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 def make_record_id(manifest_id: str, object_id: str) -> str:
@@ -137,6 +139,8 @@ class ReadModelBuilder:
                 "manifest_checksum": manifest.checksum,
                 "manifest_object_count": manifest.object_count,
             },
+            created_at=obj.created_at,
+            updated_at=obj.updated_at,
         )
 
     def build(

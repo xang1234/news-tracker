@@ -214,11 +214,12 @@ class TestSeedGraphFunction:
             "created_at": None,
             "updated_at": None,
         }
+        mock_database.fetch.return_value = []
 
         await seed_graph(mock_database)
 
-        # Each edge triggers an execute (add_edge)
-        assert mock_database.execute.call_count == len(ALL_EDGES)
+        # Each edge upserts one support row and one aggregate projection.
+        assert mock_database.execute.call_count == len(ALL_EDGES) * 2
 
     @pytest.mark.asyncio
     async def test_idempotent_uses_upsert(self, mock_database: AsyncMock) -> None:
@@ -231,6 +232,7 @@ class TestSeedGraphFunction:
             "created_at": None,
             "updated_at": None,
         }
+        mock_database.fetch.return_value = []
 
         await seed_graph(mock_database)
 
@@ -238,6 +240,6 @@ class TestSeedGraphFunction:
         node_sql = mock_database.fetchrow.call_args_list[0][0][0]
         assert "ON CONFLICT" in node_sql
 
-        # Edge upsert uses ON CONFLICT
+        # Edge support upsert uses ON CONFLICT
         edge_sql = mock_database.execute.call_args_list[0][0][0]
         assert "ON CONFLICT" in edge_sql

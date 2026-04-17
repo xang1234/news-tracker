@@ -30,6 +30,9 @@ from src.contracts.intelligence.db_schemas import (
 from src.contracts.intelligence.lanes import validate_lane
 from src.contracts.intelligence.ownership import OwnershipPolicy
 from src.contracts.intelligence.version import ContractRegistry
+from src.publish._read_model_fallback import InMemoryReadModelRepository
+from src.publish.read_model import ReadModelBuilder
+from src.publish.read_model_repository import ReadModelRepository
 from src.publish.repository import PublishRepository
 
 logger = logging.getLogger(__name__)
@@ -95,8 +98,53 @@ class PublishService:
     the publish tables directly.
     """
 
-    def __init__(self, repository: PublishRepository) -> None:
+    def __init__(
+        self,
+        repository: PublishRepository,
+        *,
+        read_model_repository: ReadModelRepository | Any | None = None,
+        read_model_builder: ReadModelBuilder | None = None,
+    ) -> None:
         self._repo = repository
+        self._read_model_repo = self._resolve_read_model_repository(
+            repository,
+            read_model_repository=read_model_repository,
+        )
+        self._read_model_builder = read_model_builder or ReadModelBuilder()
+
+    @staticmethod
+    def _resolve_read_model_repository(
+        repository: PublishRepository,
+        *,
+        read_model_repository: ReadModelRepository | Any | None,
+    ) -> ReadModelRepository | Any:
+        """Resolve the read-model repository without breaking older callers."""
+        if read_model_repository is not None:
+            return read_model_repository
+        if hasattr(repository, "upsert_records") and hasattr(
+            repository, "count_records_for_manifest"
+        ):
+            return repository
+        if isinstance(repository, PublishRepository):
+            return ReadModelRepository(repository._db)
+        logger.warning(
+            "publish_service_using_ephemeral_read_model: repository_type=%s",
+            type(repository).__name__,
+        )
+        return InMemoryReadModelRepository()
+
+    async def _materialize_read_model(
+        self,
+        manifest: Manifest,
+        objects: list[PublishedObject],
+    ) -> int:
+        """Persist read-model rows for a sealed manifest."""
+        records = self._read_model_builder.build(manifest, objects, published_only=True)
+        return await self._read_model_repo.upsert_records(records)
+
+    async def _count_materialized_read_model_records(self, manifest_id: str) -> int:
+        """Count read-model rows materialized for a manifest."""
+        return await self._read_model_repo.count_records_for_manifest(manifest_id)
 
     # -- Lane run lifecycle ------------------------------------------------
 
@@ -299,6 +347,7 @@ class PublishService:
         )
         if result is None:
             raise ValueError(f"Failed to seal manifest: {manifest_id}")
+        await self._materialize_read_model(result, all_objects)
         logger.info(
             "Manifest sealed: %s (objects=%d, checksum=%s)",
             manifest_id,
@@ -355,6 +404,13 @@ class PublishService:
             raise ValueError(
                 f"Cannot advance pointer: lane run {manifest.run_id} "
                 f"is {run_status!r}, not 'completed'"
+            )
+        materialized_count = await self._count_materialized_read_model_records(manifest.manifest_id)
+        if materialized_count != manifest.object_count:
+            raise ValueError(
+                f"Cannot advance pointer: manifest {manifest_id} has "
+                f"{materialized_count} materialized read-model record(s), expected "
+                f"{manifest.object_count}"
             )
         pointer = await self._repo.advance_pointer(lane, manifest_id, metadata=metadata)
         logger.info(
