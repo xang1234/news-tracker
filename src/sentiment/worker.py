@@ -224,6 +224,9 @@ class SentimentWorker:
         # Map documents by ID for easy lookup
         doc_map = {doc.id: doc for doc in documents}
 
+        plain_jobs: list[tuple[SentimentJob, Any, str]] = []
+        entity_jobs: list[tuple[SentimentJob, Any, str]] = []
+
         for job in batch:
             try:
                 doc = doc_map.get(job.document_id)
@@ -261,14 +264,79 @@ class SentimentWorker:
                 if doc.title:
                     text = f"{doc.title}. {text}"
 
-                # Check if document has entities for entity-level sentiment
                 if doc.entities_mentioned and self._config.enable_entity_sentiment:
-                    result = await self._sentiment_service.analyze_with_entities(
-                        text, doc.entities_mentioned
-                    )
+                    entity_jobs.append((job, doc, text))
                 else:
-                    # Document-level only
-                    result = await self._sentiment_service.analyze(text)
+                    plain_jobs.append((job, doc, text))
+
+            except Exception as e:
+                logger.error(
+                    "Error processing sentiment job",
+                    document_id=job.document_id,
+                    error=str(e),
+                )
+                errors += 1
+                metrics.record_sentiment_error(type(e).__name__)
+                await self._queue.nack(job.message_id, str(e))
+
+        if plain_jobs:
+            try:
+                texts = [text for _, _, text in plain_jobs]
+                results = await self._sentiment_service.analyze_batch(texts)
+
+                for (job, doc, _), result in zip(plain_jobs, results, strict=True):
+                    try:
+                        success = await self._repository.update_sentiment(job.document_id, result)
+
+                        if success:
+                            processed += 1
+                            metrics.record_sentiment_analyzed(
+                                platform=doc.platform,
+                                label=result["label"],
+                                confidence=result["confidence"],
+                            )
+                            logger.debug(
+                                "Sentiment updated",
+                                document_id=job.document_id,
+                                label=result["label"],
+                                confidence=result["confidence"],
+                            )
+                        else:
+                            logger.error(
+                                "Failed to update sentiment",
+                                document_id=job.document_id,
+                            )
+                            errors += 1
+                            metrics.record_sentiment_error("db_update_failed")
+
+                        await self._queue.ack(job.message_id)
+
+                    except Exception as e:
+                        logger.error(
+                            "Error processing sentiment job",
+                            document_id=job.document_id,
+                            error=str(e),
+                        )
+                        errors += 1
+                        metrics.record_sentiment_error(type(e).__name__)
+                        await self._queue.nack(job.message_id, str(e))
+
+            except Exception as e:
+                for job, _, _ in plain_jobs:
+                    logger.error(
+                        "Error processing sentiment job",
+                        document_id=job.document_id,
+                        error=str(e),
+                    )
+                    errors += 1
+                    metrics.record_sentiment_error(type(e).__name__)
+                    await self._queue.nack(job.message_id, str(e))
+
+        for job, doc, text in entity_jobs:
+            try:
+                result = await self._sentiment_service.analyze_with_entities(
+                    text, doc.entities_mentioned
+                )
 
                 # Update document with sentiment
                 success = await self._repository.update_sentiment(job.document_id, result)
@@ -331,13 +399,7 @@ class SentimentWorker:
         """Fetch documents from database by IDs."""
         if not self._repository:
             return []
-
-        documents = []
-        for doc_id in doc_ids:
-            doc = await self._repository.get_by_id(doc_id)
-            if doc:
-                documents.append(doc)
-        return documents
+        return await self._repository.get_by_ids(doc_ids)
 
     async def run_once(
         self,
