@@ -53,10 +53,11 @@ def mock_repository(sample_documents):
     # Map documents by ID
     doc_map = {doc.id: doc for doc in sample_documents}
 
-    async def get_by_id(doc_id):
-        return doc_map.get(doc_id)
+    async def get_by_ids(doc_ids):
+        return [doc_map[doc_id] for doc_id in doc_ids if doc_id in doc_map]
 
-    repo.get_by_id = AsyncMock(side_effect=get_by_id)
+    repo.get_by_ids = AsyncMock(side_effect=get_by_ids)
+    repo.get_by_id = AsyncMock()
     repo.update_embedding = AsyncMock(return_value=True)
     return repo
 
@@ -118,6 +119,26 @@ class TestEmbeddingWorkerProcessing:
     """Tests for embedding job processing."""
 
     @pytest.mark.asyncio
+    async def test_fetch_documents_uses_bulk_repository_call(
+        self,
+        mock_database,
+        sample_documents,
+    ):
+        """Should fetch documents with a single bulk repository call."""
+        worker = EmbeddingWorker(database=mock_database)
+
+        mock_repo = AsyncMock(spec=DocumentRepository)
+        mock_repo.get_by_ids = AsyncMock(return_value=sample_documents[:2])
+        mock_repo.get_by_id = AsyncMock()
+        worker._repository = mock_repo
+
+        documents = await worker._fetch_documents(["doc_0", "doc_1"])
+
+        assert documents == sample_documents[:2]
+        mock_repo.get_by_ids.assert_awaited_once_with(["doc_0", "doc_1"])
+        mock_repo.get_by_id.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_process_batch_success(
         self,
         mock_queue,
@@ -168,7 +189,7 @@ class TestEmbeddingWorkerProcessing:
 
         # Mock repository that returns None
         mock_repo = AsyncMock()
-        mock_repo.get_by_id = AsyncMock(return_value=None)
+        mock_repo.get_by_ids = AsyncMock(return_value=[])
         mock_repo.update_embedding = AsyncMock()
         worker._repository = mock_repo
 
@@ -204,7 +225,7 @@ class TestEmbeddingWorkerProcessing:
         )
 
         mock_repo = AsyncMock()
-        mock_repo.get_by_id = AsyncMock(return_value=doc)
+        mock_repo.get_by_ids = AsyncMock(return_value=[doc])
         mock_repo.update_embedding = AsyncMock()
         worker._repository = mock_repo
 
@@ -240,7 +261,7 @@ class TestEmbeddingWorkerProcessing:
         )
 
         mock_repo = AsyncMock()
-        mock_repo.get_by_id = AsyncMock(side_effect=lambda id: sample_documents[0])
+        mock_repo.get_by_ids = AsyncMock(return_value=[sample_documents[0]])
         worker._repository = mock_repo
 
         jobs = [EmbeddingJob(message_id="msg_1", document_id="doc_0")]
@@ -304,7 +325,6 @@ class TestEmbeddingWorkerRunOnce:
 
             mock_repo = AsyncMock()
             doc_map = {doc.id: doc for doc in sample_documents[:3]}
-            mock_repo.get_by_id = AsyncMock(side_effect=lambda id: doc_map.get(id))
             mock_repo.update_embedding = AsyncMock(return_value=True)
 
             # Patch repository creation
@@ -484,7 +504,9 @@ class TestEmbeddingWorkerClusteringIntegration:
         # Repository that returns False (update failed)
         mock_repo = AsyncMock()
         doc_map = {doc.id: doc for doc in sample_documents}
-        mock_repo.get_by_id = AsyncMock(side_effect=lambda id: doc_map.get(id))
+        mock_repo.get_by_ids = AsyncMock(
+            side_effect=lambda ids: [doc_map[id] for id in ids if id in doc_map]
+        )
         mock_repo.update_embedding = AsyncMock(return_value=False)
 
         with patch("src.embedding.worker.get_settings") as mock_settings:

@@ -406,12 +406,9 @@ class EmbeddingWorker:
 
     async def _fetch_documents(self, doc_ids: list[str]) -> list[Any]:
         """Fetch documents from database by IDs."""
-        documents = []
-        for doc_id in doc_ids:
-            doc = await self._repository.get_by_id(doc_id)
-            if doc:
-                documents.append(doc)
-        return documents
+        if self._repository is None:
+            return []
+        return await self._repository.get_by_ids(doc_ids)
 
     async def run_once(
         self,
