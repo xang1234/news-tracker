@@ -19,7 +19,7 @@ import structlog
 
 from src.config.settings import get_settings
 from src.embedding.queue import EmbeddingQueue
-from src.ingestion.deduplication import Deduplicator
+from src.ingestion.deduplication import SharedDeduplicator
 from src.ingestion.preprocessor import Preprocessor
 from src.ingestion.queue import DocumentQueue
 from src.ingestion.schemas import NormalizedDocument
@@ -53,7 +53,7 @@ class ProcessingService:
         queue: DocumentQueue | None = None,
         database: Database | None = None,
         preprocessor: Preprocessor | None = None,
-        deduplicator: Deduplicator | None = None,
+        deduplicator: SharedDeduplicator | None = None,
         embedding_queue: EmbeddingQueue | None = None,
         sentiment_queue: SentimentQueue | None = None,
         batch_size: int = 32,
@@ -77,7 +77,7 @@ class ProcessingService:
         self._queue = queue or DocumentQueue()
         self._database = database or Database()
         self._preprocessor = preprocessor or self._create_default_preprocessor()
-        self._deduplicator = deduplicator or Deduplicator()
+        self._deduplicator = deduplicator or SharedDeduplicator(self._database)
         self._embedding_queue = embedding_queue
         self._sentiment_queue = sentiment_queue
         self._enable_embedding_queue = enable_embedding_queue
@@ -181,6 +181,7 @@ class ProcessingService:
 
         # Create repository
         self._repository = DocumentRepository(self._database)
+        await self._deduplicator.connect()
 
         # Create claim repository if extraction is enabled
         if self._claim_extraction_enabled:
@@ -209,6 +210,7 @@ class ProcessingService:
         """Clean up resources."""
         await self._queue.close()
         await self._database.close()
+        await self._deduplicator.close()
         if self._embedding_queue:
             await self._embedding_queue.close()
         if self._sentiment_queue:
@@ -293,10 +295,13 @@ class ProcessingService:
                     await self._queue.ack(msg_id)
                     continue
 
-                # Stage 2: Deduplication
+                # Stage 2/3: Shared deduplication + transactional storage
                 try:
                     stage_start = time.monotonic()
-                    is_dup = not self._deduplicator.process(doc)
+                    dedup_result = await self._deduplicator.store_if_unique(
+                        doc,
+                        repository=self._repository,
+                    )
                     self._metrics.record_stage_latency(
                         "deduplication",
                         time.monotonic() - stage_start,
@@ -304,7 +309,7 @@ class ProcessingService:
                 except Exception as e:
                     errors += 1
                     logger.error(
-                        "Error in deduplication",
+                        "Error in deduplication/storage",
                         doc_id=doc.id,
                         error=str(e),
                     )
@@ -316,35 +321,12 @@ class ProcessingService:
                     await self._queue.nack(msg_id, str(e))
                     continue
 
-                if is_dup:
+                if dedup_result.is_duplicate:
                     duplicates += 1
                     self._metrics.duplicates_detected.labels(
                         platform=doc.platform,
                     ).inc()
                     await self._queue.ack(msg_id)
-                    continue
-
-                # Stage 3: Storage
-                try:
-                    stage_start = time.monotonic()
-                    await self._repository.insert(doc)
-                    self._metrics.record_stage_latency(
-                        "storage",
-                        time.monotonic() - stage_start,
-                    )
-                except Exception as e:
-                    errors += 1
-                    logger.error(
-                        "Error in storage",
-                        doc_id=doc.id,
-                        error=str(e),
-                    )
-                    self._metrics.record_error(
-                        "storage",
-                        type(e).__name__,
-                        is_adapter=False,
-                    )
-                    await self._queue.nack(msg_id, str(e))
                     continue
 
                 # Stage 4: Queue for embedding generation
@@ -455,6 +437,7 @@ class ProcessingService:
         """
         await self._database.connect()
         self._repository = DocumentRepository(self._database)
+        await self._deduplicator.connect()
 
         stats = {
             "total": len(docs),
@@ -481,11 +464,13 @@ class ProcessingService:
                         stats["filtered"] += 1
                         continue
 
-                    if not self._deduplicator.process(doc):
+                    dedup_result = await self._deduplicator.store_if_unique(
+                        doc,
+                        repository=self._repository,
+                    )
+                    if dedup_result.is_duplicate:
                         stats["duplicates"] += 1
                         continue
-
-                    await self._repository.insert(doc)
                     stats["processed"] += 1
                     stored_doc_ids.append(doc.id)
 
@@ -517,6 +502,7 @@ class ProcessingService:
                     logger.error("Error in run_once", error=str(e))
 
         finally:
+            await self._deduplicator.close()
             await self._database.close()
 
         if return_doc_ids:

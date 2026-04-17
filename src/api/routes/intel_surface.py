@@ -334,6 +334,17 @@ def _confidence_expr() -> str:
     )
 
 
+_ACTIVE_READ_MODEL_CTE = """
+active_read_model AS (
+    SELECT rm.*
+    FROM intel_pub.read_model rm
+    JOIN intel_pub.manifest_pointers mp
+      ON mp.lane = rm.lane
+     AND mp.manifest_id = rm.manifest_id
+)
+"""
+
+
 def _row_to_assertion_response(row, payload: dict[str, Any]) -> AssertionResponse | None:
     """Map a published assertion object to API response shape."""
     subject = _as_str(payload.get("subject_concept_id"))
@@ -603,10 +614,11 @@ async def _list_assertions_impl(
     params = [*base_params, *latest_params]
     count_row = await db.fetchrow(
         f"""
-        WITH all_versions AS (
+        WITH {_ACTIVE_READ_MODEL_CTE},
+        all_versions AS (
             SELECT *,
                    COALESCE(NULLIF(payload->>'assertion_id', ''), object_id) AS assertion_dedupe_id
-            FROM intel_pub.published_objects
+            FROM active_read_model
             WHERE {base_where}
         ),
         latest AS (
@@ -626,10 +638,11 @@ async def _list_assertions_impl(
     page_params = [*params, limit, offset]
     rows = await db.fetch(
         f"""
-        WITH all_versions AS (
+        WITH {_ACTIVE_READ_MODEL_CTE},
+        all_versions AS (
             SELECT *,
                    COALESCE(NULLIF(payload->>'assertion_id', ''), object_id) AS assertion_dedupe_id
-            FROM intel_pub.published_objects
+            FROM active_read_model
             WHERE {base_where}
         ),
         latest AS (
@@ -674,8 +687,15 @@ async def get_assertion_detail(
     try:
         row = await db.fetchrow(
             """
+            WITH active_read_model AS (
+                SELECT rm.*
+                FROM intel_pub.read_model rm
+                JOIN intel_pub.manifest_pointers mp
+                  ON mp.lane = rm.lane
+                 AND mp.manifest_id = rm.manifest_id
+            )
             SELECT *
-            FROM intel_pub.published_objects
+            FROM active_read_model
             WHERE object_type = 'assertion'
               AND publish_state = 'published'
               AND (object_id = $1 OR payload->>'assertion_id' = $1)
@@ -708,10 +728,17 @@ async def get_assertion_detail(
 
     claim_rows = await db.fetch(
         """
-        WITH linked AS (
+        WITH active_read_model AS (
+            SELECT rm.*
+            FROM intel_pub.read_model rm
+            JOIN intel_pub.manifest_pointers mp
+              ON mp.lane = rm.lane
+             AND mp.manifest_id = rm.manifest_id
+        ),
+        linked AS (
             SELECT *,
                    COALESCE(NULLIF(payload->>'claim_id', ''), object_id) AS claim_dedupe_id
-            FROM intel_pub.published_objects
+            FROM active_read_model
             WHERE object_type = 'claim'
               AND publish_state = 'published'
               AND (
@@ -837,8 +864,15 @@ async def _list_claims_impl(assertion_id, lane, source_id, claim_status, limit, 
     if assertion_id is not None:
         assertion_row = await db.fetchrow(
             """
+            WITH active_read_model AS (
+                SELECT rm.*
+                FROM intel_pub.read_model rm
+                JOIN intel_pub.manifest_pointers mp
+                  ON mp.lane = rm.lane
+                 AND mp.manifest_id = rm.manifest_id
+            )
             SELECT payload
-            FROM intel_pub.published_objects
+            FROM active_read_model
             WHERE object_type = 'assertion'
               AND publish_state = 'published'
               AND (object_id = $1 OR payload->>'assertion_id' = $1)
@@ -875,10 +909,11 @@ async def _list_claims_impl(assertion_id, lane, source_id, claim_status, limit, 
     params = [*base_params, *latest_params]
     count_row = await db.fetchrow(
         f"""
-        WITH all_versions AS (
+        WITH {_ACTIVE_READ_MODEL_CTE},
+        all_versions AS (
             SELECT *,
                    COALESCE(NULLIF(payload->>'claim_id', ''), object_id) AS claim_dedupe_id
-            FROM intel_pub.published_objects
+            FROM active_read_model
             WHERE {base_where}
         ),
         latest AS (
@@ -898,10 +933,11 @@ async def _list_claims_impl(assertion_id, lane, source_id, claim_status, limit, 
     page_params = [*params, limit, offset]
     rows = await db.fetch(
         f"""
-        WITH all_versions AS (
+        WITH {_ACTIVE_READ_MODEL_CTE},
+        all_versions AS (
             SELECT *,
                    COALESCE(NULLIF(payload->>'claim_id', ''), object_id) AS claim_dedupe_id
-            FROM intel_pub.published_objects
+            FROM active_read_model
             WHERE {base_where}
         ),
         latest AS (
@@ -982,7 +1018,10 @@ async def _list_divergence_impl(severity, reason_code, issuer, theme, limit, off
     where = " AND ".join(conditions)
 
     count_row = await db.fetchrow(
-        f"SELECT count(*) AS cnt FROM intel_pub.published_objects WHERE {where}",
+        f"""
+        WITH {_ACTIVE_READ_MODEL_CTE}
+        SELECT count(*) AS cnt FROM active_read_model WHERE {where}
+        """,
         *params,
     )
     total = count_row["cnt"] if count_row else 0
@@ -990,7 +1029,8 @@ async def _list_divergence_impl(severity, reason_code, issuer, theme, limit, off
     params.extend([limit, offset])
     rows = await db.fetch(
         f"""
-        SELECT * FROM intel_pub.published_objects
+        WITH {_ACTIVE_READ_MODEL_CTE}
+        SELECT * FROM active_read_model
         WHERE {where}
         ORDER BY created_at DESC
         LIMIT ${idx} OFFSET ${idx + 1}
@@ -1003,8 +1043,9 @@ async def _list_divergence_impl(severity, reason_code, issuer, theme, limit, off
     # Severity counts from full filtered set
     sev_rows = await db.fetch(
         f"""
+        WITH {_ACTIVE_READ_MODEL_CTE}
         SELECT payload->>'severity' AS sev, count(*) AS cnt
-        FROM intel_pub.published_objects
+        FROM active_read_model
         WHERE {where}
         GROUP BY payload->>'severity'
         """,
@@ -1039,7 +1080,14 @@ async def get_issuer_divergence(
     try:
         rows = await db.fetch(
             """
-            SELECT * FROM intel_pub.published_objects
+            WITH active_read_model AS (
+                SELECT rm.*
+                FROM intel_pub.read_model rm
+                JOIN intel_pub.manifest_pointers mp
+                  ON mp.lane = rm.lane
+                 AND mp.manifest_id = rm.manifest_id
+            )
+            SELECT * FROM active_read_model
             WHERE object_type IN ('divergence', 'adoption', 'drift')
               AND publish_state = 'published'
               AND payload->>'issuer_concept_id' = $1
@@ -1095,7 +1143,14 @@ async def get_basket_members(
     try:
         rows = await db.fetch(
             """
-            SELECT * FROM intel_pub.published_objects
+            WITH active_read_model AS (
+                SELECT rm.*
+                FROM intel_pub.read_model rm
+                JOIN intel_pub.manifest_pointers mp
+                  ON mp.lane = rm.lane
+                 AND mp.manifest_id = rm.manifest_id
+            )
+            SELECT * FROM active_read_model
             WHERE object_type = 'basket' AND publish_state = 'published'
               AND payload->>'theme_id' = $1
             ORDER BY created_at DESC
@@ -1148,7 +1203,14 @@ async def get_basket_path(
     try:
         rows = await db.fetch(
             """
-            SELECT * FROM intel_pub.published_objects
+            WITH active_read_model AS (
+                SELECT rm.*
+                FROM intel_pub.read_model rm
+                JOIN intel_pub.manifest_pointers mp
+                  ON mp.lane = rm.lane
+                 AND mp.manifest_id = rm.manifest_id
+            )
+            SELECT * FROM active_read_model
             WHERE object_type = 'basket' AND publish_state = 'published'
               AND payload->>'theme_id' = $1
             ORDER BY created_at DESC

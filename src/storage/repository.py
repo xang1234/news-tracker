@@ -54,7 +54,12 @@ class DocumentRepository:
         await apply_migrations(self._db)
         logger.info("Database schema verified via migrations")
 
-    async def insert(self, doc: NormalizedDocument) -> bool:
+    async def insert(
+        self,
+        doc: NormalizedDocument,
+        *,
+        conn: asyncpg.Connection | None = None,
+    ) -> bool:
         """
         Insert a document into the database.
 
@@ -96,7 +101,8 @@ class DocumentRepository:
         RETURNING (xmax = 0) AS inserted
         """
 
-        result = await self._db.fetchval(
+        executor = conn or self._db
+        result = await executor.fetchval(
             sql,
             doc.id,
             doc.platform.value if isinstance(doc.platform, Platform) else doc.platform,
@@ -126,6 +132,84 @@ class DocumentRepository:
         )
 
         return bool(result)
+
+    async def get_dedup_signature_by_exact_fingerprint(
+        self,
+        exact_fingerprint: str,
+        *,
+        conn: asyncpg.Connection | None = None,
+    ) -> dict[str, Any] | None:
+        """Get a persisted dedupe signature by exact fingerprint."""
+        query = """
+        SELECT document_id, canonical_document_id, exact_fingerprint, minhash_signature
+        FROM document_dedup_signatures
+        WHERE exact_fingerprint = $1
+        """
+        executor = conn or self._db
+        row = await executor.fetchrow(query, exact_fingerprint)
+        return dict(row) if row is not None else None
+
+    async def fetch_dedup_signatures(
+        self,
+        document_ids: list[str],
+        *,
+        conn: asyncpg.Connection | None = None,
+    ) -> list[dict[str, Any]]:
+        """Fetch dedupe signatures for a set of canonical document IDs."""
+        if not document_ids:
+            return []
+        query = """
+        SELECT document_id, canonical_document_id, exact_fingerprint, minhash_signature
+        FROM document_dedup_signatures
+        WHERE document_id = ANY($1::text[])
+        """
+        executor = conn or self._db
+        rows = await executor.fetch(query, document_ids)
+        return [dict(row) for row in rows]
+
+    async def list_dedup_signatures(
+        self,
+        *,
+        conn: asyncpg.Connection | None = None,
+    ) -> list[dict[str, Any]]:
+        """List all persisted dedupe signatures."""
+        query = """
+        SELECT document_id, canonical_document_id, exact_fingerprint, minhash_signature
+        FROM document_dedup_signatures
+        ORDER BY created_at ASC
+        """
+        executor = conn or self._db
+        rows = await executor.fetch(query)
+        return [dict(row) for row in rows]
+
+    async def upsert_dedup_signature(
+        self,
+        *,
+        document_id: str,
+        canonical_document_id: str,
+        exact_fingerprint: str,
+        minhash_signature: list[str],
+        conn: asyncpg.Connection | None = None,
+    ) -> None:
+        """Persist or refresh the canonical dedupe signature for a stored document."""
+        query = """
+        INSERT INTO document_dedup_signatures (
+            document_id, canonical_document_id, exact_fingerprint, minhash_signature
+        ) VALUES ($1, $2, $3, $4)
+        ON CONFLICT (document_id) DO UPDATE
+        SET canonical_document_id = EXCLUDED.canonical_document_id,
+            exact_fingerprint = EXCLUDED.exact_fingerprint,
+            minhash_signature = EXCLUDED.minhash_signature,
+            updated_at = NOW()
+        """
+        executor = conn or self._db
+        await executor.execute(
+            query,
+            document_id,
+            canonical_document_id,
+            exact_fingerprint,
+            json.dumps(minhash_signature),
+        )
 
     async def insert_batch(
         self,

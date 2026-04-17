@@ -11,21 +11,28 @@ from typing import Any
 
 from src.storage.database import Database
 
-from .schemas import CausalEdge, CausalNode
+from .schemas import CausalEdge, CausalEdgeSupport, CausalNode
 
 logger = logging.getLogger(__name__)
 
 
+def _parse_json(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, str):
+        return json.loads(value)
+    if isinstance(value, dict):
+        return value
+    return dict(value)
+
+
 def _row_to_node(row: Any) -> CausalNode:
     """Convert an asyncpg Record to a CausalNode."""
-    metadata = row["metadata"]
-    if isinstance(metadata, str):
-        metadata = json.loads(metadata)
     return CausalNode(
         node_id=row["node_id"],
         node_type=row["node_type"],
         name=row["name"],
-        metadata=metadata,
+        metadata=_parse_json(row["metadata"]),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -33,9 +40,6 @@ def _row_to_node(row: Any) -> CausalNode:
 
 def _row_to_edge(row: Any) -> CausalEdge:
     """Convert an asyncpg Record to a CausalEdge."""
-    metadata = row["metadata"]
-    if isinstance(metadata, str):
-        metadata = json.loads(metadata)
     return CausalEdge(
         source=row["source"],
         target=row["target"],
@@ -43,7 +47,24 @@ def _row_to_edge(row: Any) -> CausalEdge:
         confidence=row["confidence"],
         source_doc_ids=list(row["source_doc_ids"]),
         created_at=row["created_at"],
-        metadata=metadata,
+        metadata=_parse_json(row["metadata"]),
+    )
+
+
+def _row_to_edge_support(row: Any) -> CausalEdgeSupport:
+    """Convert an asyncpg Record to a CausalEdgeSupport."""
+    return CausalEdgeSupport(
+        source=row["source"],
+        target=row["target"],
+        relation=row["relation"],
+        support_key=row["support_key"],
+        origin_kind=row["origin_kind"],
+        confidence=row["confidence"],
+        source_doc_ids=list(row["source_doc_ids"] or []),
+        active=bool(row["active"]),
+        metadata=_parse_json(row["metadata"]),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
     )
 
 
@@ -52,6 +73,10 @@ class GraphRepository:
 
     def __init__(self, database: Database) -> None:
         self._db = database
+
+    @staticmethod
+    def _legacy_support_key(source: str, target: str, relation: str) -> str:
+        return f"legacy::{source}::{target}::{relation}"
 
     # ------------------------------------------------------------------
     # Node operations
@@ -105,45 +130,176 @@ class GraphRepository:
         source_doc_ids: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        """Add or update an edge between two nodes.
+        """Add or update a legacy/manual edge support and refresh the projection."""
+        support_key = self._legacy_support_key(source, target, relation)
+        await self.upsert_edge_support(
+            source,
+            target,
+            relation,
+            support_key=support_key,
+            origin_kind="legacy",
+            confidence=confidence,
+            source_doc_ids=source_doc_ids,
+            metadata=metadata,
+        )
+        await self.refresh_edge(source, target, relation)
 
-        Uses ON CONFLICT to merge source_doc_ids and update confidence
-        on re-insertion of the same (source, target, relation) triple.
-        """
+    async def remove_edge(self, source: str, target: str, relation: str) -> bool:
+        """Remove the legacy/manual support for an edge and refresh the projection."""
+        support_key = self._legacy_support_key(source, target, relation)
+        removed = await self.deactivate_edge_support(
+            source,
+            target,
+            relation,
+            support_key=support_key,
+        )
+        await self.refresh_edge(source, target, relation)
+        return removed
+
+    async def upsert_edge_support(
+        self,
+        source: str,
+        target: str,
+        relation: str,
+        *,
+        support_key: str,
+        origin_kind: str,
+        confidence: float = 1.0,
+        source_doc_ids: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        active: bool = True,
+    ) -> None:
+        """Upsert one support row contributing to an aggregated edge."""
         await self._db.execute(
             """
-            INSERT INTO causal_edges
-                (source, target, relation, confidence, source_doc_ids, metadata)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO causal_edge_supports (
+                source, target, relation, support_key, origin_kind,
+                confidence, source_doc_ids, active, metadata
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (source, target, relation, support_key) DO UPDATE
+                SET origin_kind = EXCLUDED.origin_kind,
+                    confidence = EXCLUDED.confidence,
+                    source_doc_ids = EXCLUDED.source_doc_ids,
+                    active = EXCLUDED.active,
+                    metadata = EXCLUDED.metadata,
+                    updated_at = NOW()
+            """,
+            source,
+            target,
+            relation,
+            support_key,
+            origin_kind,
+            confidence,
+            source_doc_ids or [],
+            active,
+            json.dumps(metadata or {}),
+        )
+
+    async def deactivate_edge_support(
+        self,
+        source: str,
+        target: str,
+        relation: str,
+        *,
+        support_key: str,
+    ) -> bool:
+        """Deactivate one support row and return whether it existed."""
+        result = await self._db.execute(
+            """
+            UPDATE causal_edge_supports
+            SET active = FALSE,
+                updated_at = NOW()
+            WHERE source = $1
+              AND target = $2
+              AND relation = $3
+              AND support_key = $4
+              AND active = TRUE
+            """,
+            source,
+            target,
+            relation,
+            support_key,
+        )
+        return result == "UPDATE 1"
+
+    async def list_edge_supports(
+        self,
+        source: str,
+        target: str,
+        relation: str,
+        *,
+        active_only: bool = False,
+    ) -> list[CausalEdgeSupport]:
+        """List support rows for an edge triple."""
+        query = """
+        SELECT *
+        FROM causal_edge_supports
+        WHERE source = $1 AND target = $2 AND relation = $3
+        """
+        if active_only:
+            query += " AND active = TRUE"
+        query += " ORDER BY support_key"
+        rows = await self._db.fetch(query, source, target, relation)
+        return [_row_to_edge_support(row) for row in rows]
+
+    async def refresh_edge(self, source: str, target: str, relation: str) -> bool:
+        """Recompute the aggregated edge from active supports."""
+        supports = await self.list_edge_supports(source, target, relation, active_only=True)
+        if not supports:
+            result = await self._db.execute(
+                """
+                DELETE FROM causal_edges
+                WHERE source = $1 AND target = $2 AND relation = $3
+                """,
+                source,
+                target,
+                relation,
+            )
+            return result == "DELETE 1"
+
+        aggregated_source_ids = sorted(
+            {
+                source_doc_id
+                for support in supports
+                for source_doc_id in support.source_doc_ids
+                if source_doc_id
+            }
+        )
+        metadata = {
+            "support_count": len(supports),
+            "support_keys": [support.support_key for support in supports],
+            "origin_kinds": sorted({support.origin_kind for support in supports}),
+            "supports": [
+                {
+                    "support_key": support.support_key,
+                    "origin_kind": support.origin_kind,
+                    "active": support.active,
+                    "confidence": support.confidence,
+                    "source_doc_ids": support.source_doc_ids,
+                    "metadata": support.metadata,
+                }
+                for support in supports
+            ],
+        }
+
+        await self._db.execute(
+            """
+            INSERT INTO causal_edges (
+                source, target, relation, confidence, source_doc_ids, metadata
+            ) VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (source, target, relation) DO UPDATE
                 SET confidence = EXCLUDED.confidence,
-                    source_doc_ids = ARRAY(
-                        SELECT DISTINCT unnest(
-                            causal_edges.source_doc_ids || EXCLUDED.source_doc_ids
-                        )
-                    ),
+                    source_doc_ids = EXCLUDED.source_doc_ids,
                     metadata = EXCLUDED.metadata
             """,
             source,
             target,
             relation,
-            confidence,
-            source_doc_ids or [],
-            json.dumps(metadata or {}),
+            max(support.confidence for support in supports),
+            aggregated_source_ids,
+            json.dumps(metadata),
         )
-
-    async def remove_edge(self, source: str, target: str, relation: str) -> bool:
-        """Remove an edge. Returns True if an edge was actually deleted."""
-        result = await self._db.execute(
-            """
-            DELETE FROM causal_edges
-            WHERE source = $1 AND target = $2 AND relation = $3
-            """,
-            source,
-            target,
-            relation,
-        )
-        return result == "DELETE 1"
+        return True
 
     async def get_edge(self, source: str, target: str, relation: str) -> CausalEdge | None:
         """Get a specific edge, or None if not found."""

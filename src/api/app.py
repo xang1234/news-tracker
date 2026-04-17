@@ -147,10 +147,9 @@ Requires `X-API-KEY` header for all requests except `/health`.
     )
 
     # Add CORS middleware (origins from CORS_ORIGINS env var, comma-separated)
-    cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=cors_origins,
+        allow_origins=settings.cors_origin_list,
         allow_credentials=settings.cors_allow_credentials,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],

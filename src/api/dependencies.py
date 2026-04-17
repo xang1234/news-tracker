@@ -30,6 +30,7 @@ from src.narrative.repository import NarrativeRepository
 from src.ner.config import NERConfig
 from src.ner.service import NERService
 from src.publish.repository import PublishRepository
+from src.publish.read_model_repository import ReadModelRepository
 from src.publish.service import PublishService
 from src.security_master.repository import SecurityMasterRepository
 from src.sentiment.aggregation import SentimentAggregator
@@ -329,7 +330,10 @@ class AppServices:
             database = await self.get_database()
             async with self._init_lock:
                 if self.publish_service is None:
-                    self.publish_service = PublishService(repository=PublishRepository(database))
+                    self.publish_service = PublishService(
+                        repository=PublishRepository(database),
+                        read_model_repository=ReadModelRepository(database),
+                    )
         return self.publish_service
 
     async def get_assertion_repository(self) -> AssertionRepository:

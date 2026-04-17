@@ -15,6 +15,7 @@ RelationType = Literal["depends_on", "supplies_to", "competes_with", "drives", "
 VALID_NODE_TYPES = frozenset({"ticker", "theme", "technology"})
 
 VALID_RELATION_TYPES = frozenset({"depends_on", "supplies_to", "competes_with", "drives", "blocks"})
+VALID_EDGE_SUPPORT_ORIGINS = frozenset({"assertion", "legacy"})
 
 
 @dataclass
@@ -79,6 +80,37 @@ class CausalEdge:
             raise ValueError(
                 f"Invalid relation {self.relation!r}. "
                 f"Must be one of: {sorted(VALID_RELATION_TYPES)}"
+            )
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError(f"confidence must be between 0.0 and 1.0, got {self.confidence}")
+
+
+@dataclass
+class CausalEdgeSupport:
+    """A single support record that contributes to an aggregated graph edge."""
+
+    source: str
+    target: str
+    relation: RelationType
+    support_key: str
+    origin_kind: str
+    confidence: float = 1.0
+    source_doc_ids: list[str] = field(default_factory=list)
+    active: bool = True
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+    def __post_init__(self) -> None:
+        if self.relation not in VALID_RELATION_TYPES:
+            raise ValueError(
+                f"Invalid relation {self.relation!r}. "
+                f"Must be one of: {sorted(VALID_RELATION_TYPES)}"
+            )
+        if self.origin_kind not in VALID_EDGE_SUPPORT_ORIGINS:
+            raise ValueError(
+                f"Invalid origin_kind {self.origin_kind!r}. "
+                f"Must be one of: {sorted(VALID_EDGE_SUPPORT_ORIGINS)}"
             )
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError(f"confidence must be between 0.0 and 1.0, got {self.confidence}")
