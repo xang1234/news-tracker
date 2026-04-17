@@ -1,8 +1,8 @@
 """Tests for bulk document fetch repository behavior."""
 
-from datetime import UTC, datetime
 import sys
 import types
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
