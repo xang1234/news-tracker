@@ -85,7 +85,11 @@ class FakeRepository:
 
     async def fetch_dedup_signatures(self, document_ids: list[str], *, conn=None):
         del conn
-        return [self.signatures[document_id] for document_id in document_ids if document_id in self.signatures]
+        return [
+            self.signatures[document_id]
+            for document_id in document_ids
+            if document_id in self.signatures
+        ]
 
     async def list_dedup_signatures(self, *, conn=None):
         del conn

@@ -503,7 +503,9 @@ class SharedDeduplicator:
             self._indexed_documents += 1
             return SharedDuplicateResult(is_duplicate=False, stored=True)
         except UniqueViolationError:
-            exact_match = await repository.get_dedup_signature_by_exact_fingerprint(exact_fingerprint)
+            exact_match = await repository.get_dedup_signature_by_exact_fingerprint(
+                exact_fingerprint
+            )
             self._duplicates_found += 1
             canonical_document_id = (
                 str(exact_match["canonical_document_id"]) if exact_match is not None else None
@@ -636,10 +638,7 @@ class SharedDeduplicator:
 
     def deserialize_signature(self, value: object) -> list[int]:
         """Parse a stored signature row back into integers."""
-        if isinstance(value, str):
-            parsed = json.loads(value)
-        else:
-            parsed = value
+        parsed = json.loads(value) if isinstance(value, str) else value
         if not isinstance(parsed, list):
             return []
         return [int(item) for item in parsed]

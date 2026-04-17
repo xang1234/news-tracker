@@ -229,7 +229,9 @@ class GraphSyncService:
                 relation,
                 active_only=True,
             )
-            reverse_has_legacy = any(support.origin_kind == "legacy" for support in reverse_supports)
+            reverse_has_legacy = any(
+                support.origin_kind == "legacy" for support in reverse_supports
+            )
             if not (reverse_has_legacy and edge.support_count < self._min_evidence):
                 await self._graph_repo.upsert_edge_support(
                     source=edge.target_concept_id,

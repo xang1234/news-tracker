@@ -82,6 +82,9 @@ CREATE TRIGGER update_document_dedup_signatures_updated_at
 -- Backfill the published read model for all manifests currently pointed
 -- to by active manifest pointers before consumer routes switch over.
 -- ============================================================
+ALTER TABLE intel_pub.read_model
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
 INSERT INTO intel_pub.read_model (
     record_id,
     manifest_id,

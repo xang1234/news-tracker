@@ -29,8 +29,8 @@ from src.keywords.service import KeywordsService
 from src.narrative.repository import NarrativeRepository
 from src.ner.config import NERConfig
 from src.ner.service import NERService
-from src.publish.repository import PublishRepository
 from src.publish.read_model_repository import ReadModelRepository
+from src.publish.repository import PublishRepository
 from src.publish.service import PublishService
 from src.security_master.repository import SecurityMasterRepository
 from src.sentiment.aggregation import SentimentAggregator

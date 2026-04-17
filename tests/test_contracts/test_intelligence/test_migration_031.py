@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-
 MIGRATION_PATH = Path("migrations/031_publish_graph_dedupe_hardening.sql")
 
 
@@ -33,3 +32,9 @@ def test_backfills_active_read_model_rows() -> None:
     assert "INSERT INTO intel_pub.read_model" in sql
     assert "intel_pub.manifest_pointers" in sql
     assert "digest(" in sql
+
+
+def test_adds_updated_at_column_before_read_model_backfill() -> None:
+    sql = _sql()
+    assert "ALTER TABLE intel_pub.read_model" in sql
+    assert "ADD COLUMN IF NOT EXISTS updated_at" in sql

@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-
 MIGRATION_PATH = Path("migrations/032_read_model_timestamp_repair.sql")
 
 

@@ -121,7 +121,9 @@ class PublishService:
         """Resolve the read-model repository without breaking older callers."""
         if read_model_repository is not None:
             return read_model_repository
-        if hasattr(repository, "upsert_records") and hasattr(repository, "count_records_for_manifest"):
+        if hasattr(repository, "upsert_records") and hasattr(
+            repository, "count_records_for_manifest"
+        ):
             return repository
         if isinstance(repository, PublishRepository):
             return ReadModelRepository(repository._db)
