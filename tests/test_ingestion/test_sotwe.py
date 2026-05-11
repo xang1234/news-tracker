@@ -326,9 +326,7 @@ class TestTwitterAdapterXui:
             )
             adapter = TwitterAdapter(bearer_token="api_token", tickers={"NVDA"})
 
-        respx.get(TWEETS_SEARCH_RECENT).mock(
-            side_effect=httpx.ConnectError("Connection refused")
-        )
+        respx.get(TWEETS_SEARCH_RECENT).mock(side_effect=httpx.ConnectError("Connection refused"))
         adapter._xui_runtime_healthy = lambda: True
         adapter._collect_xui_items = AsyncMock(
             return_value=(
