@@ -390,7 +390,7 @@ class Settings(BaseSettings):
     @property
     def twitter_configured(self) -> bool:
         """Check if Twitter API is configured."""
-        return self.twitter_bearer_token is not None
+        return bool((self.twitter_bearer_token or "").strip())
 
     @property
     def xui_configured(self) -> bool:

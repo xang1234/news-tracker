@@ -233,7 +233,7 @@ class TwitterAdapter(BaseAdapter):
                 emitted_api_item = True
                 yield item
 
-            if emitted_api_item:
+            if emitted_api_item and not self._twitter_api_unavailable:
                 return
 
             if not self._xui.enabled:
