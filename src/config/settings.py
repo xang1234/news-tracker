@@ -63,10 +63,10 @@ class Settings(BaseSettings):
     # Substack
     substack_cookie: str | None = None
 
-    # XUI (Twitter browser ingestion with adaptive guardrails)
+    # XUI (optional Twitter browser-ingestion fallback with adaptive guardrails)
     twitter_xui_enabled: bool = Field(
         default=False,
-        description="Enable xui browser ingestion for Twitter data",
+        description="Enable xui browser-ingestion fallback for Twitter data",
     )
     twitter_xui_command: str = Field(
         default="xui",
@@ -394,7 +394,7 @@ class Settings(BaseSettings):
 
     @property
     def xui_configured(self) -> bool:
-        """Check if xui ingestion is enabled."""
+        """Check if xui fallback ingestion is enabled."""
         return self.twitter_xui_enabled
 
     @property

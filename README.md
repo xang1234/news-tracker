@@ -216,6 +216,11 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/news_tracker
 REDIS_URL=redis://localhost:6379/0
 API_KEYS=key1,key2
 
+# X/Twitter ingestion
+TWITTER_BEARER_TOKEN=...
+TWITTER_XUI_ENABLED=false
+XUI_INSTALL=false
+
 # Model selection
 EMBEDDING_MODEL_NAME=ProsusAI/finbert
 SENTIMENT_MODEL_NAME=ProsusAI/finbert
@@ -225,6 +230,10 @@ NER_SPACY_MODEL=en_core_web_trf
 SPAM_THRESHOLD=0.7
 DUPLICATE_THRESHOLD=0.85
 ```
+
+The official X API is the primary Twitter/X ingestion path when `TWITTER_BEARER_TOKEN` is
+configured. The private xui path is an explicit fallback: set `TWITTER_XUI_ENABLED=true`
+at runtime and `XUI_INSTALL=true` at image build time to use it.
 
 Feature flags are opt-in and grouped by subsystem (`*_ENABLED`). See `src/config/settings.py` for full settings.
 

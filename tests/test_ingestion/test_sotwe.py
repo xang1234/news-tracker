@@ -92,6 +92,103 @@ class TestTwitterAdapterXui:
             assert adapter._xui.enabled is True
             assert adapter._xui.usernames == ("nvidia", "amd")
 
+    @pytest.mark.asyncio
+    async def test_fetch_raw_prefers_api_when_token_configured(self):
+        with patch("src.ingestion.twitter_adapter.get_settings") as mock_settings:
+            mock_settings.return_value = _settings(twitter_bearer_token="api_token")
+            adapter = TwitterAdapter(bearer_token="api_token")
+
+        adapter._xui_runtime_healthy = lambda: True
+        adapter._collect_xui_items = AsyncMock(
+            return_value=(
+                [
+                    {
+                        "source": "xui",
+                        "tweet": {"tweet_id": "999", "text": "$NVDA via xui"},
+                        "username": "nvidia",
+                    }
+                ],
+                True,
+            )
+        )
+
+        async def _fake_api():
+            yield {
+                "source": "twitter_api",
+                "tweet": {
+                    "id": "111",
+                    "text": "$AMD up",
+                    "created_at": "2024-01-15T10:30:00Z",
+                    "author_id": "42",
+                    "public_metrics": {},
+                },
+                "author": {"username": "AMD"},
+            }
+
+        adapter._fetch_twitter_api = _fake_api
+
+        items = [item async for item in adapter._fetch_raw()]
+
+        assert [item["source"] for item in items] == ["twitter_api"]
+        adapter._collect_xui_items.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fetch_raw_falls_back_to_xui_after_empty_api_result(self):
+        with patch("src.ingestion.twitter_adapter.get_settings") as mock_settings:
+            mock_settings.return_value = _settings(twitter_bearer_token="api_token")
+            adapter = TwitterAdapter(bearer_token="api_token")
+
+        events: list[str] = []
+        adapter._xui_runtime_healthy = lambda: True
+
+        async def _fake_api():
+            events.append("api")
+            if False:
+                yield {}
+
+        async def _fake_xui():
+            events.append("xui")
+            return (
+                [
+                    {
+                        "source": "xui",
+                        "tweet": {"tweet_id": "999", "text": "$NVDA via xui"},
+                        "username": "nvidia",
+                    }
+                ],
+                True,
+            )
+
+        adapter._fetch_twitter_api = _fake_api
+        adapter._collect_xui_items = AsyncMock(side_effect=_fake_xui)
+
+        items = [item async for item in adapter._fetch_raw()]
+
+        assert events == ["api", "xui"]
+        assert [item["source"] for item in items] == ["xui"]
+
+    @pytest.mark.asyncio
+    async def test_fetch_raw_does_not_fall_back_to_xui_when_disabled(self):
+        with patch("src.ingestion.twitter_adapter.get_settings") as mock_settings:
+            mock_settings.return_value = _settings(
+                twitter_bearer_token="api_token",
+                twitter_xui_enabled=False,
+            )
+            adapter = TwitterAdapter(bearer_token="api_token")
+
+        async def _fake_api():
+            adapter._twitter_api_unavailable = True
+            if False:
+                yield {}
+
+        adapter._fetch_twitter_api = _fake_api
+        adapter._collect_xui_items = AsyncMock(return_value=([], True))
+
+        items = [item async for item in adapter._fetch_raw()]
+
+        assert items == []
+        adapter._collect_xui_items.assert_not_called()
+
     def test_adapter_transform_xui_tweet(self):
         with patch("src.ingestion.twitter_adapter.get_settings") as mock_settings:
             mock_settings.return_value = _settings()
@@ -172,31 +269,28 @@ class TestTwitterAdapterXui:
         assert adapter._xui_state.circuit_open_until > datetime.now(UTC)
 
     @pytest.mark.asyncio
-    async def test_fetch_raw_falls_back_to_api_when_xui_unsuccessful(self):
+    async def test_fetch_raw_uses_xui_when_api_token_missing(self):
         with patch("src.ingestion.twitter_adapter.get_settings") as mock_settings:
-            mock_settings.return_value = _settings(twitter_bearer_token="api_token")
-            adapter = TwitterAdapter(bearer_token="api_token")
+            mock_settings.return_value = _settings(twitter_bearer_token=None)
+            adapter = TwitterAdapter()
 
-        adapter._collect_xui_items = AsyncMock(return_value=([], False))
-
-        async def _fake_api():
-            yield {
-                "source": "twitter_api",
-                "tweet": {
-                    "id": "111",
-                    "text": "$AMD up",
-                    "created_at": "2024-01-15T10:30:00Z",
-                    "author_id": "42",
-                    "public_metrics": {},
-                },
-                "author": {"username": "AMD"},
-            }
-
-        adapter._fetch_twitter_api = _fake_api
+        adapter._xui_runtime_healthy = lambda: True
+        adapter._collect_xui_items = AsyncMock(
+            return_value=(
+                [
+                    {
+                        "source": "xui",
+                        "tweet": {"tweet_id": "999", "text": "$NVDA via xui"},
+                        "username": "nvidia",
+                    }
+                ],
+                True,
+            )
+        )
 
         items = [item async for item in adapter._fetch_raw()]
         assert len(items) == 1
-        assert items[0]["source"] == "twitter_api"
+        assert items[0]["source"] == "xui"
 
     def test_detect_xui_block_from_payload_error(self):
         with patch("src.ingestion.twitter_adapter.get_settings") as mock_settings:
