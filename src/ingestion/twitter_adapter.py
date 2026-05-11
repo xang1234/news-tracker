@@ -163,6 +163,7 @@ class TwitterAdapter(BaseAdapter):
         # Track seen tweet IDs to avoid duplicates
         self._seen_tweet_ids: set[str] = set()
         self._twitter_api_unavailable = False
+        self._xui_used_last_cycle = False
 
         if self._xui.enabled and not self._xui.usernames:
             logger.warning("xui is enabled but no usernames are configured")
@@ -182,7 +183,12 @@ class TwitterAdapter(BaseAdapter):
 
     def next_poll_delay_seconds(self, default_interval_seconds: float) -> float:
         """Adapter-specific jittered polling delay with block-aware backoff."""
-        if not self._xui.enabled or (self._bearer_token and not self._twitter_api_unavailable):
+        using_primary_api = (
+            self._bearer_token
+            and not self._twitter_api_unavailable
+            and not self._xui_used_last_cycle
+        )
+        if not self._xui.enabled or using_primary_api:
             return default_interval_seconds
 
         now = _utc_now()
@@ -211,10 +217,19 @@ class TwitterAdapter(BaseAdapter):
         """
         self._seen_tweet_ids.clear()
         self._twitter_api_unavailable = False
+        self._xui_used_last_cycle = False
 
         if self._bearer_token:
             emitted_api_item = False
             async for item in self._fetch_twitter_api():
+                if self._transform_twitter_api(item) is None:
+                    tweet = item.get("tweet", {})
+                    if isinstance(tweet, dict):
+                        tweet_id = str(tweet.get("id", "")).strip()
+                        if tweet_id:
+                            self._seen_tweet_ids.discard(tweet_id)
+                    logger.debug("Skipping unusable Twitter API item before fallback decision")
+                    continue
                 emitted_api_item = True
                 yield item
 
@@ -241,6 +256,7 @@ class TwitterAdapter(BaseAdapter):
             logger.warning("xui fallback enabled but runtime is not healthy")
             return
 
+        self._xui_used_last_cycle = True
         raw_items, xui_cycle_success = await self._collect_xui_items()
         for item in raw_items:
             yield item
@@ -767,14 +783,16 @@ class TwitterAdapter(BaseAdapter):
                     except httpx.HTTPStatusError as exc:
                         status_code = exc.response.status_code
                         logger.error("Twitter API error", extra={"status_code": status_code})
-                        if status_code in (401, 403):
+                        if status_code in (401, 403) or status_code >= 500:
                             self._twitter_api_unavailable = True
                             return
+                        pages_fetched += 1
                         continue
 
                     except Exception as exc:
                         logger.error("Twitter API request failed", extra={"error": str(exc)})
-                        continue
+                        self._twitter_api_unavailable = True
+                        return
 
                     authors: dict[str, dict[str, Any]] = {}
                     includes = data.get("includes", {})
