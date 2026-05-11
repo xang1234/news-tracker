@@ -1,0 +1,1 @@
+{"id":"int-2fc12940","kind":"field_change","created_at":"2026-05-11T12:19:23.066307Z","actor":"David Ten","issue_id":"news-tracker-mo5","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Implemented X API-primary ingestion with optional xui fallback, tests, and documentation updates."}}

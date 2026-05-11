@@ -7,7 +7,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends build-essential git && \
     rm -rf /var/lib/apt/lists/*
 
-ARG XUI_INSTALL=true
+ARG XUI_INSTALL=false
 ARG XUI_PIP_SPEC=git+https://github.com/xang1234/xui.git@main
 ARG EXPORT_ONNX_MODELS=true
 ARG CPU_RUNTIME_OPTIMIZED=false
@@ -104,7 +104,7 @@ RUN apt-get update && \
       libxrandr2 && \
     rm -rf /var/lib/apt/lists/*
 
-ARG XUI_INSTALL=true
+ARG XUI_INSTALL=false
 ARG CPU_RUNTIME_OPTIMIZED=false
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 # ONNX model paths are exported by docker-entrypoint.sh at container start

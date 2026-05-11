@@ -1,8 +1,8 @@
 """
 Twitter adapter for financial content ingestion.
 
-Primary path: xui browser ingestion with adaptive guardrails.
-Backup path: Twitter API v2 (when token is configured).
+Primary path: official X/Twitter API v2 (when token is configured).
+Fallback path: xui browser ingestion when explicitly enabled.
 
 Guardrails implemented for xui:
 - Randomized polling cadence
@@ -133,8 +133,8 @@ class TwitterAdapter(BaseAdapter):
     Twitter adapter for fetching financial posts.
 
     Fetch order:
-    1) xui browser ingestion (primary)
-    2) Twitter API v2 (backup when xui is unavailable/blocked)
+    1) Twitter API v2 (primary when token is configured)
+    2) xui browser ingestion (optional fallback when enabled)
 
     xui guardrails are tuned to reduce bot-like traffic patterns and
     challenge/rate-limit risk.
@@ -163,13 +163,14 @@ class TwitterAdapter(BaseAdapter):
         # Track seen tweet IDs to avoid duplicates
         self._seen_tweet_ids: set[str] = set()
         self._twitter_api_unavailable = False
+        self._xui_used_last_cycle = False
 
         if self._xui.enabled and not self._xui.usernames:
             logger.warning("xui is enabled but no usernames are configured")
 
         if not self._bearer_token:
             if self._xui.enabled:
-                logger.info("Twitter API token missing; using xui primary ingestion")
+                logger.info("Twitter API token missing; using xui-only ingestion")
             else:
                 logger.warning(
                     "Twitter bearer token not configured and xui disabled. "
@@ -182,7 +183,12 @@ class TwitterAdapter(BaseAdapter):
 
     def next_poll_delay_seconds(self, default_interval_seconds: float) -> float:
         """Adapter-specific jittered polling delay with block-aware backoff."""
-        if not self._xui.enabled:
+        using_primary_api = (
+            self._bearer_token
+            and not self._twitter_api_unavailable
+            and not self._xui_used_last_cycle
+        )
+        if not self._xui.enabled or using_primary_api:
             return default_interval_seconds
 
         now = _utc_now()
@@ -207,27 +213,59 @@ class TwitterAdapter(BaseAdapter):
 
     async def _fetch_raw(self) -> AsyncIterator[dict[str, Any]]:
         """
-        Fetch tweets via xui primary, with Twitter API fallback.
+        Fetch tweets via the official API first, with optional xui fallback.
         """
         self._seen_tweet_ids.clear()
         self._twitter_api_unavailable = False
+        self._xui_used_last_cycle = False
 
-        xui_cycle_success = False
-        if self._xui.enabled:
-            raw_items, xui_cycle_success = await self._collect_xui_items()
-            for item in raw_items:
+        if self._bearer_token:
+            emitted_api_item = False
+            async for item in self._fetch_twitter_api():
+                if self._transform_twitter_api(item) is None:
+                    tweet = item.get("tweet", {})
+                    if isinstance(tweet, dict):
+                        tweet_id = str(tweet.get("id", "")).strip()
+                        if tweet_id:
+                            self._seen_tweet_ids.discard(tweet_id)
+                    logger.debug("Skipping unusable Twitter API item before fallback decision")
+                    continue
+                emitted_api_item = True
                 yield item
+
+            if emitted_api_item and not self._twitter_api_unavailable:
+                return
+
+            if not self._xui.enabled:
+                if self._twitter_api_unavailable:
+                    logger.warning("Twitter API unavailable and xui fallback disabled")
+                else:
+                    logger.info("Twitter API produced no items and xui fallback disabled")
+                return
+
+            if self._twitter_api_unavailable:
+                logger.warning("Twitter API unavailable; attempting xui fallback")
+            else:
+                logger.info("Twitter API produced no items; attempting xui fallback")
+
+        elif not self._xui.enabled:
+            logger.error("Twitter bearer token not configured and xui disabled")
+            return
+
+        if not self._xui_runtime_healthy():
+            logger.warning("xui fallback enabled but runtime is not healthy")
+            return
+
+        self._xui_used_last_cycle = True
+        raw_items, xui_cycle_success = await self._collect_xui_items()
+        for item in raw_items:
+            yield item
 
         if xui_cycle_success:
             return
 
         if self._bearer_token:
-            async for item in self._fetch_twitter_api():
-                yield item
-            return
-
-        if not self._xui.enabled:
-            logger.error("Twitter bearer token not configured and xui disabled")
+            logger.warning("xui fallback did not complete successfully")
         else:
             logger.warning("xui cycle did not complete successfully and no API token is configured")
 
@@ -736,6 +774,7 @@ class TwitterAdapter(BaseAdapter):
 
                         if response.status_code == 429:
                             logger.warning("Twitter API rate limit hit")
+                            self._twitter_api_unavailable = True
                             return
 
                         response.raise_for_status()
@@ -744,14 +783,16 @@ class TwitterAdapter(BaseAdapter):
                     except httpx.HTTPStatusError as exc:
                         status_code = exc.response.status_code
                         logger.error("Twitter API error", extra={"status_code": status_code})
-                        if status_code in (401, 403):
+                        if status_code in (401, 403) or status_code >= 500:
                             self._twitter_api_unavailable = True
                             return
+                        pages_fetched += 1
                         continue
 
                     except Exception as exc:
                         logger.error("Twitter API request failed", extra={"error": str(exc)})
-                        continue
+                        self._twitter_api_unavailable = True
+                        return
 
                     authors: dict[str, dict[str, Any]] = {}
                     includes = data.get("includes", {})

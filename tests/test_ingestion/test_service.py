@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
+from src.config.settings import Settings
 from src.ingestion.schemas import Platform
 from src.services.ingestion_service import IngestionConfigurationError, IngestionService
 
@@ -56,6 +57,34 @@ class TestIngestionServiceConfiguration:
             service = IngestionService(use_mock=False)
 
         assert Platform.SUBSTACK in service._adapters
+
+    def test_blank_twitter_bearer_token_does_not_enable_twitter_adapter(self) -> None:
+        settings = Settings(
+            _env_file=None,
+            twitter_bearer_token="   ",
+            twitter_xui_enabled=False,
+            reddit_client_id=None,
+            reddit_client_secret=None,
+            news_api_key=None,
+        )
+
+        with (
+            patch("src.services.ingestion_service.get_settings", return_value=settings),
+            patch("src.services.ingestion_service.TwitterAdapter") as twitter_adapter,
+            pytest.raises(
+                IngestionConfigurationError,
+                match="No ingestion sources are configured",
+            ),
+        ):
+            IngestionService(
+                use_mock=False,
+                twitter_sources=["nvidia"],
+                reddit_sources=[],
+                substack_sources=[],
+            )
+
+        assert settings.twitter_configured is False
+        twitter_adapter.assert_not_called()
 
     def test_mock_mode_still_uses_mock_adapters(self) -> None:
         service = IngestionService(use_mock=True)

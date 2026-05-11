@@ -2,7 +2,7 @@ x-backend-build: &backend-build
     context: .
     dockerfile: Dockerfile
     args:
-      XUI_INSTALL: ${XUI_INSTALL:-true}
+      XUI_INSTALL: ${XUI_INSTALL:-false}
       XUI_PIP_SPEC: ${XUI_PIP_SPEC:-git+https://github.com/xang1234/xui.git@main}
       EXPORT_ONNX_MODELS: ${EXPORT_ONNX_MODELS:-true}
       CPU_RUNTIME_OPTIMIZED: ${CPU_RUNTIME_OPTIMIZED:-false}
@@ -267,4 +267,4 @@ volumes:
 
 secrets:
   xui_github_token:
-    file: ${XUI_GITHUB_TOKEN_FILE:-./.secrets/xui_github_token}
+    file: ${XUI_GITHUB_TOKEN_FILE:-/dev/null}

@@ -123,7 +123,7 @@ class IngestionService:
         """
         adapters: dict[Platform, BaseAdapter] = {}
 
-        # Twitter (xui primary with API backup)
+        # Twitter (official API primary with optional xui fallback)
         if (settings.twitter_configured or settings.xui_configured) and _has_selected_sources(
             twitter_sources,
         ):
@@ -131,8 +131,10 @@ class IngestionService:
             if twitter_sources is not None:
                 kwargs["xui_usernames"] = twitter_sources
             adapters[Platform.TWITTER] = TwitterAdapter(**kwargs)
-            if settings.twitter_configured:
-                logger.info("Twitter adapter enabled (xui primary, API backup)")
+            if settings.twitter_configured and settings.xui_configured:
+                logger.info("Twitter adapter enabled (API primary, xui fallback)")
+            elif settings.twitter_configured:
+                logger.info("Twitter adapter enabled (API only)")
             else:
                 logger.info("Twitter adapter enabled (xui only)")
         elif settings.twitter_configured or settings.xui_configured:
