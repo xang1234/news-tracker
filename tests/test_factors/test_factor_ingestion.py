@@ -7,13 +7,14 @@ from datetime import UTC, date, datetime
 import pytest
 
 from src.factors.ingestion import FactorIngestionService
+from src.factors.providers import MissingProviderCredentialError
 from src.factors.schemas import FactorObservation, FactorSeries
 
 
 class FakeProvider:
     def __init__(self, observations: list[FactorObservation]) -> None:
         self.observations = observations
-        self.calls: list[dict] = []
+        self.calls: list[dict[str, object]] = []
 
     async def fetch_observations(
         self,
@@ -36,10 +37,23 @@ class FakeProvider:
         return self.observations
 
 
+class MissingCredentialProvider:
+    async def fetch_observations(
+        self,
+        series: FactorSeries,
+        *,
+        start: date | None = None,
+        end: date | None = None,
+        latest: bool = False,
+        fetched_at: datetime | None = None,
+    ) -> list[FactorObservation]:
+        raise MissingProviderCredentialError("FRED_API_KEY is required for FRED")
+
+
 class InMemoryFactorRepository:
     def __init__(self) -> None:
         self.series: dict[str, FactorSeries] = {}
-        self.observations: dict[tuple, FactorObservation] = {}
+        self.observations: dict[tuple[str, date, datetime, str], FactorObservation] = {}
 
     async def upsert_series(self, series: FactorSeries) -> FactorSeries:
         self.series[series.factor_id] = series
@@ -140,5 +154,18 @@ async def test_refresh_rejects_observation_that_does_not_match_registry() -> Non
     with pytest.raises(ValueError, match="units mismatch"):
         await service.refresh_series(provider, _series())
 
-    assert repo.series == {}
+    assert repo.series == {"fred:DGS10": _series()}
+    assert repo.observations == {}
+
+
+@pytest.mark.asyncio
+async def test_refresh_series_registers_series_before_provider_fetch_failure() -> None:
+    series = _series()
+    repo = InMemoryFactorRepository()
+    service = FactorIngestionService(repo)
+
+    with pytest.raises(MissingProviderCredentialError):
+        await service.refresh_series(MissingCredentialProvider(), series)
+
+    assert repo.series == {"fred:DGS10": series}
     assert repo.observations == {}

@@ -5,13 +5,10 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date
-from typing import cast
 
 from src.factors.ingestion import FactorIngestionService, FactorObservationProvider
 from src.factors.macro_catalog import get_curated_macro_factor_series
 from src.factors.provider_common import (
-    FactorHTTPClient,
-    FactorHTTPGetClient,
     MissingProviderCredentialError,
 )
 from src.factors.providers import (
@@ -124,16 +121,14 @@ async def refresh_curated_factor_series(
 def _build_provider_map(http_client: HTTPClient) -> dict[str, FactorObservationProvider]:
     macro_credentials = MacroProviderCredentials.from_env()
     supply_credentials = SupplyChainProviderCredentials.from_env()
-    macro_http_client = cast(FactorHTTPClient, http_client)
-    get_http_client = cast(FactorHTTPGetClient, http_client)
     return {
-        "fred": FredFactorProvider(macro_http_client, macro_credentials),
-        "bls": BlsFactorProvider(macro_http_client, macro_credentials),
-        "bea": BeaFactorProvider(macro_http_client, macro_credentials),
-        "treasury": TreasuryFiscalDataProvider(macro_http_client),
-        "fed": FederalReserveCsvFactorProvider(macro_http_client),
-        "eia": EiaFactorProvider(get_http_client, supply_credentials),
-        "census": CensusTradeFactorProvider(get_http_client, supply_credentials),
+        "fred": FredFactorProvider(http_client, macro_credentials),
+        "bls": BlsFactorProvider(http_client, macro_credentials),
+        "bea": BeaFactorProvider(http_client, macro_credentials),
+        "treasury": TreasuryFiscalDataProvider(http_client),
+        "fed": FederalReserveCsvFactorProvider(http_client),
+        "eia": EiaFactorProvider(http_client, supply_credentials),
+        "census": CensusTradeFactorProvider(http_client, supply_credentials),
     }
 
 

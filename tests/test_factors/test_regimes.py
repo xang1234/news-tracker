@@ -240,3 +240,40 @@ async def test_build_context_map_derives_relevance_from_theme_keywords() -> None
     )
 
     assert context_map["theme_hbm"][0].factor_id == "census:imports:hs854232:value"
+
+
+@pytest.mark.asyncio
+async def test_build_context_map_does_not_match_relevance_inside_unrelated_words() -> None:
+    ai_series = FactorSeries(
+        factor_id="eia:electricity:retail_sales:industrial_sales_us",
+        provider="eia",
+        external_id="electricity/retail-sales",
+        name="Industrial Electricity Sales",
+        units="megawatthours",
+        cadence="monthly",
+        relevance_tags=["ai_infrastructure", "energy"],
+    )
+    observation = FactorObservation(
+        factor_id=ai_series.factor_id,
+        observation_date=date(2026, 4, 1),
+        value=100.0,
+        units="megawatthours",
+        available_at=datetime(2026, 5, 15, tzinfo=UTC),
+    )
+    repo = FakeFactorRepository([ai_series], [observation])
+    theme = type(
+        "ThemeLike",
+        (),
+        {
+            "theme_id": "theme_retail_chain",
+            "name": "Retail chain paid media optimization",
+            "metadata": {},
+        },
+    )()
+
+    context_map = await FactorRegimeService(repo).build_context_map(
+        [theme],
+        as_of=datetime(2026, 6, 1, tzinfo=UTC),
+    )
+
+    assert context_map["theme_retail_chain"] == []

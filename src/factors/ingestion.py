@@ -65,6 +65,7 @@ class FactorIngestionService:
         fetched_at: datetime | None = None,
     ) -> FactorIngestionResult:
         """Fetch and persist one factor series refresh."""
+        await self._repository.upsert_series(series)
         observations = await provider.fetch_observations(
             series,
             start=start,
@@ -75,7 +76,6 @@ class FactorIngestionService:
         for observation in observations:
             validate_observation_for_series(series, observation)
 
-        await self._repository.upsert_series(series)
         written = 0
         missing = 0
         for observation in observations:

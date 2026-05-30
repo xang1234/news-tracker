@@ -41,7 +41,7 @@ class TestFactorRefresh:
         with (
             patch("src.storage.database.Database", return_value=mock_db),
             patch(
-                "src.cli.refresh_curated_factor_series",
+                "src.factors.cli.refresh_curated_factor_series",
                 new=AsyncMock(return_value=summary),
             ) as refresh,
         ):
@@ -73,3 +73,61 @@ class TestFactorRefresh:
         mock_db.close.assert_awaited_once()
         assert "Series refreshed: 1/2" in result.output
         assert "Skipped missing credentials: 1" in result.output
+
+    def test_refresh_exits_nonzero_when_provider_errors_are_reported(
+        self,
+        runner: CliRunner,
+    ) -> None:
+        mock_db = _mock_db()
+        summary = FactorRefreshSummary(
+            series_seen=1,
+            series_refreshed=0,
+            observations_seen=0,
+            observations_written=0,
+            skipped_missing_credentials=[],
+            errors={"fred:DGS10": "provider failed"},
+            dry_run=False,
+        )
+
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch(
+                "src.factors.cli.refresh_curated_factor_series",
+                new=AsyncMock(return_value=summary),
+            ),
+        ):
+            result = runner.invoke(main, ["factors", "refresh", "--provider", "fred"])
+
+        assert result.exit_code == 1, result.output
+        assert "Errors: 1" in result.output
+        assert "Factor refresh completed with errors" in result.output
+        mock_db.close.assert_awaited_once()
+
+    def test_refresh_exits_nonzero_when_all_selected_series_are_skipped(
+        self,
+        runner: CliRunner,
+    ) -> None:
+        mock_db = _mock_db()
+        summary = FactorRefreshSummary(
+            series_seen=1,
+            series_refreshed=0,
+            observations_seen=0,
+            observations_written=0,
+            skipped_missing_credentials=["fred:DGS10"],
+            errors={},
+            dry_run=False,
+        )
+
+        with (
+            patch("src.storage.database.Database", return_value=mock_db),
+            patch(
+                "src.factors.cli.refresh_curated_factor_series",
+                new=AsyncMock(return_value=summary),
+            ),
+        ):
+            result = runner.invoke(main, ["factors", "refresh", "--provider", "fred"])
+
+        assert result.exit_code == 1, result.output
+        assert "Skipped missing credentials: 1" in result.output
+        assert "No factor series refreshed" in result.output
+        mock_db.close.assert_awaited_once()

@@ -7,6 +7,11 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Protocol
 
+from src.factors.relevance import (
+    ThemeWithFactorTags,
+    extract_theme_factor_tags,
+    normalise_factor_tag,
+)
 from src.factors.schemas import FactorObservation, FactorSeries
 
 DEFAULT_RELATIVE_THRESHOLD = 0.01
@@ -24,17 +29,6 @@ class FactorRegimeRepository(Protocol):
         """List registered factor series."""
         ...
 
-    async def get_observations_as_of(
-        self,
-        factor_id: str,
-        *,
-        start: date,
-        end: date,
-        as_of: datetime,
-    ) -> list[FactorObservation]:
-        """Fetch observations visible as of a decision timestamp."""
-        ...
-
     async def get_latest_observations_as_of(
         self,
         factor_ids: list[str],
@@ -46,11 +40,6 @@ class FactorRegimeRepository(Protocol):
     ) -> dict[str, list[FactorObservation]]:
         """Fetch the latest visible observations for multiple factors."""
         ...
-
-
-class ThemeWithFactorTags(Protocol):
-    theme_id: str
-    metadata: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -149,7 +138,7 @@ class FactorRegimeService:
         start = as_of.date() - timedelta(days=lookback_days)
         end = as_of.date()
         matches_by_theme = {
-            theme.theme_id: _matching_series(series_list, _theme_factor_tags(theme))[
+            theme.theme_id: _matching_series(series_list, extract_theme_factor_tags(theme))[
                 :max_factors_per_theme
             ]
             for theme in themes
@@ -192,29 +181,6 @@ def _context_from_observations(
     return classify_factor_regime(series, current, previous)
 
 
-def _theme_factor_tags(theme: ThemeWithFactorTags) -> set[str]:
-    metadata = theme.metadata or {}
-    raw_tags = metadata.get("factor_relevance_tags") or metadata.get("relevance_tags") or []
-    if isinstance(raw_tags, str):
-        raw_tags = [raw_tags]
-    tags = {_normalise_tag(str(tag)) for tag in raw_tags if str(tag).strip()}
-    text_parts = [
-        getattr(theme, "name", ""),
-        getattr(theme, "description", ""),
-        " ".join(str(keyword) for keyword in getattr(theme, "top_keywords", []) or []),
-        " ".join(str(ticker) for ticker in getattr(theme, "top_tickers", []) or []),
-    ]
-    for entity in getattr(theme, "top_entities", []) or []:
-        if isinstance(entity, dict):
-            text_parts.append(str(entity.get("name") or entity.get("text") or ""))
-        else:
-            text_parts.append(str(entity))
-    text = " ".join(text_parts).lower().replace("-", " ").replace("_", " ")
-    tags.update(_normalise_tag(keyword) for keyword in text.split() if keyword.strip())
-    tags.update(_derived_factor_tags(text))
-    return {tag for tag in tags if tag}
-
-
 def _matching_series(
     series_list: list[FactorSeries],
     theme_tags: set[str],
@@ -224,55 +190,5 @@ def _matching_series(
     return [
         series
         for series in series_list
-        if theme_tags.intersection(_normalise_tag(tag) for tag in series.relevance_tags)
+        if theme_tags.intersection(normalise_factor_tag(tag) for tag in series.relevance_tags)
     ]
-
-
-def _normalise_tag(value: str) -> str:
-    return value.strip().lower().replace("-", "_").replace(" ", "_")
-
-
-def _derived_factor_tags(text: str) -> set[str]:
-    tags: set[str] = set()
-    if _contains_any(
-        text,
-        "semiconductor",
-        "semiconductors",
-        "chip",
-        "chips",
-        "gpu",
-        "hbm",
-        "nvidia",
-        "amd",
-        "tsmc",
-        "foundry",
-        "fab",
-    ):
-        tags.add("semiconductors")
-    if _contains_any(text, "hbm", "dram", "nand", "memory"):
-        tags.add("memory")
-    if _contains_any(text, "ai", "data center", "datacenter", "power", "electricity"):
-        tags.update({"ai_infrastructure", "energy"})
-    if _contains_any(text, "energy", "utility", "electricity", "power"):
-        tags.add("energy")
-    if _contains_any(text, "rate", "rates", "yield", "treasury", "fed"):
-        tags.update({"rates", "yield_curve", "macro"})
-    if _contains_any(text, "inflation", "cpi", "ppi", "consumer price"):
-        tags.update({"inflation", "consumer", "macro"})
-    if _contains_any(text, "jobs", "labor", "payroll", "employment"):
-        tags.update({"labor", "macro"})
-    if _contains_any(text, "industrial", "production", "manufacturing", "pmi"):
-        tags.update({"industry", "macro"})
-    if _contains_any(text, "gdp", "growth"):
-        tags.update({"growth", "macro"})
-    if _contains_any(text, "profit", "profits", "earnings", "margin"):
-        tags.update({"profits", "earnings", "macro"})
-    if _contains_any(text, "trade", "import", "imports", "export", "tariff", "china"):
-        tags.update({"trade", "supply_chain"})
-    if _contains_any(text, "capex", "equipment", "asml"):
-        tags.add("capex")
-    return tags
-
-
-def _contains_any(text: str, *needles: str) -> bool:
-    return any(needle in text for needle in needles)

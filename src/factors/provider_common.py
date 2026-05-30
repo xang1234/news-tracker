@@ -16,7 +16,6 @@ class FactorHTTPGetClient(Protocol):
         url: str,
         params: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
-        **kwargs: Any,
     ) -> httpx.Response:
         """Fetch a URL with optional query parameters."""
         ...
@@ -29,7 +28,6 @@ class FactorHTTPClient(FactorHTTPGetClient, Protocol):
         params: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
         json_body: dict[str, Any] | None = None,
-        **kwargs: Any,
     ) -> httpx.Response:
         """Post a JSON body to a URL."""
         ...

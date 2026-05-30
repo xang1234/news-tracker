@@ -15,13 +15,13 @@ Usage:
 import asyncio
 import signal
 import sys
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import click
 
 from src.config.settings import get_settings
-from src.factors.refresh import refresh_curated_factor_series
+from src.factors.cli import factors
 from src.observability.logging import setup_logging
 from src.observability.metrics import get_metrics
 
@@ -73,6 +73,9 @@ def main(debug: bool) -> None:
             service_name=settings.otel_service_name,
             otlp_endpoint=settings.otel_exporter_otlp_endpoint,
         )
+
+
+main.add_command(factors)
 
 
 @main.command()
@@ -199,82 +202,6 @@ def init_db() -> None:
         await db.close()
 
     asyncio.run(run())
-
-
-@main.group()
-def factors() -> None:
-    """Manage curated macro and supply-chain factor datasources."""
-
-
-@factors.command("refresh")
-@click.option(
-    "--provider",
-    "providers",
-    multiple=True,
-    help="Provider to refresh (repeatable: fred, bls, bea, treasury, fed, eia, census)",
-)
-@click.option("--factor-id", "factor_ids", multiple=True, help="Specific factor_id to refresh")
-@click.option("--start", "start_date", help="Observation start date (YYYY-MM-DD)")
-@click.option("--end", "end_date", help="Observation end date (YYYY-MM-DD)")
-@click.option("--latest/--history", default=True, help="Fetch latest observation only or history")
-@click.option("--dry-run", is_flag=True, help="Show selected series without writing observations")
-def factors_refresh(
-    providers: tuple[str, ...],
-    factor_ids: tuple[str, ...],
-    start_date: str | None,
-    end_date: str | None,
-    latest: bool,
-    dry_run: bool,
-) -> None:
-    """Refresh curated factor registry entries and observations."""
-
-    async def run() -> None:
-        from src.storage.database import Database
-
-        start = _parse_cli_date(start_date, "--start")
-        end = _parse_cli_date(end_date, "--end")
-        if start and end and start > end:
-            click.echo("Error: start date must be before end date")
-            return
-
-        db = Database()
-        await db.connect()
-        try:
-            summary = await refresh_curated_factor_series(
-                db,
-                providers={provider.lower() for provider in providers},
-                factor_ids=set(factor_ids),
-                start=start,
-                end=end,
-                latest=latest,
-                dry_run=dry_run,
-            )
-        finally:
-            await db.close()
-
-        click.echo("Factor Refresh Results")
-        click.echo(f"Series refreshed: {summary.series_refreshed}/{summary.series_seen}")
-        click.echo(f"Observations seen: {summary.observations_seen}")
-        click.echo(f"Observations written: {summary.observations_written}")
-        if summary.skipped_missing_credentials:
-            click.echo(
-                f"Skipped missing credentials: {len(summary.skipped_missing_credentials)}"
-            )
-        if summary.errors:
-            click.echo(f"Errors: {len(summary.errors)}")
-        if summary.dry_run:
-            click.echo("Dry run only")
-
-    asyncio.run(run())
-
-
-def _parse_cli_date(value: str | None, option_name: str) -> date | None:
-    if not value:
-        return None
-    try:
-        return date.fromisoformat(value)
-    except ValueError as exc:
-        raise click.BadParameter("must use YYYY-MM-DD", param_hint=option_name) from exc
 
 
 @main.command()
