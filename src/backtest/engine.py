@@ -361,7 +361,7 @@ class BacktestEngine:
                 theme_count=len(themes),
             )
 
-        await self._factor_regimes.enrich_ranked_themes(
+        factor_context_map = await self._factor_regimes.build_ranked_context_map(
             top_ranked,
             as_of=as_of,
         )
@@ -375,7 +375,7 @@ class BacktestEngine:
                 "name": rt.theme.name,
                 "lifecycle_stage": rt.theme.lifecycle_stage,
                 "top_tickers": rt.theme.top_tickers[:3],
-                "factor_context": rt.factor_context,
+                "factor_context": factor_context_map.get(rt.theme_id, []),
             }
             for rt in top_ranked
         ]

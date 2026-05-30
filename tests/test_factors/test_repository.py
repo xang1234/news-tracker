@@ -2,17 +2,49 @@
 
 import json
 from datetime import UTC, date, datetime
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
 
 from src.factors.repository import FactorRepository
 from src.factors.schemas import FactorObservation, FactorSeries
+from src.storage.database import Database
 
 
 @pytest.fixture()
 def mock_database() -> AsyncMock:
     return AsyncMock()
+
+
+class RecordingTransaction:
+    def __init__(self, connection: AsyncMock) -> None:
+        self.connection = connection
+        self.exc_type: type[BaseException] | None = None
+
+    async def __aenter__(self) -> AsyncMock:
+        return self.connection
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: Any,
+    ) -> bool:
+        self.exc_type = exc_type
+        return False
+
+
+class RecordingDatabase:
+    def __init__(self, rows: list[Any]) -> None:
+        self.connection = AsyncMock()
+        self.connection.fetchrow = AsyncMock(side_effect=rows)
+        self.transaction_context = RecordingTransaction(self.connection)
+        self.transaction_calls = 0
+
+    def transaction(self) -> RecordingTransaction:
+        self.transaction_calls += 1
+        return self.transaction_context
 
 
 def _series_row() -> dict:
@@ -47,6 +79,36 @@ def _observation_row() -> dict:
         "missing_reason": None,
         "metadata": {"provider_payload_id": "obs-1"},
     }
+
+
+def _series_model() -> FactorSeries:
+    return FactorSeries(
+        factor_id="fred:DGS10",
+        provider="fred",
+        external_id="DGS10",
+        name="10-Year Treasury Constant Maturity Rate",
+        description="Daily 10-year Treasury rate.",
+        units="percent",
+        cadence="daily",
+        release_lag_days=1,
+        relevance_tags=["rates", "macro"],
+        required_credentials=["FRED_API_KEY"],
+        source_url="https://fred.stlouisfed.org/series/DGS10",
+        metadata={"category": "rates"},
+    )
+
+
+def _observation_model() -> FactorObservation:
+    return FactorObservation(
+        factor_id="fred:DGS10",
+        observation_date=date(2026, 4, 30),
+        value=4.52,
+        units="percent",
+        available_at=datetime(2026, 5, 1, 13, 30, tzinfo=UTC),
+        fetched_at=datetime(2026, 5, 1, 13, 45, tzinfo=UTC),
+        revision="initial",
+        metadata={"provider_payload_id": "obs-1"},
+    )
 
 
 class TestFactorSeriesRepository:
@@ -192,3 +254,32 @@ class TestFactorObservationRepository:
 
         assert observation.is_missing is True
         assert observation.missing_reason == "provider_suppressed"
+
+    @pytest.mark.asyncio
+    async def test_upsert_series_with_observations_uses_one_transaction(self) -> None:
+        database = RecordingDatabase([_series_row(), _observation_row()])
+        repo = FactorRepository(cast(Database, database))
+
+        series, observations = await repo.upsert_series_with_observations(
+            _series_model(),
+            [_observation_model()],
+        )
+
+        assert database.transaction_calls == 1
+        assert database.connection.fetchrow.await_count == 2
+        assert series.factor_id == "fred:DGS10"
+        assert observations[0].factor_id == "fred:DGS10"
+
+    @pytest.mark.asyncio
+    async def test_upsert_series_with_observations_propagates_failures_inside_transaction(
+        self,
+    ) -> None:
+        error = RuntimeError("observation write failed")
+        database = RecordingDatabase([_series_row(), error])
+        repo = FactorRepository(cast(Database, database))
+
+        with pytest.raises(RuntimeError, match="observation write failed"):
+            await repo.upsert_series_with_observations(_series_model(), [_observation_model()])
+
+        assert database.transaction_calls == 1
+        assert database.transaction_context.exc_type is RuntimeError

@@ -119,7 +119,7 @@ def _make_mock_engine(
     # Mock PriceDataFeed
     engine._price_feed.get_forward_returns = AsyncMock(return_value=forward_returns)
     engine._factor_regimes.build_context_map = AsyncMock(return_value={})
-    engine._factor_regimes.enrich_ranked_themes = AsyncMock(return_value=None)
+    engine._factor_regimes.build_ranked_context_map = AsyncMock(return_value={})
 
     # Mock repositories to return simple objects
     mock_database.fetchrow = AsyncMock(
@@ -330,17 +330,16 @@ class TestRunBacktest:
             sample_theme_metrics,
             sample_forward_returns,
         )
-        async def enrich_ranked(ranked, *, as_of):
-            ranked[0].factor_context = [context.to_dict()]
-
-        engine._factor_regimes.enrich_ranked_themes = AsyncMock(side_effect=enrich_ranked)
+        engine._factor_regimes.build_ranked_context_map = AsyncMock(
+            return_value={"theme_nvda": [context.to_dict()]}
+        )
 
         result = await engine._process_day(date(2025, 6, 2), "swing", top_n=1, horizon=5)
 
         assert result.ranked_themes[0]["factor_context"] == [context.to_dict()]
-        engine._factor_regimes.enrich_ranked_themes.assert_awaited_once()
-        enriched_ranked = engine._factor_regimes.enrich_ranked_themes.call_args.args[0]
-        assert [ranked_theme.theme_id for ranked_theme in enriched_ranked] == ["theme_nvda"]
+        engine._factor_regimes.build_ranked_context_map.assert_awaited_once()
+        context_ranked = engine._factor_regimes.build_ranked_context_map.call_args.args[0]
+        assert [ranked_theme.theme_id for ranked_theme in context_ranked] == ["theme_nvda"]
 
 
 # ── Serialization ───────────────────────────────────────────

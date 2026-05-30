@@ -65,19 +65,7 @@ class FactorRepository:
         """Insert or update a factor registry entry."""
         row = await self._db.fetchrow(
             _UPSERT_SERIES_SQL,
-            series.factor_id,
-            series.provider,
-            series.external_id,
-            series.name,
-            series.description,
-            series.units,
-            series.cadence,
-            series.release_lag_days,
-            series.relevance_tags,
-            series.required_credentials,
-            series.source_url,
-            series.is_active,
-            json.dumps(series.metadata),
+            *_series_upsert_args(series),
         )
         return _record_to_series(row)
 
@@ -123,17 +111,50 @@ class FactorRepository:
         """Insert or update one point-in-time factor observation."""
         row = await self._db.fetchrow(
             _UPSERT_OBSERVATION_SQL,
-            observation.factor_id,
-            observation.observation_date,
-            observation.value,
-            observation.units,
-            observation.available_at,
-            observation.fetched_at,
-            observation.revision,
-            observation.missing_reason,
-            json.dumps(observation.metadata),
+            *_observation_upsert_args(observation),
         )
         return _record_to_observation(row)
+
+    async def upsert_observations(
+        self,
+        observations: list[FactorObservation],
+    ) -> list[FactorObservation]:
+        """Insert or update point-in-time observations as one atomic write."""
+        if not observations:
+            return []
+
+        async with self._db.transaction() as connection:
+            return [
+                _record_to_observation(
+                    await connection.fetchrow(
+                        _UPSERT_OBSERVATION_SQL,
+                        *_observation_upsert_args(observation),
+                    )
+                )
+                for observation in observations
+            ]
+
+    async def upsert_series_with_observations(
+        self,
+        series: FactorSeries,
+        observations: list[FactorObservation],
+    ) -> tuple[FactorSeries, list[FactorObservation]]:
+        """Insert or update a registry entry and its observations atomically."""
+        async with self._db.transaction() as connection:
+            series_row = await connection.fetchrow(
+                _UPSERT_SERIES_SQL,
+                *_series_upsert_args(series),
+            )
+            observation_rows = [
+                await connection.fetchrow(
+                    _UPSERT_OBSERVATION_SQL,
+                    *_observation_upsert_args(observation),
+                )
+                for observation in observations
+            ]
+        return _record_to_series(series_row), [
+            _record_to_observation(row) for row in observation_rows
+        ]
 
     async def get_observations_as_of(
         self,
@@ -210,6 +231,38 @@ class FactorRepository:
         for row in rows:
             grouped.setdefault(row["factor_id"], []).append(_record_to_observation(row))
         return grouped
+
+
+def _series_upsert_args(series: FactorSeries) -> tuple[Any, ...]:
+    return (
+        series.factor_id,
+        series.provider,
+        series.external_id,
+        series.name,
+        series.description,
+        series.units,
+        series.cadence,
+        series.release_lag_days,
+        series.relevance_tags,
+        series.required_credentials,
+        series.source_url,
+        series.is_active,
+        json.dumps(series.metadata),
+    )
+
+
+def _observation_upsert_args(observation: FactorObservation) -> tuple[Any, ...]:
+    return (
+        observation.factor_id,
+        observation.observation_date,
+        observation.value,
+        observation.units,
+        observation.available_at,
+        observation.fetched_at,
+        observation.revision,
+        observation.missing_reason,
+        json.dumps(observation.metadata),
+    )
 
 
 def _parse_metadata(value: Any) -> dict[str, Any]:

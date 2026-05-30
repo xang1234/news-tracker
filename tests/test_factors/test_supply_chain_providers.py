@@ -159,7 +159,7 @@ async def test_eia_provider_parses_monthly_values_missing_values_and_revisions()
     )
 
     assert observations[0].observation_date == date(2026, 4, 1)
-    assert observations[0].available_at == fetched_at
+    assert observations[0].available_at == datetime(2026, 5, 16, tzinfo=UTC)
     assert observations[0].fetched_at == fetched_at
     assert observations[0].value == 8.12
     assert observations[0].revision == "2026-06-19T10:30:00Z"
@@ -263,7 +263,7 @@ async def test_census_provider_parses_monthly_hs_rows() -> None:
     )
 
     assert observations[0].observation_date == date(2026, 4, 1)
-    assert observations[0].available_at == datetime(2026, 6, 15, 12, tzinfo=UTC)
+    assert observations[0].available_at == datetime(2026, 5, 6, tzinfo=UTC)
     assert observations[0].metadata["estimated_release_at"] == "2026-05-06T00:00:00+00:00"
     assert observations[0].value == 1_250_000_000
     assert observations[0].revision == "2026-04"

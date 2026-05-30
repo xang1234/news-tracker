@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -96,7 +96,6 @@ class FakeFactorRepository:
 class RankedThemeLike:
     theme_id: str
     theme: Any
-    factor_context: list[dict[str, Any]] = field(default_factory=list)
 
 
 def test_classifies_rising_falling_stable_and_missing_regimes() -> None:
@@ -318,7 +317,46 @@ async def test_build_context_map_does_not_match_broad_catalog_tags_from_theme_te
 
 
 @pytest.mark.asyncio
-async def test_enrich_ranked_themes_applies_serialized_factor_context() -> None:
+async def test_build_context_map_caps_after_dropping_unobserved_matches() -> None:
+    unobserved_series = _series()
+    observed_series = FactorSeries(
+        factor_id="fred:DGS2",
+        provider="fred",
+        external_id="DGS2",
+        name="2-Year Treasury Constant Maturity Rate",
+        units="percent",
+        cadence="daily",
+        relevance_tags=["rates", "macro"],
+    )
+    observed = FactorObservation(
+        factor_id=observed_series.factor_id,
+        observation_date=date(2026, 5, 1),
+        value=4.0,
+        units="percent",
+        available_at=datetime(2026, 5, 2, tzinfo=UTC),
+    )
+    repo = FakeFactorRepository([unobserved_series, observed_series], [observed])
+    theme = type(
+        "ThemeLike",
+        (),
+        {
+            "theme_id": "theme_rates",
+            "metadata": {"factor_relevance_tags": ["rates"]},
+        },
+    )()
+
+    context_map = await FactorRegimeService(repo).build_context_map(
+        [theme],
+        as_of=datetime(2026, 5, 3, tzinfo=UTC),
+        max_factors_per_theme=1,
+    )
+
+    assert repo.calls[0]["factor_ids"] == ["fred:DGS10", "fred:DGS2"]
+    assert [context.factor_id for context in context_map["theme_rates"]] == ["fred:DGS2"]
+
+
+@pytest.mark.asyncio
+async def test_build_ranked_context_map_serializes_without_mutation() -> None:
     service = FactorRegimeService(FakeFactorRepository([_series()], [_observation(4.2)]))
     theme = type(
         "ThemeLike",
@@ -330,9 +368,10 @@ async def test_enrich_ranked_themes_applies_serialized_factor_context() -> None:
     )()
     ranked = RankedThemeLike(theme_id="theme_rates", theme=theme)
 
-    await service.enrich_ranked_themes(
+    context_map = await service.build_ranked_context_map(
         [ranked],
         as_of=datetime(2026, 5, 3, tzinfo=UTC),
     )
 
-    assert ranked.factor_context[0]["factor_id"] == "fred:DGS10"
+    assert context_map["theme_rates"][0]["factor_id"] == "fred:DGS10"
+    assert not hasattr(ranked, "factor_context")

@@ -6,7 +6,7 @@ import asyncio
 import time
 from collections.abc import Iterable
 from datetime import UTC, date, datetime, timedelta
-from typing import cast
+from typing import Any, cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -57,6 +57,7 @@ from src.factors.regimes import FactorRegimeService
 from src.graph.propagation import SentimentPropagation
 from src.graph.storage import GraphRepository
 from src.narrative.repository import NarrativeRepository
+from src.narrative.schemas import NarrativeRun
 from src.sentiment.aggregation import DocumentSentiment, SentimentAggregator
 from src.storage.repository import DocumentRepository
 from src.themes.catalysts import (
@@ -97,7 +98,7 @@ def _theme_to_item(theme: Theme, include_centroid: bool = False) -> ThemeItem:
 
 async def _run_to_item(
     narrative_repo: NarrativeRepository,
-    run,
+    run: NarrativeRun,
     theme_name: str | None = None,
 ) -> NarrativeRunItem:
     recent_alerts = await narrative_repo.get_recent_alerts(run.run_id, limit=3)
@@ -143,7 +144,7 @@ async def _run_to_item(
     )
 
 
-def _narrative_document_item(doc: dict) -> NarrativeDocumentItem:
+def _narrative_document_item(doc: dict[str, Any]) -> NarrativeDocumentItem:
     sentiment = doc.get("sentiment") or {}
     return NarrativeDocumentItem(
         document_id=doc["document_id"],
@@ -161,7 +162,7 @@ def _narrative_document_item(doc: dict) -> NarrativeDocumentItem:
     )
 
 
-def _catalyst_evidence_item(doc: dict) -> MarketCatalystEvidenceItem:
+def _catalyst_evidence_item(doc: dict[str, Any]) -> MarketCatalystEvidenceItem:
     sentiment = doc.get("sentiment") or {}
     return MarketCatalystEvidenceItem(
         document_id=doc["document_id"],
@@ -222,7 +223,7 @@ class _TickerNodeLookup:
 
 async def _build_market_catalyst_bounded(
     semaphore: asyncio.Semaphore,
-    **kwargs,
+    **kwargs: Any,
 ) -> MarketCatalystItem | None:
     """Build a catalyst while respecting the route-level concurrency ceiling."""
     async with semaphore:
@@ -231,7 +232,7 @@ async def _build_market_catalyst_bounded(
 
 async def _build_market_catalyst(
     *,
-    run,
+    run: NarrativeRun,
     theme_name: str | None,
     days: int,
     narrative_repo: NarrativeRepository,
@@ -292,13 +293,13 @@ async def _build_market_catalyst(
         candidate_node_ids = {
             impact.node_id
             for result in propagation_results
-            if not isinstance(result, Exception)
+            if not isinstance(result, BaseException)
             for impact in result.values()
         }
         ticker_node_ids = await ticker_node_lookup.filter_tickers(candidate_node_ids)
         best_impacts: dict[str, MarketCatalystRelatedTickerItem] = {}
         for source_item, result in zip(primary_tickers, propagation_results, strict=True):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 logger.warning(
                     "catalyst_propagation_failed",
                     run_id=run.run_id,
@@ -511,8 +512,9 @@ async def get_ranked_themes(
 
         # Apply limit
         ranked = ranked[:limit]
+        factor_context_map: dict[str, list[dict[str, Any]]] = {}
         if ranked:
-            await factor_regime_service.enrich_ranked_themes(
+            factor_context_map = await factor_regime_service.build_ranked_context_map(
                 ranked,
                 as_of=datetime.now(UTC),
             )
@@ -523,7 +525,7 @@ async def get_ranked_themes(
                 score=round(r.score, 4),
                 tier=r.tier,
                 components=r.components,
-                factor_context=r.factor_context,
+                factor_context=factor_context_map.get(r.theme_id, []),
             )
             for r in ranked
         ]
@@ -641,7 +643,7 @@ async def get_market_catalysts(
 
     items: list[MarketCatalystItem] = []
     for result in catalysts:
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             logger.warning("build_market_catalyst_failed", error=str(result))
             continue
         if result is not None:

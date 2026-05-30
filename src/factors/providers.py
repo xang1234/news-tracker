@@ -15,6 +15,7 @@ from src.factors.provider_common import (
     MissingProviderCredentialError,
     ProviderResponseError,
     date_in_range,
+    date_to_utc,
     latest_only,
     make_observation,
     response_json,
@@ -136,6 +137,7 @@ class FredFactorProvider:
                     series,
                     observation_date=obs_date,
                     value=row.get("value"),
+                    available_at=date_to_utc(realtime_start),
                     fetched_at=observed_at,
                     revision=realtime_start,
                     metadata={

@@ -42,10 +42,16 @@ class FactorRegimeRepository(Protocol):
         ...
 
 
-class RankedThemeWithFactorContext(Protocol):
-    theme_id: str
-    theme: Any
-    factor_context: list[dict[str, Any]]
+class RankedThemeForFactorContext(Protocol):
+    @property
+    def theme_id(self) -> str:
+        """Theme identifier used to attach context."""
+        ...
+
+    @property
+    def theme(self) -> ThemeWithFactorTags:
+        """Theme payload used for factor relevance matching."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -140,13 +146,14 @@ class FactorRegimeService:
         max_factors_per_theme: int = 5,
     ) -> dict[str, list[FactorRegimeContext]]:
         """Join theme relevance tags to factor observations visible at ``as_of``."""
+        if max_factors_per_theme <= 0:
+            return {theme.theme_id: [] for theme in themes}
+
         series_list = await self._repository.list_series(active_only=True)
         start = as_of.date() - timedelta(days=lookback_days)
         end = as_of.date()
         matches_by_theme = {
-            theme.theme_id: _matching_series(series_list, extract_theme_factor_tags(theme))[
-                :max_factors_per_theme
-            ]
+            theme.theme_id: _matching_series(series_list, extract_theme_factor_tags(theme))
             for theme in themes
         }
         series_by_id = {
@@ -173,20 +180,22 @@ class FactorRegimeService:
                 observations = observations_by_factor.get(series.factor_id, [])
                 if observations:
                     contexts.append(_context_from_observations(series, observations))
+                if len(contexts) >= max_factors_per_theme:
+                    break
             context_map[theme.theme_id] = contexts
         return context_map
 
-    async def enrich_ranked_themes(
+    async def build_ranked_context_map(
         self,
-        ranked_themes: Sequence[RankedThemeWithFactorContext],
+        ranked_themes: Sequence[RankedThemeForFactorContext],
         *,
         as_of: datetime,
         lookback_days: int = DEFAULT_LOOKBACK_DAYS,
         max_factors_per_theme: int = 5,
-    ) -> None:
-        """Attach serialised factor context to ranked theme payloads."""
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Build serialised factor context for ranked theme payloads."""
         if not ranked_themes:
-            return
+            return {}
 
         factor_context_map = await self.build_context_map(
             [ranked_theme.theme for ranked_theme in ranked_themes],
@@ -194,11 +203,13 @@ class FactorRegimeService:
             lookback_days=lookback_days,
             max_factors_per_theme=max_factors_per_theme,
         )
-        for ranked_theme in ranked_themes:
-            ranked_theme.factor_context = [
+        return {
+            ranked_theme.theme_id: [
                 context.to_dict()
                 for context in factor_context_map.get(ranked_theme.theme_id, [])
             ]
+            for ranked_theme in ranked_themes
+        }
 
 
 def _context_from_observations(

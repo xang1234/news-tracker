@@ -69,6 +69,21 @@ class InMemoryFactorRepository:
         self.observations[key] = observation
         return observation
 
+    async def upsert_observations(
+        self,
+        observations: list[FactorObservation],
+    ) -> list[FactorObservation]:
+        return [await self.upsert_observation(observation) for observation in observations]
+
+    async def upsert_series_with_observations(
+        self,
+        series: FactorSeries,
+        observations: list[FactorObservation],
+    ) -> tuple[FactorSeries, list[FactorObservation]]:
+        persisted_series = await self.upsert_series(series)
+        persisted_observations = await self.upsert_observations(observations)
+        return persisted_series, persisted_observations
+
 
 def _series() -> FactorSeries:
     return FactorSeries(

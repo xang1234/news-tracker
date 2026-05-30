@@ -17,7 +17,7 @@ Components:
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Any, Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -58,7 +58,6 @@ class RankedTheme:
         score: Composite ranking score (higher = more actionable).
         tier: 1 (top 5%), 2 (top 20%), or 3 (rest).
         components: Breakdown of score factors for explainability.
-        factor_context: Macro/supply-chain regime context for explanations.
     """
 
     theme_id: str
@@ -66,7 +65,6 @@ class RankedTheme:
     score: float
     tier: int = 3
     components: dict[str, Any] = field(default_factory=dict)
-    factor_context: list[dict[str, Any]] = field(default_factory=list)
 
 
 # ── Config ───────────────────────────────────────────────
@@ -284,14 +282,12 @@ class ThemeRankingService:
         self,
         strategy: RankingStrategy | None = None,
         max_tier: int = 3,
-        as_of: datetime | None = None,
     ) -> list[RankedTheme]:
         """Fetch themes + latest metrics, rank, and filter by tier.
 
         Args:
             strategy: Ranking strategy. Defaults to config default.
             max_tier: Maximum tier to include (1, 2, or 3).
-            as_of: Optional decision timestamp for factor context.
 
         Returns:
             Sorted list of RankedTheme up to max_tier.

@@ -97,7 +97,7 @@ def make_observation(
         observation_date=observation_date,
         value=parsed_value,
         units=series.units,
-        available_at=available_at or fetched_at,
+        available_at=available_at or estimated_release_at,
         fetched_at=fetched_at,
         revision=revision,
         missing_reason="provider_missing_value" if parsed_value is None else None,

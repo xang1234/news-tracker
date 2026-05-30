@@ -33,8 +33,19 @@ class FactorStore(Protocol):
         """Insert or update a factor registry entry."""
         ...
 
-    async def upsert_observation(self, observation: FactorObservation) -> FactorObservation:
-        """Insert or update a point-in-time observation."""
+    async def upsert_observations(
+        self,
+        observations: list[FactorObservation],
+    ) -> list[FactorObservation]:
+        """Insert or update point-in-time observations."""
+        ...
+
+    async def upsert_series_with_observations(
+        self,
+        series: FactorSeries,
+        observations: list[FactorObservation],
+    ) -> tuple[FactorSeries, list[FactorObservation]]:
+        """Insert or update a factor registry entry and observations."""
         ...
 
 
@@ -78,8 +89,11 @@ class FactorIngestionService:
             fetched_at=fetched_at,
         )
 
-        await self._repository.upsert_series(series)
-        return await self._write_observations(series, observations)
+        _, written_observations = await self._repository.upsert_series_with_observations(
+            series,
+            observations,
+        )
+        return _summarize_ingestion(series, observations, written_observations)
 
     async def refresh_registered_series(
         self,
@@ -100,7 +114,8 @@ class FactorIngestionService:
             latest=latest,
             fetched_at=fetched_at,
         )
-        return await self._write_observations(series, observations)
+        written_observations = await self._repository.upsert_observations(observations)
+        return _summarize_ingestion(series, observations, written_observations)
 
     async def _fetch_validated_observations(
         self,
@@ -123,22 +138,17 @@ class FactorIngestionService:
             validate_observation_for_series(series, observation)
         return observations
 
-    async def _write_observations(
-        self,
-        series: FactorSeries,
-        observations: list[FactorObservation],
-    ) -> FactorIngestionResult:
-        written = 0
-        missing = 0
-        for observation in observations:
-            await self._repository.upsert_observation(observation)
-            written += 1
-            if observation.is_missing:
-                missing += 1
 
-        return FactorIngestionResult(
-            factor_id=series.factor_id,
-            observations_seen=len(observations),
-            observations_written=written,
-            missing_observations=missing,
-        )
+def _summarize_ingestion(
+    series: FactorSeries,
+    observations_seen: list[FactorObservation],
+    observations_written: list[FactorObservation],
+) -> FactorIngestionResult:
+    return FactorIngestionResult(
+        factor_id=series.factor_id,
+        observations_seen=len(observations_seen),
+        observations_written=len(observations_written),
+        missing_observations=sum(
+            1 for observation in observations_written if observation.is_missing
+        ),
+    )
