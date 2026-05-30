@@ -514,6 +514,7 @@ async def get_ranked_themes(
                 score=round(r.score, 4),
                 tier=r.tier,
                 components=r.components,
+                factor_context=r.factor_context,
             )
             for r in ranked
         ]

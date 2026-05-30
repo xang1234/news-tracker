@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from src.backtest.engine import BacktestEngine, BacktestResults
+from src.factors.regimes import FactorRegimeContext
 from src.themes.schemas import Theme, ThemeMetrics
 
 # ── Trading Days ────────────────────────────────────────────
@@ -117,6 +118,7 @@ def _make_mock_engine(
 
     # Mock PriceDataFeed
     engine._price_feed.get_forward_returns = AsyncMock(return_value=forward_returns)
+    engine._factor_regimes.build_context_map = AsyncMock(return_value={})
 
     # Mock repositories to return simple objects
     mock_database.fetchrow = AsyncMock(
@@ -300,6 +302,41 @@ class TestRunBacktest:
         assert results.strategy == "position"
         assert results.horizon == 10
         assert results.top_n == 5
+
+    @pytest.mark.asyncio
+    async def test_daily_snapshots_include_pit_factor_context(
+        self,
+        mock_database,
+        sample_themes,
+        sample_theme_metrics,
+        sample_forward_returns,
+    ):
+        """Backtest replay serializes factor context available at decision time."""
+        context = FactorRegimeContext(
+            factor_id="fred:DGS10",
+            provider="fred",
+            name="10-Year Treasury Constant Maturity Rate",
+            observation_date=date(2025, 6, 1),
+            value=4.2,
+            units="percent",
+            regime="rising",
+            available_at=datetime(2025, 6, 2, tzinfo=UTC),
+            relevance_tags=["rates"],
+        )
+        engine = _make_mock_engine(
+            mock_database,
+            sample_themes,
+            sample_theme_metrics,
+            sample_forward_returns,
+        )
+        engine._factor_regimes.build_context_map = AsyncMock(
+            return_value={"theme_nvda": [context]}
+        )
+
+        result = await engine._process_day(date(2025, 6, 2), "swing", top_n=3, horizon=5)
+
+        assert result.ranked_themes[0]["factor_context"] == [context.to_dict()]
+        engine._factor_regimes.build_context_map.assert_awaited_once()
 
 
 # ── Serialization ───────────────────────────────────────────

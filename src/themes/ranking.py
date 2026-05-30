@@ -17,7 +17,7 @@ Components:
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -58,13 +58,15 @@ class RankedTheme:
         score: Composite ranking score (higher = more actionable).
         tier: 1 (top 5%), 2 (top 20%), or 3 (rest).
         components: Breakdown of score factors for explainability.
+        factor_context: Macro/supply-chain regime context for explanations.
     """
 
     theme_id: str
     theme: Theme
     score: float
     tier: int = 3
-    components: dict[str, float] = field(default_factory=dict)
+    components: dict[str, Any] = field(default_factory=dict)
+    factor_context: list[dict[str, Any]] = field(default_factory=list)
 
 
 # ── Config ───────────────────────────────────────────────
@@ -122,9 +124,11 @@ class ThemeRankingService:
         self,
         config: RankingConfig | None = None,
         theme_repo: Any = None,
+        factor_context_provider: Any = None,
     ) -> None:
         self._config = config or RankingConfig()
         self._theme_repo = theme_repo
+        self._factor_context_provider = factor_context_provider
 
     # ── Pure computation methods ─────────────────────────
 
@@ -133,7 +137,7 @@ class ThemeRankingService:
         theme: Theme,
         metrics: ThemeMetrics | None,
         strategy: RankingStrategy = "swing",
-    ) -> tuple[float, dict[str, float]]:
+    ) -> tuple[float, dict[str, Any]]:
         """Compute the ranking score for a single theme.
 
         Formula:
@@ -202,6 +206,7 @@ class ThemeRankingService:
         themes: list[Theme],
         metrics_map: dict[str, ThemeMetrics],
         strategy: RankingStrategy = "swing",
+        factor_context_map: dict[str, list[Any]] | None = None,
     ) -> list[RankedTheme]:
         """Score all themes, sort descending, and assign tiers.
 
@@ -209,6 +214,7 @@ class ThemeRankingService:
             themes: Themes to rank.
             metrics_map: theme_id → latest ThemeMetrics.
             strategy: Ranking strategy.
+            factor_context_map: Optional theme_id → factor regime contexts.
 
         Returns:
             Sorted list of RankedTheme (highest score first).
@@ -230,6 +236,9 @@ class ThemeRankingService:
                     theme=theme,
                     score=score,
                     components=components,
+                    factor_context=_serialise_factor_context(
+                        (factor_context_map or {}).get(theme.theme_id, [])
+                    ),
                 )
             )
 
@@ -282,12 +291,14 @@ class ThemeRankingService:
         self,
         strategy: RankingStrategy | None = None,
         max_tier: int = 3,
+        as_of: datetime | None = None,
     ) -> list[RankedTheme]:
         """Fetch themes + latest metrics, rank, and filter by tier.
 
         Args:
             strategy: Ranking strategy. Defaults to config default.
             max_tier: Maximum tier to include (1, 2, or 3).
+            as_of: Optional decision timestamp for factor context.
 
         Returns:
             Sorted list of RankedTheme up to max_tier.
@@ -318,7 +329,26 @@ class ThemeRankingService:
                 # Use the most recent entry
                 metrics_map[theme.theme_id] = metrics_list[-1]
 
-        ranked = self.rank_themes(themes, metrics_map, effective_strategy)
+        factor_context_map = {}
+        if self._factor_context_provider is not None:
+            factor_context_map = await self._factor_context_provider.build_context_map(
+                themes,
+                as_of=as_of or datetime.now(UTC),
+            )
+
+        ranked = self.rank_themes(
+            themes,
+            metrics_map,
+            effective_strategy,
+            factor_context_map=factor_context_map,
+        )
 
         # Filter by tier
         return [r for r in ranked if r.tier <= max_tier]
+
+
+def _serialise_factor_context(contexts: list[Any]) -> list[dict[str, Any]]:
+    return [
+        context.to_dict() if hasattr(context, "to_dict") else dict(context)
+        for context in contexts
+    ]

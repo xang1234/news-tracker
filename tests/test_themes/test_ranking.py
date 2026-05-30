@@ -1,12 +1,13 @@
 """Tests for ThemeRankingService — pure computation and async orchestrator."""
 
 import math
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import AsyncMock
 
 import numpy as np
 import pytest
 
+from src.factors.regimes import FactorRegimeContext
 from src.themes.ranking import (
     RankingConfig,
     ThemeRankingService,
@@ -242,6 +243,31 @@ class TestRankThemes:
 
         assert len(result) == 1
         assert result[0].components["volume_zscore"] == 0.0
+
+    def test_ranked_theme_includes_factor_context(self, service: ThemeRankingService) -> None:
+        """Ranking payload can carry relevant macro/supply-chain context."""
+        theme = _make_theme("theme_rates")
+        context = FactorRegimeContext(
+            factor_id="fred:DGS10",
+            provider="fred",
+            name="10-Year Treasury Constant Maturity Rate",
+            observation_date=date(2026, 5, 1),
+            value=4.2,
+            units="percent",
+            regime="rising",
+            available_at=datetime(2026, 5, 2),
+            relevance_tags=["rates"],
+            metadata={"delta": 0.2},
+        )
+
+        result = service.rank_themes(
+            [theme],
+            {},
+            "swing",
+            factor_context_map={"theme_rates": [context]},
+        )
+
+        assert result[0].factor_context == [context.to_dict()]
 
 
 # ── TestAssignTiers ──────────────────────────────────────

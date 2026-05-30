@@ -19,6 +19,8 @@ from src.embedding.config import EmbeddingConfig
 from src.embedding.service import EmbeddingService
 from src.event_extraction.config import EventExtractionConfig
 from src.event_extraction.patterns import PatternExtractor
+from src.factors.regimes import FactorRegimeService
+from src.factors.repository import FactorRepository
 from src.feedback.repository import FeedbackRepository
 from src.graph.causal_graph import CausalGraph
 from src.graph.config import GraphConfig
@@ -212,9 +214,15 @@ class AppServices:
     async def get_ranking_service(self) -> ThemeRankingService:
         if self.ranking_service is None:
             theme_repository = await self.get_theme_repository()
+            database = await self.get_database()
             async with self._init_lock:
                 if self.ranking_service is None:
-                    self.ranking_service = ThemeRankingService(theme_repo=theme_repository)
+                    self.ranking_service = ThemeRankingService(
+                        theme_repo=theme_repository,
+                        factor_context_provider=FactorRegimeService(
+                            FactorRepository(database)
+                        ),
+                    )
         return self.ranking_service
 
     async def get_alert_repository(self) -> AlertRepository:

@@ -13,6 +13,11 @@ from src.factors.providers import (
     ProviderResponseError,
     TreasuryFiscalDataProvider,
 )
+from src.factors.regimes import (
+    FactorRegimeContext,
+    FactorRegimeService,
+    classify_factor_regime,
+)
 from src.factors.repository import FactorRepository
 from src.factors.schemas import (
     VALID_FACTOR_CADENCES,
@@ -41,6 +46,8 @@ __all__ = [
     "FactorIngestionResult",
     "FactorIngestionService",
     "FactorObservation",
+    "FactorRegimeContext",
+    "FactorRegimeService",
     "FactorRepository",
     "FactorSeries",
     "FederalReserveCsvFactorProvider",
@@ -51,6 +58,7 @@ __all__ = [
     "ProviderResponseError",
     "SupplyChainProviderCredentials",
     "TreasuryFiscalDataProvider",
+    "classify_factor_regime",
     "get_curated_macro_factor_series",
     "get_curated_supply_chain_factor_series",
     "validate_observation_for_series",
