@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -34,6 +33,18 @@ class FactorRegimeRepository(Protocol):
         as_of: datetime,
     ) -> list[FactorObservation]:
         """Fetch observations visible as of a decision timestamp."""
+        ...
+
+    async def get_latest_observations_as_of(
+        self,
+        factor_ids: list[str],
+        *,
+        start: date,
+        end: date,
+        as_of: datetime,
+        per_factor: int = 2,
+    ) -> dict[str, list[FactorObservation]]:
+        """Fetch the latest visible observations for multiple factors."""
         ...
 
 
@@ -137,56 +148,38 @@ class FactorRegimeService:
         series_list = await self._repository.list_series(active_only=True)
         start = as_of.date() - timedelta(days=lookback_days)
         end = as_of.date()
-
-        entries = await asyncio.gather(
-            *[
-                self._build_theme_context(
-                    theme,
-                    series_list,
-                    start=start,
-                    end=end,
-                    as_of=as_of,
-                    max_factors=max_factors_per_theme,
-                )
-                for theme in themes
+        matches_by_theme = {
+            theme.theme_id: _matching_series(series_list, _theme_factor_tags(theme))[
+                :max_factors_per_theme
             ]
+            for theme in themes
+        }
+        series_by_id = {
+            series.factor_id: series
+            for matching in matches_by_theme.values()
+            for series in matching
+        }
+        observations_by_factor = (
+            await self._repository.get_latest_observations_as_of(
+                list(series_by_id),
+                start=start,
+                end=end,
+                as_of=as_of,
+                per_factor=2,
+            )
+            if series_by_id
+            else {}
         )
-        return dict(entries)
 
-    async def _build_theme_context(
-        self,
-        theme: ThemeWithFactorTags,
-        series_list: list[FactorSeries],
-        *,
-        start: date,
-        end: date,
-        as_of: datetime,
-        max_factors: int,
-    ) -> tuple[str, list[FactorRegimeContext]]:
-        matching = _matching_series(series_list, _theme_factor_tags(theme))[:max_factors]
-        context_candidates = await asyncio.gather(
-            *[
-                self._context_for_series(series, start=start, end=end, as_of=as_of)
-                for series in matching
-            ]
-        )
-        return theme.theme_id, [context for context in context_candidates if context is not None]
-
-    async def _context_for_series(
-        self,
-        series: FactorSeries,
-        *,
-        start: date,
-        end: date,
-        as_of: datetime,
-    ) -> FactorRegimeContext | None:
-        observations = await self._repository.get_observations_as_of(
-            series.factor_id,
-            start=start,
-            end=end,
-            as_of=as_of,
-        )
-        return _context_from_observations(series, observations) if observations else None
+        context_map: dict[str, list[FactorRegimeContext]] = {}
+        for theme in themes:
+            contexts = []
+            for series in matches_by_theme[theme.theme_id]:
+                observations = observations_by_factor.get(series.factor_id, [])
+                if observations:
+                    contexts.append(_context_from_observations(series, observations))
+            context_map[theme.theme_id] = contexts
+        return context_map
 
 
 def _context_from_observations(
@@ -204,7 +197,22 @@ def _theme_factor_tags(theme: ThemeWithFactorTags) -> set[str]:
     raw_tags = metadata.get("factor_relevance_tags") or metadata.get("relevance_tags") or []
     if isinstance(raw_tags, str):
         raw_tags = [raw_tags]
-    return {str(tag).lower() for tag in raw_tags if str(tag).strip()}
+    tags = {_normalise_tag(str(tag)) for tag in raw_tags if str(tag).strip()}
+    text_parts = [
+        getattr(theme, "name", ""),
+        getattr(theme, "description", ""),
+        " ".join(str(keyword) for keyword in getattr(theme, "top_keywords", []) or []),
+        " ".join(str(ticker) for ticker in getattr(theme, "top_tickers", []) or []),
+    ]
+    for entity in getattr(theme, "top_entities", []) or []:
+        if isinstance(entity, dict):
+            text_parts.append(str(entity.get("name") or entity.get("text") or ""))
+        else:
+            text_parts.append(str(entity))
+    text = " ".join(text_parts).lower().replace("-", " ").replace("_", " ")
+    tags.update(_normalise_tag(keyword) for keyword in text.split() if keyword.strip())
+    tags.update(_derived_factor_tags(text))
+    return {tag for tag in tags if tag}
 
 
 def _matching_series(
@@ -216,5 +224,55 @@ def _matching_series(
     return [
         series
         for series in series_list
-        if theme_tags.intersection(tag.lower() for tag in series.relevance_tags)
+        if theme_tags.intersection(_normalise_tag(tag) for tag in series.relevance_tags)
     ]
+
+
+def _normalise_tag(value: str) -> str:
+    return value.strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _derived_factor_tags(text: str) -> set[str]:
+    tags: set[str] = set()
+    if _contains_any(
+        text,
+        "semiconductor",
+        "semiconductors",
+        "chip",
+        "chips",
+        "gpu",
+        "hbm",
+        "nvidia",
+        "amd",
+        "tsmc",
+        "foundry",
+        "fab",
+    ):
+        tags.add("semiconductors")
+    if _contains_any(text, "hbm", "dram", "nand", "memory"):
+        tags.add("memory")
+    if _contains_any(text, "ai", "data center", "datacenter", "power", "electricity"):
+        tags.update({"ai_infrastructure", "energy"})
+    if _contains_any(text, "energy", "utility", "electricity", "power"):
+        tags.add("energy")
+    if _contains_any(text, "rate", "rates", "yield", "treasury", "fed"):
+        tags.update({"rates", "yield_curve", "macro"})
+    if _contains_any(text, "inflation", "cpi", "ppi", "consumer price"):
+        tags.update({"inflation", "consumer", "macro"})
+    if _contains_any(text, "jobs", "labor", "payroll", "employment"):
+        tags.update({"labor", "macro"})
+    if _contains_any(text, "industrial", "production", "manufacturing", "pmi"):
+        tags.update({"industry", "macro"})
+    if _contains_any(text, "gdp", "growth"):
+        tags.update({"growth", "macro"})
+    if _contains_any(text, "profit", "profits", "earnings", "margin"):
+        tags.update({"profits", "earnings", "macro"})
+    if _contains_any(text, "trade", "import", "imports", "export", "tariff", "china"):
+        tags.update({"trade", "supply_chain"})
+    if _contains_any(text, "capex", "equipment", "asml"):
+        tags.add("capex")
+    return tags
+
+
+def _contains_any(text: str, *needles: str) -> bool:
+    return any(needle in text for needle in needles)

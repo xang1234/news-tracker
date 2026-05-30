@@ -67,6 +67,7 @@ class AppServices:
         self.document_repository: DocumentRepository | None = None
         self.sentiment_aggregator: SentimentAggregator | None = None
         self.ranking_service: ThemeRankingService | None = None
+        self.factor_regime_service: FactorRegimeService | None = None
         self.alert_repository: AlertRepository | None = None
         self.narrative_repository: NarrativeRepository | None = None
         self.causal_graph: CausalGraph | None = None
@@ -214,16 +215,20 @@ class AppServices:
     async def get_ranking_service(self) -> ThemeRankingService:
         if self.ranking_service is None:
             theme_repository = await self.get_theme_repository()
-            database = await self.get_database()
             async with self._init_lock:
                 if self.ranking_service is None:
-                    self.ranking_service = ThemeRankingService(
-                        theme_repo=theme_repository,
-                        factor_context_provider=FactorRegimeService(
-                            FactorRepository(database)
-                        ),
-                    )
+                    self.ranking_service = ThemeRankingService(theme_repo=theme_repository)
         return self.ranking_service
+
+    async def get_factor_regime_service(self) -> FactorRegimeService:
+        if self.factor_regime_service is None:
+            database = await self.get_database()
+            async with self._init_lock:
+                if self.factor_regime_service is None:
+                    self.factor_regime_service = FactorRegimeService(
+                        FactorRepository(database)
+                    )
+        return self.factor_regime_service
 
     async def get_alert_repository(self) -> AlertRepository:
         if self.alert_repository is None:
@@ -395,6 +400,7 @@ class AppServices:
         self.document_repository = None
         self.sentiment_aggregator = None
         self.ranking_service = None
+        self.factor_regime_service = None
         self.alert_repository = None
         self.narrative_repository = None
         self.causal_graph = None
@@ -462,6 +468,10 @@ async def get_document_repository(request: Request) -> DocumentRepository:
 
 async def get_ranking_service(request: Request) -> ThemeRankingService:
     return await _get_services(request).get_ranking_service()
+
+
+async def get_factor_regime_service(request: Request) -> FactorRegimeService:
+    return await _get_services(request).get_factor_regime_service()
 
 
 async def get_alert_repository(request: Request) -> AlertRepository:

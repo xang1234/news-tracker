@@ -161,6 +161,56 @@ class FactorRepository:
         )
         return [_record_to_observation(row) for row in rows]
 
+    async def get_latest_observations_as_of(
+        self,
+        factor_ids: list[str],
+        *,
+        start: date,
+        end: date,
+        as_of: datetime,
+        per_factor: int = 2,
+    ) -> dict[str, list[FactorObservation]]:
+        """Fetch the latest visible observations for multiple factors in one query."""
+        if not factor_ids:
+            return {}
+
+        rows = await self._db.fetch(
+            """
+            WITH latest_per_observation AS (
+                SELECT DISTINCT ON (factor_id, observation_date) *
+                FROM factor_observations
+                WHERE factor_id = ANY($1::text[])
+                  AND observation_date >= $2
+                  AND observation_date <= $3
+                  AND available_at <= $4
+                ORDER BY factor_id, observation_date DESC, available_at DESC, fetched_at DESC
+            ),
+            ranked AS (
+                SELECT
+                    latest_per_observation.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY factor_id
+                        ORDER BY observation_date DESC
+                    ) AS factor_rank
+                FROM latest_per_observation
+            )
+            SELECT *
+            FROM ranked
+            WHERE factor_rank <= $5
+            ORDER BY factor_id, observation_date ASC
+            """,
+            factor_ids,
+            start,
+            end,
+            as_of,
+            per_factor,
+        )
+
+        grouped: dict[str, list[FactorObservation]] = {factor_id: [] for factor_id in factor_ids}
+        for row in rows:
+            grouped.setdefault(row["factor_id"], []).append(_record_to_observation(row))
+        return grouped
+
 
 def _parse_metadata(value: Any) -> dict[str, Any]:
     if isinstance(value, str):

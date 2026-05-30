@@ -15,7 +15,6 @@ from src.factors.provider_common import (
     MissingProviderCredentialError,
     ProviderResponseError,
     date_in_range,
-    date_to_utc,
     latest_only,
     make_observation,
     response_json,
@@ -130,17 +129,19 @@ class FredFactorProvider:
         observed_at = fetched_at or utc_now()
         observations: list[FactorObservation] = []
         for row in payload.get("observations", []):
-            release_date = row.get("realtime_start") or row["date"]
+            realtime_start = row.get("realtime_start") or row["date"]
             obs_date = date.fromisoformat(row["date"])
             observations.append(
                 make_observation(
                     series,
                     observation_date=obs_date,
                     value=row.get("value"),
-                    available_at=date_to_utc(release_date),
                     fetched_at=observed_at,
-                    revision=release_date,
-                    metadata={"realtime_end": row.get("realtime_end")},
+                    revision=realtime_start,
+                    metadata={
+                        "realtime_start": realtime_start,
+                        "realtime_end": row.get("realtime_end"),
+                    },
                 )
             )
         return observations

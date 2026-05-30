@@ -15,6 +15,7 @@ class FactorHTTPGetClient(Protocol):
         self,
         url: str,
         params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
         **kwargs: Any,
     ) -> httpx.Response:
         """Fetch a URL with optional query parameters."""
@@ -25,6 +26,8 @@ class FactorHTTPClient(FactorHTTPGetClient, Protocol):
     async def post(
         self,
         url: str,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
         json_body: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> httpx.Response:
@@ -86,16 +89,21 @@ def make_observation(
 ) -> FactorObservation:
     """Build a point-in-time observation from provider payload fields."""
     parsed_value = parse_number(value)
+    estimated_release_at = lagged_available_at(series, observation_date)
+    observation_metadata = {
+        "estimated_release_at": estimated_release_at.isoformat(),
+        **(metadata or {}),
+    }
     return FactorObservation(
         factor_id=series.factor_id,
         observation_date=observation_date,
         value=parsed_value,
         units=series.units,
-        available_at=available_at or lagged_available_at(series, observation_date),
+        available_at=available_at or fetched_at,
         fetched_at=fetched_at,
         revision=revision,
         missing_reason="provider_missing_value" if parsed_value is None else None,
-        metadata=metadata or {},
+        metadata=observation_metadata,
     )
 
 

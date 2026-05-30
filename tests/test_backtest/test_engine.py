@@ -333,10 +333,12 @@ class TestRunBacktest:
             return_value={"theme_nvda": [context]}
         )
 
-        result = await engine._process_day(date(2025, 6, 2), "swing", top_n=3, horizon=5)
+        result = await engine._process_day(date(2025, 6, 2), "swing", top_n=1, horizon=5)
 
         assert result.ranked_themes[0]["factor_context"] == [context.to_dict()]
         engine._factor_regimes.build_context_map.assert_awaited_once()
+        enriched_themes = engine._factor_regimes.build_context_map.call_args.args[0]
+        assert [theme.theme_id for theme in enriched_themes] == ["theme_nvda"]
 
 
 # ── Serialization ───────────────────────────────────────────

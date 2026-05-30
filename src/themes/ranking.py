@@ -17,7 +17,7 @@ Components:
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -124,11 +124,9 @@ class ThemeRankingService:
         self,
         config: RankingConfig | None = None,
         theme_repo: Any = None,
-        factor_context_provider: Any = None,
     ) -> None:
         self._config = config or RankingConfig()
         self._theme_repo = theme_repo
-        self._factor_context_provider = factor_context_provider
 
     # ── Pure computation methods ─────────────────────────
 
@@ -329,18 +327,10 @@ class ThemeRankingService:
                 # Use the most recent entry
                 metrics_map[theme.theme_id] = metrics_list[-1]
 
-        factor_context_map = {}
-        if self._factor_context_provider is not None:
-            factor_context_map = await self._factor_context_provider.build_context_map(
-                themes,
-                as_of=as_of or datetime.now(UTC),
-            )
-
         ranked = self.rank_themes(
             themes,
             metrics_map,
             effective_strategy,
-            factor_context_map=factor_context_map,
         )
 
         # Filter by tier

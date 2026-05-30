@@ -346,17 +346,12 @@ class BacktestEngine:
 
         # Build metrics map for ranking
         metrics_map = await self._build_metrics_map(themes, as_of)
-        factor_context_map = await self._factor_regimes.build_context_map(
-            themes,
-            as_of=as_of,
-        )
 
         # Rank themes
         ranked = self._ranking.rank_themes(
             themes,
             metrics_map,
             strategy,
-            factor_context_map=factor_context_map,
         )
         top_ranked = ranked[:top_n]
 
@@ -365,6 +360,16 @@ class BacktestEngine:
                 date=day,
                 theme_count=len(themes),
             )
+
+        factor_context_map = await self._factor_regimes.build_context_map(
+            [rt.theme for rt in top_ranked],
+            as_of=as_of,
+        )
+        for ranked_theme in top_ranked:
+            ranked_theme.factor_context = [
+                context.to_dict()
+                for context in factor_context_map.get(ranked_theme.theme_id, [])
+            ]
 
         # Serialise ranked themes for storage
         ranked_snapshots = [

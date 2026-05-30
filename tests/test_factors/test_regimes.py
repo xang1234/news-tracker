@@ -58,29 +58,37 @@ class FakeFactorRepository:
     ) -> list[FactorSeries]:
         return self.series
 
-    async def get_observations_as_of(
+    async def get_latest_observations_as_of(
         self,
-        factor_id: str,
+        factor_ids: list[str],
         *,
         start: date,
         end: date,
         as_of: datetime,
-    ) -> list[FactorObservation]:
+        per_factor: int = 2,
+    ) -> dict[str, list[FactorObservation]]:
         self.calls.append(
             {
-                "factor_id": factor_id,
+                "factor_ids": factor_ids,
                 "start": start,
                 "end": end,
                 "as_of": as_of,
+                "per_factor": per_factor,
             }
         )
-        return [
-            obs
-            for obs in self.observations
-            if obs.factor_id == factor_id
-            and start <= obs.observation_date <= end
-            and obs.available_at <= as_of
-        ]
+        result: dict[str, list[FactorObservation]] = {}
+        for factor_id in factor_ids:
+            visible = [
+                obs
+                for obs in self.observations
+                if obs.factor_id == factor_id
+                and start <= obs.observation_date <= end
+                and obs.available_at <= as_of
+            ]
+            result[factor_id] = sorted(visible, key=lambda obs: obs.observation_date)[
+                -per_factor:
+            ]
+        return result
 
 
 def test_classifies_rising_falling_stable_and_missing_regimes() -> None:
@@ -136,10 +144,11 @@ async def test_build_context_map_joins_theme_tags_to_factor_observations_as_of()
 
     assert repo.calls == [
         {
-            "factor_id": "fred:DGS10",
+            "factor_ids": ["fred:DGS10"],
             "start": date(2025, 5, 3),
             "end": date(2026, 5, 3),
             "as_of": as_of,
+            "per_factor": 2,
         }
     ]
     assert context_map["theme_rates"][0].factor_id == "fred:DGS10"
@@ -166,3 +175,68 @@ async def test_build_context_map_omits_unrelated_theme_tags() -> None:
     )
 
     assert context_map["theme_memory"] == []
+
+
+@pytest.mark.asyncio
+async def test_build_context_map_batches_unique_factor_observations_once() -> None:
+    series = _series()
+    repo = FakeFactorRepository([series], [_observation(4.0), _observation(4.2)])
+    theme_a = type(
+        "ThemeLike",
+        (),
+        {"theme_id": "theme_a", "metadata": {"factor_relevance_tags": ["rates"]}},
+    )()
+    theme_b = type(
+        "ThemeLike",
+        (),
+        {"theme_id": "theme_b", "metadata": {"factor_relevance_tags": ["rates"]}},
+    )()
+
+    context_map = await FactorRegimeService(repo).build_context_map(
+        [theme_a, theme_b],
+        as_of=datetime(2026, 5, 3, tzinfo=UTC),
+    )
+
+    assert list(context_map) == ["theme_a", "theme_b"]
+    assert len(repo.calls) == 1
+    assert repo.calls[0]["factor_ids"] == ["fred:DGS10"]
+
+
+@pytest.mark.asyncio
+async def test_build_context_map_derives_relevance_from_theme_keywords() -> None:
+    memory_series = FactorSeries(
+        factor_id="census:imports:hs854232:value",
+        provider="census",
+        external_id="imports",
+        name="U.S. Imports of Memory Integrated Circuits",
+        units="usd",
+        cadence="monthly",
+        relevance_tags=["memory", "semiconductors"],
+    )
+    observation = FactorObservation(
+        factor_id=memory_series.factor_id,
+        observation_date=date(2026, 4, 1),
+        value=100.0,
+        units="usd",
+        available_at=datetime(2026, 5, 15, tzinfo=UTC),
+    )
+    repo = FakeFactorRepository([memory_series], [observation])
+    theme = type(
+        "ThemeLike",
+        (),
+        {
+            "theme_id": "theme_hbm",
+            "name": "HBM demand",
+            "top_keywords": ["hbm", "gpu"],
+            "top_tickers": ["NVDA", "MU"],
+            "top_entities": [{"name": "NVIDIA"}],
+            "metadata": {"bertopic_topic_id": 7},
+        },
+    )()
+
+    context_map = await FactorRegimeService(repo).build_context_map(
+        [theme],
+        as_of=datetime(2026, 6, 1, tzinfo=UTC),
+    )
+
+    assert context_map["theme_hbm"][0].factor_id == "census:imports:hs854232:value"

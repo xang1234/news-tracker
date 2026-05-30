@@ -6,6 +6,7 @@ import asyncio
 import time
 from collections.abc import Iterable
 from datetime import UTC, date, datetime, timedelta
+from typing import cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -14,6 +15,7 @@ from starlette.requests import Request
 from src.api.auth import verify_api_key
 from src.api.dependencies import (
     get_document_repository,
+    get_factor_regime_service,
     get_graph_repository,
     get_narrative_repository,
     get_propagation_service,
@@ -51,6 +53,7 @@ from src.api.models import (
 from src.api.rate_limit import limiter
 from src.config.settings import get_settings as _get_settings
 from src.event_extraction.theme_integration import EventThemeLinker, ThemeWithEvents
+from src.factors.regimes import FactorRegimeService
 from src.graph.propagation import SentimentPropagation
 from src.graph.storage import GraphRepository
 from src.narrative.repository import NarrativeRepository
@@ -64,7 +67,7 @@ from src.themes.catalysts import (
     propagation_delta,
     summarize_market_catalyst,
 )
-from src.themes.ranking import ThemeRankingService
+from src.themes.ranking import RankingStrategy, ThemeRankingService
 from src.themes.repository import ThemeRepository
 from src.themes.schemas import Theme
 
@@ -490,6 +493,7 @@ async def get_ranked_themes(
     limit: int = Query(default=50, ge=1, le=500, description="Maximum themes to return"),
     api_key: str = Depends(verify_api_key),
     ranking_service: ThemeRankingService = Depends(get_ranking_service),
+    factor_regime_service: FactorRegimeService = Depends(get_factor_regime_service),
 ) -> RankedThemesResponse:
     start_time = time.perf_counter()
 
@@ -501,12 +505,22 @@ async def get_ranked_themes(
             )
 
         ranked = await ranking_service.get_actionable(
-            strategy=strategy,
+            strategy=cast(RankingStrategy, strategy),
             max_tier=max_tier,
         )
 
         # Apply limit
         ranked = ranked[:limit]
+        if ranked:
+            factor_context_map = await factor_regime_service.build_context_map(
+                [r.theme for r in ranked],
+                as_of=datetime.now(UTC),
+            )
+            for ranked_theme in ranked:
+                ranked_theme.factor_context = [
+                    context.to_dict()
+                    for context in factor_context_map.get(ranked_theme.theme_id, [])
+                ]
 
         items = [
             RankedThemeItem(

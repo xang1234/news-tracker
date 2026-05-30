@@ -13,6 +13,12 @@ from src.factors.providers import (
     ProviderResponseError,
     TreasuryFiscalDataProvider,
 )
+from src.factors.refresh import (
+    FactorRefreshSummary,
+    curated_factor_series,
+    provider_names,
+    refresh_curated_factor_series,
+)
 from src.factors.regimes import (
     FactorRegimeContext,
     FactorRegimeService,
@@ -49,6 +55,7 @@ __all__ = [
     "FactorRegimeContext",
     "FactorRegimeService",
     "FactorRepository",
+    "FactorRefreshSummary",
     "FactorSeries",
     "FederalReserveCsvFactorProvider",
     "FredFactorProvider",
@@ -59,7 +66,10 @@ __all__ = [
     "SupplyChainProviderCredentials",
     "TreasuryFiscalDataProvider",
     "classify_factor_regime",
+    "curated_factor_series",
     "get_curated_macro_factor_series",
     "get_curated_supply_chain_factor_series",
+    "provider_names",
+    "refresh_curated_factor_series",
     "validate_observation_for_series",
 ]

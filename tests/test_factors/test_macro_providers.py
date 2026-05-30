@@ -151,9 +151,11 @@ async def test_fred_provider_preserves_realtime_release_and_sparse_values() -> N
 
     assert observations[0].observation_date == date(2026, 4, 30)
     assert observations[0].value == 4.52
-    assert observations[0].available_at == datetime(2026, 5, 1, tzinfo=UTC)
+    assert observations[0].available_at == fetched_at
     assert observations[0].fetched_at == fetched_at
     assert observations[0].revision == "2026-05-01"
+    assert observations[0].metadata["estimated_release_at"] == "2026-04-30T00:00:00+00:00"
+    assert observations[0].metadata["realtime_start"] == "2026-05-01"
     assert observations[1].is_missing is True
     assert observations[1].missing_reason == "provider_missing_value"
 
@@ -196,7 +198,8 @@ async def test_bls_provider_uses_no_key_mode_and_latest_refresh() -> None:
     assert url == "https://api.bls.gov/publicAPI/v2/timeseries/data/CUSR0000SA0"
     assert params == {"latest": "true"}
     assert observations[0].observation_date == date(2026, 4, 1)
-    assert observations[0].available_at == datetime(2026, 4, 8, tzinfo=UTC)
+    assert observations[0].available_at == datetime(2026, 5, 15, 12, tzinfo=UTC)
+    assert observations[0].metadata["estimated_release_at"] == "2026-04-08T00:00:00+00:00"
     assert observations[0].fetched_at == datetime(2026, 5, 15, 12, tzinfo=UTC)
     assert observations[0].value == 321.5
     assert observations[0].revision == "latest"
@@ -285,7 +288,8 @@ async def test_bea_provider_requires_key_and_parses_quarterly_data() -> None:
     assert params["TableName"] == "T10101"
     assert params["LineNumber"] == "1"
     assert observations[0].observation_date == date(2026, 1, 1)
-    assert observations[0].available_at == datetime(2026, 1, 31, tzinfo=UTC)
+    assert observations[0].available_at == datetime(2026, 4, 30, 12, tzinfo=UTC)
+    assert observations[0].metadata["estimated_release_at"] == "2026-01-31T00:00:00+00:00"
     assert observations[0].fetched_at == datetime(2026, 4, 30, 12, tzinfo=UTC)
     assert observations[0].value == 2.4
 
@@ -366,7 +370,7 @@ async def test_treasury_provider_fetches_no_key_fiscal_data() -> None:
         "record_date:gte:2026-04-01,record_date:lte:2026-04-30"
     )
     assert observations[0].observation_date == date(2026, 4, 30)
-    assert observations[0].available_at == datetime(2026, 5, 1, tzinfo=UTC)
+    assert observations[0].metadata["estimated_release_at"] == "2026-05-01T00:00:00+00:00"
     assert observations[0].value == 4.52
 
 
@@ -400,5 +404,5 @@ async def test_federal_reserve_csv_provider_fetches_no_key_ddp_series() -> None:
         "to": "2026-04-30",
     }
     assert observations[0].observation_date == date(2026, 4, 30)
-    assert observations[0].available_at == datetime(2026, 5, 1, tzinfo=UTC)
+    assert "estimated_release_at" in observations[0].metadata
     assert observations[0].value == 4.52
