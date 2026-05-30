@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -89,6 +90,13 @@ class FakeFactorRepository:
                 -per_factor:
             ]
         return result
+
+
+@dataclass
+class RankedThemeLike:
+    theme_id: str
+    theme: Any
+    factor_context: list[dict[str, Any]] = field(default_factory=list)
 
 
 def test_classifies_rising_falling_stable_and_missing_regimes() -> None:
@@ -277,3 +285,54 @@ async def test_build_context_map_does_not_match_relevance_inside_unrelated_words
     )
 
     assert context_map["theme_retail_chain"] == []
+
+
+@pytest.mark.asyncio
+async def test_build_context_map_does_not_match_broad_catalog_tags_from_theme_text() -> None:
+    stock_series = FactorSeries(
+        factor_id="fred:DGS10",
+        provider="fred",
+        external_id="DGS10",
+        name="10-Year Treasury Constant Maturity Rate",
+        units="percent",
+        cadence="daily",
+        relevance_tags=["stocks"],
+    )
+    repo = FakeFactorRepository([stock_series], [_observation(4.2)])
+    theme = type(
+        "ThemeLike",
+        (),
+        {
+            "theme_id": "theme_generic_stocks",
+            "name": "Stocks watchlist",
+            "metadata": {},
+        },
+    )()
+
+    context_map = await FactorRegimeService(repo).build_context_map(
+        [theme],
+        as_of=datetime(2026, 6, 1, tzinfo=UTC),
+    )
+
+    assert context_map["theme_generic_stocks"] == []
+
+
+@pytest.mark.asyncio
+async def test_enrich_ranked_themes_applies_serialized_factor_context() -> None:
+    service = FactorRegimeService(FakeFactorRepository([_series()], [_observation(4.2)]))
+    theme = type(
+        "ThemeLike",
+        (),
+        {
+            "theme_id": "theme_rates",
+            "metadata": {"factor_relevance_tags": ["rates"]},
+        },
+    )()
+    ranked = RankedThemeLike(theme_id="theme_rates", theme=theme)
+
+    await service.enrich_ranked_themes(
+        [ranked],
+        as_of=datetime(2026, 5, 3, tzinfo=UTC),
+    )
+
+    assert ranked.factor_context[0]["factor_id"] == "fred:DGS10"

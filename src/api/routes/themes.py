@@ -512,15 +512,10 @@ async def get_ranked_themes(
         # Apply limit
         ranked = ranked[:limit]
         if ranked:
-            factor_context_map = await factor_regime_service.build_context_map(
-                [r.theme for r in ranked],
+            await factor_regime_service.enrich_ranked_themes(
+                ranked,
                 as_of=datetime.now(UTC),
             )
-            for ranked_theme in ranked:
-                ranked_theme.factor_context = [
-                    context.to_dict()
-                    for context in factor_context_map.get(ranked_theme.theme_id, [])
-                ]
 
         items = [
             RankedThemeItem(

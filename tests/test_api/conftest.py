@@ -119,6 +119,7 @@ def mock_factor_regime_service():
     """Mock FactorRegimeService."""
     service = AsyncMock()
     service.build_context_map = AsyncMock(return_value={})
+    service.enrich_ranked_themes = AsyncMock(return_value=None)
     return service
 
 

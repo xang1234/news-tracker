@@ -15,9 +15,11 @@ from src.factors.providers import (
 )
 from src.factors.refresh import (
     FactorRefreshSummary,
+    UnknownFactorSelectorError,
     curated_factor_series,
     provider_names,
     refresh_curated_factor_series,
+    validate_factor_refresh_selectors,
 )
 from src.factors.regimes import (
     FactorRegimeContext,
@@ -65,11 +67,13 @@ __all__ = [
     "ProviderResponseError",
     "SupplyChainProviderCredentials",
     "TreasuryFiscalDataProvider",
+    "UnknownFactorSelectorError",
     "classify_factor_regime",
     "curated_factor_series",
     "get_curated_macro_factor_series",
     "get_curated_supply_chain_factor_series",
     "provider_names",
     "refresh_curated_factor_series",
+    "validate_factor_refresh_selectors",
     "validate_observation_for_series",
 ]

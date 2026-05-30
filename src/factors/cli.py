@@ -7,7 +7,12 @@ from datetime import date
 
 import click
 
-from src.factors.refresh import FactorRefreshSummary, refresh_curated_factor_series
+from src.factors.refresh import (
+    FactorRefreshSummary,
+    UnknownFactorSelectorError,
+    refresh_curated_factor_series,
+    validate_factor_refresh_selectors,
+)
 
 
 @click.group(name="factors")
@@ -45,13 +50,23 @@ def factors_refresh(
         if start and end and start > end:
             raise click.ClickException("start date must be before end date")
 
+        provider_set = {provider.lower() for provider in providers}
+        factor_id_set = set(factor_ids)
+        try:
+            validate_factor_refresh_selectors(
+                providers=provider_set,
+                factor_ids=factor_id_set,
+            )
+        except UnknownFactorSelectorError as exc:
+            raise click.ClickException(str(exc)) from exc
+
         db = Database()
         await db.connect()
         try:
             summary = await refresh_curated_factor_series(
                 db,
-                providers={provider.lower() for provider in providers},
-                factor_ids=set(factor_ids),
+                providers=provider_set,
+                factor_ids=factor_id_set,
                 start=start,
                 end=end,
                 latest=latest,

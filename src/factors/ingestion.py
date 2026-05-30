@@ -54,6 +54,10 @@ class FactorIngestionService:
     def __init__(self, repository: FactorStore | FactorRepository) -> None:
         self._repository = repository
 
+    async def register_series(self, series: FactorSeries) -> FactorSeries:
+        """Persist a factor registry entry without fetching observations."""
+        return await self._repository.upsert_series(series)
+
     async def refresh_series(
         self,
         provider: FactorObservationProvider,
@@ -65,7 +69,49 @@ class FactorIngestionService:
         fetched_at: datetime | None = None,
     ) -> FactorIngestionResult:
         """Fetch and persist one factor series refresh."""
+        observations = await self._fetch_validated_observations(
+            provider,
+            series,
+            start=start,
+            end=end,
+            latest=latest,
+            fetched_at=fetched_at,
+        )
+
         await self._repository.upsert_series(series)
+        return await self._write_observations(series, observations)
+
+    async def refresh_registered_series(
+        self,
+        provider: FactorObservationProvider,
+        series: FactorSeries,
+        *,
+        start: date | None = None,
+        end: date | None = None,
+        latest: bool = False,
+        fetched_at: datetime | None = None,
+    ) -> FactorIngestionResult:
+        """Fetch and persist observations for a series already in the registry."""
+        observations = await self._fetch_validated_observations(
+            provider,
+            series,
+            start=start,
+            end=end,
+            latest=latest,
+            fetched_at=fetched_at,
+        )
+        return await self._write_observations(series, observations)
+
+    async def _fetch_validated_observations(
+        self,
+        provider: FactorObservationProvider,
+        series: FactorSeries,
+        *,
+        start: date | None,
+        end: date | None,
+        latest: bool,
+        fetched_at: datetime | None,
+    ) -> list[FactorObservation]:
         observations = await provider.fetch_observations(
             series,
             start=start,
@@ -75,7 +121,13 @@ class FactorIngestionService:
         )
         for observation in observations:
             validate_observation_for_series(series, observation)
+        return observations
 
+    async def _write_observations(
+        self,
+        series: FactorSeries,
+        observations: list[FactorObservation],
+    ) -> FactorIngestionResult:
         written = 0
         missing = 0
         for observation in observations:

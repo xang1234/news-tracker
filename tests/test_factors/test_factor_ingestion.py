@@ -154,12 +154,12 @@ async def test_refresh_rejects_observation_that_does_not_match_registry() -> Non
     with pytest.raises(ValueError, match="units mismatch"):
         await service.refresh_series(provider, _series())
 
-    assert repo.series == {"fred:DGS10": _series()}
+    assert repo.series == {}
     assert repo.observations == {}
 
 
 @pytest.mark.asyncio
-async def test_refresh_series_registers_series_before_provider_fetch_failure() -> None:
+async def test_refresh_series_does_not_register_series_when_provider_fetch_fails() -> None:
     series = _series()
     repo = InMemoryFactorRepository()
     service = FactorIngestionService(repo)
@@ -167,5 +167,5 @@ async def test_refresh_series_registers_series_before_provider_fetch_failure() -
     with pytest.raises(MissingProviderCredentialError):
         await service.refresh_series(MissingCredentialProvider(), series)
 
-    assert repo.series == {"fred:DGS10": series}
+    assert repo.series == {}
     assert repo.observations == {}

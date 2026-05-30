@@ -361,15 +361,10 @@ class BacktestEngine:
                 theme_count=len(themes),
             )
 
-        factor_context_map = await self._factor_regimes.build_context_map(
-            [rt.theme for rt in top_ranked],
+        await self._factor_regimes.enrich_ranked_themes(
+            top_ranked,
             as_of=as_of,
         )
-        for ranked_theme in top_ranked:
-            ranked_theme.factor_context = [
-                context.to_dict()
-                for context in factor_context_map.get(ranked_theme.theme_id, [])
-            ]
 
         # Serialise ranked themes for storage
         ranked_snapshots = [

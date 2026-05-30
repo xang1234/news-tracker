@@ -42,6 +42,12 @@ class FactorRegimeRepository(Protocol):
         ...
 
 
+class RankedThemeWithFactorContext(Protocol):
+    theme_id: str
+    theme: Any
+    factor_context: list[dict[str, Any]]
+
+
 @dataclass(frozen=True)
 class FactorRegimeContext:
     """Regime classification for one factor at a decision time."""
@@ -169,6 +175,30 @@ class FactorRegimeService:
                     contexts.append(_context_from_observations(series, observations))
             context_map[theme.theme_id] = contexts
         return context_map
+
+    async def enrich_ranked_themes(
+        self,
+        ranked_themes: Sequence[RankedThemeWithFactorContext],
+        *,
+        as_of: datetime,
+        lookback_days: int = DEFAULT_LOOKBACK_DAYS,
+        max_factors_per_theme: int = 5,
+    ) -> None:
+        """Attach serialised factor context to ranked theme payloads."""
+        if not ranked_themes:
+            return
+
+        factor_context_map = await self.build_context_map(
+            [ranked_theme.theme for ranked_theme in ranked_themes],
+            as_of=as_of,
+            lookback_days=lookback_days,
+            max_factors_per_theme=max_factors_per_theme,
+        )
+        for ranked_theme in ranked_themes:
+            ranked_theme.factor_context = [
+                context.to_dict()
+                for context in factor_context_map.get(ranked_theme.theme_id, [])
+            ]
 
 
 def _context_from_observations(

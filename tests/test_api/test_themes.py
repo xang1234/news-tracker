@@ -824,15 +824,19 @@ class TestRankedThemes:
             available_at=datetime(2026, 5, 15, tzinfo=UTC),
             relevance_tags=["memory"],
         )
-        mock_factor_regime_service.build_context_map.return_value = {"t0": [context]}
+        async def enrich_ranked(ranked, *, as_of):
+            ranked[0].factor_context = [context.to_dict()]
+
+        mock_factor_regime_service.enrich_ranked_themes.side_effect = enrich_ranked
 
         resp = client.get("/themes/ranked?limit=2")
         assert resp.status_code == 200
         data = resp.json()
         assert data["total"] == 2
         assert data["themes"][0]["factor_context"] == [context.to_dict()]
-        enriched_themes = mock_factor_regime_service.build_context_map.call_args.args[0]
-        assert [theme.theme_id for theme in enriched_themes] == ["t0", "t1"]
+        mock_factor_regime_service.enrich_ranked_themes.assert_awaited_once()
+        enriched_ranked = mock_factor_regime_service.enrich_ranked_themes.call_args.args[0]
+        assert [ranked_theme.theme_id for ranked_theme in enriched_ranked] == ["t0", "t1"]
 
     def test_invalid_strategy(self, client, mock_ranking_service):
         resp = client.get("/themes/ranked?strategy=invalid")

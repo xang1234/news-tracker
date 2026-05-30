@@ -88,7 +88,6 @@ def extract_theme_factor_tags(theme: ThemeWithFactorTags) -> set[str]:
 
     tags = {normalise_factor_tag(str(tag)) for tag in raw_tags if str(tag).strip()}
     text = _theme_text(theme)
-    tags.update(normalise_factor_tag(token) for token in _word_tokens(text))
     tags.update(_derive_factor_tags(text))
     return {tag for tag in tags if tag}
 

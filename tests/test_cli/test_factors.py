@@ -131,3 +131,29 @@ class TestFactorRefresh:
         assert "Skipped missing credentials: 1" in result.output
         assert "No factor series refreshed" in result.output
         mock_db.close.assert_awaited_once()
+
+    def test_refresh_exits_nonzero_for_unknown_provider_selector(
+        self,
+        runner: CliRunner,
+    ) -> None:
+        mock_db = _mock_db()
+
+        with patch("src.storage.database.Database", return_value=mock_db):
+            result = runner.invoke(main, ["factors", "refresh", "--provider", "frd"])
+
+        assert result.exit_code == 1, result.output
+        assert "Unknown factor provider" in result.output
+        mock_db.connect.assert_not_awaited()
+
+    def test_refresh_exits_nonzero_for_unknown_factor_id_selector(
+        self,
+        runner: CliRunner,
+    ) -> None:
+        mock_db = _mock_db()
+
+        with patch("src.storage.database.Database", return_value=mock_db):
+            result = runner.invoke(main, ["factors", "refresh", "--factor-id", "fred:NOPE"])
+
+        assert result.exit_code == 1, result.output
+        assert "Unknown factor_id" in result.output
+        mock_db.connect.assert_not_awaited()

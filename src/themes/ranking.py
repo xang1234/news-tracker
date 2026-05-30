@@ -204,7 +204,6 @@ class ThemeRankingService:
         themes: list[Theme],
         metrics_map: dict[str, ThemeMetrics],
         strategy: RankingStrategy = "swing",
-        factor_context_map: dict[str, list[Any]] | None = None,
     ) -> list[RankedTheme]:
         """Score all themes, sort descending, and assign tiers.
 
@@ -212,7 +211,6 @@ class ThemeRankingService:
             themes: Themes to rank.
             metrics_map: theme_id → latest ThemeMetrics.
             strategy: Ranking strategy.
-            factor_context_map: Optional theme_id → factor regime contexts.
 
         Returns:
             Sorted list of RankedTheme (highest score first).
@@ -234,9 +232,6 @@ class ThemeRankingService:
                     theme=theme,
                     score=score,
                     components=components,
-                    factor_context=_serialise_factor_context(
-                        (factor_context_map or {}).get(theme.theme_id, [])
-                    ),
                 )
             )
 
@@ -335,10 +330,3 @@ class ThemeRankingService:
 
         # Filter by tier
         return [r for r in ranked if r.tier <= max_tier]
-
-
-def _serialise_factor_context(contexts: list[Any]) -> list[dict[str, Any]]:
-    return [
-        context.to_dict() if hasattr(context, "to_dict") else dict(context)
-        for context in contexts
-    ]
