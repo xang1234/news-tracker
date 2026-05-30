@@ -5,12 +5,22 @@ from __future__ import annotations
 import csv
 import os
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime
 from io import StringIO
-from typing import Any, Protocol
+from typing import Any
 
-import httpx
-
+from src.factors.provider_common import (
+    FactorHTTPClient,
+    MacroProviderError,
+    MissingProviderCredentialError,
+    ProviderResponseError,
+    date_in_range,
+    date_to_utc,
+    latest_only,
+    make_observation,
+    response_json,
+    utc_now,
+)
 from src.factors.schemas import FactorObservation, FactorSeries
 
 FRED_OBSERVATIONS_URL = "https://api.stlouisfed.org/fred/series/observations"
@@ -22,25 +32,17 @@ TREASURY_AVG_INTEREST_RATES_URL = (
     "v2/accounting/od/avg_interest_rates"
 )
 
-
-class FactorHTTPClient(Protocol):
-    async def get(
-        self,
-        url: str,
-        params: dict[str, Any] | None = None,
-        **kwargs: Any,
-    ) -> httpx.Response:
-        """Fetch a URL with optional query parameters."""
-        ...
-
-    async def post(
-        self,
-        url: str,
-        json_body: dict[str, Any] | None = None,
-        **kwargs: Any,
-    ) -> httpx.Response:
-        """Post a JSON body to a URL."""
-        ...
+__all__ = [
+    "BeaFactorProvider",
+    "BlsFactorProvider",
+    "FederalReserveCsvFactorProvider",
+    "FredFactorProvider",
+    "MacroProviderCredentials",
+    "MacroProviderError",
+    "MissingProviderCredentialError",
+    "ProviderResponseError",
+    "TreasuryFiscalDataProvider",
+]
 
 
 @dataclass(frozen=True)
@@ -61,64 +63,6 @@ class MacroProviderCredentials:
         )
 
 
-class MacroProviderError(Exception):
-    """Base exception for macro provider failures."""
-
-
-class MissingProviderCredentialError(MacroProviderError):
-    """Raised when a provider cannot run without a configured free key."""
-
-
-class ProviderResponseError(MacroProviderError):
-    """Raised when an upstream provider returns a domain-level error."""
-
-
-def _utc_now() -> datetime:
-    return datetime.now(UTC)
-
-
-def _date_to_utc(value: str) -> datetime:
-    return datetime.combine(date.fromisoformat(value), datetime.min.time(), tzinfo=UTC)
-
-
-def _lagged_available_at(series: FactorSeries, observation_date: date) -> datetime:
-    release_date = observation_date + timedelta(days=series.release_lag_days)
-    return datetime.combine(release_date, datetime.min.time(), tzinfo=UTC)
-
-
-def _parse_number(value: Any) -> float | None:
-    if value is None:
-        return None
-    text = str(value).strip().replace(",", "")
-    if not text or text == ".":
-        return None
-    return float(text)
-
-
-def _observation(
-    series: FactorSeries,
-    *,
-    observation_date: date,
-    value: Any,
-    available_at: datetime,
-    fetched_at: datetime,
-    revision: str = "",
-    metadata: dict[str, Any] | None = None,
-) -> FactorObservation:
-    parsed_value = _parse_number(value)
-    return FactorObservation(
-        factor_id=series.factor_id,
-        observation_date=observation_date,
-        value=parsed_value,
-        units=series.units,
-        available_at=available_at,
-        fetched_at=fetched_at,
-        revision=revision,
-        missing_reason="provider_missing_value" if parsed_value is None else None,
-        metadata=metadata or {},
-    )
-
-
 def _parse_bls_period(year: str, period: str) -> date:
     if period.startswith("M") and period != "M13":
         return date(int(year), int(period[1:]), 1)
@@ -134,24 +78,8 @@ def _parse_bea_period(value: str) -> date:
     return date(int(value), 1, 1)
 
 
-def _date_in_range(value: date, start: date | None, end: date | None) -> bool:
-    if start is not None and value < start:
-        return False
-    return not (end is not None and value > end)
-
-
-def _latest_only(
-    observations: list[FactorObservation],
-    *,
-    latest: bool,
-) -> list[FactorObservation]:
-    if not latest or not observations:
-        return observations
-    return [max(observations, key=lambda observation: observation.observation_date)]
-
-
-def _response_json(response: httpx.Response) -> dict[str, Any]:
-    payload = response.json()
+def _response_json_dict(response: Any) -> dict[str, Any]:
+    payload = response_json(response)
     if not isinstance(payload, dict):
         raise ProviderResponseError("provider returned non-object JSON payload")
     return payload
@@ -193,21 +121,23 @@ class FredFactorProvider:
         if end is not None:
             params["observation_end"] = end.isoformat()
 
-        payload = _response_json(await self.http_client.get(FRED_OBSERVATIONS_URL, params=params))
+        payload = _response_json_dict(
+            await self.http_client.get(FRED_OBSERVATIONS_URL, params=params)
+        )
         if "error_code" in payload:
             raise ProviderResponseError(str(payload.get("error_message") or payload["error_code"]))
 
-        observed_at = fetched_at or _utc_now()
+        observed_at = fetched_at or utc_now()
         observations: list[FactorObservation] = []
         for row in payload.get("observations", []):
             release_date = row.get("realtime_start") or row["date"]
             obs_date = date.fromisoformat(row["date"])
             observations.append(
-                _observation(
+                make_observation(
                     series,
                     observation_date=obs_date,
                     value=row.get("value"),
-                    available_at=_date_to_utc(release_date),
+                    available_at=date_to_utc(release_date),
                     fetched_at=observed_at,
                     revision=release_date,
                     metadata={"realtime_end": row.get("realtime_end")},
@@ -251,26 +181,25 @@ class BlsFactorProvider:
                 body["registrationkey"] = self._credentials.bls_registration_key
             response = await self.http_client.post(BLS_TIMESERIES_URL, json_body=body)
 
-        payload = _response_json(response)
+        payload = _response_json_dict(response)
         if payload.get("status") != "REQUEST_SUCCEEDED":
             message = "; ".join(payload.get("message") or ["BLS request failed"])
             raise ProviderResponseError(message)
 
-        observed_at = fetched_at or _utc_now()
+        observed_at = fetched_at or utc_now()
         observations: list[FactorObservation] = []
         for provider_series in payload.get("Results", {}).get("series", []):
             for row in provider_series.get("data", []):
                 if row.get("period") == "M13":
                     continue
                 obs_date = _parse_bls_period(row["year"], row["period"])
-                if not _date_in_range(obs_date, start, end):
+                if not date_in_range(obs_date, start, end):
                     continue
                 observations.append(
-                    _observation(
+                    make_observation(
                         series,
                         observation_date=obs_date,
                         value=row.get("value"),
-                        available_at=_lagged_available_at(series, obs_date),
                         fetched_at=observed_at,
                         revision="latest" if row.get("latest") == "true" else "",
                         metadata={
@@ -317,23 +246,22 @@ class BeaFactorProvider:
             "ResultFormat": "JSON",
         }
 
-        payload = _response_json(await self.http_client.get(BEA_DATA_URL, params=params))
+        payload = _response_json_dict(await self.http_client.get(BEA_DATA_URL, params=params))
         if "Error" in payload.get("BEAAPI", {}):
             raise ProviderResponseError(str(payload["BEAAPI"]["Error"]))
 
-        observed_at = fetched_at or _utc_now()
+        observed_at = fetched_at or utc_now()
         observations: list[FactorObservation] = []
         rows = payload.get("BEAAPI", {}).get("Results", {}).get("Data", [])
         for row in rows:
             obs_date = _parse_bea_period(row["TimePeriod"])
-            if not _date_in_range(obs_date, start, end):
+            if not date_in_range(obs_date, start, end):
                 continue
             observations.append(
-                _observation(
+                make_observation(
                     series,
                     observation_date=obs_date,
                     value=row.get("DataValue"),
-                    available_at=_lagged_available_at(series, obs_date),
                     fetched_at=observed_at,
                     revision=str(row.get("TimePeriod", "")),
                     metadata={
@@ -342,7 +270,7 @@ class BeaFactorProvider:
                     },
                 )
             )
-        return _latest_only(observations, latest=latest)
+        return latest_only(observations, latest=latest)
 
 
 class TreasuryFiscalDataProvider:
@@ -377,17 +305,16 @@ class TreasuryFiscalDataProvider:
             params["page[size]"] = "1"
 
         url = str(series.metadata.get("endpoint") or TREASURY_AVG_INTEREST_RATES_URL)
-        payload = _response_json(await self.http_client.get(url, params=params))
-        observed_at = fetched_at or _utc_now()
+        payload = _response_json_dict(await self.http_client.get(url, params=params))
+        observed_at = fetched_at or utc_now()
         observations: list[FactorObservation] = []
         for row in payload.get("data", []):
             obs_date = date.fromisoformat(row[date_field])
             observations.append(
-                _observation(
+                make_observation(
                     series,
                     observation_date=obs_date,
                     value=row.get(value_field),
-                    available_at=_lagged_available_at(series, obs_date),
                     fetched_at=observed_at,
                     revision=str(row.get(date_field, "")),
                     metadata={"provider": "treasury"},
@@ -427,7 +354,7 @@ class FederalReserveCsvFactorProvider:
 
         response = await self.http_client.get(FED_DDP_URL, params=params)
         value_column = str(series.metadata.get("value_column") or series.external_id)
-        observed_at = fetched_at or _utc_now()
+        observed_at = fetched_at or utc_now()
         observations: list[FactorObservation] = []
 
         for row in _iter_csv_data_rows(response.text):
@@ -435,20 +362,19 @@ class FederalReserveCsvFactorProvider:
             if not raw_date or value_column not in row:
                 continue
             obs_date = date.fromisoformat(raw_date)
-            if not _date_in_range(obs_date, start, end):
+            if not date_in_range(obs_date, start, end):
                 continue
             observations.append(
-                _observation(
+                make_observation(
                     series,
                     observation_date=obs_date,
                     value=row.get(value_column),
-                    available_at=_lagged_available_at(series, obs_date),
                     fetched_at=observed_at,
                     revision=raw_date,
                     metadata={"provider": "fed", "value_column": value_column},
                 )
             )
-        return _latest_only(observations, latest=latest)
+        return latest_only(observations, latest=latest)
 
 
 def _iter_csv_data_rows(text: str) -> list[dict[str, str]]:

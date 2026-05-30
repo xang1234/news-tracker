@@ -14,6 +14,7 @@ from src.factors.providers import (
     FederalReserveCsvFactorProvider,
     FredFactorProvider,
     MacroProviderCredentials,
+    MacroProviderError,
     MissingProviderCredentialError,
     ProviderResponseError,
     TreasuryFiscalDataProvider,
@@ -31,6 +32,11 @@ def test_macro_provider_credentials_load_from_environment(monkeypatch: pytest.Mo
     assert credentials.fred_api_key == "fred-env"
     assert credentials.bls_registration_key == "bls-env"
     assert credentials.bea_api_key == "bea-env"
+
+
+def test_provider_specific_errors_keep_macro_error_base() -> None:
+    assert issubclass(MissingProviderCredentialError, MacroProviderError)
+    assert issubclass(ProviderResponseError, MacroProviderError)
 
 
 class FakeHTTPClient:

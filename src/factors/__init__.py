@@ -20,12 +20,24 @@ from src.factors.schemas import (
     FactorSeries,
     validate_observation_for_series,
 )
+from src.factors.supply_chain_catalog import (
+    SUPPLY_CHAIN_CATALOG_VERSION,
+    get_curated_supply_chain_factor_series,
+)
+from src.factors.supply_chain_providers import (
+    CensusTradeFactorProvider,
+    EiaFactorProvider,
+    SupplyChainProviderCredentials,
+)
 
 __all__ = [
     "CATALOG_VERSION",
+    "SUPPLY_CHAIN_CATALOG_VERSION",
     "VALID_FACTOR_CADENCES",
     "BeaFactorProvider",
     "BlsFactorProvider",
+    "CensusTradeFactorProvider",
+    "EiaFactorProvider",
     "FactorIngestionResult",
     "FactorIngestionService",
     "FactorObservation",
@@ -37,7 +49,9 @@ __all__ = [
     "MacroProviderError",
     "MissingProviderCredentialError",
     "ProviderResponseError",
+    "SupplyChainProviderCredentials",
     "TreasuryFiscalDataProvider",
     "get_curated_macro_factor_series",
+    "get_curated_supply_chain_factor_series",
     "validate_observation_for_series",
 ]
