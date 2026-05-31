@@ -21,6 +21,7 @@ from typing import Any
 import click
 
 from src.config.settings import get_settings
+from src.factors.cli import factors
 from src.observability.logging import setup_logging
 from src.observability.metrics import get_metrics
 
@@ -72,6 +73,9 @@ def main(debug: bool) -> None:
             service_name=settings.otel_service_name,
             otlp_endpoint=settings.otel_exporter_otlp_endpoint,
         )
+
+
+main.add_command(factors)
 
 
 @main.command()

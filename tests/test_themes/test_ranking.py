@@ -243,6 +243,17 @@ class TestRankThemes:
         assert len(result) == 1
         assert result[0].components["volume_zscore"] == 0.0
 
+    def test_ranked_theme_does_not_carry_factor_context(
+        self,
+        service: ThemeRankingService,
+    ) -> None:
+        """Ranking remains pure; factor context is composed at serialization boundaries."""
+        theme = _make_theme("theme_rates")
+
+        result = service.rank_themes([theme], {}, "swing")
+
+        assert not hasattr(result[0], "factor_context")
+
 
 # ── TestAssignTiers ──────────────────────────────────────
 

@@ -4,12 +4,23 @@ from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
+from src.api.routes.themes import _normal_exception_or_raise
+from src.factors.regimes import FactorRegimeContext
 from src.graph.propagation import PropagationImpact
 from src.ingestion.schemas import EngagementMetrics, NormalizedDocument, Platform
 from src.narrative.schemas import NarrativeRun, NarrativeRunBucket
 from src.sentiment.aggregation import AggregatedSentiment
 from tests.test_api.conftest import _make_metrics, _make_theme
+
+
+def test_gather_exception_helper_propagates_system_exceptions() -> None:
+    normal_error = RuntimeError("provider failed")
+
+    assert _normal_exception_or_raise(normal_error) is normal_error
+    with pytest.raises(SystemExit, match="shutdown"):
+        _normal_exception_or_raise(SystemExit("shutdown"))
 
 
 def _make_narrative_run(run_id: str = "run_abc123", theme_id: str = "theme_abc123") -> NarrativeRun:
@@ -797,7 +808,7 @@ class TestRankedThemes:
             max_tier=1,
         )
 
-    def test_limit_param(self, client, mock_ranking_service):
+    def test_limit_param(self, client, mock_ranking_service, mock_factor_regime_service):
         from src.themes.ranking import RankedTheme
 
         # Return 5 ranked themes
@@ -812,11 +823,29 @@ class TestRankedThemes:
             for i in range(5)
         ]
         mock_ranking_service.get_actionable.return_value = ranked
+        context = FactorRegimeContext(
+            factor_id="census:imports:hs854232:value",
+            provider="census",
+            name="Memory imports",
+            observation_date=date(2026, 4, 1),
+            value=100.0,
+            units="usd",
+            regime="observed",
+            available_at=datetime(2026, 5, 15, tzinfo=UTC),
+            relevance_tags=["memory"],
+        )
+        mock_factor_regime_service.build_ranked_context_map.return_value = {
+            "t0": [context.to_dict()]
+        }
 
         resp = client.get("/themes/ranked?limit=2")
         assert resp.status_code == 200
         data = resp.json()
         assert data["total"] == 2
+        assert data["themes"][0]["factor_context"] == [context.to_dict()]
+        mock_factor_regime_service.build_ranked_context_map.assert_awaited_once()
+        context_ranked = mock_factor_regime_service.build_ranked_context_map.call_args.args[0]
+        assert [ranked_theme.theme_id for ranked_theme in context_ranked] == ["t0", "t1"]
 
     def test_invalid_strategy(self, client, mock_ranking_service):
         resp = client.get("/themes/ranked?strategy=invalid")

@@ -64,7 +64,7 @@ class RankedTheme:
     theme: Theme
     score: float
     tier: int = 3
-    components: dict[str, float] = field(default_factory=dict)
+    components: dict[str, Any] = field(default_factory=dict)
 
 
 # ── Config ───────────────────────────────────────────────
@@ -133,7 +133,7 @@ class ThemeRankingService:
         theme: Theme,
         metrics: ThemeMetrics | None,
         strategy: RankingStrategy = "swing",
-    ) -> tuple[float, dict[str, float]]:
+    ) -> tuple[float, dict[str, Any]]:
         """Compute the ranking score for a single theme.
 
         Formula:
@@ -318,7 +318,11 @@ class ThemeRankingService:
                 # Use the most recent entry
                 metrics_map[theme.theme_id] = metrics_list[-1]
 
-        ranked = self.rank_themes(themes, metrics_map, effective_strategy)
+        ranked = self.rank_themes(
+            themes,
+            metrics_map,
+            effective_strategy,
+        )
 
         # Filter by tier
         return [r for r in ranked if r.tier <= max_tier]

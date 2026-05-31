@@ -12,6 +12,7 @@ from src.api.auth import verify_api_key
 from src.api.dependencies import (
     get_document_repository,
     get_embedding_service,
+    get_factor_regime_service,
     get_graph_repository,
     get_narrative_repository,
     get_propagation_service,
@@ -114,6 +115,15 @@ def mock_ranking_service():
 
 
 @pytest.fixture
+def mock_factor_regime_service():
+    """Mock FactorRegimeService."""
+    service = AsyncMock()
+    service.build_context_map = AsyncMock(return_value={})
+    service.build_ranked_context_map = AsyncMock(return_value={})
+    return service
+
+
+@pytest.fixture
 def mock_narrative_repo():
     """Mock NarrativeRepository."""
     repo = AsyncMock()
@@ -189,6 +199,7 @@ def client(
     mock_doc_repo,
     mock_aggregator,
     mock_ranking_service,
+    mock_factor_regime_service,
     mock_narrative_repo,
     mock_embedding_service,
     mock_sentiment_service,
@@ -204,6 +215,7 @@ def client(
     app.dependency_overrides[get_document_repository] = lambda: mock_doc_repo
     app.dependency_overrides[get_sentiment_aggregator] = lambda: mock_aggregator
     app.dependency_overrides[get_ranking_service] = lambda: mock_ranking_service
+    app.dependency_overrides[get_factor_regime_service] = lambda: mock_factor_regime_service
     app.dependency_overrides[get_narrative_repository] = lambda: mock_narrative_repo
     app.dependency_overrides[get_embedding_service] = lambda: mock_embedding_service
     app.dependency_overrides[get_sentiment_service] = lambda: mock_sentiment_service

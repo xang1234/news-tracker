@@ -6,6 +6,7 @@ import asyncio
 import time
 from collections.abc import Iterable
 from datetime import UTC, date, datetime, timedelta
+from typing import Any, cast
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -14,6 +15,7 @@ from starlette.requests import Request
 from src.api.auth import verify_api_key
 from src.api.dependencies import (
     get_document_repository,
+    get_factor_regime_service,
     get_graph_repository,
     get_narrative_repository,
     get_propagation_service,
@@ -51,9 +53,11 @@ from src.api.models import (
 from src.api.rate_limit import limiter
 from src.config.settings import get_settings as _get_settings
 from src.event_extraction.theme_integration import EventThemeLinker, ThemeWithEvents
+from src.factors.regimes import FactorRegimeService
 from src.graph.propagation import SentimentPropagation
 from src.graph.storage import GraphRepository
 from src.narrative.repository import NarrativeRepository
+from src.narrative.schemas import NarrativeRun
 from src.sentiment.aggregation import DocumentSentiment, SentimentAggregator
 from src.storage.repository import DocumentRepository
 from src.themes.catalysts import (
@@ -64,7 +68,7 @@ from src.themes.catalysts import (
     propagation_delta,
     summarize_market_catalyst,
 )
-from src.themes.ranking import ThemeRankingService
+from src.themes.ranking import RankingStrategy, ThemeRankingService
 from src.themes.repository import ThemeRepository
 from src.themes.schemas import Theme
 
@@ -72,6 +76,12 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 CATALYST_BUILD_CONCURRENCY = 10
+
+
+def _normal_exception_or_raise(result: BaseException) -> Exception:
+    if not isinstance(result, Exception):
+        raise result
+    return result
 
 
 def _theme_to_item(theme: Theme, include_centroid: bool = False) -> ThemeItem:
@@ -94,7 +104,7 @@ def _theme_to_item(theme: Theme, include_centroid: bool = False) -> ThemeItem:
 
 async def _run_to_item(
     narrative_repo: NarrativeRepository,
-    run,
+    run: NarrativeRun,
     theme_name: str | None = None,
 ) -> NarrativeRunItem:
     recent_alerts = await narrative_repo.get_recent_alerts(run.run_id, limit=3)
@@ -140,7 +150,7 @@ async def _run_to_item(
     )
 
 
-def _narrative_document_item(doc: dict) -> NarrativeDocumentItem:
+def _narrative_document_item(doc: dict[str, Any]) -> NarrativeDocumentItem:
     sentiment = doc.get("sentiment") or {}
     return NarrativeDocumentItem(
         document_id=doc["document_id"],
@@ -158,7 +168,7 @@ def _narrative_document_item(doc: dict) -> NarrativeDocumentItem:
     )
 
 
-def _catalyst_evidence_item(doc: dict) -> MarketCatalystEvidenceItem:
+def _catalyst_evidence_item(doc: dict[str, Any]) -> MarketCatalystEvidenceItem:
     sentiment = doc.get("sentiment") or {}
     return MarketCatalystEvidenceItem(
         document_id=doc["document_id"],
@@ -219,7 +229,7 @@ class _TickerNodeLookup:
 
 async def _build_market_catalyst_bounded(
     semaphore: asyncio.Semaphore,
-    **kwargs,
+    **kwargs: Any,
 ) -> MarketCatalystItem | None:
     """Build a catalyst while respecting the route-level concurrency ceiling."""
     async with semaphore:
@@ -228,7 +238,7 @@ async def _build_market_catalyst_bounded(
 
 async def _build_market_catalyst(
     *,
-    run,
+    run: NarrativeRun,
     theme_name: str | None,
     days: int,
     narrative_repo: NarrativeRepository,
@@ -286,21 +296,22 @@ async def _build_market_catalyst(
             ],
             return_exceptions=True,
         )
-        candidate_node_ids = {
-            impact.node_id
-            for result in propagation_results
-            if not isinstance(result, Exception)
-            for impact in result.values()
-        }
+        candidate_node_ids: set[str] = set()
+        for result in propagation_results:
+            if isinstance(result, BaseException):
+                _normal_exception_or_raise(result)
+                continue
+            candidate_node_ids.update(impact.node_id for impact in result.values())
         ticker_node_ids = await ticker_node_lookup.filter_tickers(candidate_node_ids)
         best_impacts: dict[str, MarketCatalystRelatedTickerItem] = {}
         for source_item, result in zip(primary_tickers, propagation_results, strict=True):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
+                error = _normal_exception_or_raise(result)
                 logger.warning(
                     "catalyst_propagation_failed",
                     run_id=run.run_id,
                     source_ticker=source_item.ticker,
-                    error=str(result),
+                    error=str(error),
                 )
                 continue
 
@@ -490,6 +501,7 @@ async def get_ranked_themes(
     limit: int = Query(default=50, ge=1, le=500, description="Maximum themes to return"),
     api_key: str = Depends(verify_api_key),
     ranking_service: ThemeRankingService = Depends(get_ranking_service),
+    factor_regime_service: FactorRegimeService = Depends(get_factor_regime_service),
 ) -> RankedThemesResponse:
     start_time = time.perf_counter()
 
@@ -501,12 +513,18 @@ async def get_ranked_themes(
             )
 
         ranked = await ranking_service.get_actionable(
-            strategy=strategy,
+            strategy=cast(RankingStrategy, strategy),
             max_tier=max_tier,
         )
 
         # Apply limit
         ranked = ranked[:limit]
+        factor_context_map: dict[str, list[dict[str, Any]]] = {}
+        if ranked:
+            factor_context_map = await factor_regime_service.build_ranked_context_map(
+                ranked,
+                as_of=datetime.now(UTC),
+            )
 
         items = [
             RankedThemeItem(
@@ -514,6 +532,7 @@ async def get_ranked_themes(
                 score=round(r.score, 4),
                 tier=r.tier,
                 components=r.components,
+                factor_context=factor_context_map.get(r.theme_id, []),
             )
             for r in ranked
         ]
@@ -631,8 +650,9 @@ async def get_market_catalysts(
 
     items: list[MarketCatalystItem] = []
     for result in catalysts:
-        if isinstance(result, Exception):
-            logger.warning("build_market_catalyst_failed", error=str(result))
+        if isinstance(result, BaseException):
+            error = _normal_exception_or_raise(result)
+            logger.warning("build_market_catalyst_failed", error=str(error))
             continue
         if result is not None:
             items.append(result)

@@ -26,9 +26,12 @@ from src.backtest.model_versions import (
     create_version_from_settings,
 )
 from src.backtest.point_in_time import PointInTimeService
+from src.factors.regimes import FactorRegimeService
+from src.factors.repository import FactorRepository
 from src.storage.database import Database
 from src.themes.ranking import RankingStrategy, ThemeRankingService
 from src.themes.repository import ThemeRepository
+from src.themes.schemas import Theme
 from src.themes.schemas import ThemeMetrics as ThemeMetricsSchema
 
 logger = logging.getLogger(__name__)
@@ -171,6 +174,7 @@ class BacktestEngine:
         self._pit = PointInTimeService(database, self._theme_repo)
         self._price_feed = PriceDataFeed(database, self._config)
         self._ranking = ThemeRankingService(theme_repo=self._theme_repo)
+        self._factor_regimes = FactorRegimeService(FactorRepository(database))
         self._run_repo = BacktestRunRepository(database)
         self._version_repo = ModelVersionRepository(database)
 
@@ -345,7 +349,11 @@ class BacktestEngine:
         metrics_map = await self._build_metrics_map(themes, as_of)
 
         # Rank themes
-        ranked = self._ranking.rank_themes(themes, metrics_map, strategy)
+        ranked = self._ranking.rank_themes(
+            themes,
+            metrics_map,
+            strategy,
+        )
         top_ranked = ranked[:top_n]
 
         if not top_ranked:
@@ -353,6 +361,11 @@ class BacktestEngine:
                 date=day,
                 theme_count=len(themes),
             )
+
+        factor_context_map = await self._factor_regimes.build_ranked_context_map(
+            top_ranked,
+            as_of=as_of,
+        )
 
         # Serialise ranked themes for storage
         ranked_snapshots = [
@@ -363,6 +376,7 @@ class BacktestEngine:
                 "name": rt.theme.name,
                 "lifecycle_stage": rt.theme.lifecycle_stage,
                 "top_tickers": rt.theme.top_tickers[:3],
+                "factor_context": factor_context_map.get(rt.theme_id, []),
             }
             for rt in top_ranked
         ]
@@ -415,7 +429,7 @@ class BacktestEngine:
 
     async def _build_metrics_map(
         self,
-        themes: list,
+        themes: list[Theme],
         as_of: datetime,
     ) -> dict[str, ThemeMetricsSchema]:
         """Build a theme_id → latest ThemeMetrics map.

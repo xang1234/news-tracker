@@ -600,6 +600,10 @@ class RankedThemeItem(BaseModel):
         default_factory=dict,
         description="Score component breakdown (volume_component, compellingness_component, lifecycle_multiplier, volume_zscore, strategy)",
     )
+    factor_context: list[dict] = Field(
+        default_factory=list,
+        description="Relevant macro or supply-chain factor regimes for explanation context",
+    )
 
 
 class RankedThemesResponse(BaseModel):
