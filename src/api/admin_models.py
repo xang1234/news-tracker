@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from src.security_master.schemas import normalize_sec_cik
+
 _ALLOWED_SOURCE_PLATFORMS = {"twitter", "reddit", "substack"}
 
 
@@ -13,6 +15,12 @@ def _validate_source_platform(value: str) -> str:
         allowed = ", ".join(sorted(_ALLOWED_SOURCE_PLATFORMS))
         raise ValueError(f"platform must be one of: {allowed}")
     return normalized
+
+
+def _normalize_optional_sec_cik(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return normalize_sec_cik(value)
 
 
 class SecurityIdentifierLineageItem(BaseModel):
@@ -76,6 +84,11 @@ class CreateSecurityRequest(BaseModel):
     external_identifiers: dict[str, object] = Field(default_factory=dict)
     identifier_lineage: list[SecurityIdentifierLineageItem] = Field(default_factory=list)
 
+    @field_validator("sec_cik")
+    @classmethod
+    def validate_sec_cik(cls, value: str | None) -> str | None:
+        return _normalize_optional_sec_cik(value)
+
 
 class UpdateSecurityRequest(BaseModel):
     """Request to update a security."""
@@ -90,6 +103,11 @@ class UpdateSecurityRequest(BaseModel):
     former_names: list[str] | None = Field(default=None, description="Former issuer names")
     external_identifiers: dict[str, object] | None = Field(default=None)
     identifier_lineage: list[SecurityIdentifierLineageItem] | None = Field(default=None)
+
+    @field_validator("sec_cik")
+    @classmethod
+    def validate_sec_cik(cls, value: str | None) -> str | None:
+        return _normalize_optional_sec_cik(value)
 
 
 class SourceItem(BaseModel):

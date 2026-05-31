@@ -193,7 +193,7 @@ async def update_security(
             country=body.country if body.country is not None else existing.country,
             currency=body.currency if body.currency is not None else existing.currency,
             figi=existing.figi,
-            sec_cik=body.sec_cik if body.sec_cik is not None else existing.sec_cik,
+            sec_cik=body.sec_cik if "sec_cik" in body.model_fields_set else existing.sec_cik,
             issuer_name=body.issuer_name if body.issuer_name is not None else existing.issuer_name,
             former_names=(
                 body.former_names if body.former_names is not None else existing.former_names

@@ -89,6 +89,19 @@ class TestSECStructuredDataRepository:
         assert persisted.id == 7
 
     @pytest.mark.asyncio
+    async def test_upsert_payload_normalizes_cik_at_repository_boundary(self) -> None:
+        database = AsyncMock()
+        database.fetchrow.return_value = _payload_row()
+        repository = SECStructuredDataRepository(database)
+        record = _record()
+        record.cik = "320193"
+
+        await repository.upsert_payload(record)
+
+        args = database.fetchrow.call_args[0]
+        assert args[1] == "0000320193"
+
+    @pytest.mark.asyncio
     async def test_get_latest_payload_orders_by_last_seen(self) -> None:
         database = AsyncMock()
         database.fetchrow.return_value = _payload_row()
@@ -99,10 +112,22 @@ class TestSECStructuredDataRepository:
         args = database.fetchrow.call_args[0]
         sql = args[0]
         assert "WHERE cik = $1 AND payload_type = $2" in sql
-        assert "ORDER BY last_seen_at DESC, fetched_at DESC" in sql
+        assert "ORDER BY last_seen_at DESC, fetched_at DESC, id DESC" in sql
         assert args[1] == "0000320193"
         assert record is not None
         assert record.accession_numbers == ["0000320193-24-000123"]
+
+    @pytest.mark.asyncio
+    async def test_unexpected_json_column_types_decode_to_empty_objects(self) -> None:
+        database = AsyncMock()
+        database.fetchrow.return_value = _payload_row(payload=["not", "object"], metadata=42)
+        repository = SECStructuredDataRepository(database)
+
+        record = await repository.get_latest_payload("320193", "submissions")
+
+        assert record is not None
+        assert record.payload == {}
+        assert record.metadata == {}
 
 
 class TestMigration035:

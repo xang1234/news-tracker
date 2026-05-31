@@ -85,8 +85,9 @@ class _HTTPClient:
         url: str,
         *,
         headers: dict[str, str] | None = None,
+        timeout: float | None = None,
     ) -> _Response:
-        self.requests.append({"url": url, "headers": headers})
+        self.requests.append({"url": url, "headers": headers, "timeout": timeout})
         response = self._responses.pop(0)
         if isinstance(response, Exception):
             raise response
@@ -147,6 +148,7 @@ async def test_submissions_fetch_uses_sec_policy_and_caches_accession_lineage() 
         {
             "url": "https://data.sec.gov/submissions/CIK0000320193.json",
             "headers": policy.headers,
+            "timeout": policy.request_timeout,
         }
     ]
     assert limiter.acquire_count == 1
@@ -232,6 +234,22 @@ async def test_transient_sec_error_retries_before_cache_write() -> None:
     assert len(client.requests) == 2
     assert limiter.acquire_count == 2
     assert len(repository.upserts) == 1
+
+
+@pytest.mark.asyncio
+async def test_injected_http_client_receives_policy_timeout() -> None:
+    policy = SECPolicy(request_timeout=7.5)
+    client = _HTTPClient(_Response(200, SUBMISSIONS_PAYLOAD))
+    provider = SECStructuredDataProvider(
+        repository=_Repository(),
+        policy=policy,
+        http_client=client,
+        rate_limiter=_RateLimiter(),
+    )
+
+    await provider.fetch_submissions("0000320193")
+
+    assert client.requests[0]["timeout"] == 7.5
 
 
 @pytest.mark.asyncio

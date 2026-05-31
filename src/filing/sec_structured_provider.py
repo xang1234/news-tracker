@@ -30,6 +30,7 @@ class SECStructuredHTTPClient(Protocol):
         url: str,
         *,
         headers: dict[str, str] | None = None,
+        timeout: float | None = None,
     ) -> httpx.Response:
         """Fetch a SEC JSON URL."""
         ...
@@ -199,7 +200,11 @@ class SECStructuredDataProvider:
         for attempt in range(self._policy.max_retries + 1):
             await self._rate_limiter.acquire()
             try:
-                response = await client.get(url, headers=self._policy.headers)
+                response = await client.get(
+                    url,
+                    headers=self._policy.headers,
+                    timeout=self._policy.request_timeout,
+                )
             except Exception as exc:
                 last_error = exc
                 if attempt < self._policy.max_retries:

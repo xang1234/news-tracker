@@ -18,7 +18,7 @@ def _parse_json_object(value: Any) -> dict[str, Any]:
         return parsed if isinstance(parsed, dict) else {}
     if isinstance(value, dict):
         return dict(value)
-    return dict(value)
+    return {}
 
 
 def _row_to_payload(row: Any) -> SECStructuredPayloadRecord:
@@ -49,6 +49,9 @@ class SECStructuredDataRepository:
         self,
         record: SECStructuredPayloadRecord,
     ) -> SECStructuredPayloadRecord:
+        normalized_cik = normalize_sec_cik(record.cik)
+        if normalized_cik is None:
+            raise ValueError("cik must be a non-empty SEC CIK")
         row = await self._db.fetchrow(
             """
             INSERT INTO sec_structured_payloads (
@@ -64,7 +67,7 @@ class SECStructuredDataRepository:
                 updated_at = NOW()
             RETURNING *
             """,
-            record.cik,
+            normalized_cik,
             record.payload_type,
             record.source_url,
             record.payload_hash,
@@ -88,7 +91,7 @@ class SECStructuredDataRepository:
             SELECT *
             FROM sec_structured_payloads
             WHERE cik = $1 AND payload_type = $2
-            ORDER BY last_seen_at DESC, fetched_at DESC
+            ORDER BY last_seen_at DESC, fetched_at DESC, id DESC
             LIMIT 1
             """,
             normalized_cik,

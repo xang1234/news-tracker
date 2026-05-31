@@ -57,6 +57,13 @@ from src.filing.schemas import (
     FilingSection,
 )
 from src.filing.sec_api_provider import SecApiProvider
+from src.filing.sec_delta_events import (
+    SEC_FILING_DELTA_EVENT_TYPES,
+    SECFactObservation,
+    SECFilingDeltaEvent,
+    SECFilingDeltaRepository,
+    compute_sec_filing_delta_events,
+)
 from src.filing.sec_policy import SECPolicy
 from src.filing.sec_structured import (
     SECStructuredDataError,
@@ -90,6 +97,10 @@ __all__ = [
     "FilingResult",
     "FilingSection",
     "FilingSectionRecord",
+    "SEC_FILING_DELTA_EVENT_TYPES",
+    "SECFactObservation",
+    "SECFilingDeltaEvent",
+    "SECFilingDeltaRepository",
     "SECPolicy",
     "SECRateLimiter",
     "SECStructuredDataError",
@@ -109,6 +120,7 @@ __all__ = [
     "compute_dimension_magnitude",
     "compute_drift_decomposition",
     "compute_filing_adoption",
+    "compute_sec_filing_delta_events",
     "extract_section_changes",
     "filing_result_to_records",
     "prepare_filing_publication",
