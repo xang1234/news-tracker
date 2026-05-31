@@ -58,11 +58,18 @@ from src.filing.schemas import (
 )
 from src.filing.sec_api_provider import SecApiProvider
 from src.filing.sec_delta_events import (
+    SEC_DELTA_REASON_CODES,
     SEC_FILING_DELTA_EVENT_TYPES,
+    SECDeltaPublicationPayload,
+    SECFactEvidenceReference,
     SECFactObservation,
     SECFilingDeltaEvent,
     SECFilingDeltaRepository,
+    build_sec_delta_payload,
+    build_sec_fact_evidence,
+    classify_sec_fact_evidence,
     compute_sec_filing_delta_events,
+    sec_delta_reason_code,
 )
 from src.filing.sec_policy import SECPolicy
 from src.filing.sec_structured import (
@@ -98,7 +105,10 @@ __all__ = [
     "FilingSection",
     "FilingSectionRecord",
     "SEC_FILING_DELTA_EVENT_TYPES",
+    "SEC_DELTA_REASON_CODES",
+    "SECDeltaPublicationPayload",
     "SECFactObservation",
+    "SECFactEvidenceReference",
     "SECFilingDeltaEvent",
     "SECFilingDeltaRepository",
     "SECPolicy",
@@ -115,8 +125,11 @@ __all__ = [
     "build_adoption_payload",
     "build_divergence_payload",
     "build_issuer_summaries",
+    "build_sec_delta_payload",
+    "build_sec_fact_evidence",
     "check_divergence",
     "classify_by_dimension",
+    "classify_sec_fact_evidence",
     "compute_dimension_magnitude",
     "compute_drift_decomposition",
     "compute_filing_adoption",
@@ -124,4 +137,5 @@ __all__ = [
     "extract_section_changes",
     "filing_result_to_records",
     "prepare_filing_publication",
+    "sec_delta_reason_code",
 ]

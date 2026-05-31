@@ -1,6 +1,7 @@
 """Tests for PointInTimeService temporal filtering."""
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import numpy as np
@@ -207,3 +208,70 @@ class TestGetThemeCentroidsAsOf:
 
         assert "theme_abc" in result
         assert result["theme_abc"] == pytest.approx([0.1, 0.2, 0.3], abs=1e-6)
+
+
+class TestGetSecDeltaEventsAsOf:
+    """Test PointInTimeService.get_sec_delta_events_as_of()."""
+
+    @pytest.mark.asyncio
+    async def test_replays_sec_delta_events_by_available_at(
+        self,
+        pit_service: PointInTimeService,
+        mock_database: AsyncMock,
+    ) -> None:
+        as_of = datetime(2026, 5, 31, 12, 0, tzinfo=UTC)
+        mock_database.fetch.return_value = [
+            {
+                "event_id": "sec_delta:test",
+                "cik": "0000320193",
+                "event_type": "revenue_growth",
+                "accession_number": "0000320193-26-000001",
+                "previous_accession_number": "0000320193-25-000001",
+                "taxonomy": "us-gaap",
+                "fact_name": "Revenues",
+                "unit": "USD",
+                "period_start": None,
+                "period_end": as_of.date(),
+                "previous_period_start": None,
+                "previous_period_end": datetime(2025, 5, 31, tzinfo=UTC).date(),
+                "filed_date": as_of.date(),
+                "previous_filed_date": datetime(2025, 5, 31, tzinfo=UTC).date(),
+                "form": "10-K",
+                "previous_form": "10-K",
+                "available_at": as_of,
+                "fetched_at": as_of,
+                "current_value": Decimal("120"),
+                "previous_value": Decimal("100"),
+                "absolute_delta": Decimal("20"),
+                "relative_delta": 0.2,
+                "source_payload_hash": "sha256:payload",
+                "source_url": "https://data.sec.gov/example.json",
+                "metadata": {"period_gap": False},
+                "created_at": as_of,
+                "updated_at": as_of,
+            }
+        ]
+
+        events = await pit_service.get_sec_delta_events_as_of(
+            "320193",
+            as_of=as_of,
+            event_type="revenue_growth",
+            limit=25,
+        )
+
+        sql = mock_database.fetch.call_args[0][0]
+        args = mock_database.fetch.call_args[0][1:]
+        assert "available_at <= $2" in sql
+        assert "event_type = $3" in sql
+        assert "LIMIT $4" in sql
+        assert args == ("0000320193", as_of, "revenue_growth", 25)
+        assert len(events) == 1
+        assert events[0].event_id == "sec_delta:test"
+
+    @pytest.mark.asyncio
+    async def test_rejects_invalid_sec_delta_cik(
+        self,
+        pit_service: PointInTimeService,
+    ) -> None:
+        with pytest.raises(ValueError, match="cik"):
+            await pit_service.get_sec_delta_events_as_of("not-a-cik", as_of=datetime.now(UTC))

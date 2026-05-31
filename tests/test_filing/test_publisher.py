@@ -8,6 +8,7 @@ and lane health gating.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from src.filing.adoption import (
     AdoptionBreakdown,
@@ -20,6 +21,7 @@ from src.filing.publisher import (
     build_issuer_summaries,
     prepare_filing_publication,
 )
+from src.filing.sec_delta_events import SECFilingDeltaEvent
 from src.publish.lane_health import (
     FreshnessLevel,
     LaneHealthStatus,
@@ -83,6 +85,30 @@ def _make_alert(
         summary="Test summary",
         evidence={"test": True},
         created_at=NOW,
+    )
+
+
+def _make_sec_delta_event() -> SECFilingDeltaEvent:
+    return SECFilingDeltaEvent(
+        event_id="sec_delta:test",
+        cik="320193",
+        event_type="revenue_growth",
+        accession_number="0000320193-26-000001",
+        previous_accession_number="0000320193-25-000001",
+        taxonomy="us-gaap",
+        fact_name="Revenues",
+        unit="USD",
+        period_end=NOW.date(),
+        filed_date=NOW.date(),
+        form="10-K",
+        available_at=NOW,
+        fetched_at=NOW,
+        current_value=Decimal("120"),
+        previous_value=Decimal("100"),
+        absolute_delta=Decimal("20"),
+        relative_delta=0.2,
+        source_payload_hash="sha256:payload",
+        source_url="https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json",
     )
 
 
@@ -291,12 +317,15 @@ class TestPrepareFilingPublication:
             adoptions,
             alerts,
             _healthy_status(),
+            sec_delta_events=[_make_sec_delta_event()],
         )
         assert result.published is True
         assert len(result.adoption_payloads) == 1
         assert len(result.divergence_payloads) == 1
+        assert len(result.sec_delta_payloads) == 1
+        assert result.sec_delta_payloads[0].reason_code == "sec_fact_revenue_growth"
         assert len(result.issuer_summaries) == 1
-        assert result.object_count == 3  # 1 + 1 + 1
+        assert result.object_count == 4  # 1 + 1 + 1 + 1
         assert result.block_reason is None
 
     def test_blocked_publication(self) -> None:
@@ -304,11 +333,13 @@ class TestPrepareFilingPublication:
             [_make_adoption()],
             [_make_alert()],
             _blocked_status(),
+            sec_delta_events=[_make_sec_delta_event()],
         )
         assert result.published is False
         assert result.block_reason is not None
         assert result.adoption_payloads == []
         assert result.divergence_payloads == []
+        assert result.sec_delta_payloads == []
         assert result.issuer_summaries == []
         assert result.object_count == 0
 

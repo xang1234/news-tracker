@@ -260,10 +260,46 @@ class TestPreparePublication:
         result = prepare_narrative_publication(runs, _healthy_status(), now=NOW)
         assert len(result.symbol_rollups) == 2
 
+    def test_symbol_rollups_include_sec_fact_evidence(self) -> None:
+        runs = [_make_run(ticker_counts={"NVDA": 3})]
+        evidence = {
+            "event_id": "sec_delta:nvda",
+            "reason_code": "sec_fact_revenue_growth",
+            "evidence_role": "corroborating",
+            "lineage": {"accession_number": "0001045810-26-000001"},
+        }
+
+        result = prepare_narrative_publication(
+            runs,
+            _healthy_status(),
+            now=NOW,
+            sec_fact_evidence_by_symbol={"NVDA": [evidence]},
+        )
+
+        rollup = result.symbol_rollups[0]
+        assert rollup.symbol == "NVDA"
+        assert rollup.sec_fact_evidence == [evidence]
+        assert rollup.to_dict()["sec_fact_evidence"][0]["lineage"]["accession_number"] == (
+            "0001045810-26-000001"
+        )
+
     def test_theme_rollups_included(self) -> None:
         runs = [_make_run(theme_id="theme_a"), _make_run("nr_2", theme_id="theme_b")]
         result = prepare_narrative_publication(runs, _healthy_status(), now=NOW)
         assert len(result.theme_rollups) == 2
+
+    def test_theme_rollups_aggregate_sec_fact_evidence_from_symbols(self) -> None:
+        runs = [_make_run(ticker_counts={"NVDA": 3, "AMD": 1})]
+        evidence = {"event_id": "sec_delta:nvda", "evidence_role": "corroborating"}
+
+        result = prepare_narrative_publication(
+            runs,
+            _healthy_status(),
+            now=NOW,
+            sec_fact_evidence_by_symbol={"NVDA": [evidence]},
+        )
+
+        assert result.theme_rollups[0].sec_fact_evidence == [evidence]
 
     def test_empty_runs(self) -> None:
         result = prepare_narrative_publication([], _healthy_status(), now=NOW)

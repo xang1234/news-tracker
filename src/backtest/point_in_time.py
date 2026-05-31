@@ -7,12 +7,28 @@ publication time (timestamp), preventing look-ahead bias.
 
 import logging
 from datetime import datetime, timedelta
+from typing import Any, Protocol
 
+from src.filing.sec_delta_models import SECFilingDeltaEvent
+from src.filing.sec_delta_repository import SECFilingDeltaRepository
 from src.storage.database import Database
 from src.themes.repository import ThemeRepository
 from src.themes.schemas import Theme, ThemeMetrics
 
 logger = logging.getLogger(__name__)
+
+
+class SecDeltaEventReader(Protocol):
+    async def list_events_as_of(
+        self,
+        cik: str,
+        *,
+        as_of: datetime,
+        event_type: str | None = None,
+        limit: int = 100,
+    ) -> list[SECFilingDeltaEvent]:
+        """Return SEC delta events available at a point in time."""
+        ...
 
 
 class PointInTimeService:
@@ -26,9 +42,11 @@ class PointInTimeService:
         self,
         database: Database,
         theme_repo: ThemeRepository,
+        sec_delta_repo: SecDeltaEventReader | None = None,
     ) -> None:
         self._db = database
         self._theme_repo = theme_repo
+        self._sec_delta_repo = sec_delta_repo or SECFilingDeltaRepository(database)
 
     async def get_themes_as_of(
         self,
@@ -61,7 +79,7 @@ class PointInTimeService:
         as_of: datetime,
         since: datetime | None = None,
         limit: int = 1000,
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """Get documents that had been ingested by a specific point in time.
 
         Filters on fetched_at (ingestion time), NOT timestamp (publication time),
@@ -77,7 +95,7 @@ class PointInTimeService:
             authority_score, sentiment, theme_ids, fetched_at).
         """
         conditions = ["fetched_at <= $1", "embedding IS NOT NULL"]
-        params: list = [as_of]
+        params: list[Any] = [as_of]
         idx = 2
 
         if since:
@@ -166,3 +184,23 @@ class PointInTimeService:
         """
         themes = await self.get_themes_as_of(as_of=as_of, limit=10000)
         return {t.theme_id: t.centroid.tolist() for t in themes}
+
+    async def get_sec_delta_events_as_of(
+        self,
+        cik: str,
+        *,
+        as_of: datetime,
+        event_type: str | None = None,
+        limit: int = 100,
+    ) -> list[SECFilingDeltaEvent]:
+        """Get SEC filing-delta events available at a specific point in time.
+
+        Filters on ``available_at`` through SECFilingDeltaRepository so
+        backtests replay only issuer facts known by the historical clock.
+        """
+        return await self._sec_delta_repo.list_events_as_of(
+            cik,
+            as_of=as_of,
+            event_type=event_type,
+            limit=limit,
+        )

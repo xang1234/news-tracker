@@ -31,6 +31,12 @@ from src.narrative.lane_adapter import (
     NarrativeRunPayload,
 )
 from src.narrative.schemas import NarrativeRun
+from src.publish.evidence import (
+    EvidencePayload,
+    EvidencePayloadInput,
+    copy_evidence,
+    evidence_for_key,
+)
 from src.publish.lane_health import LaneHealthStatus, PublishReadiness
 
 # -- Rollup dataclasses ----------------------------------------------------
@@ -47,6 +53,7 @@ class SymbolRollup:
         max_composite: Highest component composite among runs.
         avg_sentiment: Weighted average sentiment across runs.
         contributing_run_ids: Which runs contribute to this rollup.
+        sec_fact_evidence: SEC fact lineage confirming or contradicting the symbol.
     """
 
     symbol: str
@@ -55,6 +62,7 @@ class SymbolRollup:
     max_composite: float
     avg_sentiment: float
     contributing_run_ids: list[str] = field(default_factory=list)
+    sec_fact_evidence: list[EvidencePayload] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -64,6 +72,7 @@ class SymbolRollup:
             "max_composite": self.max_composite,
             "avg_sentiment": round(self.avg_sentiment, 4),
             "contributing_run_ids": self.contributing_run_ids,
+            "sec_fact_evidence": copy_evidence(self.sec_fact_evidence),
         }
 
 
@@ -80,6 +89,7 @@ class ThemeRollup:
         avg_sentiment: Weighted average sentiment.
         top_symbols: Most-mentioned symbols.
         contributing_run_ids: Which runs contribute.
+        sec_fact_evidence: SEC fact lineage for the theme's symbols.
     """
 
     theme_id: str
@@ -90,6 +100,7 @@ class ThemeRollup:
     avg_sentiment: float
     top_symbols: list[str] = field(default_factory=list)
     contributing_run_ids: list[str] = field(default_factory=list)
+    sec_fact_evidence: list[EvidencePayload] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -101,6 +112,7 @@ class ThemeRollup:
             "avg_sentiment": round(self.avg_sentiment, 4),
             "top_symbols": self.top_symbols,
             "contributing_run_ids": self.contributing_run_ids,
+            "sec_fact_evidence": copy_evidence(self.sec_fact_evidence),
         }
 
 
@@ -138,6 +150,8 @@ class NarrativePublicationResult:
 def build_symbol_rollups(
     runs: list[NarrativeRun],
     components: dict[str, NarrativeComponents],
+    *,
+    sec_fact_evidence_by_symbol: dict[str, list[EvidencePayloadInput]] | None = None,
 ) -> list[SymbolRollup]:
     """Build per-symbol rollups from narrative runs and their components.
 
@@ -176,6 +190,7 @@ def build_symbol_rollups(
                 max_composite=s["max_composite"],
                 avg_sentiment=avg_sent,
                 contributing_run_ids=s["run_ids"],
+                sec_fact_evidence=evidence_for_key(sec_fact_evidence_by_symbol, symbol),
             )
         )
     return rollups
@@ -184,6 +199,8 @@ def build_symbol_rollups(
 def build_theme_rollups(
     runs: list[NarrativeRun],
     components: dict[str, NarrativeComponents],
+    *,
+    sec_fact_evidence_by_symbol: dict[str, list[EvidencePayloadInput]] | None = None,
 ) -> list[ThemeRollup]:
     """Build per-theme rollups from narrative runs and their components."""
     theme_data: dict[str, dict[str, Any]] = {}
@@ -202,6 +219,7 @@ def build_theme_rollups(
                 "sentiment_sum": 0.0,
                 "sentiment_weight": 0.0,
                 "symbol_counts": {},
+                "sec_fact_evidence": [],
             }
         t = theme_data[tid]
         t["run_ids"].append(run.run_id)
@@ -211,6 +229,7 @@ def build_theme_rollups(
         t["sentiment_weight"] += run.doc_count
         for sym, cnt in run.ticker_counts.items():
             t["symbol_counts"][sym] = t["symbol_counts"].get(sym, 0) + cnt
+            t["sec_fact_evidence"].extend(evidence_for_key(sec_fact_evidence_by_symbol, sym))
 
     rollups = []
     for tid, t in sorted(theme_data.items()):
@@ -226,6 +245,7 @@ def build_theme_rollups(
                 avg_sentiment=avg_sent,
                 top_symbols=top_symbols,
                 contributing_run_ids=t["run_ids"],
+                sec_fact_evidence=t["sec_fact_evidence"],
             )
         )
     return rollups
@@ -239,6 +259,7 @@ def prepare_narrative_publication(
     lane_health: LaneHealthStatus,
     *,
     adapter: NarrativeLaneAdapter | None = None,
+    sec_fact_evidence_by_symbol: dict[str, list[EvidencePayloadInput]] | None = None,
     now: datetime | None = None,
 ) -> NarrativePublicationResult:
     """Prepare narrative lane outputs for manifest publication.
@@ -254,6 +275,7 @@ def prepare_narrative_publication(
         runs: Active/cooling narrative runs to publish.
         lane_health: Pre-computed lane health status.
         adapter: Lane adapter (created with defaults if not provided).
+        sec_fact_evidence_by_symbol: SEC fact lineage keyed by ticker symbol.
         now: Current time for component computation.
 
     Returns:
@@ -291,8 +313,16 @@ def prepare_narrative_publication(
         )
 
     # Build rollups
-    symbol_rollups = build_symbol_rollups(runs, components)
-    theme_rollups = build_theme_rollups(runs, components)
+    symbol_rollups = build_symbol_rollups(
+        runs,
+        components,
+        sec_fact_evidence_by_symbol=sec_fact_evidence_by_symbol,
+    )
+    theme_rollups = build_theme_rollups(
+        runs,
+        components,
+        sec_fact_evidence_by_symbol=sec_fact_evidence_by_symbol,
+    )
 
     object_count = len(payloads) + len(symbol_rollups) + len(theme_rollups)
 

@@ -179,9 +179,8 @@ Current source families include:
 - Security master: ticker, exchange, alias, FIGI, and SEC issuer identifiers. Seeded semiconductor securities now carry SEC CIKs where available, SEC issuer names, former issuer-name slots, external identifier maps, and identifier-lineage records so Company Facts and submissions ingestion can audit how a ticker was mapped to an SEC issuer.
 - SEC structured fundamentals: official `data.sec.gov` Submissions and XBRL Company Facts JSON for tracked issuer CIKs, cached by issuer, payload hash, source URL, and accession-number lineage. The provider uses declared SEC User-Agent headers, per-second fair-access rate limiting, retry handling for transient SEC failures, and exposes the SEC nightly bulk archive URLs for backfills.
 - SEC filing-delta events: point-in-time deltas derived from cached Company Facts for revenue, inventory, capex, R&D, gross-margin compression, and restatement/amended-filing changes. Events preserve accession, fact, unit, period, filed-date, fetched-at, source payload hash, and availability lineage for backtests and publication manifests.
+- SEC delta publication and replay: filing manifests can publish SEC fact-delta payloads as `filing_fact` objects with stable reason codes, while narrative and structural payloads can attach SEC fact lineage as corroborating or contradictory evidence. Backtests can replay SEC delta availability through point-in-time `available_at` queries.
 - Macro and supply-chain factors: FRED, BLS, BEA, Treasury Fiscal Data, Federal Reserve CSV, EIA, and Census sources for point-in-time ranking/backtest context.
-
-Planned SEC publication work builds on the structured SEC cache and filing-delta events to publish SEC fact deltas into filing, narrative, and backtest surfaces.
 
 ## API Surfaces
 

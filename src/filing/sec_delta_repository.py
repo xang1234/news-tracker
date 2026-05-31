@@ -19,7 +19,7 @@ def _parse_json_object(value: Any) -> dict[str, Any]:
         return parsed if isinstance(parsed, dict) else {}
     if isinstance(value, dict):
         return dict(value)
-    return dict(value)
+    return {}
 
 
 def _row_to_event(row: Any) -> SECFilingDeltaEvent:
@@ -145,7 +145,7 @@ class SECFilingDeltaRepository:
             SELECT *
             FROM sec_filing_delta_events
             WHERE {" AND ".join(conditions)}
-            ORDER BY available_at DESC, filed_date DESC
+            ORDER BY available_at DESC, filed_date DESC, event_id DESC
             LIMIT ${len(params)}
             """,
             *params,

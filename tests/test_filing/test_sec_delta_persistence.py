@@ -131,10 +131,23 @@ class TestSECFilingDeltaRepository:
         sql = args[0]
         assert "available_at <= $" in sql
         assert "event_type = $" in sql
-        assert "ORDER BY available_at DESC, filed_date DESC" in sql
+        assert "ORDER BY available_at DESC, filed_date DESC, event_id DESC" in sql
         assert args[1] == "0000320193"
         assert len(events) == 1
         assert events[0].event_id == "sec-delta-1"
+
+    @pytest.mark.asyncio
+    async def test_unexpected_metadata_column_type_decodes_to_empty_object(self) -> None:
+        database = AsyncMock()
+        database.fetch.return_value = [_event_row(metadata=["not", "object"])]
+        repository = SECFilingDeltaRepository(database)
+
+        events = await repository.list_events_as_of(
+            "320193",
+            as_of=datetime(2024, 12, 1, tzinfo=UTC),
+        )
+
+        assert events[0].metadata == {}
 
 
 class TestMigration036:
