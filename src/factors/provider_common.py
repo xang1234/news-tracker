@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from calendar import monthrange
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Protocol
 
@@ -59,20 +60,58 @@ def date_to_utc(value: str) -> datetime:
     return datetime.combine(date.fromisoformat(value), datetime.min.time(), tzinfo=UTC)
 
 
+def _period_end_for_cadence(cadence: str, observation_date: date) -> date:
+    if cadence == "monthly":
+        return date(
+            observation_date.year,
+            observation_date.month,
+            monthrange(observation_date.year, observation_date.month)[1],
+        )
+    if cadence == "quarterly":
+        quarter_end_month = ((observation_date.month - 1) // 3 + 1) * 3
+        return date(
+            observation_date.year,
+            quarter_end_month,
+            monthrange(observation_date.year, quarter_end_month)[1],
+        )
+    if cadence == "annual":
+        return date(observation_date.year, 12, 31)
+    return observation_date
+
+
 def lagged_available_at(series: FactorSeries, observation_date: date) -> datetime:
     """Fallback availability for feeds without explicit release timestamps."""
-    release_date = observation_date + timedelta(days=series.release_lag_days)
+    period_end = _period_end_for_cadence(series.cadence, observation_date)
+    release_date = period_end + timedelta(days=series.release_lag_days)
     return datetime.combine(release_date, datetime.min.time(), tzinfo=UTC)
+
+
+_MISSING_NUMBER_TOKENS = frozenset({"", ".", "-", "--", "na", "n/a", "none", "null", "nan"})
 
 
 def parse_number(value: Any) -> float | None:
     """Parse provider numeric values while preserving explicit missing markers."""
     if value is None:
         return None
-    text = str(value).strip().replace(",", "")
-    if not text or text in {".", "-", "NA", "null"}:
+    text = str(value).strip()
+    if text.lower() in _MISSING_NUMBER_TOKENS:
         return None
-    return float(text)
+
+    is_parenthesized_negative = text.startswith("(") and text.endswith(")")
+    if is_parenthesized_negative:
+        text = text[1:-1].strip()
+
+    text = text.replace(",", "").removeprefix("$").strip()
+    if text.endswith("%"):
+        text = text[:-1].strip()
+    if text.lower() in _MISSING_NUMBER_TOKENS:
+        return None
+
+    try:
+        parsed = float(text)
+    except (TypeError, ValueError):
+        return None
+    return -parsed if is_parenthesized_negative else parsed
 
 
 def make_observation(

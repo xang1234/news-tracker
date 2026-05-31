@@ -39,9 +39,10 @@ class TestFactorSeries:
         assert series.required_credentials == ["FRED_API_KEY"]
 
     def test_supported_cadences_are_explicit(self) -> None:
-        assert frozenset(
-            {"daily", "weekly", "monthly", "quarterly", "annual", "irregular"}
-        ) == VALID_FACTOR_CADENCES
+        assert (
+            frozenset({"daily", "weekly", "monthly", "quarterly", "annual", "irregular"})
+            == VALID_FACTOR_CADENCES
+        )
 
     def test_invalid_cadence_rejected(self) -> None:
         with pytest.raises(ValueError, match="Invalid cadence"):
@@ -136,6 +137,38 @@ class TestFactorObservation:
                 value=None,
                 units="usd",
                 available_at=datetime(2026, 5, 15, tzinfo=UTC),
+            )
+
+    def test_present_value_with_missing_reason_rejected(self) -> None:
+        with pytest.raises(ValueError, match="missing_reason"):
+            FactorObservation(
+                factor_id="fred:DGS10",
+                observation_date=date(2026, 4, 30),
+                value=4.2,
+                units="percent",
+                available_at=datetime(2026, 5, 1, tzinfo=UTC),
+                missing_reason="provider_missing_value",
+            )
+
+    def test_naive_available_at_rejected(self) -> None:
+        with pytest.raises(ValueError, match="available_at"):
+            FactorObservation(
+                factor_id="fred:DGS10",
+                observation_date=date(2026, 4, 30),
+                value=4.2,
+                units="percent",
+                available_at=datetime(2026, 5, 1),
+            )
+
+    def test_naive_fetched_at_rejected(self) -> None:
+        with pytest.raises(ValueError, match="fetched_at"):
+            FactorObservation(
+                factor_id="fred:DGS10",
+                observation_date=date(2026, 4, 30),
+                value=4.2,
+                units="percent",
+                available_at=datetime(2026, 5, 1, tzinfo=UTC),
+                fetched_at=datetime(2026, 5, 1),
             )
 
     def test_unit_mismatch_rejected_against_registry_entry(self) -> None:

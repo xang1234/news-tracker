@@ -239,8 +239,4 @@ def _census_rows(payload: list[Any]) -> list[dict[str, str]]:
     headers = payload[0]
     if not isinstance(headers, list):
         raise ProviderResponseError("Census payload did not include a header row")
-    return [
-        dict(zip(headers, row, strict=False))
-        for row in payload[1:]
-        if isinstance(row, list)
-    ]
+    return [dict(zip(headers, row, strict=False)) for row in payload[1:] if isinstance(row, list)]

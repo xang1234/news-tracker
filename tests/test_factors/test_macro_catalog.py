@@ -26,10 +26,22 @@ def test_macro_catalog_tags_series_for_stock_relevance() -> None:
     assert any("profits" in entry.relevance_tags for entry in series)
 
 
+def test_macro_catalog_uses_verified_bea_corporate_profit_series() -> None:
+    profits = next(
+        entry
+        for entry in get_curated_macro_factor_series()
+        if entry.name == "Corporate Profits After Tax"
+    )
+
+    assert profits.factor_id == "bea:NIPA:T61900A:A055RC:Q"
+    assert profits.external_id == "NIPA:T61900A:A055RC:Q"
+    assert profits.metadata["table_name"] == "T61900A"
+    assert profits.metadata["line_number"] == "1"
+
+
 def test_macro_catalog_declares_credentials_only_where_needed() -> None:
     by_provider = {
-        entry.provider: entry.required_credentials
-        for entry in get_curated_macro_factor_series()
+        entry.provider: entry.required_credentials for entry in get_curated_macro_factor_series()
     }
 
     assert by_provider["fred"] == ["FRED_API_KEY"]

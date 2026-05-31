@@ -135,11 +135,14 @@ _CURATED_MACRO_FACTOR_SERIES = (
         },
     ),
     _series(
-        factor_id="bea:NIPA:T61300:A262RC:Q",
+        factor_id="bea:NIPA:T61900A:A055RC:Q",
         provider="bea",
-        external_id="NIPA:T61300:A262RC:Q",
+        external_id="NIPA:T61900A:A055RC:Q",
         name="Corporate Profits After Tax",
-        description="Corporate profit backdrop for margin and earnings-cycle interpretation.",
+        description=(
+            "Corporate profits after tax without IVA and CCAdj for margin "
+            "and earnings-cycle interpretation."
+        ),
         units="billions_usd",
         cadence="quarterly",
         release_lag_days=60,
@@ -148,7 +151,7 @@ _CURATED_MACRO_FACTOR_SERIES = (
         source_url="https://apps.bea.gov/iTable/?ReqID=19&step=2",
         metadata={
             "dataset": "NIPA",
-            "table_name": "T61300",
+            "table_name": "T61900A",
             "line_number": "1",
             "frequency": "Q",
         },

@@ -20,6 +20,11 @@ def _require_non_empty(value: str, field_name: str) -> None:
         raise ValueError(f"{field_name} must be non-empty")
 
 
+def _require_timezone_aware(value: datetime, field_name: str) -> None:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(f"{field_name} must be timezone-aware")
+
+
 @dataclass
 class FactorSeries:
     """A registered macro or supply-chain time series.
@@ -53,8 +58,7 @@ class FactorSeries:
 
         if self.cadence not in VALID_FACTOR_CADENCES:
             raise ValueError(
-                f"Invalid cadence {self.cadence!r}. "
-                f"Must be one of {sorted(VALID_FACTOR_CADENCES)}"
+                f"Invalid cadence {self.cadence!r}. Must be one of {sorted(VALID_FACTOR_CADENCES)}"
             )
         if self.release_lag_days < 0:
             raise ValueError("release_lag_days must be non-negative")
@@ -81,6 +85,8 @@ class FactorObservation:
     def __post_init__(self) -> None:
         _require_non_empty(self.factor_id, "factor_id")
         _require_non_empty(self.units, "units")
+        _require_timezone_aware(self.available_at, "available_at")
+        _require_timezone_aware(self.fetched_at, "fetched_at")
         if self.value is None and not self.missing_reason:
             raise ValueError("missing_reason is required when value is missing")
         if self.value is not None and self.missing_reason:

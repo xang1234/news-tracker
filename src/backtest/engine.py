@@ -31,6 +31,7 @@ from src.factors.repository import FactorRepository
 from src.storage.database import Database
 from src.themes.ranking import RankingStrategy, ThemeRankingService
 from src.themes.repository import ThemeRepository
+from src.themes.schemas import Theme
 from src.themes.schemas import ThemeMetrics as ThemeMetricsSchema
 
 logger = logging.getLogger(__name__)
@@ -428,7 +429,7 @@ class BacktestEngine:
 
     async def _build_metrics_map(
         self,
-        themes: list[Any],
+        themes: list[Theme],
         as_of: datetime,
     ) -> dict[str, ThemeMetricsSchema]:
         """Build a theme_id → latest ThemeMetrics map.

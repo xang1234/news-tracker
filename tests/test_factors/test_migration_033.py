@@ -2,9 +2,7 @@
 
 from pathlib import Path
 
-MIGRATION_PATH = (
-    Path(__file__).resolve().parents[2] / "migrations" / "033_factor_series.sql"
-)
+MIGRATION_PATH = Path(__file__).resolve().parents[2] / "migrations" / "033_factor_series.sql"
 
 
 def test_migration_file_exists() -> None:

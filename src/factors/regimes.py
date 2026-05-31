@@ -101,7 +101,8 @@ def classify_factor_regime(
         regime = "observed"
         metadata = {"trend": "unknown"}
     else:
-        delta = current.value - previous.value if current.value is not None else 0.0
+        assert current.value is not None
+        delta = current.value - previous.value
         pct_change = delta / abs(previous.value)
         if abs(pct_change) < relative_threshold:
             regime = "stable"
@@ -205,8 +206,7 @@ class FactorRegimeService:
         )
         return {
             ranked_theme.theme_id: [
-                context.to_dict()
-                for context in factor_context_map.get(ranked_theme.theme_id, [])
+                context.to_dict() for context in factor_context_map.get(ranked_theme.theme_id, [])
             ]
             for ranked_theme in ranked_themes
         }

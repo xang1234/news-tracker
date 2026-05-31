@@ -225,9 +225,7 @@ class AppServices:
             database = await self.get_database()
             async with self._init_lock:
                 if self.factor_regime_service is None:
-                    self.factor_regime_service = FactorRegimeService(
-                        FactorRepository(database)
-                    )
+                    self.factor_regime_service = FactorRegimeService(FactorRepository(database))
         return self.factor_regime_service
 
     async def get_alert_repository(self) -> AlertRepository:

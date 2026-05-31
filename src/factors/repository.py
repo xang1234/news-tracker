@@ -92,7 +92,7 @@ class FactorRepository:
             conditions.append("is_active = TRUE")
         if relevance_tag is not None:
             params.append(relevance_tag)
-            conditions.append(f"${len(params)} = ANY(relevance_tags)")
+            conditions.append(f"relevance_tags @> ARRAY[${len(params)}]::text[]")
         if provider is not None:
             params.append(provider)
             conditions.append(f"provider = ${len(params)}")

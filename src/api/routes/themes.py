@@ -78,6 +78,12 @@ router = APIRouter()
 CATALYST_BUILD_CONCURRENCY = 10
 
 
+def _normal_exception_or_raise(result: BaseException) -> Exception:
+    if not isinstance(result, Exception):
+        raise result
+    return result
+
+
 def _theme_to_item(theme: Theme, include_centroid: bool = False) -> ThemeItem:
     """Convert a Theme dataclass to a ThemeItem response model."""
     return ThemeItem(
@@ -290,21 +296,22 @@ async def _build_market_catalyst(
             ],
             return_exceptions=True,
         )
-        candidate_node_ids = {
-            impact.node_id
-            for result in propagation_results
-            if not isinstance(result, BaseException)
-            for impact in result.values()
-        }
+        candidate_node_ids: set[str] = set()
+        for result in propagation_results:
+            if isinstance(result, BaseException):
+                _normal_exception_or_raise(result)
+                continue
+            candidate_node_ids.update(impact.node_id for impact in result.values())
         ticker_node_ids = await ticker_node_lookup.filter_tickers(candidate_node_ids)
         best_impacts: dict[str, MarketCatalystRelatedTickerItem] = {}
         for source_item, result in zip(primary_tickers, propagation_results, strict=True):
             if isinstance(result, BaseException):
+                error = _normal_exception_or_raise(result)
                 logger.warning(
                     "catalyst_propagation_failed",
                     run_id=run.run_id,
                     source_ticker=source_item.ticker,
-                    error=str(result),
+                    error=str(error),
                 )
                 continue
 
@@ -644,7 +651,8 @@ async def get_market_catalysts(
     items: list[MarketCatalystItem] = []
     for result in catalysts:
         if isinstance(result, BaseException):
-            logger.warning("build_market_catalyst_failed", error=str(result))
+            error = _normal_exception_or_raise(result)
+            logger.warning("build_market_catalyst_failed", error=str(error))
             continue
         if result is not None:
             items.append(result)

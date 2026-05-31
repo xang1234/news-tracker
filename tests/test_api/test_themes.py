@@ -4,13 +4,23 @@ from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
+from src.api.routes.themes import _normal_exception_or_raise
 from src.factors.regimes import FactorRegimeContext
 from src.graph.propagation import PropagationImpact
 from src.ingestion.schemas import EngagementMetrics, NormalizedDocument, Platform
 from src.narrative.schemas import NarrativeRun, NarrativeRunBucket
 from src.sentiment.aggregation import AggregatedSentiment
 from tests.test_api.conftest import _make_metrics, _make_theme
+
+
+def test_gather_exception_helper_propagates_system_exceptions() -> None:
+    normal_error = RuntimeError("provider failed")
+
+    assert _normal_exception_or_raise(normal_error) is normal_error
+    with pytest.raises(SystemExit, match="shutdown"):
+        _normal_exception_or_raise(SystemExit("shutdown"))
 
 
 def _make_narrative_run(run_id: str = "run_abc123", theme_id: str = "theme_abc123") -> NarrativeRun:

@@ -86,9 +86,7 @@ class FakeFactorRepository:
                 and start <= obs.observation_date <= end
                 and obs.available_at <= as_of
             ]
-            result[factor_id] = sorted(visible, key=lambda obs: obs.observation_date)[
-                -per_factor:
-            ]
+            result[factor_id] = sorted(visible, key=lambda obs: obs.observation_date)[-per_factor:]
         return result
 
 

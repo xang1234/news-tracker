@@ -169,7 +169,7 @@ class TestFactorSeriesRepository:
         args = mock_database.fetch.call_args[0]
         sql = args[0]
         assert "is_active = TRUE" in sql
-        assert "$1 = ANY(relevance_tags)" in sql
+        assert "relevance_tags @> ARRAY[$1]::text[]" in sql
         assert "provider = $2" in sql
         assert args[1] == "rates"
         assert args[2] == "fred"
@@ -232,6 +232,34 @@ class TestFactorObservationRepository:
         assert "ORDER BY observation_date ASC, available_at DESC, fetched_at DESC" in sql
         assert args[4] == as_of
         assert result[0].value == 4.52
+
+    @pytest.mark.asyncio
+    async def test_get_latest_observations_as_of_groups_each_requested_factor(
+        self,
+        mock_database: AsyncMock,
+    ) -> None:
+        mock_database.fetch.return_value = [_observation_row()]
+        repo = FactorRepository(mock_database)
+        as_of = datetime(2026, 5, 2, tzinfo=UTC)
+
+        result = await repo.get_latest_observations_as_of(
+            ["fred:DGS10", "fred:UNSEEN"],
+            start=date(2026, 4, 1),
+            end=date(2026, 4, 30),
+            as_of=as_of,
+            per_factor=3,
+        )
+
+        args = mock_database.fetch.call_args[0]
+        sql = args[0]
+        assert "WITH latest_per_observation AS" in sql
+        assert "ROW_NUMBER() OVER" in sql
+        assert "factor_rank <= $5" in sql
+        assert args[1] == ["fred:DGS10", "fred:UNSEEN"]
+        assert args[4] == as_of
+        assert args[5] == 3
+        assert result["fred:DGS10"][0].value == 4.52
+        assert result["fred:UNSEEN"] == []
 
     @pytest.mark.asyncio
     async def test_missing_observation_round_trips(self, mock_database: AsyncMock) -> None:

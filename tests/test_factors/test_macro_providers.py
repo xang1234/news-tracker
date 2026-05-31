@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 import pytest
 
+from src.factors.provider_common import parse_number
 from src.factors.providers import (
     BeaFactorProvider,
     BlsFactorProvider,
@@ -72,6 +73,7 @@ def _series(
     external_id: str,
     *,
     units: str = "percent",
+    cadence: str = "monthly",
     release_lag_days: int = 0,
     **metadata: Any,
 ) -> FactorSeries:
@@ -81,11 +83,30 @@ def _series(
         external_id=external_id,
         name=f"{provider} {external_id}",
         units=units,
-        cadence="monthly",
+        cadence=cadence,
         release_lag_days=release_lag_days,
         relevance_tags=["macro"],
         metadata=metadata,
     )
+
+
+@pytest.mark.parametrize(
+    ("raw_value", "expected"),
+    [
+        ("4.52", 4.52),
+        ("1,234.5", 1234.5),
+        ("(1,234.5)", -1234.5),
+        ("4.5%", 4.5),
+        ("n/a", None),
+        ("footnote", None),
+        ("--", None),
+    ],
+)
+def test_parse_number_treats_provider_tokens_without_raising(
+    raw_value: Any,
+    expected: float | None,
+) -> None:
+    assert parse_number(raw_value) == expected
 
 
 @pytest.mark.asyncio
@@ -198,8 +219,8 @@ async def test_bls_provider_uses_no_key_mode_and_latest_refresh() -> None:
     assert url == "https://api.bls.gov/publicAPI/v2/timeseries/data/CUSR0000SA0"
     assert params == {"latest": "true"}
     assert observations[0].observation_date == date(2026, 4, 1)
-    assert observations[0].available_at == datetime(2026, 4, 8, tzinfo=UTC)
-    assert observations[0].metadata["estimated_release_at"] == "2026-04-08T00:00:00+00:00"
+    assert observations[0].available_at == datetime(2026, 5, 7, tzinfo=UTC)
+    assert observations[0].metadata["estimated_release_at"] == "2026-05-07T00:00:00+00:00"
     assert observations[0].fetched_at == datetime(2026, 5, 15, 12, tzinfo=UTC)
     assert observations[0].value == 321.5
     assert observations[0].revision == "latest"
@@ -270,6 +291,7 @@ async def test_bea_provider_requires_key_and_parses_quarterly_data() -> None:
         _series(
             "bea",
             "NIPA:T10101:A191RL:Q",
+            cadence="quarterly",
             release_lag_days=30,
             dataset="NIPA",
             table_name="T10101",
@@ -288,8 +310,8 @@ async def test_bea_provider_requires_key_and_parses_quarterly_data() -> None:
     assert params["TableName"] == "T10101"
     assert params["LineNumber"] == "1"
     assert observations[0].observation_date == date(2026, 1, 1)
-    assert observations[0].available_at == datetime(2026, 1, 31, tzinfo=UTC)
-    assert observations[0].metadata["estimated_release_at"] == "2026-01-31T00:00:00+00:00"
+    assert observations[0].available_at == datetime(2026, 4, 30, tzinfo=UTC)
+    assert observations[0].metadata["estimated_release_at"] == "2026-04-30T00:00:00+00:00"
     assert observations[0].fetched_at == datetime(2026, 4, 30, 12, tzinfo=UTC)
     assert observations[0].value == 2.4
 
@@ -321,6 +343,7 @@ async def test_bea_latest_refresh_selects_latest_period_not_response_tail() -> N
         _series(
             "bea",
             "NIPA:T10101:A191RL:Q",
+            cadence="quarterly",
             dataset="NIPA",
             table_name="T10101",
             line_number="1",
@@ -366,8 +389,7 @@ async def test_treasury_provider_fetches_no_key_fiscal_data() -> None:
     _, params = provider.http_client.get_calls[0]
     assert "api_key" not in params
     assert params["filter"] == (
-        "security_type_desc:eq:Treasury Notes,"
-        "record_date:gte:2026-04-01,record_date:lte:2026-04-30"
+        "security_type_desc:eq:Treasury Notes,record_date:gte:2026-04-01,record_date:lte:2026-04-30"
     )
     assert observations[0].observation_date == date(2026, 4, 30)
     assert observations[0].metadata["estimated_release_at"] == "2026-05-01T00:00:00+00:00"

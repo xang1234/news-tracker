@@ -109,8 +109,10 @@ def _refresh_failed(summary: FactorRefreshSummary) -> bool:
         return False
     if summary.errors:
         return True
-    return summary.series_seen > 0 and summary.series_refreshed == 0 and bool(
-        summary.skipped_missing_credentials
+    return (
+        summary.series_seen > 0
+        and summary.series_refreshed == 0
+        and bool(summary.skipped_missing_credentials)
     )
 
 
