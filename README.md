@@ -170,6 +170,18 @@ Divergence payloads include reason code, severity, human-readable summary, and s
 4. Publish layer creates/updates manifests and object state.
 5. Consumers query published objects/read-model surfaces.
 
+## Datasource Coverage
+
+Current source families include:
+
+- Social/news ingestion: X/Twitter, Reddit, Substack, and news adapters.
+- SEC filing lane: EDGAR filing search/fetch providers with centralized SEC fair-access policy.
+- Security master: ticker, exchange, alias, FIGI, and SEC issuer identifiers. Seeded semiconductor securities now carry SEC CIKs where available, SEC issuer names, former issuer-name slots, external identifier maps, and identifier-lineage records so Company Facts and submissions ingestion can audit how a ticker was mapped to an SEC issuer.
+- SEC structured fundamentals: official `data.sec.gov` Submissions and XBRL Company Facts JSON for tracked issuer CIKs, cached by issuer, payload hash, source URL, and accession-number lineage. The provider uses declared SEC User-Agent headers, per-second fair-access rate limiting, retry handling for transient SEC failures, and exposes the SEC nightly bulk archive URLs for backfills.
+- Macro and supply-chain factors: FRED, BLS, BEA, Treasury Fiscal Data, Federal Reserve CSV, EIA, and Census sources for point-in-time ranking/backtest context.
+
+Planned SEC filing-delta work builds on the structured SEC cache to produce point-in-time events from Company Facts and submissions history.
+
 ## API Surfaces
 
 - Infrastructure/publish endpoints: `src/api/routes/intel.py`

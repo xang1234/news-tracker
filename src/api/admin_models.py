@@ -15,6 +15,19 @@ def _validate_source_platform(value: str) -> str:
     return normalized
 
 
+class SecurityIdentifierLineageItem(BaseModel):
+    """Auditable provenance for one security identifier."""
+
+    identifier_type: str = Field(..., min_length=1, description="Identifier kind")
+    value: str = Field(..., min_length=1, description="Identifier value")
+    source: str = Field(..., min_length=1, description="Source that supplied the identifier")
+    observed_at: str | None = Field(default=None, description="Observation date or timestamp")
+    valid_from: str | None = Field(default=None, description="Known validity start")
+    valid_to: str | None = Field(default=None, description="Known validity end")
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
 class SecurityItem(BaseModel):
     """Single security record."""
 
@@ -25,6 +38,14 @@ class SecurityItem(BaseModel):
     sector: str = Field(default="", description="Sector classification")
     country: str = Field(default="US", description="Country code")
     currency: str = Field(default="USD", description="Trading currency")
+    sec_cik: str | None = Field(default=None, description="10-digit SEC CIK")
+    issuer_name: str = Field(default="", description="Issuer name reported to SEC")
+    former_names: list[str] = Field(default_factory=list, description="Former issuer names")
+    external_identifiers: dict[str, object] = Field(
+        default_factory=dict,
+        description="External identifiers such as SEC tickers, LEIs, and FIGI aliases",
+    )
+    identifier_lineage: list[SecurityIdentifierLineageItem] = Field(default_factory=list)
     is_active: bool = Field(default=True, description="Whether security is active")
     created_at: str | None = Field(default=None, description="Creation timestamp (ISO)")
     updated_at: str | None = Field(default=None, description="Last update timestamp (ISO)")
@@ -49,6 +70,11 @@ class CreateSecurityRequest(BaseModel):
     sector: str = Field(default="", description="Sector classification")
     country: str = Field(default="US", description="Country code")
     currency: str = Field(default="USD", description="Trading currency")
+    sec_cik: str | None = Field(default=None, description="10-digit SEC CIK")
+    issuer_name: str = Field(default="", description="Issuer name reported to SEC")
+    former_names: list[str] = Field(default_factory=list, description="Former issuer names")
+    external_identifiers: dict[str, object] = Field(default_factory=dict)
+    identifier_lineage: list[SecurityIdentifierLineageItem] = Field(default_factory=list)
 
 
 class UpdateSecurityRequest(BaseModel):
@@ -59,6 +85,11 @@ class UpdateSecurityRequest(BaseModel):
     sector: str | None = Field(default=None, description="Sector classification")
     country: str | None = Field(default=None, description="Country code")
     currency: str | None = Field(default=None, description="Trading currency")
+    sec_cik: str | None = Field(default=None, description="10-digit SEC CIK")
+    issuer_name: str | None = Field(default=None, description="Issuer name reported to SEC")
+    former_names: list[str] | None = Field(default=None, description="Former issuer names")
+    external_identifiers: dict[str, object] | None = Field(default=None)
+    identifier_lineage: list[SecurityIdentifierLineageItem] | None = Field(default=None)
 
 
 class SourceItem(BaseModel):

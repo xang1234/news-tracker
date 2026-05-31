@@ -58,6 +58,12 @@ from src.filing.schemas import (
 )
 from src.filing.sec_api_provider import SecApiProvider
 from src.filing.sec_policy import SECPolicy
+from src.filing.sec_structured import (
+    SECStructuredDataError,
+    SECStructuredDataProvider,
+    SECStructuredDataRepository,
+    SECStructuredPayloadRecord,
+)
 
 __all__ = [
     "AdoptionBreakdown",
@@ -86,6 +92,10 @@ __all__ = [
     "FilingSectionRecord",
     "SECPolicy",
     "SECRateLimiter",
+    "SECStructuredDataError",
+    "SECStructuredDataProvider",
+    "SECStructuredDataRepository",
+    "SECStructuredPayloadRecord",
     "SectionChange",
     "SectionInput",
     "SectionSignal",

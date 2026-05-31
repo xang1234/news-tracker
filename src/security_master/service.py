@@ -4,10 +4,11 @@ import json
 import logging
 import time
 from pathlib import Path
+from typing import Any
 
 from src.security_master.config import SecurityMasterConfig
 from src.security_master.repository import SecurityMasterRepository
-from src.security_master.schemas import Security
+from src.security_master.schemas import Security, SecurityIdentifierLineage, normalize_sec_cik
 from src.storage.database import Database
 
 logger = logging.getLogger(__name__)
@@ -15,8 +16,21 @@ logger = logging.getLogger(__name__)
 _SEED_FILE = Path(__file__).parent / "data" / "seed_securities.json"
 
 
-def _parse_seed_entry(entry: dict) -> Security:
+def _parse_seed_entry(entry: dict[str, Any]) -> Security:
     """Convert a JSON seed entry to a Security dataclass."""
+    sec_cik = normalize_sec_cik(entry.get("sec_cik"))
+    external_identifiers = dict(entry.get("external_identifiers", {}))
+    identifier_lineage = list(entry.get("identifier_lineage", []))
+    if sec_cik:
+        external_identifiers.setdefault("sec_ticker", entry["ticker"])
+        if not any(record.get("identifier_type") == "sec_cik" for record in identifier_lineage):
+            identifier_lineage.append(
+                {
+                    "identifier_type": "sec_cik",
+                    "value": sec_cik,
+                    "source": "sec_company_tickers",
+                }
+            )
     return Security(
         ticker=entry["ticker"],
         exchange=entry.get("exchange", "US"),
@@ -26,6 +40,13 @@ def _parse_seed_entry(entry: dict) -> Security:
         country=entry.get("country", "US"),
         currency=entry.get("currency", "USD"),
         figi=entry.get("figi"),
+        sec_cik=sec_cik,
+        issuer_name=entry.get("issuer_name", ""),
+        former_names=entry.get("former_names", []),
+        external_identifiers=external_identifiers,
+        identifier_lineage=[
+            SecurityIdentifierLineage.from_raw(record) for record in identifier_lineage
+        ],
         is_active=entry.get("is_active", True),
     )
 

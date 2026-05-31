@@ -119,7 +119,22 @@ class TestSeedFromJson:
     @pytest.mark.asyncio
     async def test_loads_and_upserts(self, service: SecurityMasterService, tmp_path: Path) -> None:
         seed_data = [
-            {"ticker": "TEST", "name": "Test Corp", "aliases": ["test"]},
+            {
+                "ticker": "TEST",
+                "name": "Test Corp",
+                "aliases": ["test"],
+                "sec_cik": "CIK1234567",
+                "issuer_name": "Test Corporation",
+                "former_names": ["Old Test Corp"],
+                "external_identifiers": {"sec_ticker": "TEST"},
+                "identifier_lineage": [
+                    {
+                        "identifier_type": "sec_cik",
+                        "value": "0001234567",
+                        "source": "sec_ticker_company",
+                    }
+                ],
+            },
         ]
         seed_file = tmp_path / "test_seed.json"
         seed_file.write_text(json.dumps(seed_data))
@@ -128,6 +143,9 @@ class TestSeedFromJson:
 
         assert result == 1  # bulk_upsert returns len(securities)
         service.repository._db.execute.assert_called_once()
+        args = service.repository._db.execute.call_args[0]
+        assert args[9] == ["0001234567"]
+        assert args[10] == ["Test Corporation"]
 
     @pytest.mark.asyncio
     async def test_invalidates_cache_after_seed(

@@ -20,7 +20,7 @@ from src.security_master.concept_schemas import (
 )
 from src.security_master.config import SecurityMasterConfig
 from src.security_master.repository import SecurityMasterRepository
-from src.security_master.schemas import Security
+from src.security_master.schemas import Security, SecurityIdentifierLineage, normalize_sec_cik
 from src.security_master.service import SecurityMasterService
 
 __all__ = [
@@ -39,7 +39,9 @@ __all__ = [
     "make_concept_id",
     # Security master
     "Security",
+    "SecurityIdentifierLineage",
     "SecurityMasterConfig",
     "SecurityMasterRepository",
     "SecurityMasterService",
+    "normalize_sec_cik",
 ]

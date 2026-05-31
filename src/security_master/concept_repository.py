@@ -29,7 +29,8 @@ def _parse_json(value: Any) -> dict[str, Any]:
     if value is None:
         return {}
     if isinstance(value, str):
-        return json.loads(value)
+        parsed = json.loads(value)
+        return parsed if isinstance(parsed, dict) else {}
     if isinstance(value, dict):
         return value
     return dict(value)
