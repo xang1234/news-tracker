@@ -25,7 +25,21 @@ VALID_CONCEPT_TYPES = frozenset(
     }
 )
 
-VALID_ALIAS_TYPES = frozenset({"name", "ticker", "abbreviation", "former_name", "local_name"})
+VALID_ALIAS_TYPES = frozenset(
+    {
+        "name",
+        "ticker",
+        "abbreviation",
+        "former_name",
+        "local_name",
+        "subsidiary",
+        "acquired_entity",
+        "lab",
+        "research_institution",
+    }
+)
+
+VALID_ALIAS_REVIEW_STATUSES = frozenset({"accepted", "needs_review", "rejected"})
 
 VALID_ISSUER_SECURITY_RELATIONSHIPS = frozenset(
     {"primary", "adr", "subsidiary_listing", "preferred", "warrant"}
@@ -107,6 +121,11 @@ class ConceptAlias:
     concept_id: str
     alias_type: str = "name"
     is_primary: bool = False
+    confidence: float = 1.0
+    source_attribution: str | None = None
+    review_status: str = "accepted"
+    review_note: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime | None = None
 
     def __post_init__(self) -> None:
@@ -115,6 +134,30 @@ class ConceptAlias:
                 f"Invalid alias_type {self.alias_type!r}. "
                 f"Must be one of {sorted(VALID_ALIAS_TYPES)}"
             )
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("ConceptAlias confidence must be between 0 and 1")
+        if self.review_status not in VALID_ALIAS_REVIEW_STATUSES:
+            raise ValueError(
+                f"Invalid review_status {self.review_status!r}. "
+                f"Must be one of {sorted(VALID_ALIAS_REVIEW_STATUSES)}"
+            )
+
+
+@dataclass(frozen=True)
+class ConceptAliasCandidate:
+    """One possible concept match for an alias lookup.
+
+    Multiple candidates are valid output for patent assignees and research
+    affiliations because ambiguous names must stay reviewable instead of
+    collapsing to a single ticker too early.
+    """
+
+    concept: Concept
+    alias: ConceptAlias
+
+    @property
+    def requires_review(self) -> bool:
+        return self.alias.review_status != "accepted"
 
 
 @dataclass
