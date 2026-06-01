@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import calendar
 import html
 import logging
 import re
-import time
+from collections import OrderedDict
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime, timedelta
 from email.utils import parsedate_to_datetime
@@ -18,15 +19,27 @@ from bs4 import BeautifulSoup
 from src.config.feeds import FEEDS, Feed
 from src.ingestion.base_adapter import BaseAdapter, clean_text, extract_tickers, stable_hash
 from src.ingestion.schemas import EngagementMetrics, NormalizedDocument, Platform
+from src.observability.metrics import get_metrics
 
 logger = logging.getLogger(__name__)
 
 _USER_AGENT = "NewsTracker/1.0 (RSS/Atom Reader)"
+_MAX_SEEN_ENTRY_IDS_PER_FEED = 5_000
 
 
 class FeedRateLimiter(Protocol):
     async def acquire(self) -> None:
         """Wait until one outbound request can be made."""
+        ...
+
+
+class FeedMetrics(Protocol):
+    def record_rss_feed_fetch(self, feed_slug: str, status: str) -> None:
+        """Record one RSS feed fetch outcome."""
+        ...
+
+    def record_rss_feed_documents(self, feed_slug: str, count: int) -> None:
+        """Record yielded RSS documents for a feed."""
         ...
 
 
@@ -43,10 +56,12 @@ class FeedAdapter(BaseAdapter):
         fetch_timeout: float = 15.0,
         full_text_enabled: bool = True,
         rate_limiter: FeedRateLimiter | None = None,
+        metrics: FeedMetrics | None = None,
         now: Callable[[], datetime] | None = None,
     ) -> None:
         super().__init__(rate_limit=rate_limit)
         self._request_limiter = rate_limiter or self._rate_limiter
+        self._metrics = metrics or get_metrics()
         self._feeds = list(feeds if feeds is not None else FEEDS)
         self._max_items_per_feed = max_items_per_feed
         self._recency_days = recency_days
@@ -55,7 +70,7 @@ class FeedAdapter(BaseAdapter):
         self._now = now or (lambda: datetime.now(UTC))
         self._conditional_headers: dict[str, dict[str, str]] = {}
         self._feed_health: dict[str, dict[str, object]] = {}
-        self._seen_entry_ids_by_feed: dict[str, set[str]] = {}
+        self._seen_entry_ids_by_feed: dict[str, OrderedDict[str, None]] = {}
 
     @property
     def platform(self) -> Platform:
@@ -89,7 +104,19 @@ class FeedAdapter(BaseAdapter):
 
         parsed = feedparser.parse(response.text)
         entries = parsed.get("entries", [])
-        self._mark_feed_health(feed, "ok")
+        if not entries and (parsed.bozo or not parsed.get("feed")):
+            error = (
+                str(parsed.bozo_exception)
+                if parsed.bozo
+                else "Parsed response did not contain feed metadata or entries"
+            )
+            self._mark_feed_health(
+                feed,
+                "parse_failure",
+                error,
+                document_count=0,
+            )
+            return
         yielded = 0
 
         for entry in entries:
@@ -101,13 +128,14 @@ class FeedAdapter(BaseAdapter):
             if not self._entry_is_recent(entry):
                 continue
             entry_id = self._entry_identity(entry, url)
-            seen_ids = self._seen_entry_ids_by_feed.setdefault(feed.slug, set())
+            seen_ids = self._seen_entry_ids_by_feed.setdefault(feed.slug, OrderedDict())
             if entry_id in seen_ids:
+                seen_ids.move_to_end(entry_id)
                 continue
 
             content, content_mode = await self._resolve_content(client, feed, entry, url)
             seen_urls.add(url)
-            seen_ids.add(entry_id)
+            self._remember_entry_id(feed.slug, entry_id)
             yielded += 1
             yield {
                 "feed": feed,
@@ -118,6 +146,7 @@ class FeedAdapter(BaseAdapter):
                 "fetched_at": self._now(),
                 "feed_health": self._feed_health.get(feed.slug, {"status": "ok"}),
             }
+        self._mark_feed_health(feed, "ok", document_count=yielded)
 
     def _transform(self, raw: dict[str, Any]) -> NormalizedDocument | None:
         try:
@@ -218,7 +247,7 @@ class FeedAdapter(BaseAdapter):
             parsed_field = entry.get(f"{field}_parsed")
             if parsed_field:
                 try:
-                    return datetime.fromtimestamp(time.mktime(parsed_field), tz=UTC)
+                    return datetime.fromtimestamp(calendar.timegm(parsed_field), tz=UTC)
                 except Exception:
                     continue
         return self._now()
@@ -260,6 +289,13 @@ class FeedAdapter(BaseAdapter):
                 return str(value)
         return url
 
+    def _remember_entry_id(self, feed_slug: str, entry_id: str) -> None:
+        seen_ids = self._seen_entry_ids_by_feed.setdefault(feed_slug, OrderedDict())
+        seen_ids[entry_id] = None
+        seen_ids.move_to_end(entry_id)
+        while len(seen_ids) > _MAX_SEEN_ENTRY_IDS_PER_FEED:
+            seen_ids.popitem(last=False)
+
     def _request_headers(self, feed: Feed) -> dict[str, str]:
         headers = {"User-Agent": _USER_AGENT}
         conditional = self._conditional_headers.get(feed.slug, {})
@@ -276,28 +312,42 @@ class FeedAdapter(BaseAdapter):
         if response.headers.get("Last-Modified"):
             cached["last_modified"] = response.headers["Last-Modified"]
 
-    def _mark_feed_health(self, feed: Feed, status: str, error: str | None = None) -> None:
-        payload: dict[str, object] = {"status": status, "checked_at": self._now().isoformat()}
+    def _mark_feed_health(
+        self,
+        feed: Feed,
+        status: str,
+        error: str | None = None,
+        *,
+        document_count: int = 0,
+    ) -> None:
+        now = self._now().isoformat()
+        payload: dict[str, object] = {
+            "slug": feed.slug,
+            "name": feed.name,
+            "url": feed.url,
+            "category": feed.category,
+            "enabled": feed.enabled,
+            "status": status,
+            "checked_at": now,
+            "last_fetch_at": now,
+            "recent_document_count": document_count,
+        }
+        if status in {"ok", "not_modified"}:
+            payload["last_success_at"] = now
         if error:
             payload["error"] = error
+            payload["last_error"] = error
+            payload["last_error_at"] = now
         self._feed_health[feed.slug] = payload
+        self._metrics.record_rss_feed_fetch(feed.slug, status)
+        self._metrics.record_rss_feed_documents(feed.slug, document_count)
+
+    def feed_health_snapshots(self) -> list[dict[str, object]]:
+        """Return latest per-feed health snapshots for persistence/API surfaces."""
+        return [dict(snapshot) for snapshot in self._feed_health.values()]
 
     def _enabled_feeds(self) -> list[Feed]:
         return [feed for feed in self._feeds if feed.enabled]
 
     async def health_check(self) -> bool:
-        enabled_feeds = self._enabled_feeds()
-        if not enabled_feeds:
-            return False
-        feed = enabled_feeds[0]
-        try:
-            async with httpx.AsyncClient(timeout=self._fetch_timeout) as client:
-                await self._request_limiter.acquire()
-                response = await client.get(feed.url, headers=self._request_headers(feed))
-                if response.status_code == 304:
-                    return True
-                response.raise_for_status()
-                parsed = feedparser.parse(response.text)
-                return bool(parsed.get("entries"))
-        except Exception:
-            return False
+        return bool(self._enabled_feeds())

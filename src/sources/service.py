@@ -3,13 +3,14 @@
 import json
 import logging
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from src.config.feeds import FEEDS, Feed
 from src.sources.config import SourcesConfig
 from src.sources.repository import SourcesRepository
-from src.sources.schemas import Source
+from src.sources.schemas import RssSourceHealth, Source
 from src.storage.database import Database
 
 logger = logging.getLogger(__name__)
@@ -90,6 +91,57 @@ def _metadata_bool(value: object, *, default: bool) -> bool:
             return False
         return default
     return bool(value)
+
+
+def _metadata_int(value: object, *, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return max(value, 0)
+    if isinstance(value, str):
+        try:
+            return max(int(value), 0)
+        except ValueError:
+            return default
+    return default
+
+
+def _metadata_dict(value: object) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _metadata_str(value: object) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _parse_iso_datetime(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def _rss_operator_status(
+    *,
+    source: Source,
+    health: dict[str, Any],
+    now: datetime,
+    stale_after_seconds: int,
+) -> str:
+    if not source.is_active:
+        return "inactive"
+    health_status = str(health.get("status") or "")
+    if health_status in {"error", "parse_failure"}:
+        return "failing"
+    last_fetch_at = _parse_iso_datetime(health.get("last_fetch_at"))
+    if last_fetch_at is None:
+        return "never_fetched"
+    if (now - last_fetch_at).total_seconds() > stale_after_seconds:
+        return "stale"
+    return "active"
 
 
 class SourcesService:
@@ -176,6 +228,54 @@ class SourcesService:
         self._rss_cache = feeds
         self._rss_cached_at = now
         return feeds
+
+    async def get_rss_source_health(
+        self,
+        *,
+        stale_after_seconds: int = 24 * 60 * 60,
+        now: datetime | None = None,
+    ) -> list[RssSourceHealth]:
+        """Summarize RSS source health for operator surfaces."""
+        current_time = now or datetime.now(UTC)
+        sources, _ = await self._repo.list_sources(platform="rss", limit=500)
+        summaries: list[RssSourceHealth] = []
+        for source in sources:
+            metadata = source.metadata or {}
+            health = _metadata_dict(metadata.get("health"))
+            recent_document_count = _metadata_int(health.get("recent_document_count"))
+            last_fetch_at = _metadata_str(health.get("last_fetch_at"))
+            last_success_at = _metadata_str(health.get("last_success_at"))
+            last_error_at = _metadata_str(health.get("last_error_at"))
+            summaries.append(
+                RssSourceHealth(
+                    slug=source.identifier,
+                    name=source.display_name or source.identifier,
+                    url=str(metadata.get("url") or ""),
+                    category=str(metadata.get("category") or ""),
+                    is_active=source.is_active,
+                    status=_rss_operator_status(
+                        source=source,
+                        health=health,
+                        now=current_time,
+                        stale_after_seconds=stale_after_seconds,
+                    ),
+                    is_producing=recent_document_count > 0,
+                    recent_document_count=recent_document_count,
+                    last_fetch_at=last_fetch_at,
+                    last_success_at=last_success_at,
+                    last_error_at=last_error_at,
+                    last_error=str(health.get("last_error") or health.get("error") or ""),
+                    health_status=str(health.get("status") or ""),
+                )
+            )
+        return summaries
+
+    async def record_rss_feed_health(self, feed_slug: str, health: dict[str, object]) -> bool:
+        """Persist the latest RSS fetch health snapshot into source metadata."""
+        updated = await self._repo.patch_metadata("rss", feed_slug, {"health": health})
+        if updated:
+            self.invalidate_cache()
+        return updated
 
     def invalidate_cache(self) -> None:
         """Force-clear all caches so next access hits the DB."""

@@ -14,12 +14,13 @@ from src.api.routes.sources import (
     create_source,
     deactivate_source,
     list_sources,
+    rss_source_health,
     trigger_ingestion,
 )
 from src.config.feeds import Feed
 from src.ingestion.schemas import Platform
 from src.services.ingestion_service import IngestionConfigurationError
-from src.sources.schemas import Source
+from src.sources.schemas import RssSourceHealth, Source
 
 
 def _build_request() -> SimpleNamespace:
@@ -54,6 +55,22 @@ class _FakeSourcesService:
             )
         ]
 
+    async def get_rss_source_health(self) -> list[RssSourceHealth]:
+        return [
+            RssSourceHealth(
+                slug="semiwiki",
+                name="SemiWiki",
+                url="https://semiwiki.com/feed/",
+                category="trade_press",
+                is_active=True,
+                status="active",
+                is_producing=True,
+                recent_document_count=5,
+                last_fetch_at="2026-06-01T12:00:00+00:00",
+                last_success_at="2026-06-01T12:00:00+00:00",
+            )
+        ]
+
 
 class _EmptySourcesService:
     def __init__(self, db) -> None:
@@ -69,6 +86,9 @@ class _EmptySourcesService:
         return []
 
     async def get_rss_feeds(self) -> list[Feed]:
+        return []
+
+    async def get_rss_source_health(self) -> list[RssSourceHealth]:
         return []
 
 
@@ -219,6 +239,24 @@ async def test_deactivate_source_supports_rss_feeds() -> None:
         )
 
     assert repo.deactivated == ("rss", "semiwiki")
+
+
+@pytest.mark.asyncio
+async def test_rss_source_health_endpoint_returns_operator_status() -> None:
+    request = _build_request()
+    settings = SimpleNamespace(sources_enabled=True)
+
+    with (
+        patch("src.api.routes.sources._get_settings", return_value=settings),
+        patch("src.sources.service.SourcesService", _FakeSourcesService),
+    ):
+        response = await rss_source_health(request=request, api_key="test-key")
+
+    assert response.total == 1
+    assert response.feeds[0].slug == "semiwiki"
+    assert response.feeds[0].status == "active"
+    assert response.feeds[0].is_producing is True
+    assert response.feeds[0].recent_document_count == 5
 
 
 @pytest.mark.asyncio

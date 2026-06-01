@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import time
 from datetime import UTC, datetime
 
 import httpx
@@ -50,6 +52,7 @@ def _feed(
     *,
     url: str = "https://feeds.example.com/rss.xml",
     full_text: bool = False,
+    enabled: bool = True,
 ) -> Feed:
     return Feed(
         slug=slug,
@@ -58,6 +61,7 @@ def _feed(
         category="trade_press",
         authority="high",
         full_text=full_text,
+        enabled=enabled,
     )
 
 
@@ -74,6 +78,18 @@ class CountingLimiter:
 
     async def acquire(self) -> None:
         self.calls += 1
+
+
+class RecordingMetrics:
+    def __init__(self) -> None:
+        self.feed_fetches: list[tuple[str, str]] = []
+        self.feed_documents: list[tuple[str, int]] = []
+
+    def record_rss_feed_fetch(self, feed_slug: str, status: str) -> None:
+        self.feed_fetches.append((feed_slug, status))
+
+    def record_rss_feed_documents(self, feed_slug: str, count: int) -> None:
+        self.feed_documents.append((feed_slug, count))
 
 
 @pytest.mark.asyncio
@@ -113,6 +129,40 @@ async def test_rss_feed_entries_transform_to_normalized_documents() -> None:
     assert doc.raw_data["feed"]["full_text"] is False
     assert doc.raw_data["feed_health"]["status"] == "ok"
     assert limiter.calls == 1
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_feed_health_snapshots_and_metrics_capture_success_and_parse_failure() -> None:
+    good = _feed("good", url="https://feeds.example.com/good.xml")
+    broken = _feed("broken", url="https://feeds.example.com/broken.xml")
+    respx.get("https://feeds.example.com/good.xml").mock(
+        return_value=httpx.Response(200, text=RSS_FEED)
+    )
+    respx.get("https://feeds.example.com/broken.xml").mock(
+        return_value=httpx.Response(200, text="<html>not a feed</html>")
+    )
+    metrics = RecordingMetrics()
+    adapter = FeedAdapter(
+        feeds=[good, broken],
+        now=_now,
+        recency_days=7,
+        metrics=metrics,
+    )
+
+    docs = await _collect_docs(adapter)
+    health = {item["slug"]: item for item in adapter.feed_health_snapshots()}
+
+    assert [doc.author_id for doc in docs] == ["good"]
+    assert health["good"]["status"] == "ok"
+    assert health["good"]["last_fetch_at"] == "2026-06-01T00:00:00+00:00"
+    assert health["good"]["last_success_at"] == "2026-06-01T00:00:00+00:00"
+    assert health["good"]["recent_document_count"] == 1
+    assert health["broken"]["status"] == "parse_failure"
+    assert health["broken"]["recent_document_count"] == 0
+    assert "error" in health["broken"]
+    assert metrics.feed_fetches == [("good", "ok"), ("broken", "parse_failure")]
+    assert metrics.feed_documents == [("good", 1), ("broken", 0)]
 
 
 @pytest.mark.asyncio
@@ -200,12 +250,92 @@ async def test_recency_filter_per_feed_cap_and_in_cycle_dedupe() -> None:
         feeds=[_feed()],
         now=_now,
         recency_days=7,
-        max_items_per_feed=1,
+        max_items_per_feed=3,
     )
 
     docs = await _collect_docs(adapter)
 
-    assert [doc.url for doc in docs] == ["https://example.com/rss/recent-a"]
+    assert [doc.url for doc in docs] == [
+        "https://example.com/rss/recent-a",
+        "https://example.com/rss/recent-b",
+    ]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_seen_entry_cache_is_bounded_per_feed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "src.ingestion.feed_adapter._MAX_SEEN_ENTRY_IDS_PER_FEED",
+        2,
+        raising=False,
+    )
+    rss = """<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0"><channel><title>Chip Wire</title>
+      <item>
+        <guid>entry-1</guid>
+        <title>Recent 1</title>
+        <link>https://example.com/rss/recent-1</link>
+        <pubDate>Fri, 31 May 2026 14:30:00 GMT</pubDate>
+        <description>Recent 1 body.</description>
+      </item>
+      <item>
+        <guid>entry-2</guid>
+        <title>Recent 2</title>
+        <link>https://example.com/rss/recent-2</link>
+        <pubDate>Fri, 31 May 2026 14:31:00 GMT</pubDate>
+        <description>Recent 2 body.</description>
+      </item>
+      <item>
+        <guid>entry-3</guid>
+        <title>Recent 3</title>
+        <link>https://example.com/rss/recent-3</link>
+        <pubDate>Fri, 31 May 2026 14:32:00 GMT</pubDate>
+        <description>Recent 3 body.</description>
+      </item>
+    </channel></rss>
+    """
+    respx.get("https://feeds.example.com/rss.xml").mock(return_value=httpx.Response(200, text=rss))
+    adapter = FeedAdapter(
+        feeds=[_feed()],
+        now=_now,
+        recency_days=7,
+        max_items_per_feed=3,
+    )
+
+    docs = await _collect_docs(adapter)
+
+    assert len(docs) == 3
+    seen_ids = adapter._seen_entry_ids_by_feed["chip-wire"]
+    assert len(seen_ids) == 2
+    assert "entry-1" not in seen_ids
+    assert {"entry-2", "entry-3"} <= set(seen_ids)
+
+
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="requires POSIX timezone support")
+def test_parse_timestamp_treats_feedparser_struct_time_as_utc(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_tz = os.environ.get("TZ")
+    monkeypatch.setenv("TZ", "America/Los_Angeles")
+    time.tzset()
+    try:
+        adapter = FeedAdapter(feeds=[_feed()], now=_now, recency_days=7)
+        parsed = time.struct_time((2026, 5, 31, 14, 30, 0, 6, 151, 0))
+
+        assert adapter._parse_timestamp({"published_parsed": parsed}) == datetime(
+            2026,
+            5,
+            31,
+            14,
+            30,
+            tzinfo=UTC,
+        )
+    finally:
+        if original_tz is None:
+            monkeypatch.delenv("TZ", raising=False)
+        else:
+            monkeypatch.setenv("TZ", original_tz)
+        time.tzset()
 
 
 @pytest.mark.asyncio
@@ -267,11 +397,9 @@ async def test_full_text_fetch_uses_article_body_when_available() -> None:
 
 
 @pytest.mark.asyncio
-@respx.mock
-async def test_health_check_requires_one_parseable_enabled_feed() -> None:
-    respx.get("https://feeds.example.com/rss.xml").mock(
-        return_value=httpx.Response(200, text=RSS_FEED)
-    )
-    adapter = FeedAdapter(feeds=[_feed()], now=_now)
+async def test_health_check_requires_enabled_feeds() -> None:
+    adapter = FeedAdapter(feeds=[_feed(enabled=True)], now=_now)
+    disabled_adapter = FeedAdapter(feeds=[_feed(enabled=False)], now=_now)
 
     assert await adapter.health_check() is True
+    assert await disabled_adapter.health_check() is False

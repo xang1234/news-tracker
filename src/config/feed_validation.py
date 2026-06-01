@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -109,4 +110,8 @@ async def validate_live_feed_urls(
         headers=headers,
         timeout=timeout,
     ) as client:
-        return [await validate_feed_url(feed, client=client) for feed in selected_feeds]
+        return list(
+            await asyncio.gather(
+                *(validate_feed_url(feed, client=client) for feed in selected_feeds)
+            )
+        )

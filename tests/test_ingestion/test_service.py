@@ -1,14 +1,47 @@
 """Tests for ingestion service configuration behavior."""
 
+from collections.abc import AsyncIterator
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import patch
 
 import pytest
 
 from src.config.feeds import Feed
 from src.config.settings import Settings
-from src.ingestion.schemas import Platform
+from src.ingestion.base_adapter import BaseAdapter
+from src.ingestion.schemas import NormalizedDocument, Platform
 from src.services.ingestion_service import IngestionConfigurationError, IngestionService
+
+
+class RecordingQueue:
+    def __init__(self) -> None:
+        self.published: list[NormalizedDocument] = []
+        self.closed = False
+
+    async def connect(self) -> None:
+        return None
+
+    async def publish(self, doc: NormalizedDocument) -> None:
+        self.published.append(doc)
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+class RssHealthAdapter:
+    def __init__(self, snapshots: list[dict[str, object]]) -> None:
+        self._snapshots = snapshots
+
+    async def fetch(self) -> AsyncIterator[NormalizedDocument]:
+        if False:
+            yield cast(NormalizedDocument, object())
+
+    async def health_check(self) -> bool:
+        return True
+
+    def feed_health_snapshots(self) -> list[dict[str, object]]:
+        return [dict(snapshot) for snapshot in self._snapshots]
 
 
 class TestIngestionServiceConfiguration:
@@ -174,3 +207,45 @@ class TestIngestionServiceConfiguration:
     def test_mock_mode_still_uses_mock_adapters(self) -> None:
         service = IngestionService(use_mock=True)
         assert service._adapters
+
+    @pytest.mark.asyncio
+    async def test_run_once_publishes_rss_health_snapshots(self) -> None:
+        snapshot = {
+            "slug": "semiwiki",
+            "status": "ok",
+            "recent_document_count": 0,
+        }
+        recorded: list[tuple[str, dict[str, object]]] = []
+
+        async def sink(slug: str, health: dict[str, object]) -> bool:
+            recorded.append((slug, dict(health)))
+            return True
+
+        service = IngestionService(
+            adapters={Platform.RSS: cast(BaseAdapter, RssHealthAdapter([snapshot]))},
+            queue=cast(Any, RecordingQueue()),
+            rss_health_sink=sink,
+        )
+
+        results = await service.run_once()
+
+        assert results == {Platform.RSS: 0}
+        assert recorded == [("semiwiki", snapshot)]
+
+    @pytest.mark.asyncio
+    async def test_run_once_ignores_rss_health_sink_failure(self) -> None:
+        async def failing_sink(slug: str, health: dict[str, object]) -> bool:
+            raise RuntimeError(f"cannot persist {slug}")
+
+        service = IngestionService(
+            adapters={
+                Platform.RSS: cast(
+                    BaseAdapter,
+                    RssHealthAdapter([{"slug": "semiwiki", "status": "ok"}]),
+                )
+            },
+            queue=cast(Any, RecordingQueue()),
+            rss_health_sink=failing_sink,
+        )
+
+        assert await service.run_once() == {Platform.RSS: 0}

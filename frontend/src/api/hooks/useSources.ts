@@ -30,6 +30,28 @@ export interface SourcesListResponse {
   latency_ms: number;
 }
 
+export interface RssSourceHealthItem {
+  slug: string;
+  name: string;
+  url: string;
+  category: string;
+  is_active: boolean;
+  status: string;
+  is_producing: boolean;
+  recent_document_count: number;
+  last_fetch_at: string | null;
+  last_success_at: string | null;
+  last_error_at: string | null;
+  last_error: string;
+  health_status: string;
+}
+
+export interface RssSourceHealthResponse {
+  feeds: RssSourceHealthItem[];
+  total: number;
+  latency_ms: number;
+}
+
 export interface CreateSourcePayload {
   platform: string;
   identifier: string;
@@ -81,6 +103,19 @@ export function useSources(filters?: SourceFilters) {
   });
 }
 
+export function useRssSourceHealth(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.rssSourceHealth(),
+    queryFn: async (): Promise<RssSourceHealthResponse> => {
+      const { data } = await api.get<RssSourceHealthResponse>('/sources/rss/health');
+      return data;
+    },
+    enabled,
+    staleTime: 15_000,
+    retry: 1,
+  });
+}
+
 export function useCreateSource() {
   const queryClient = useQueryClient();
 
@@ -91,6 +126,7 @@ export function useCreateSource() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sources'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.rssSourceHealth() });
     },
   });
 }
@@ -109,6 +145,7 @@ export function useUpdateSource() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sources'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.rssSourceHealth() });
     },
   });
 }
@@ -123,6 +160,7 @@ export function useBulkCreateSources() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sources'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.rssSourceHealth() });
     },
   });
 }
@@ -144,6 +182,7 @@ export function useTriggerIngestion() {
       // Invalidate documents/stats so the dashboard refreshes after ingestion
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.rssSourceHealth() });
     },
   });
 }
@@ -159,6 +198,7 @@ export function useDeactivateSource() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sources'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.rssSourceHealth() });
     },
   });
 }

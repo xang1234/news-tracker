@@ -13,7 +13,7 @@ Features:
 
 import asyncio
 import time
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any, cast
 
 import structlog
@@ -64,6 +64,7 @@ class IngestionService:
         reddit_sources: list[str] | None = None,
         substack_sources: list[tuple[str, str, str]] | None = None,
         rss_feeds: list[Feed] | None = None,
+        rss_health_sink: Callable[[str, dict[str, object]], Awaitable[bool]] | None = None,
     ):
         """
         Initialize ingestion service.
@@ -76,6 +77,7 @@ class IngestionService:
             reddit_sources: Override subreddit names (from sources DB)
             substack_sources: Override Substack publications as (slug, name, desc) tuples
             rss_feeds: Override RSS/Atom feeds (from sources DB)
+            rss_health_sink: Optional callback for persisting RSS per-feed health
         """
         settings = get_settings()
 
@@ -83,6 +85,7 @@ class IngestionService:
         self._running = False
         self._tasks: list[asyncio.Task[None]] = []
         self._metrics = get_metrics()
+        self._rss_health_sink = rss_health_sink
 
         # Initialize queue
         self._queue = queue or DocumentQueue()
@@ -176,7 +179,7 @@ class IngestionService:
         # RSS/Atom feeds. DB-backed sources override the static seed catalog.
         configured_rss_feeds = FEEDS if rss_feeds is None else rss_feeds
         active_rss_feeds = [feed for feed in configured_rss_feeds if feed.enabled]
-        if getattr(settings, "rss_enabled", True) and active_rss_feeds:
+        if getattr(settings, "rss_enabled", False) and active_rss_feeds:
             adapters[Platform.RSS] = FeedAdapter(
                 feeds=active_rss_feeds,
                 rate_limit=getattr(settings, "rss_rate_limit", 20),
@@ -186,7 +189,7 @@ class IngestionService:
                 full_text_enabled=getattr(settings, "rss_full_text_enabled", True),
             )
             logger.info("RSS/Atom adapter enabled")
-        elif getattr(settings, "rss_enabled", True):
+        elif getattr(settings, "rss_enabled", False):
             logger.info("RSS/Atom adapter disabled (no enabled feeds configured)")
 
         # Normal startup should never silently switch to mock adapters.
@@ -294,6 +297,7 @@ class IngestionService:
                     count=doc_count,
                     latency=elapsed,
                 )
+                await self._publish_rss_health(platform, adapter)
 
                 logger.info(
                     "Adapter fetch completed",
@@ -370,10 +374,34 @@ class IngestionService:
                         error=str(e),
                     )
                 results[platform] = count
+                await self._publish_rss_health(platform, adapter)
         finally:
             await self._queue.close()
 
         return results
+
+    async def _publish_rss_health(self, platform: Platform, adapter: BaseAdapter) -> None:
+        """Persist RSS per-feed health snapshots when the adapter exposes them."""
+        if platform is not Platform.RSS or self._rss_health_sink is None:
+            return
+
+        snapshot_reader = getattr(adapter, "feed_health_snapshots", None)
+        if not callable(snapshot_reader):
+            return
+
+        try:
+            snapshots = list(snapshot_reader())
+        except Exception as exc:
+            logger.warning("RSS health snapshots unavailable", error=str(exc))
+            return
+
+        for snapshot in snapshots:
+            slug = snapshot.get("slug")
+            if isinstance(slug, str) and slug:
+                try:
+                    await self._rss_health_sink(slug, snapshot)
+                except Exception as exc:
+                    logger.warning("RSS health persistence failed", feed=slug, error=str(exc))
 
     @property
     def is_running(self) -> bool:

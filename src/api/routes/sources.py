@@ -16,6 +16,8 @@ from src.api.admin_models import (
     BulkCreateSourcesRequest,
     BulkCreateSourcesResponse,
     CreateSourceRequest,
+    RssSourceHealthItem,
+    RssSourceHealthResponse,
     SourceItem,
     SourcesListResponse,
     TriggerIngestionResponse,
@@ -27,7 +29,7 @@ from src.api.models import ErrorResponse
 from src.api.rate_limit import limiter
 from src.config.settings import get_settings as _get_settings
 from src.sources.repository import SourcesRepository
-from src.sources.schemas import Source
+from src.sources.schemas import RssSourceHealth, Source
 
 if TYPE_CHECKING:
     from src.services.ingestion_service import IngestionService
@@ -63,6 +65,7 @@ async def _build_ingestion_service(request: Request) -> IngestionService:
     reddit_sources = None
     substack_sources = None
     rss_feeds = None
+    rss_health_sink = None
 
     if settings.sources_enabled:
         db = await request.app.state.services.get_database()
@@ -71,12 +74,14 @@ async def _build_ingestion_service(request: Request) -> IngestionService:
         reddit_sources = await svc.get_reddit_sources()
         substack_sources = await svc.get_substack_sources()
         rss_feeds = await svc.get_rss_feeds()
+        rss_health_sink = getattr(svc, "record_rss_feed_health", None)
 
     return IngestionService(
         twitter_sources=twitter_sources,
         reddit_sources=reddit_sources,
         substack_sources=substack_sources,
         rss_feeds=rss_feeds,
+        rss_health_sink=rss_health_sink,
     )
 
 
@@ -99,6 +104,24 @@ def _source_to_item(s: Source) -> SourceItem:
         metadata=s.metadata,
         created_at=s.created_at.isoformat() if s.created_at else None,
         updated_at=s.updated_at.isoformat() if s.updated_at else None,
+    )
+
+
+def _rss_health_to_item(health: RssSourceHealth) -> RssSourceHealthItem:
+    return RssSourceHealthItem(
+        slug=health.slug,
+        name=health.name,
+        url=health.url,
+        category=health.category,
+        is_active=health.is_active,
+        status=health.status,
+        is_producing=health.is_producing,
+        recent_document_count=health.recent_document_count,
+        last_fetch_at=health.last_fetch_at,
+        last_success_at=health.last_success_at,
+        last_error_at=health.last_error_at,
+        last_error=health.last_error,
+        health_status=health.health_status,
     )
 
 
@@ -154,6 +177,39 @@ async def list_sources(
     except Exception as e:
         logger.error("list_sources_failed", error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list sources")
+
+
+@router.get(
+    "/sources/rss/health",
+    response_model=RssSourceHealthResponse,
+    responses={401: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    summary="List RSS source health",
+)
+@limiter.limit(lambda: _get_settings().rate_limit_default)
+async def rss_source_health(
+    request: Request,
+    api_key: str = Depends(verify_api_key),
+) -> RssSourceHealthResponse:
+    _require_sources_enabled()
+    start = time.perf_counter()
+
+    try:
+        from src.sources.service import SourcesService
+
+        db = await request.app.state.services.get_database()
+        service = SourcesService(db)
+        feeds = await service.get_rss_source_health()
+        latency_ms = (time.perf_counter() - start) * 1000
+        return RssSourceHealthResponse(
+            feeds=[_rss_health_to_item(feed) for feed in feeds],
+            total=len(feeds),
+            latency_ms=round(latency_ms, 2),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("rss_source_health_failed", error=str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to list RSS source health")
 
 
 @router.post(

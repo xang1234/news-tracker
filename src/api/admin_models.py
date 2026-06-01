@@ -153,6 +153,35 @@ class SourcesListResponse(BaseModel):
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
 
 
+class RssSourceHealthItem(BaseModel):
+    """Operator-facing health for one RSS feed source."""
+
+    slug: str = Field(..., description="Stable RSS feed slug")
+    name: str = Field(..., description="Display name")
+    url: str = Field(..., description="Feed URL")
+    category: str = Field(..., description="RSS feed category")
+    is_active: bool = Field(..., description="Whether the source is enabled")
+    status: str = Field(
+        ...,
+        description="Operator status: active, stale, failing, inactive, or never_fetched",
+    )
+    is_producing: bool = Field(..., description="Whether the latest fetch yielded documents")
+    recent_document_count: int = Field(default=0, description="Documents yielded last fetch")
+    last_fetch_at: str | None = Field(default=None, description="Last feed fetch timestamp")
+    last_success_at: str | None = Field(default=None, description="Last successful fetch timestamp")
+    last_error_at: str | None = Field(default=None, description="Last failed fetch timestamp")
+    last_error: str = Field(default="", description="Most recent fetch or parse error")
+    health_status: str = Field(default="", description="Raw adapter health status")
+
+
+class RssSourceHealthResponse(BaseModel):
+    """RSS feed source health list."""
+
+    feeds: list[RssSourceHealthItem] = Field(..., description="RSS feed health entries")
+    total: int = Field(..., description="Number of RSS feeds returned")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
 class CreateSourceRequest(BaseModel):
     """Request to create a new source."""
 

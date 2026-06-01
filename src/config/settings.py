@@ -276,7 +276,7 @@ class Settings(BaseSettings):
     sources_enabled: bool = Field(
         default=False, description="Enable database-backed source management"
     )
-    rss_enabled: bool = Field(default=True, description="Enable static RSS/Atom feed ingestion")
+    rss_enabled: bool = Field(default=False, description="Enable static RSS/Atom feed ingestion")
     sources_trigger_lock_ttl_seconds: int = Field(
         default=3600,
         ge=60,
