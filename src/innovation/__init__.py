@@ -13,6 +13,11 @@ from src.innovation.patents import (
     deduplicate_patent_families,
     load_patentsview_bulk_snapshot,
 )
+from src.innovation.publish import (
+    build_innovation_evidence_payload,
+    group_innovation_evidence_by_concept,
+    group_innovation_evidence_by_theme,
+)
 from src.innovation.repository import PatentSignalRepository
 from src.innovation.research import (
     ArxivResearchProvider,
@@ -47,7 +52,10 @@ __all__ = [
     "ResearchSignalLinker",
     "ResearchSignalRepository",
     "StalePatentSnapshotError",
+    "build_innovation_evidence_payload",
     "deduplicate_patent_families",
     "deduplicate_research_records",
+    "group_innovation_evidence_by_concept",
+    "group_innovation_evidence_by_theme",
     "load_patentsview_bulk_snapshot",
 ]

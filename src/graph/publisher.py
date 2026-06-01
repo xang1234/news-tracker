@@ -58,6 +58,7 @@ class PathExplanation:
         hop_decay: Decay factor for path length.
         assertion_ids: Lineage to supporting assertions.
         sec_fact_evidence: SEC fact lineage for the target concept.
+        innovation_evidence: Patent/research lineage for the target concept.
     """
 
     source_concept_id: str
@@ -73,6 +74,7 @@ class PathExplanation:
     hop_decay: float
     assertion_ids: list[str]
     sec_fact_evidence: list[EvidencePayload] = field(default_factory=list)
+    innovation_evidence: list[EvidencePayload] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -89,6 +91,7 @@ class PathExplanation:
             "hop_decay": round(self.hop_decay, 4),
             "assertion_ids": self.assertion_ids,
             "sec_fact_evidence": copy_evidence(self.sec_fact_evidence),
+            "innovation_evidence": copy_evidence(self.innovation_evidence),
         }
 
 
@@ -165,6 +168,7 @@ def build_path_explanation(
     path: ScoredPath,
     *,
     sec_fact_evidence: Sequence[EvidencePayloadInput] | None = None,
+    innovation_evidence: Sequence[EvidencePayloadInput] | None = None,
 ) -> PathExplanation:
     """Convert a ScoredPath into a publishable PathExplanation.
 
@@ -185,6 +189,7 @@ def build_path_explanation(
         hop_decay=path.breakdown.hop_decay,
         assertion_ids=[e.relation.assertion_id for e in path.edges],
         sec_fact_evidence=copy_evidence(sec_fact_evidence),
+        innovation_evidence=copy_evidence(innovation_evidence),
     )
 
 
@@ -193,6 +198,7 @@ def build_basket_payload(
     *,
     top_n: int = DEFAULT_TOP_N,
     sec_fact_evidence_by_concept: dict[str, list[EvidencePayloadInput]] | None = None,
+    innovation_evidence_by_concept: dict[str, list[EvidencePayloadInput]] | None = None,
 ) -> BasketPayload:
     """Convert a ThematicBasket into a publishable BasketPayload.
 
@@ -205,6 +211,12 @@ def build_basket_payload(
         evidence = evidence_for_key(sec_fact_evidence_by_concept, member.concept_id)
         if evidence:
             payload["sec_fact_evidence"] = evidence
+        innovation_evidence = evidence_for_key(
+            innovation_evidence_by_concept,
+            member.concept_id,
+        )
+        if innovation_evidence:
+            payload["innovation_evidence"] = innovation_evidence
         return payload
 
     return BasketPayload(
@@ -228,6 +240,7 @@ def prepare_structural_publication(
     *,
     top_n: int = DEFAULT_TOP_N,
     sec_fact_evidence_by_concept: dict[str, list[EvidencePayloadInput]] | None = None,
+    innovation_evidence_by_concept: dict[str, list[EvidencePayloadInput]] | None = None,
     now: datetime | None = None,
 ) -> StructuralPublicationResult:
     """Prepare structural lane outputs for manifest publication.
@@ -245,6 +258,7 @@ def prepare_structural_publication(
         lane_health: Pre-computed lane health status.
         top_n: How many top members to include per basket.
         sec_fact_evidence_by_concept: SEC fact lineage keyed by concept id.
+        innovation_evidence_by_concept: Patent/research lineage keyed by concept id.
         now: Current time (unused, kept for API symmetry).
 
     Returns:
@@ -261,6 +275,10 @@ def prepare_structural_publication(
         build_path_explanation(
             p,
             sec_fact_evidence=evidence_for_key(sec_fact_evidence_by_concept, p.target_concept_id),
+            innovation_evidence=evidence_for_key(
+                innovation_evidence_by_concept,
+                p.target_concept_id,
+            ),
         )
         for p in paths
     ]
@@ -269,6 +287,7 @@ def prepare_structural_publication(
             b,
             top_n=top_n,
             sec_fact_evidence_by_concept=sec_fact_evidence_by_concept,
+            innovation_evidence_by_concept=innovation_evidence_by_concept,
         )
         for b in baskets
     ]
