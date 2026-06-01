@@ -24,6 +24,7 @@ class TestIngestionServiceConfiguration:
             substack_rate_limit=10,
             news_api_configured=False,
             news_rate_limit=10,
+            rss_enabled=False,
         )
 
         with (
@@ -102,6 +103,7 @@ class TestIngestionServiceConfiguration:
             reddit_client_id=None,
             reddit_client_secret=None,
             news_api_key=None,
+            rss_enabled=False,
         )
 
         with (

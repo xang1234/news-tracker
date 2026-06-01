@@ -126,6 +126,7 @@ async def test_trigger_ingestion_returns_503_when_all_active_sources_are_disable
         substack_rate_limit=10,
         news_api_configured=False,
         news_rate_limit=10,
+        rss_enabled=False,
     )
 
     with (
