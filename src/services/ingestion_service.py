@@ -18,8 +18,10 @@ from typing import Any, cast
 
 import structlog
 
+from src.config.feeds import FEEDS
 from src.config.settings import get_settings
 from src.ingestion.base_adapter import BaseAdapter
+from src.ingestion.feed_adapter import FeedAdapter
 from src.ingestion.mock_adapter import create_mock_adapters
 from src.ingestion.news_adapter import NewsAdapter
 from src.ingestion.queue import DocumentQueue
@@ -166,6 +168,19 @@ class IngestionService:
                 rate_limit=settings.news_rate_limit,
             )
             logger.info("News adapter enabled")
+
+        # RSS/Atom feeds (static catalog in src.config.feeds)
+        if getattr(settings, "rss_enabled", True) and any(feed.enabled for feed in FEEDS):
+            adapters[Platform.RSS] = FeedAdapter(
+                rate_limit=getattr(settings, "rss_rate_limit", 20),
+                max_items_per_feed=getattr(settings, "rss_max_items_per_feed", 50),
+                recency_days=getattr(settings, "rss_recency_days", 7),
+                fetch_timeout=getattr(settings, "rss_fetch_timeout", 15.0),
+                full_text_enabled=getattr(settings, "rss_full_text_enabled", True),
+            )
+            logger.info("RSS/Atom adapter enabled")
+        elif getattr(settings, "rss_enabled", True):
+            logger.info("RSS/Atom adapter disabled (no enabled feeds configured)")
 
         # Normal startup should never silently switch to mock adapters.
         if not adapters:

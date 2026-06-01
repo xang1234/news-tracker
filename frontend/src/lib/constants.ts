@@ -3,6 +3,7 @@ export const PLATFORMS: Record<string, { label: string; color: string }> = {
   twitter: { label: 'Twitter', color: 'bg-sky-500/20 text-sky-400' },
   reddit: { label: 'Reddit', color: 'bg-orange-500/20 text-orange-400' },
   substack: { label: 'Substack', color: 'bg-violet-500/20 text-violet-400' },
+  rss: { label: 'RSS', color: 'bg-cyan-500/20 text-cyan-400' },
   news_api: { label: 'News', color: 'bg-emerald-500/20 text-emerald-400' },
   newsfilter: { label: 'NewsFilter', color: 'bg-emerald-500/20 text-emerald-400' },
   marketaux: { label: 'MarketAux', color: 'bg-teal-500/20 text-teal-400' },

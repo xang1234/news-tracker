@@ -175,6 +175,7 @@ Divergence payloads include reason code, severity, human-readable summary, and s
 Current source families include:
 
 - Social/news ingestion: X/Twitter, Reddit, Substack, and news adapters.
+- RSS/Atom ingestion: a generic `FeedAdapter` can ingest operator-configured RSS 2.0 and Atom feeds as normal `NormalizedDocument` article records with source category, authority, full-text mode, feed health, conditional GET lineage, recency limits, per-feed caps, and per-run dedupe. The static curated feed catalog is tracked separately in `news-tracker-781.2`; this slice provides the reusable adapter and service wiring.
 - SEC filing lane: EDGAR filing search/fetch providers with centralized SEC fair-access policy.
 - Security master: ticker, exchange, alias, FIGI, and SEC issuer identifiers. Seeded semiconductor securities now carry SEC CIKs where available, SEC issuer names, former issuer-name slots, external identifier maps, and identifier-lineage records so Company Facts and submissions ingestion can audit how a ticker was mapped to an SEC issuer.
 - SEC structured fundamentals: official `data.sec.gov` Submissions and XBRL Company Facts JSON for tracked issuer CIKs, cached by issuer, payload hash, source URL, and accession-number lineage. The provider uses declared SEC User-Agent headers, per-second fair-access rate limiting, retry handling for transient SEC failures, and exposes the SEC nightly bulk archive URLs for backfills.
@@ -241,6 +242,13 @@ NER_SPACY_MODEL=en_core_web_trf
 # Processing thresholds
 SPAM_THRESHOLD=0.7
 DUPLICATE_THRESHOLD=0.85
+
+# RSS/Atom ingestion
+RSS_ENABLED=true
+RSS_RATE_LIMIT=20
+RSS_MAX_ITEMS_PER_FEED=50
+RSS_RECENCY_DAYS=7
+RSS_FULL_TEXT_ENABLED=true
 ```
 
 The official X API is the primary Twitter/X ingestion path when `TWITTER_BEARER_TOKEN` is

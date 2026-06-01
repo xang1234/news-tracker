@@ -58,6 +58,42 @@ class TestIngestionServiceConfiguration:
 
         assert Platform.SUBSTACK in service._adapters
 
+    def test_rss_adapter_enabled_when_configured_feeds_exist(self) -> None:
+        settings = SimpleNamespace(
+            poll_interval_seconds=60,
+            twitter_configured=False,
+            xui_configured=False,
+            twitter_rate_limit=10,
+            reddit_configured=False,
+            reddit_rate_limit=10,
+            substack_rate_limit=10,
+            news_api_configured=False,
+            news_rate_limit=10,
+            rss_enabled=True,
+            rss_rate_limit=20,
+            rss_max_items_per_feed=50,
+            rss_recency_days=7,
+            rss_fetch_timeout=15.0,
+            rss_full_text_enabled=True,
+        )
+        feed = SimpleNamespace(enabled=True)
+
+        with (
+            patch("src.services.ingestion_service.get_settings", return_value=settings),
+            patch("src.services.ingestion_service.FEEDS", [feed]),
+            patch("src.services.ingestion_service.FeedAdapter") as feed_adapter,
+        ):
+            service = IngestionService(use_mock=False, substack_sources=[])
+
+        assert Platform.RSS in service._adapters
+        feed_adapter.assert_called_once_with(
+            rate_limit=20,
+            max_items_per_feed=50,
+            recency_days=7,
+            fetch_timeout=15.0,
+            full_text_enabled=True,
+        )
+
     def test_blank_twitter_bearer_token_does_not_enable_twitter_adapter(self) -> None:
         settings = Settings(
             _env_file=None,
