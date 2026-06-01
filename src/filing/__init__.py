@@ -71,6 +71,13 @@ from src.filing.sec_delta_events import (
     compute_sec_filing_delta_events,
     sec_delta_reason_code,
 )
+from src.filing.sec_ownership_events import (
+    SEC_OWNERSHIP_EVENT_TYPES,
+    SECOwnershipEvent,
+    SECOwnershipEventRepository,
+    SECOwnershipParseResult,
+    parse_sec_ownership_events,
+)
 from src.filing.sec_policy import SECPolicy
 from src.filing.sec_structured import (
     SECStructuredDataError,
@@ -122,6 +129,10 @@ __all__ = [
     "SectionSignal",
     "SecApiProvider",
     "XBRLFactRecord",
+    "SEC_OWNERSHIP_EVENT_TYPES",
+    "SECOwnershipEvent",
+    "SECOwnershipEventRepository",
+    "SECOwnershipParseResult",
     "build_adoption_payload",
     "build_divergence_payload",
     "build_issuer_summaries",
@@ -136,6 +147,7 @@ __all__ = [
     "compute_sec_filing_delta_events",
     "extract_section_changes",
     "filing_result_to_records",
+    "parse_sec_ownership_events",
     "prepare_filing_publication",
     "sec_delta_reason_code",
 ]
