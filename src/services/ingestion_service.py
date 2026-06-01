@@ -18,7 +18,7 @@ from typing import Any, cast
 
 import structlog
 
-from src.config.feeds import FEEDS
+from src.config.feeds import FEEDS, Feed
 from src.config.settings import get_settings
 from src.ingestion.base_adapter import BaseAdapter
 from src.ingestion.feed_adapter import FeedAdapter
@@ -63,6 +63,7 @@ class IngestionService:
         twitter_sources: list[str] | None = None,
         reddit_sources: list[str] | None = None,
         substack_sources: list[tuple[str, str, str]] | None = None,
+        rss_feeds: list[Feed] | None = None,
     ):
         """
         Initialize ingestion service.
@@ -74,6 +75,7 @@ class IngestionService:
             twitter_sources: Override Twitter usernames (from sources DB)
             reddit_sources: Override subreddit names (from sources DB)
             substack_sources: Override Substack publications as (slug, name, desc) tuples
+            rss_feeds: Override RSS/Atom feeds (from sources DB)
         """
         settings = get_settings()
 
@@ -96,6 +98,7 @@ class IngestionService:
                 twitter_sources=twitter_sources,
                 reddit_sources=reddit_sources,
                 substack_sources=substack_sources,
+                rss_feeds=rss_feeds,
             )
 
         if not self._adapters and not use_mock:
@@ -117,6 +120,7 @@ class IngestionService:
         twitter_sources: list[str] | None = None,
         reddit_sources: list[str] | None = None,
         substack_sources: list[tuple[str, str, str]] | None = None,
+        rss_feeds: list[Feed] | None = None,
     ) -> dict[Platform, BaseAdapter]:
         """Create adapters based on available configuration.
 
@@ -169,9 +173,12 @@ class IngestionService:
             )
             logger.info("News adapter enabled")
 
-        # RSS/Atom feeds (static catalog in src.config.feeds)
-        if getattr(settings, "rss_enabled", True) and any(feed.enabled for feed in FEEDS):
+        # RSS/Atom feeds. DB-backed sources override the static seed catalog.
+        configured_rss_feeds = FEEDS if rss_feeds is None else rss_feeds
+        active_rss_feeds = [feed for feed in configured_rss_feeds if feed.enabled]
+        if getattr(settings, "rss_enabled", True) and active_rss_feeds:
             adapters[Platform.RSS] = FeedAdapter(
+                feeds=active_rss_feeds,
                 rate_limit=getattr(settings, "rss_rate_limit", 20),
                 max_items_per_feed=getattr(settings, "rss_max_items_per_feed", 50),
                 recency_days=getattr(settings, "rss_recency_days", 7),

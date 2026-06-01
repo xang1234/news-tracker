@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
+from src.config.feeds import Feed
 from src.config.settings import Settings
 from src.ingestion.schemas import Platform
 from src.services.ingestion_service import IngestionConfigurationError, IngestionService
@@ -88,6 +89,52 @@ class TestIngestionServiceConfiguration:
 
         assert Platform.RSS in service._adapters
         feed_adapter.assert_called_once_with(
+            feeds=[feed],
+            rate_limit=20,
+            max_items_per_feed=50,
+            recency_days=7,
+            fetch_timeout=15.0,
+            full_text_enabled=True,
+        )
+
+    def test_rss_adapter_uses_db_backed_feeds_when_supplied(self) -> None:
+        settings = SimpleNamespace(
+            poll_interval_seconds=60,
+            twitter_configured=False,
+            xui_configured=False,
+            twitter_rate_limit=10,
+            reddit_configured=False,
+            reddit_rate_limit=10,
+            substack_rate_limit=10,
+            news_api_configured=False,
+            news_rate_limit=10,
+            rss_enabled=True,
+            rss_rate_limit=20,
+            rss_max_items_per_feed=50,
+            rss_recency_days=7,
+            rss_fetch_timeout=15.0,
+            rss_full_text_enabled=True,
+        )
+        db_feed = Feed(
+            slug="semiwiki",
+            name="SemiWiki",
+            url="https://semiwiki.com/feed/",
+            category="trade_press",
+        )
+
+        with (
+            patch("src.services.ingestion_service.get_settings", return_value=settings),
+            patch("src.services.ingestion_service.FeedAdapter") as feed_adapter,
+        ):
+            service = IngestionService(
+                use_mock=False,
+                substack_sources=[],
+                rss_feeds=[db_feed],
+            )
+
+        assert Platform.RSS in service._adapters
+        feed_adapter.assert_called_once_with(
+            feeds=[db_feed],
             rate_limit=20,
             max_items_per_feed=50,
             recency_days=7,

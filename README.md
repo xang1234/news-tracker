@@ -175,7 +175,7 @@ Divergence payloads include reason code, severity, human-readable summary, and s
 Current source families include:
 
 - Social/news ingestion: X/Twitter, Reddit, Substack, and news adapters.
-- RSS/Atom ingestion: a generic `FeedAdapter` ingests curated RSS 2.0 and Atom feeds as normal `NormalizedDocument` article records with source category, authority, full-text mode, feed health, conditional GET lineage, recency limits, per-feed caps, and per-run dedupe. The seeded catalog covers first-party company/IR and technical feeds from NVIDIA, AMD, Intel, Micron, KLA, and Samsung; semiconductor trade feeds from Semiconductor Engineering, EE Times, Semiconductor Digest, Semiconductor Today, and SemiWiki; and broad technology feeds from Tom's Hardware, The Verge, TechCrunch, and Ars Technica. Run `uv run python scripts/validate_feeds.py` to catch malformed, duplicate, empty, or dead feed URLs before deploying catalog changes.
+- RSS/Atom ingestion: a generic `FeedAdapter` ingests curated RSS 2.0 and Atom feeds as normal `NormalizedDocument` article records with source category, authority, full-text mode, feed health, conditional GET lineage, recency limits, per-feed caps, and per-run dedupe. The seeded catalog covers first-party company/IR and technical feeds from NVIDIA, AMD, Intel, Micron, KLA, and Samsung; semiconductor trade feeds from Semiconductor Engineering, EE Times, Semiconductor Digest, Semiconductor Today, and SemiWiki; and broad technology feeds from Tom's Hardware, The Verge, TechCrunch, and Ars Technica. Sources seeding converts the static catalog into `platform="rss"` rows with `metadata.url`, `metadata.category`, `metadata.authority`, and `metadata.full_text`, so operators can list, create, or deactivate RSS feeds through the existing Sources API without code changes. Run `uv run python scripts/validate_feeds.py` to catch malformed, duplicate, empty, or dead feed URLs before deploying catalog changes.
 - SEC filing lane: EDGAR filing search/fetch providers with centralized SEC fair-access policy.
 - Security master: ticker, exchange, alias, FIGI, and SEC issuer identifiers. Seeded semiconductor securities now carry SEC CIKs where available, SEC issuer names, former issuer-name slots, external identifier maps, and identifier-lineage records so Company Facts and submissions ingestion can audit how a ticker was mapped to an SEC issuer.
 - SEC structured fundamentals: official `data.sec.gov` Submissions and XBRL Company Facts JSON for tracked issuer CIKs, cached by issuer, payload hash, source URL, and accession-number lineage. The provider uses declared SEC User-Agent headers, per-second fair-access rate limiting, retry handling for transient SEC failures, and exposes the SEC nightly bulk archive URLs for backfills.
@@ -253,6 +253,14 @@ RSS_FULL_TEXT_ENABLED=true
 # Validate the curated RSS/Atom source catalog
 uv run python scripts/validate_feeds.py --skip-live
 uv run python scripts/validate_feeds.py
+
+# Example DB-backed RSS source row
+platform=rss
+identifier=semiconductor-engineering
+metadata.url=https://semiengineering.com/feed/
+metadata.category=trade_press
+metadata.authority=specialist
+metadata.full_text=true
 ```
 
 The official X API is the primary Twitter/X ingestion path when `TWITTER_BEARER_TOKEN` is

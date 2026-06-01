@@ -62,6 +62,7 @@ async def _build_ingestion_service(request: Request) -> IngestionService:
     twitter_sources = None
     reddit_sources = None
     substack_sources = None
+    rss_feeds = None
 
     if settings.sources_enabled:
         db = await request.app.state.services.get_database()
@@ -69,11 +70,13 @@ async def _build_ingestion_service(request: Request) -> IngestionService:
         twitter_sources = await svc.get_twitter_sources()
         reddit_sources = await svc.get_reddit_sources()
         substack_sources = await svc.get_substack_sources()
+        rss_feeds = await svc.get_rss_feeds()
 
     return IngestionService(
         twitter_sources=twitter_sources,
         reddit_sources=reddit_sources,
         substack_sources=substack_sources,
+        rss_feeds=rss_feeds,
     )
 
 

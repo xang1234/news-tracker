@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from src.config.feeds import FEEDS, Feed
 from src.sources.config import SourcesConfig
 from src.sources.service import SourcesService
 
@@ -88,6 +89,71 @@ class TestGetSubstackSources:
         assert result == [("semianalysis", "SemiAnalysis", "Semiconductor deep dives")]
 
 
+class TestGetRssFeeds:
+    """Tests for cached RSS feed retrieval."""
+
+    @pytest.mark.asyncio
+    async def test_returns_feed_records(self, service: SourcesService) -> None:
+        service.repository._db.fetch.return_value = [
+            {
+                "platform": "rss",
+                "identifier": "nvidia-press-releases",
+                "display_name": "NVIDIA Newsroom Press Releases",
+                "description": "Official NVIDIA press releases",
+                "is_active": True,
+                "metadata": {
+                    "url": "https://nvidianews.nvidia.com/cats/press_release.xml",
+                    "category": "company_ir",
+                    "authority": "official",
+                    "full_text": True,
+                },
+                "created_at": None,
+                "updated_at": None,
+            }
+        ]
+
+        result = await service.get_rss_feeds()
+
+        assert result == [
+            Feed(
+                slug="nvidia-press-releases",
+                name="NVIDIA Newsroom Press Releases",
+                url="https://nvidianews.nvidia.com/cats/press_release.xml",
+                category="company_ir",
+                authority="official",
+                full_text=True,
+                enabled=True,
+            )
+        ]
+
+    @pytest.mark.asyncio
+    async def test_returns_cached_on_second_call(self, service: SourcesService) -> None:
+        service.repository._db.fetch.return_value = [
+            {
+                "platform": "rss",
+                "identifier": "semiwiki",
+                "display_name": "SemiWiki",
+                "description": "Semiconductor trade analysis",
+                "is_active": True,
+                "metadata": {
+                    "url": "https://semiwiki.com/feed/",
+                    "category": "trade_press",
+                    "authority": "specialist",
+                    "full_text": True,
+                },
+                "created_at": None,
+                "updated_at": None,
+            }
+        ]
+
+        first = await service.get_rss_feeds()
+        service.repository._db.fetch.return_value = []
+        second = await service.get_rss_feeds()
+
+        assert first == second
+        assert second[0].slug == "semiwiki"
+
+
 class TestInvalidateCache:
     """Tests for cache invalidation."""
 
@@ -110,12 +176,21 @@ class TestInvalidateCache:
         service._twitter_cache = ["a"]
         service._reddit_cache = ["b"]
         service._substack_cache = [("c", "d", "e")]
+        service._rss_cache = [
+            Feed(
+                slug="semiwiki",
+                name="SemiWiki",
+                url="https://semiwiki.com/feed/",
+                category="trade_press",
+            )
+        ]
 
         service.invalidate_cache()
 
         assert service._twitter_cache is None
         assert service._reddit_cache is None
         assert service._substack_cache is None
+        assert service._rss_cache is None
 
 
 class TestSeedFromJson:
@@ -155,6 +230,17 @@ class TestSeedFromJson:
         await service.seed_from_json(seed_file)
 
         assert service._twitter_cache is None
+
+    @pytest.mark.asyncio
+    async def test_default_seed_includes_static_rss_catalog(self, service: SourcesService) -> None:
+        seed_count = len(json.loads(Path("src/sources/data/seed_sources.json").read_text()))
+
+        result = await service.seed_from_json()
+
+        assert result == seed_count + len(FEEDS)
+        args = service.repository._db.execute.call_args[0]
+        assert "rss" in args[1]
+        assert "nvidia-press-releases" in args[2]
 
 
 class TestEnsureSeeded:

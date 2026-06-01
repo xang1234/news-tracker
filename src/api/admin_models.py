@@ -1,12 +1,13 @@
 """Admin API models for sources and securities."""
 
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from src.security_master.schemas import normalize_sec_cik
 
-_ALLOWED_SOURCE_PLATFORMS = {"twitter", "reddit", "substack"}
+_ALLOWED_SOURCE_PLATFORMS = {"twitter", "reddit", "substack", "rss"}
+_RSS_REQUIRED_METADATA = ("url", "category")
 
 
 def _validate_source_platform(value: str) -> str:
@@ -15,6 +16,21 @@ def _validate_source_platform(value: str) -> str:
         allowed = ", ".join(sorted(_ALLOWED_SOURCE_PLATFORMS))
         raise ValueError(f"platform must be one of: {allowed}")
     return normalized
+
+
+def _validate_rss_source_metadata(metadata: dict[str, object]) -> None:
+    for key in _RSS_REQUIRED_METADATA:
+        value = metadata.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"rss sources require metadata.{key}")
+
+    authority = metadata.get("authority")
+    if authority is not None and not isinstance(authority, str):
+        raise ValueError("rss metadata.authority must be a string when provided")
+
+    full_text = metadata.get("full_text")
+    if full_text is not None and not isinstance(full_text, bool):
+        raise ValueError("rss metadata.full_text must be a boolean when provided")
 
 
 def _normalize_optional_sec_cik(value: str | None) -> str | None:
@@ -113,8 +129,10 @@ class UpdateSecurityRequest(BaseModel):
 class SourceItem(BaseModel):
     """Single source record."""
 
-    platform: str = Field(..., description="Platform: twitter, reddit, substack")
-    identifier: str = Field(..., description="Handle, subreddit name, or publication slug")
+    platform: str = Field(..., description="Platform: twitter, reddit, substack, rss")
+    identifier: str = Field(
+        ..., description="Handle, subreddit name, publication slug, or feed slug"
+    )
     display_name: str = Field(default="", description="Human-readable display name")
     description: str = Field(default="", description="Short description")
     is_active: bool = Field(default=True, description="Whether source is active")
@@ -138,9 +156,9 @@ class SourcesListResponse(BaseModel):
 class CreateSourceRequest(BaseModel):
     """Request to create a new source."""
 
-    platform: str = Field(..., description="Platform: twitter, reddit, substack")
+    platform: str = Field(..., description="Platform: twitter, reddit, substack, rss")
     identifier: str = Field(
-        ..., min_length=1, max_length=200, description="Handle, subreddit name, or slug"
+        ..., min_length=1, max_length=200, description="Handle, subreddit name, slug, or feed slug"
     )
     display_name: str = Field(default="", max_length=200, description="Human-readable name")
     description: str = Field(default="", max_length=500, description="Short description")
@@ -162,11 +180,22 @@ class CreateSourceRequest(BaseModel):
             raise ValueError("identifier must contain at least one non-empty character")
         return cleaned
 
+    @model_validator(mode="after")
+    def validate_rss_metadata(self) -> Self:
+        if self.platform == "rss":
+            _validate_rss_source_metadata(self.metadata)
+        return self
+
 
 class BulkCreateSourcesRequest(BaseModel):
     """Request to bulk-create sources for a single platform."""
 
-    platform: str = Field(..., description="Platform: twitter, reddit, substack")
+    platform: str = Field(
+        ...,
+        description=(
+            "Platform: twitter, reddit, substack. RSS requires metadata; use create source."
+        ),
+    )
     identifiers: list[str] = Field(
         ...,
         min_length=1,
@@ -177,7 +206,10 @@ class BulkCreateSourcesRequest(BaseModel):
     @field_validator("platform")
     @classmethod
     def validate_platform(cls, value: str) -> str:
-        return _validate_source_platform(value)
+        platform = _validate_source_platform(value)
+        if platform == "rss":
+            raise ValueError("RSS sources require metadata; use create source instead")
+        return platform
 
     @field_validator("identifiers")
     @classmethod
