@@ -219,7 +219,6 @@ def build_theme_rollups(
                 "sentiment_sum": 0.0,
                 "sentiment_weight": 0.0,
                 "symbol_counts": {},
-                "sec_fact_evidence": [],
             }
         t = theme_data[tid]
         t["run_ids"].append(run.run_id)
@@ -229,12 +228,14 @@ def build_theme_rollups(
         t["sentiment_weight"] += run.doc_count
         for sym, cnt in run.ticker_counts.items():
             t["symbol_counts"][sym] = t["symbol_counts"].get(sym, 0) + cnt
-            t["sec_fact_evidence"].extend(evidence_for_key(sec_fact_evidence_by_symbol, sym))
 
     rollups = []
     for tid, t in sorted(theme_data.items()):
         avg_sent = t["sentiment_sum"] / t["sentiment_weight"] if t["sentiment_weight"] > 0 else 0.0
         top_symbols = sorted(t["symbol_counts"], key=lambda s: -t["symbol_counts"][s])[:5]
+        sec_fact_evidence = []
+        for symbol in sorted(t["symbol_counts"]):
+            sec_fact_evidence.extend(evidence_for_key(sec_fact_evidence_by_symbol, symbol))
         rollups.append(
             ThemeRollup(
                 theme_id=tid,
@@ -245,7 +246,7 @@ def build_theme_rollups(
                 avg_sentiment=avg_sent,
                 top_symbols=top_symbols,
                 contributing_run_ids=t["run_ids"],
-                sec_fact_evidence=t["sec_fact_evidence"],
+                sec_fact_evidence=sec_fact_evidence,
             )
         )
     return rollups

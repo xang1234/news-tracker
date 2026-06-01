@@ -208,6 +208,19 @@ class TestThemeRollups:
         rollups = build_theme_rollups([run], {run.run_id: comp})
         assert rollups[0].top_symbols[0] == "TSM"  # highest count
 
+    def test_sec_fact_evidence_attached_once_per_symbol(self) -> None:
+        r1 = _make_run("nr_1", ticker_counts={"NVDA": 2})
+        r2 = _make_run("nr_2", ticker_counts={"NVDA": 4})
+        evidence = {"event_id": "sec_delta:nvda", "evidence_role": "corroborating"}
+
+        rollups = build_theme_rollups(
+            [r1, r2],
+            {},
+            sec_fact_evidence_by_symbol={"NVDA": [evidence]},
+        )
+
+        assert rollups[0].sec_fact_evidence == [evidence]
+
     def test_rollup_to_dict(self) -> None:
         rollup = ThemeRollup(
             theme_id="theme_hbm",
