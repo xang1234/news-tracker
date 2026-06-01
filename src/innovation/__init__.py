@@ -14,9 +14,23 @@ from src.innovation.patents import (
     load_patentsview_bulk_snapshot,
 )
 from src.innovation.repository import PatentSignalRepository
+from src.innovation.research import (
+    ArxivResearchProvider,
+    OpenAlexResearchProvider,
+    ResearchProviderError,
+    ResearchProviderResponseError,
+    ResearchQuery,
+    ResearchRecord,
+    ResearchSignal,
+    ResearchSignalLinker,
+    deduplicate_research_records,
+)
+from src.innovation.research_repository import ResearchSignalRepository
 
 __all__ = [
+    "ArxivResearchProvider",
     "MissingPatentProviderCredentialError",
+    "OpenAlexResearchProvider",
     "PatentProviderError",
     "PatentProviderResponseError",
     "PatentQuery",
@@ -25,7 +39,15 @@ __all__ = [
     "PatentSignalLinker",
     "PatentSignalRepository",
     "PatentsViewProvider",
+    "ResearchProviderError",
+    "ResearchProviderResponseError",
+    "ResearchQuery",
+    "ResearchRecord",
+    "ResearchSignal",
+    "ResearchSignalLinker",
+    "ResearchSignalRepository",
     "StalePatentSnapshotError",
     "deduplicate_patent_families",
+    "deduplicate_research_records",
     "load_patentsview_bulk_snapshot",
 ]
