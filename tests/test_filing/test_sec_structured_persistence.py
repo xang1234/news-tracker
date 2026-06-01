@@ -129,6 +129,18 @@ class TestSECStructuredDataRepository:
         assert record.payload == {}
         assert record.metadata == {}
 
+    @pytest.mark.asyncio
+    async def test_malformed_json_column_strings_decode_to_empty_objects(self) -> None:
+        database = AsyncMock()
+        database.fetchrow.return_value = _payload_row(payload="{bad-json", metadata="{bad-json")
+        repository = SECStructuredDataRepository(database)
+
+        record = await repository.get_latest_payload("320193", "submissions")
+
+        assert record is not None
+        assert record.payload == {}
+        assert record.metadata == {}
+
 
 class TestMigration035:
     @pytest.fixture()
@@ -143,6 +155,9 @@ class TestMigration035:
 
     def test_unique_payload_identity(self, sql: str) -> None:
         assert "UNIQUE (cik, payload_type, payload_hash)" in sql
+
+    def test_cik_format_is_checked_at_table_boundary(self, sql: str) -> None:
+        assert "CHECK (cik ~ '^[0-9]{10}$')" in sql
 
     def test_accession_lineage_is_indexed(self, sql: str) -> None:
         assert "accession_numbers" in sql

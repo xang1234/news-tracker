@@ -14,7 +14,10 @@ def _parse_json_object(value: Any) -> dict[str, Any]:
     if value is None:
         return {}
     if isinstance(value, str):
-        parsed = json.loads(value)
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError):
+            return {}
         return parsed if isinstance(parsed, dict) else {}
     if isinstance(value, dict):
         return dict(value)

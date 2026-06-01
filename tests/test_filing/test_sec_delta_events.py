@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 
+from src.filing.sec_companyfacts_parser import extract_companyfacts_observations
 from src.filing.sec_delta_events import compute_sec_filing_delta_events
 from src.filing.sec_structured import SECStructuredPayloadRecord
 
@@ -157,6 +158,30 @@ def test_event_identity_is_stable_across_payload_hash_changes() -> None:
 
     assert first_event.event_id == second_event.event_id
     assert second_event.source_payload_hash == "sha256:refetched-payload"
+
+
+def test_companyfacts_observations_use_normalized_record_cik() -> None:
+    record = _companyfacts_record(
+        _facts_for(
+            "Revenues",
+            "USD",
+            [
+                _fact(
+                    accn="0000320193-24-000100",
+                    value=125,
+                    fy=2024,
+                    filed="2024-11-01",
+                    start="2023-10-01",
+                    end="2024-09-28",
+                ),
+            ],
+        )
+    )
+    record.cik = "320193"
+
+    observations = extract_companyfacts_observations(record)
+
+    assert observations[0].cik == "0000320193"
 
 
 def test_amended_filing_for_same_period_emits_restatement_event() -> None:

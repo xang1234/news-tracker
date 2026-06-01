@@ -149,6 +149,19 @@ class TestSECFilingDeltaRepository:
 
         assert events[0].metadata == {}
 
+    @pytest.mark.asyncio
+    async def test_malformed_metadata_column_string_decodes_to_empty_object(self) -> None:
+        database = AsyncMock()
+        database.fetch.return_value = [_event_row(metadata="{bad-json")]
+        repository = SECFilingDeltaRepository(database)
+
+        events = await repository.list_events_as_of(
+            "320193",
+            as_of=datetime(2024, 12, 1, tzinfo=UTC),
+        )
+
+        assert events[0].metadata == {}
+
 
 class TestMigration036:
     @pytest.fixture()

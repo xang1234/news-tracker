@@ -159,6 +159,32 @@ class TestGetAllActiveTickers:
         assert result == {"NVDA", "AMD", "TSM"}
 
 
+class TestListSecurities:
+    """Tests for paginated security listing."""
+
+    @pytest.mark.asyncio
+    async def test_search_matches_alias_and_former_name_values(
+        self,
+        mock_database: AsyncMock,
+        sample_db_row: dict,
+    ) -> None:
+        mock_database.fetchval.return_value = 1
+        mock_database.fetch.return_value = [sample_db_row]
+        repo = SecurityMasterRepository(mock_database)
+
+        result, total = await repo.list_securities(search="GeForce")
+
+        sql = mock_database.fetch.call_args[0][0]
+        assert "unnest(aliases) AS alias_value" in sql
+        assert "alias_value ILIKE $1" in sql
+        assert "unnest(former_names) AS former_name_value" in sql
+        assert "former_name_value ILIKE $1" in sql
+        assert "$1 ILIKE ANY(aliases)" not in sql
+        assert "$1 ILIKE ANY(former_names)" not in sql
+        assert total == 1
+        assert result[0].ticker == "NVDA"
+
+
 class TestGetCompanyToTickerMap:
     """Tests for company name mapping."""
 

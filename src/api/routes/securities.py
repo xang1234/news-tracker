@@ -1,9 +1,11 @@
 """Securities Admin endpoints — CRUD for the security master table."""
 
 import time
+from typing import NoReturn
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import ValidationError
 from starlette.requests import Request
 
 from src.api.admin_models import (
@@ -60,6 +62,11 @@ def _lineage_request_records(
     records: list[SecurityIdentifierLineageItem],
 ) -> list[SecurityIdentifierLineage]:
     return [SecurityIdentifierLineage.from_raw(record.model_dump()) for record in records]
+
+
+def _raise_security_input_validation_error(action: str, error: Exception) -> NoReturn:
+    logger.warning(f"{action}_security_validation_failed", error=str(error))
+    raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @router.get(
@@ -149,6 +156,8 @@ async def create_security(
         return _security_to_item(created)
     except HTTPException:
         raise
+    except (ValidationError, ValueError, TypeError) as e:
+        _raise_security_input_validation_error("create", e)
     except Exception as e:
         logger.error("create_security_failed", error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to create security")
@@ -219,6 +228,8 @@ async def update_security(
         return _security_to_item(result)
     except HTTPException:
         raise
+    except (ValidationError, ValueError, TypeError) as e:
+        _raise_security_input_validation_error("update", e)
     except Exception as e:
         logger.error("update_security_failed", error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to update security")

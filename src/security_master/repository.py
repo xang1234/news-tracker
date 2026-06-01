@@ -205,8 +205,14 @@ class SecurityMasterRepository:
                     OR sec_cik ILIKE ${idx}
                     OR name ILIKE ${idx}
                     OR issuer_name ILIKE ${idx}
-                    OR ${idx} ILIKE ANY(aliases)
-                    OR ${idx} ILIKE ANY(former_names)
+                    OR EXISTS (
+                        SELECT 1 FROM unnest(aliases) AS alias_value
+                        WHERE alias_value ILIKE ${idx}
+                    )
+                    OR EXISTS (
+                        SELECT 1 FROM unnest(former_names) AS former_name_value
+                        WHERE former_name_value ILIKE ${idx}
+                    )
                 )"""
             )
             params.append(f"%{search}%")

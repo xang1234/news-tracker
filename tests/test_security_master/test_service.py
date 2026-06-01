@@ -130,7 +130,7 @@ class TestSeedFromJson:
                 "identifier_lineage": [
                     {
                         "identifier_type": "sec_cik",
-                        "value": "0001234567",
+                        "value": "CIK1234567",
                         "source": "sec_ticker_company",
                     }
                 ],
@@ -146,6 +146,8 @@ class TestSeedFromJson:
         args = service.repository._db.execute.call_args[0]
         assert args[9] == ["0001234567"]
         assert args[10] == ["Test Corporation"]
+        lineage = json.loads(args[13][0])
+        assert lineage[0]["value"] == "0001234567"
 
     @pytest.mark.asyncio
     async def test_invalidates_cache_after_seed(

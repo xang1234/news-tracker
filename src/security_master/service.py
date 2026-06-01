@@ -20,7 +20,15 @@ def _parse_seed_entry(entry: dict[str, Any]) -> Security:
     """Convert a JSON seed entry to a Security dataclass."""
     sec_cik = normalize_sec_cik(entry.get("sec_cik"))
     external_identifiers = dict(entry.get("external_identifiers", {}))
-    identifier_lineage = list(entry.get("identifier_lineage", []))
+    identifier_lineage = []
+    for record in entry.get("identifier_lineage", []):
+        normalized_record = dict(record)
+        if (
+            normalized_record.get("identifier_type") == "sec_cik"
+            and normalized_record.get("value") is not None
+        ):
+            normalized_record["value"] = normalize_sec_cik(normalized_record["value"]) or ""
+        identifier_lineage.append(normalized_record)
     if sec_cik:
         external_identifiers.setdefault("sec_ticker", entry["ticker"])
         if not any(record.get("identifier_type") == "sec_cik" for record in identifier_lineage):

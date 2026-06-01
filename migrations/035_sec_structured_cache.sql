@@ -5,7 +5,8 @@
 
 CREATE TABLE IF NOT EXISTS sec_structured_payloads (
     id                  BIGSERIAL PRIMARY KEY,
-    cik                 TEXT NOT NULL,
+    cik                 TEXT NOT NULL
+        CHECK (cik ~ '^[0-9]{10}$'),
     payload_type        TEXT NOT NULL
         CHECK (payload_type IN ('companyfacts', 'submissions')),
     source_url          TEXT NOT NULL,

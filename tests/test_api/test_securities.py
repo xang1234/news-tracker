@@ -259,6 +259,37 @@ class TestCreateSecurity:
         mock_security_repo.upsert.assert_not_called()
 
     @patch("src.api.routes.securities._get_settings")
+    def test_create_returns_422_for_domain_lineage_validation(
+        self, mock_settings, client, mock_security_repo, monkeypatch
+    ):
+        mock_settings.return_value = MagicMock(security_master_enabled=True)
+
+        def reject_lineage(_records):
+            raise ValueError("identifier_lineage source must be non-empty")
+
+        monkeypatch.setattr("src.api.routes.securities._lineage_request_records", reject_lineage)
+
+        resp = client.post(
+            "/securities",
+            json={
+                "ticker": "NVDA",
+                "exchange": "US",
+                "name": "NVIDIA",
+                "identifier_lineage": [
+                    {
+                        "identifier_type": "sec_cik",
+                        "value": "0001045810",
+                        "source": "sec_ticker_company",
+                    }
+                ],
+            },
+        )
+
+        assert resp.status_code == 422
+        assert "identifier_lineage" in resp.json()["detail"]
+        mock_security_repo.upsert.assert_not_called()
+
+    @patch("src.api.routes.securities._get_settings")
     def test_create_refetch_fails(self, mock_settings, client, mock_security_repo):
         mock_settings.return_value = MagicMock(security_master_enabled=True)
         mock_security_repo.get_by_ticker.return_value = None
@@ -371,6 +402,35 @@ class TestUpdateSecurity:
         )
 
         assert resp.status_code == 422
+        mock_security_repo.upsert.assert_not_called()
+
+    @patch("src.api.routes.securities._get_settings")
+    def test_update_returns_422_for_domain_lineage_validation(
+        self, mock_settings, client, mock_security_repo, monkeypatch
+    ):
+        mock_settings.return_value = MagicMock(security_master_enabled=True)
+        mock_security_repo.get_by_ticker.return_value = _make_security()
+
+        def reject_lineage(_records):
+            raise ValueError("identifier_lineage source must be non-empty")
+
+        monkeypatch.setattr("src.api.routes.securities._lineage_request_records", reject_lineage)
+
+        resp = client.put(
+            "/securities/NVDA/US",
+            json={
+                "identifier_lineage": [
+                    {
+                        "identifier_type": "sec_cik",
+                        "value": "0001045810",
+                        "source": "sec_ticker_company",
+                    }
+                ]
+            },
+        )
+
+        assert resp.status_code == 422
+        assert "identifier_lineage" in resp.json()["detail"]
         mock_security_repo.upsert.assert_not_called()
 
 

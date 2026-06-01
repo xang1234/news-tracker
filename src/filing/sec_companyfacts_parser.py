@@ -35,7 +35,7 @@ def extract_companyfacts_observations(
                 continue
             observations.extend(
                 _extract_unit_observations(
-                    cik=companyfacts.cik,
+                    cik=cik,
                     taxonomy=str(taxonomy),
                     fact_name=str(fact_name),
                     units=units,
