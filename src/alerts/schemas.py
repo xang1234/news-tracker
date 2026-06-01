@@ -10,7 +10,7 @@ import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 AlertTriggerType = Literal[
     "sentiment_velocity",
@@ -25,34 +25,18 @@ AlertTriggerType = Literal[
     "cross_platform_breakout",
     "authority_divergence",
     "sentiment_regime_shift",
+    "insider_ownership",
+    "activist_ownership",
+    "institutional_holdings",
+    "short_volume_anomaly",
+    "fails_to_deliver_anomaly",
 ]
 
-VALID_TRIGGER_TYPES: frozenset[str] = frozenset(
-    {
-        "sentiment_velocity",
-        "extreme_sentiment",
-        "volume_surge",
-        "lifecycle_change",
-        "new_theme",
-        "propagated_impact",
-        "embedding_drift",
-        "cluster_instability",
-        "narrative_surge",
-        "cross_platform_breakout",
-        "authority_divergence",
-        "sentiment_regime_shift",
-    }
-)
+VALID_TRIGGER_TYPES: frozenset[str] = frozenset(get_args(AlertTriggerType))
 
 AlertSeverity = Literal["critical", "warning", "info"]
 
-VALID_SEVERITIES: frozenset[str] = frozenset(
-    {
-        "critical",
-        "warning",
-        "info",
-    }
-)
+VALID_SEVERITIES: frozenset[str] = frozenset(get_args(AlertSeverity))
 
 
 @dataclass

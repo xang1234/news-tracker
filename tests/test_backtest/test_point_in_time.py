@@ -8,6 +8,8 @@ import numpy as np
 import pytest
 
 from src.backtest.point_in_time import PointInTimeService
+from src.filing.sec_ownership_events import SECOwnershipEvent
+from src.market_structure import MarketStructureEvent
 from src.themes.repository import ThemeRepository
 from src.themes.schemas import Theme
 
@@ -275,3 +277,91 @@ class TestGetSecDeltaEventsAsOf:
     ) -> None:
         with pytest.raises(ValueError, match="cik"):
             await pit_service.get_sec_delta_events_as_of("not-a-cik", as_of=datetime.now(UTC))
+
+
+class TestGetMarketPlumbingEventsAsOf:
+    """Test point-in-time replay for market-plumbing sources."""
+
+    @pytest.mark.asyncio
+    async def test_replays_sec_ownership_events_by_available_at(
+        self,
+        mock_database: AsyncMock,
+        mock_theme_repo: ThemeRepository,
+    ) -> None:
+        as_of = datetime(2026, 6, 2, tzinfo=UTC)
+        ownership_repo = AsyncMock()
+        ownership_repo.list_events.return_value = [
+            SECOwnershipEvent(
+                event_id="ownership:test",
+                event_type="schedule_13d_ownership",
+                accession_number="0001045810-26-000001",
+                filing_type="SC 13D",
+                filed_date=datetime(2026, 6, 1, tzinfo=UTC).date(),
+                available_at=as_of,
+                issuer_cik="1045810",
+                issuer_name="NVIDIA Corporation",
+                issuer_ticker="NVDA",
+            )
+        ]
+        service = PointInTimeService(
+            database=mock_database,
+            theme_repo=mock_theme_repo,
+            sec_ownership_repo=ownership_repo,
+        )
+
+        events = await service.get_sec_ownership_events_as_of(
+            issuer_cik="1045810",
+            as_of=as_of,
+            event_type="schedule_13d_ownership",
+            limit=10,
+        )
+
+        ownership_repo.list_events.assert_awaited_once_with(
+            issuer_cik="1045810",
+            filer_cik=None,
+            as_of=as_of,
+            event_type="schedule_13d_ownership",
+            limit=10,
+        )
+        assert events[0].event_id == "ownership:test"
+
+    @pytest.mark.asyncio
+    async def test_replays_market_structure_events_by_available_at(
+        self,
+        mock_database: AsyncMock,
+        mock_theme_repo: ThemeRepository,
+    ) -> None:
+        as_of = datetime(2026, 6, 2, tzinfo=UTC)
+        market_structure_repo = AsyncMock()
+        market_structure_repo.list_events.return_value = [
+            MarketStructureEvent(
+                event_id="market:test",
+                event_type="finra_short_volume",
+                source_name="FINRA",
+                source_url="https://example.test/CNMSshvol20260601.txt",
+                source_date=datetime(2026, 6, 1, tzinfo=UTC).date(),
+                available_at=as_of,
+                symbol="NVDA",
+            )
+        ]
+        service = PointInTimeService(
+            database=mock_database,
+            theme_repo=mock_theme_repo,
+            market_structure_repo=market_structure_repo,
+        )
+
+        events = await service.get_market_structure_events_as_of(
+            symbol="NVDA",
+            as_of=as_of,
+            event_type="finra_short_volume",
+            limit=10,
+        )
+
+        market_structure_repo.list_events.assert_awaited_once_with(
+            symbol="NVDA",
+            cusip=None,
+            as_of=as_of,
+            event_type="finra_short_volume",
+            limit=10,
+        )
+        assert events[0].event_id == "market:test"

@@ -11,6 +11,8 @@ from typing import Any, Protocol
 
 from src.filing.sec_delta_models import SECFilingDeltaEvent
 from src.filing.sec_delta_repository import SECFilingDeltaRepository
+from src.filing.sec_ownership_events import SECOwnershipEvent, SECOwnershipEventRepository
+from src.market_structure import MarketStructureEvent, MarketStructureEventRepository
 from src.storage.database import Database
 from src.themes.repository import ThemeRepository
 from src.themes.schemas import Theme, ThemeMetrics
@@ -31,6 +33,34 @@ class SecDeltaEventReader(Protocol):
         ...
 
 
+class SecOwnershipEventReader(Protocol):
+    async def list_events(
+        self,
+        *,
+        issuer_cik: str | None = None,
+        filer_cik: str | None = None,
+        as_of: datetime | None = None,
+        event_type: str | None = None,
+        limit: int = 100,
+    ) -> list[SECOwnershipEvent]:
+        """Return SEC ownership events available at a point in time."""
+        ...
+
+
+class MarketStructureEventReader(Protocol):
+    async def list_events(
+        self,
+        *,
+        symbol: str | None = None,
+        cusip: str | None = None,
+        as_of: datetime | None = None,
+        event_type: str | None = None,
+        limit: int = 100,
+    ) -> list[MarketStructureEvent]:
+        """Return market-structure events available at a point in time."""
+        ...
+
+
 class PointInTimeService:
     """Retrieves data as it existed at any historical point.
 
@@ -43,10 +73,16 @@ class PointInTimeService:
         database: Database,
         theme_repo: ThemeRepository,
         sec_delta_repo: SecDeltaEventReader | None = None,
+        sec_ownership_repo: SecOwnershipEventReader | None = None,
+        market_structure_repo: MarketStructureEventReader | None = None,
     ) -> None:
         self._db = database
         self._theme_repo = theme_repo
         self._sec_delta_repo = sec_delta_repo or SECFilingDeltaRepository(database)
+        self._sec_ownership_repo = sec_ownership_repo or SECOwnershipEventRepository(database)
+        self._market_structure_repo = (
+            market_structure_repo or MarketStructureEventRepository(database)
+        )
 
     async def get_themes_as_of(
         self,
@@ -200,6 +236,42 @@ class PointInTimeService:
         """
         return await self._sec_delta_repo.list_events_as_of(
             cik,
+            as_of=as_of,
+            event_type=event_type,
+            limit=limit,
+        )
+
+    async def get_sec_ownership_events_as_of(
+        self,
+        *,
+        issuer_cik: str | None = None,
+        filer_cik: str | None = None,
+        as_of: datetime,
+        event_type: str | None = None,
+        limit: int = 100,
+    ) -> list[SECOwnershipEvent]:
+        """Get SEC ownership events known at a specific point in time."""
+        return await self._sec_ownership_repo.list_events(
+            issuer_cik=issuer_cik,
+            filer_cik=filer_cik,
+            as_of=as_of,
+            event_type=event_type,
+            limit=limit,
+        )
+
+    async def get_market_structure_events_as_of(
+        self,
+        *,
+        symbol: str | None = None,
+        cusip: str | None = None,
+        as_of: datetime,
+        event_type: str | None = None,
+        limit: int = 100,
+    ) -> list[MarketStructureEvent]:
+        """Get market-structure events known at a specific point in time."""
+        return await self._market_structure_repo.list_events(
+            symbol=symbol,
+            cusip=cusip,
             as_of=as_of,
             event_type=event_type,
             limit=limit,
