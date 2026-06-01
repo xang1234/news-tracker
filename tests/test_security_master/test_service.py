@@ -2,13 +2,33 @@
 
 import json
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from src.security_master.config import SecurityMasterConfig
+from src.security_master.nasdaq_trader import NASDAQ_TRADER_EXTERNAL_KEY
 from src.security_master.service import SecurityMasterService
+
+NASDAQ_HEADER = (
+    "Symbol|Security Name|Market Category|Test Issue|Financial Status|"
+    "Round Lot Size|ETF|NextShares"
+)
+OTHER_HEADER = (
+    "ACT Symbol|Security Name|Exchange|CQS Symbol|ETF|Round Lot Size|"
+    "Test Issue|NASDAQ Symbol"
+)
+NASDAQ_LISTED_TEXT = f"""{NASDAQ_HEADER}
+NVDA|NVIDIA Corporation|Q|N|N|100|N|N
+File Creation Time: 0601202616:01|||||||
+"""
+
+OTHER_LISTED_TEXT = f"""{OTHER_HEADER}
+IBM|International Business Machines Corporation|N|IBM|N|100|N|IBM
+File Creation Time: 0601202616:02|||||||
+"""
 
 
 @pytest.fixture
@@ -162,6 +182,43 @@ class TestSeedFromJson:
 
         await service.seed_from_json(seed_file)
 
+        assert service._tickers_cache is None
+
+
+class TestNasdaqTraderIngestion:
+    """Tests for Nasdaq Trader symbol-directory ingestion."""
+
+    @pytest.mark.asyncio
+    async def test_reconciles_files_through_repository_and_invalidates_cache(
+        self,
+        service: SecurityMasterService,
+    ) -> None:
+        service.repository.get_by_keys = AsyncMock(return_value={})  # type: ignore[method-assign]
+        service.repository.list_by_external_identifier = AsyncMock(  # type: ignore[method-assign]
+            return_value=[],
+        )
+        service.repository.bulk_upsert = AsyncMock(return_value=2)  # type: ignore[method-assign]
+        service._tickers_cache = {"OLD"}
+        service._tickers_cached_at = time.monotonic()
+
+        result = await service.ingest_nasdaq_trader_symbol_directory(
+            NASDAQ_LISTED_TEXT,
+            OTHER_LISTED_TEXT,
+            observed_at=datetime(2026, 6, 1, 17, tzinfo=UTC),
+        )
+
+        service.repository.get_by_keys.assert_awaited_once()
+        service.repository.list_by_external_identifier.assert_awaited_once_with(
+            NASDAQ_TRADER_EXTERNAL_KEY,
+        )
+        service.repository.bulk_upsert.assert_awaited_once()
+        upserted = service.repository.bulk_upsert.call_args[0][0]
+        assert {security.ticker for security in upserted} == {"NVDA", "IBM"}
+        nvda = next(security for security in upserted if security.ticker == "NVDA")
+        assert nvda.external_identifiers[NASDAQ_TRADER_EXTERNAL_KEY]["last_seen_at"] == (
+            "2026-06-01T17:00:00+00:00"
+        )
+        assert result.current_record_count == 2
         assert service._tickers_cache is None
 
 

@@ -2,6 +2,7 @@
 
 import json
 import logging
+from collections.abc import Iterable
 from typing import Any
 
 from src.security_master.schemas import Security, normalize_sec_cik
@@ -176,6 +177,45 @@ class SecurityMasterRepository:
             exchange,
         )
         return _record_to_security(row) if row else None
+
+    async def get_by_keys(
+        self,
+        keys: Iterable[tuple[str, str]],
+    ) -> dict[tuple[str, str], Security]:
+        """Fetch securities for a batch of (ticker, exchange) composite keys."""
+        unique_keys = list(dict.fromkeys(keys))
+        if not unique_keys:
+            return {}
+
+        tickers = [ticker for ticker, _exchange in unique_keys]
+        exchanges = [exchange for _ticker, exchange in unique_keys]
+        rows = await self._db.fetch(
+            """
+            SELECT securities.*
+            FROM securities
+            JOIN unnest($1::text[], $2::text[]) AS requested(ticker, exchange)
+              ON securities.ticker = requested.ticker
+             AND securities.exchange = requested.exchange
+            ORDER BY securities.ticker, securities.exchange
+            """,
+            tickers,
+            exchanges,
+        )
+        securities = [_record_to_security(row) for row in rows]
+        return {(security.ticker, security.exchange): security for security in securities}
+
+    async def list_by_external_identifier(self, identifier_key: str) -> list[Security]:
+        """List securities that carry a top-level external identifier key."""
+        rows = await self._db.fetch(
+            """
+            SELECT *
+            FROM securities
+            WHERE external_identifiers ? $1
+            ORDER BY ticker, exchange
+            """,
+            identifier_key,
+        )
+        return [_record_to_security(row) for row in rows]
 
     async def list_securities(
         self,

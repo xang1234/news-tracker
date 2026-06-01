@@ -120,6 +120,60 @@ class TestGetByTicker:
         assert result.currency == "KRW"
 
 
+class TestGetByKeys:
+    """Tests for bulk composite-key lookup."""
+
+    @pytest.mark.asyncio
+    async def test_returns_mapping_for_composite_keys(
+        self,
+        mock_database: AsyncMock,
+        sample_db_row: dict,
+        sample_korean_row: dict,
+    ) -> None:
+        mock_database.fetch.return_value = [sample_db_row, sample_korean_row]
+        repo = SecurityMasterRepository(mock_database)
+
+        result = await repo.get_by_keys([("NVDA", "US"), ("005930.KS", "KRX")])
+
+        args = mock_database.fetch.call_args[0]
+        sql = args[0]
+        assert "unnest" in sql
+        assert args[1] == ["NVDA", "005930.KS"]
+        assert args[2] == ["US", "KRX"]
+        assert result[("NVDA", "US")].ticker == "NVDA"
+        assert result[("005930.KS", "KRX")].exchange == "KRX"
+
+    @pytest.mark.asyncio
+    async def test_empty_keys_returns_empty_without_db_call(self, mock_database: AsyncMock) -> None:
+        repo = SecurityMasterRepository(mock_database)
+
+        result = await repo.get_by_keys([])
+
+        assert result == {}
+        mock_database.fetch.assert_not_called()
+
+
+class TestListByExternalIdentifier:
+    """Tests for source-owned security lookup."""
+
+    @pytest.mark.asyncio
+    async def test_filters_by_jsonb_external_identifier_key(
+        self,
+        mock_database: AsyncMock,
+        sample_db_row: dict,
+    ) -> None:
+        mock_database.fetch.return_value = [sample_db_row]
+        repo = SecurityMasterRepository(mock_database)
+
+        result = await repo.list_by_external_identifier("nasdaq_trader")
+
+        args = mock_database.fetch.call_args[0]
+        sql = args[0]
+        assert "external_identifiers ? $1" in sql
+        assert args[1] == "nasdaq_trader"
+        assert result[0].ticker == "NVDA"
+
+
 class TestGetAllActive:
     """Tests for fetching all active securities."""
 

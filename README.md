@@ -178,6 +178,7 @@ Current source families include:
 - RSS/Atom ingestion: a generic `FeedAdapter` ingests curated RSS 2.0 and Atom feeds as normal `NormalizedDocument` article records with source category, authority, full-text mode, feed health, conditional GET lineage, recency limits, per-feed caps, and per-run dedupe. The seeded catalog covers first-party company/IR and technical feeds from NVIDIA, AMD, Intel, Micron, KLA, and Samsung; semiconductor trade feeds from Semiconductor Engineering, EE Times, Semiconductor Digest, Semiconductor Today, and SemiWiki; and broad technology feeds from Tom's Hardware, The Verge, TechCrunch, and Ars Technica. Sources seeding converts the static catalog into `platform="rss"` rows with `metadata.url`, `metadata.category`, `metadata.authority`, and `metadata.full_text`, so operators can list, create, or deactivate RSS feeds through the existing Sources API without code changes. RSS health is exposed through `GET /sources/rss/health` and the Settings sources table, including active/stale/failing/inactive status, last fetch time, recent document count, and latest error. Run `uv run python scripts/validate_feeds.py` to catch malformed, duplicate, empty, or dead feed URLs before deploying catalog changes.
 - SEC filing lane: EDGAR filing search/fetch providers with centralized SEC fair-access policy.
 - Security master: ticker, exchange, alias, FIGI, and SEC issuer identifiers. Seeded semiconductor securities now carry SEC CIKs where available, SEC issuer names, former issuer-name slots, external identifier maps, and identifier-lineage records so Company Facts and submissions ingestion can audit how a ticker was mapped to an SEC issuer.
+- Nasdaq Trader symbol directories: the free Nasdaq Trader `nasdaqlisted.txt` and `otherlisted.txt` reference files can be ingested into the security master with `uv run news-tracker ingest-nasdaq-trader`. The parser preserves market category, listing-exchange code/name, financial status, round-lot size, ETF flags, test-issue flags, ACT/CQS/Nasdaq symbols, file-creation timestamps, and unexpected extra columns under `external_identifiers.nasdaq_trader`. Current non-test issues remain active, test issues are explicitly inactive, and previously Nasdaq-sourced symbols missing from the latest files are deactivated without deleting SEC CIKs or curated aliases.
 - SEC structured fundamentals: official `data.sec.gov` Submissions and XBRL Company Facts JSON for tracked issuer CIKs, cached by issuer, payload hash, source URL, and accession-number lineage. The provider uses declared SEC User-Agent headers, per-second fair-access rate limiting, retry handling for transient SEC failures, and exposes the SEC nightly bulk archive URLs for backfills.
 - SEC filing-delta events: point-in-time deltas derived from cached Company Facts for revenue, inventory, capex, R&D, gross-margin compression, and restatement/amended-filing changes. Events preserve accession, fact, unit, period, filed-date, fetched-at, source payload hash, and availability lineage for backtests and publication manifests.
 - SEC delta publication and replay: filing manifests can publish SEC fact-delta payloads as `filing_fact` objects with stable reason codes, while narrative and structural payloads can attach SEC fact lineage as corroborating or contradictory evidence. Backtests can replay SEC delta availability through point-in-time `available_at` queries.
@@ -261,6 +262,12 @@ metadata.url=https://semiengineering.com/feed/
 metadata.category=trade_press
 metadata.authority=specialist
 metadata.full_text=true
+
+# Ingest free Nasdaq Trader listed-security reference files
+uv run news-tracker ingest-nasdaq-trader
+uv run news-tracker ingest-nasdaq-trader \
+  --nasdaq-listed-file /path/to/nasdaqlisted.txt \
+  --other-listed-file /path/to/otherlisted.txt
 ```
 
 The official X API is the primary Twitter/X ingestion path when `TWITTER_BEARER_TOKEN` is
