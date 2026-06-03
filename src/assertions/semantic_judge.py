@@ -14,9 +14,15 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
+
+if TYPE_CHECKING:
+    # Type-only: keeps the scoring service package off the `assertions` import
+    # path (the judge only needs scoring when it is actually constructed).
+    from src.scoring.circuit_breaker import GenericCircuitBreaker
+    from src.scoring.config import ScoringConfig
 
 logger = structlog.get_logger(__name__)
 
@@ -87,17 +93,22 @@ class SemanticContradictionJudge:
 
     Reuses the generic circuit breaker from the scoring layer (the only
     genuinely-shared piece); the prompt and parsing are contradiction-specific
-    and live here, decoupled from compellingness scoring.
+    and live here, decoupled from compellingness scoring. Currently OpenAI-only
+    (the scoring layer's Anthropic path is not wired here).
     """
 
-    def __init__(self, config: Any, *, breaker: Any = None) -> None:
+    def __init__(
+        self, config: ScoringConfig, *, breaker: GenericCircuitBreaker | None = None
+    ) -> None:
+        # Lazy import so importing `assertions` doesn't pull in the scoring
+        # service package; the judge is only built when the tier is enabled.
         from src.scoring.circuit_breaker import GenericCircuitBreaker
 
         self._config = config
         self._client: Any = None
         self._breaker = breaker or GenericCircuitBreaker(
-            failure_threshold=getattr(config, "circuit_failure_threshold", 5),
-            recovery_timeout=getattr(config, "circuit_recovery_timeout", 60.0),
+            failure_threshold=config.circuit_failure_threshold,
+            recovery_timeout=config.circuit_recovery_timeout,
             name="semantic_judge",
         )
 

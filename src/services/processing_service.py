@@ -170,6 +170,7 @@ class ProcessingService:
         """
         from src.assertions.reconciliation_engine import (
             ClaimReconciliationEngine,
+            ContradictionTier,
             CorroborationTier,
             NumericTier,
             PredicateContradictionTier,
@@ -180,7 +181,11 @@ class ProcessingService:
         from src.security_master.concept_repository import ConceptRepository
 
         self._entity_resolver = EntityResolver(ConceptRepository(self._database))
-        tiers: list[Any] = [NumericTier(), PredicateContradictionTier(), CorroborationTier()]
+        tiers: list[ContradictionTier] = [
+            NumericTier(),
+            PredicateContradictionTier(),
+            CorroborationTier(),
+        ]
         if get_settings().semantic_contradiction_enabled:
             from src.assertions.semantic_judge import SemanticContradictionJudge
             from src.scoring.config import ScoringConfig
