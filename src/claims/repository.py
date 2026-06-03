@@ -225,6 +225,32 @@ class ClaimRepository:
         )
         return [_row_to_claim(row) for row in rows]
 
+    async def list_claims_by_subject_predicates(
+        self,
+        *,
+        subject_concept_id: str,
+        predicates: list[str],
+    ) -> list[EvidenceClaim]:
+        """List active claims for a subject restricted to given predicates.
+
+        Used by predicate-polarity contradiction detection to fetch a claim
+        and its antonym-predicate counterparts on the same subject (e.g.
+        ``expands_capacity`` + ``constrains_capacity``). Validity-window
+        overlap is applied by the caller.
+        """
+        rows = await self._db.fetch(
+            """
+            SELECT * FROM news_intel.evidence_claims
+            WHERE subject_concept_id = $1
+              AND predicate = ANY($2)
+              AND status = 'active'
+            ORDER BY source_published_at DESC NULLS LAST, claim_id
+            """,
+            subject_concept_id,
+            predicates,
+        )
+        return [_row_to_claim(row) for row in rows]
+
     async def update_status(self, claim_id: str, new_status: str) -> EvidenceClaim | None:
         """Update a claim's status."""
         if new_status not in VALID_CLAIM_STATUSES:

@@ -10,6 +10,7 @@ from src.assertions.aggregation import (
     ConfidenceBreakdown,
     aggregate_assertion,
 )
+from src.assertions.claim_reconciliation import resolve_claim_subject
 from src.assertions.edges import (
     ConceptExposure,
     DerivedEdge,
@@ -22,10 +23,13 @@ from src.assertions.numeric_contradiction import (
     classify_numeric_links,
     numeric_link_types,
 )
-from src.assertions.numeric_reconciler import (
-    NumericReconciler,
-    resolve_numeric_subject,
+from src.assertions.numeric_reconciler import NumericReconciler
+from src.assertions.predicate_contradiction import (
+    antonym_of,
+    classify_polarity_links,
+    validity_overlaps,
 )
+from src.assertions.predicate_reconciler import PredicateContradictionReconciler
 from src.assertions.recompute import (
     AssertionDelta,
     RecomputeResult,
@@ -53,17 +57,21 @@ __all__ = [
     "DerivedEdge",
     "NumericReconciler",
     "PathCacheEntry",
+    "PredicateContradictionReconciler",
     "RecomputeResult",
     "ResolvedAssertion",
     "aggregate_assertion",
+    "antonym_of",
     "build_path_cache",
     "build_recompute_result",
     "classify_numeric_links",
+    "classify_polarity_links",
     "compute_exposures",
     "derive_edges",
     "find_affected_assertion_ids",
     "make_assertion_id",
     "numeric_link_types",
     "recompute_assertion",
-    "resolve_numeric_subject",
+    "resolve_claim_subject",
+    "validity_overlaps",
 ]

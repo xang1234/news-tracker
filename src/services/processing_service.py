@@ -92,12 +92,12 @@ class ProcessingService:
         self._claim_extraction_enabled = get_settings().narrative_claim_extraction_enabled
         self._claim_repo: Any = None  # Lazy-initialized ClaimRepository
 
-        # Numeric reconciliation (resolve subjects + detect contradictions)
-        self._numeric_reconciliation_enabled = (
-            get_settings().numeric_reconciliation_enabled and self._claim_extraction_enabled
+        # Claim reconciliation (resolve subjects + run contradiction tiers)
+        self._claim_reconciliation_enabled = (
+            get_settings().claim_reconciliation_enabled and self._claim_extraction_enabled
         )
         self._entity_resolver: Any = None  # Lazy-initialized EntityResolver
-        self._numeric_reconciler: Any = None  # Lazy-initialized NumericReconciler
+        self._claim_reconcilers: list[Any] = []  # Lazy-initialized contradiction tiers
 
         logger.info(
             "Processing service initialized",
@@ -160,41 +160,44 @@ class ProcessingService:
             enable_events=enable_events,
         )
 
-    def _init_numeric_reconciliation(self, claim_repo: Any) -> None:
-        """Build the entity resolver + numeric reconciler bound to a claim repo.
+    def _init_claim_reconciliation(self, claim_repo: Any) -> None:
+        """Build the entity resolver + contradiction tiers for a claim repo.
 
         Kept lazy (called from start()/run_once) so the dependency graph
         (concept repository, assertion repository, resolver cascade) is only
-        constructed when numeric reconciliation is actually enabled.
+        constructed when reconciliation is actually enabled. New tiers (e.g.
+        semantic) join the list without touching the persist path.
         """
         from src.assertions.numeric_reconciler import NumericReconciler
+        from src.assertions.predicate_reconciler import PredicateContradictionReconciler
         from src.assertions.repository import AssertionRepository
         from src.claims.resolver import EntityResolver
         from src.security_master.concept_repository import ConceptRepository
 
+        assertion_repo = AssertionRepository(self._database)
         self._entity_resolver = EntityResolver(ConceptRepository(self._database))
-        self._numeric_reconciler = NumericReconciler(
-            claim_repo, AssertionRepository(self._database)
-        )
+        self._claim_reconcilers = [
+            NumericReconciler(claim_repo, assertion_repo),
+            PredicateContradictionReconciler(claim_repo, assertion_repo),
+        ]
 
     async def _persist_claim(self, claim: Any, claim_repo: Any) -> None:
-        """Persist one extracted claim, with optional numeric reconciliation.
+        """Persist one extracted claim, with optional reconciliation.
 
-        For numeric facts (when reconciliation is enabled): resolve the
-        subject to a concept ID *before* upsert so the concept is persisted,
-        then reconcile against comparable facts *after* upsert. Both steps
-        are no-ops for non-numeric/unresolved claims, so this is safe to call
-        for every claim.
+        When reconciliation is enabled: resolve the subject to a concept ID
+        *before* upsert (so the concept is persisted for future lookups), then
+        run each contradiction tier *after* upsert. Every tier is a no-op for
+        claims it doesn't apply to, so this is safe to call for every claim.
         """
-        if self._numeric_reconciliation_enabled and self._entity_resolver is not None:
-            from src.assertions.numeric_reconciler import resolve_numeric_subject
+        if self._claim_reconciliation_enabled and self._entity_resolver is not None:
+            from src.assertions.claim_reconciliation import resolve_claim_subject
 
-            await resolve_numeric_subject(claim, self._entity_resolver)
+            await resolve_claim_subject(claim, self._entity_resolver)
 
         await claim_repo.upsert_claim(claim)
 
-        if self._numeric_reconciliation_enabled and self._numeric_reconciler is not None:
-            await self._numeric_reconciler.reconcile_claim(claim)
+        for reconciler in self._claim_reconcilers:
+            await reconciler.reconcile_claim(claim)
 
     async def _extract_and_persist_claims(self, doc: Any, claim_repo: Any) -> None:
         """Stage 6: extract narrative claims from a document and persist them.
@@ -263,9 +266,9 @@ class ProcessingService:
 
             self._claim_repo = ClaimRepository(self._database)
 
-        # Wire numeric reconciliation (resolver + reconciler) if enabled
-        if self._numeric_reconciliation_enabled and self._claim_repo is not None:
-            self._init_numeric_reconciliation(self._claim_repo)
+        # Wire claim reconciliation (resolver + contradiction tiers) if enabled
+        if self._claim_reconciliation_enabled and self._claim_repo is not None:
+            self._init_claim_reconciliation(self._claim_repo)
 
         try:
             # Process messages from queue
@@ -507,8 +510,8 @@ class ProcessingService:
             from src.claims.repository import ClaimRepository
 
             claim_repo = ClaimRepository(self._database)
-            if self._numeric_reconciliation_enabled:
-                self._init_numeric_reconciliation(claim_repo)
+            if self._claim_reconciliation_enabled:
+                self._init_claim_reconciliation(claim_repo)
 
         try:
             for doc in docs:

@@ -329,13 +329,13 @@ class Settings(BaseSettings):
         description="Enable evidence claim extraction from document events and entities",
     )
 
-    # Numeric reconciliation (resolve numeric-fact subjects + detect
-    # contradictions/corroboration → flip assertions to 'disputed').
-    # Requires narrative_claim_extraction_enabled to have claims to reconcile.
-    numeric_reconciliation_enabled: bool = Field(
+    # Claim reconciliation: resolve claim subjects and run contradiction
+    # detection tiers (numeric + predicate-polarity) → flip assertions to
+    # 'disputed'. Requires narrative_claim_extraction_enabled (needs claims).
+    claim_reconciliation_enabled: bool = Field(
         default=False,
-        description="Resolve numeric-fact subjects and reconcile them into "
-        "assertions (numeric contradiction detection)",
+        description="Resolve claim subjects and reconcile them into assertions "
+        "(numeric + predicate-polarity contradiction detection)",
     )
 
     # Sentiment Analysis

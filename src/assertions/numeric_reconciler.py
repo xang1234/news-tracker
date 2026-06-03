@@ -30,27 +30,6 @@ from src.claims.schemas import EvidenceClaim
 logger = structlog.get_logger(__name__)
 
 
-async def resolve_numeric_subject(claim: EvidenceClaim, resolver) -> EvidenceClaim:
-    """Ground a numeric claim's subject to a concept ID, in place.
-
-    The narrative extractor sets ``subject_text`` but not
-    ``subject_concept_id``; numeric reconciliation needs the concept ID to
-    group comparable facts. This resolves the subject via the (already
-    tested) entity resolver cascade and mutates the claim.
-
-    No-op when the claim is non-numeric or already grounded. Leaves the
-    concept ID ``None`` when the subject cannot be resolved.
-    """
-    if claim.numeric_value is None or claim.metric is None:
-        return claim
-    if claim.subject_concept_id is not None:
-        return claim
-    result = await resolver.resolve(claim.subject_text, concept_type="issuer")
-    if result.resolved:
-        claim.subject_concept_id = result.concept_id
-    return claim
-
-
 class NumericReconciler:
     """Reconciles a numeric claim against comparable facts into an assertion."""
 
