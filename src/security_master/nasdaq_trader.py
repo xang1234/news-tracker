@@ -251,10 +251,7 @@ def _parse_symbol_file(
                 f"{source_file} line {line_number} has {len(values)} fields; "
                 f"expected at least {len(headers)}"
             )
-        row = {
-            header: values[index].strip()
-            for index, header in enumerate(headers)
-        }
+        row = {header: values[index].strip() for index, header in enumerate(headers)}
         records.append(_parse_record(row, source_file, headers, required_columns))
 
     return NasdaqTraderFileSnapshot(

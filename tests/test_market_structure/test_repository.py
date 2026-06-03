@@ -13,9 +13,7 @@ import pytest
 from src.market_structure import MarketStructureEvent, MarketStructureEventRepository
 
 MIGRATION_PATH = (
-    pathlib.Path(__file__).resolve().parents[2]
-    / "migrations"
-    / "038_market_structure_events.sql"
+    pathlib.Path(__file__).resolve().parents[2] / "migrations" / "038_market_structure_events.sql"
 )
 
 

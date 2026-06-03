@@ -105,10 +105,7 @@ class MarketStructureIngestionService:
         if not keys:
             return {}
         securities_by_key = await self._security_repository.get_by_keys(keys)
-        return {
-            security.ticker.upper(): security
-            for security in securities_by_key.values()
-        }
+        return {security.ticker.upper(): security for security in securities_by_key.values()}
 
 
 def _parse_files(

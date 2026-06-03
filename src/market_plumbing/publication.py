@@ -25,17 +25,14 @@ class MarketPlumbingSignalSpec:
 
 
 SHORT_VOLUME_GUARDRAILS = (
-    "FINRA short-volume is daily trade-flow volume, not short interest or an "
-    "open short position.",
-    "High ratios can reflect market making, hedging, or intraday liquidity and "
-    "need corroboration.",
+    "FINRA short-volume is daily trade-flow volume, not short interest or an open short position.",
+    "High ratios can reflect market making, hedging, or intraday liquidity and need corroboration.",
 )
 
 FTD_GUARDRAILS = (
     "SEC fails-to-deliver rows are settlement failures, not proof of an open "
     "short position or abusive short selling.",
-    "Use alongside liquidity, corporate actions, recall dates, and persistence "
-    "before escalating.",
+    "Use alongside liquidity, corporate actions, recall dates, and persistence before escalating.",
 )
 
 MARKET_STRUCTURE_GUARDRAILS: dict[str, tuple[str, ...]] = {

@@ -74,6 +74,4 @@ def test_research_institution_names_need_review_before_company_resolution() -> N
 
 
 def test_normalization_preserves_distinguishing_words() -> None:
-    assert normalize_innovation_alias("  NVIDIA, Inc. Research Lab  ") == (
-        "nvidia research lab"
-    )
+    assert normalize_innovation_alias("  NVIDIA, Inc. Research Lab  ") == ("nvidia research lab")

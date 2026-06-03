@@ -80,8 +80,8 @@ class PointInTimeService:
         self._theme_repo = theme_repo
         self._sec_delta_repo = sec_delta_repo or SECFilingDeltaRepository(database)
         self._sec_ownership_repo = sec_ownership_repo or SECOwnershipEventRepository(database)
-        self._market_structure_repo = (
-            market_structure_repo or MarketStructureEventRepository(database)
+        self._market_structure_repo = market_structure_repo or MarketStructureEventRepository(
+            database
         )
 
     async def get_themes_as_of(

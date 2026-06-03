@@ -13,12 +13,10 @@ from src.security_master.nasdaq_trader import NASDAQ_TRADER_EXTERNAL_KEY
 from src.security_master.service import SecurityMasterService
 
 NASDAQ_HEADER = (
-    "Symbol|Security Name|Market Category|Test Issue|Financial Status|"
-    "Round Lot Size|ETF|NextShares"
+    "Symbol|Security Name|Market Category|Test Issue|Financial Status|Round Lot Size|ETF|NextShares"
 )
 OTHER_HEADER = (
-    "ACT Symbol|Security Name|Exchange|CQS Symbol|ETF|Round Lot Size|"
-    "Test Issue|NASDAQ Symbol"
+    "ACT Symbol|Security Name|Exchange|CQS Symbol|ETF|Round Lot Size|Test Issue|NASDAQ Symbol"
 )
 NASDAQ_LISTED_TEXT = f"""{NASDAQ_HEADER}
 NVDA|NVIDIA Corporation|Q|N|N|100|N|N

@@ -78,9 +78,7 @@ class ArxivResearchProvider:
 
 def _arxiv_search_query(query: ResearchQuery) -> str:
     parts = [
-        f'all:"{term.strip()}"'
-        for term in [*query.topics, *query.institutions]
-        if term.strip()
+        f'all:"{term.strip()}"' for term in [*query.topics, *query.institutions] if term.strip()
     ]
     parts.extend(f"cat:{category}" for category in query.categories if category.strip())
     if query.start is not None or query.end is not None:

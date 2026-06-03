@@ -222,9 +222,7 @@ def _parse_13f(
         return SECOwnershipParseResult(errors=["missing_13f_info_table"])
 
     previous_by_cusip = {
-        event.position_cusip: event
-        for event in previous_events
-        if event.position_cusip is not None
+        event.position_cusip: event for event in previous_events if event.position_cusip is not None
     }
     issuer_mappings = _issuer_mappings(filing.metadata)
     filer_cik = _metadata_str(filing.metadata, "filer_cik") or filing.identity.cik

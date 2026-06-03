@@ -124,9 +124,7 @@ def test_alerts_distinguish_ownership_and_market_plumbing_signal_classes() -> No
     assert by_type["institutional_holdings"].trigger_data["signal_label"] == (
         "Institutional holdings update"
     )
-    assert by_type["short_volume_anomaly"].trigger_data["signal_label"] == (
-        "Short-volume anomaly"
-    )
+    assert by_type["short_volume_anomaly"].trigger_data["signal_label"] == ("Short-volume anomaly")
     assert by_type["fails_to_deliver_anomaly"].trigger_data["signal_label"] == (
         "Fails-to-deliver anomaly"
     )

@@ -77,9 +77,7 @@ class SECOwnershipEvent:
 
     def __post_init__(self) -> None:
         if self.event_type not in SEC_OWNERSHIP_EVENT_TYPES:
-            raise ValueError(
-                f"event_type must be one of {sorted(SEC_OWNERSHIP_EVENT_TYPES)}"
-            )
+            raise ValueError(f"event_type must be one of {sorted(SEC_OWNERSHIP_EVENT_TYPES)}")
         self.issuer_cik = _normalize_optional_cik(self.issuer_cik)
         self.filer_cik = _normalize_optional_cik(self.filer_cik)
 
@@ -102,14 +100,10 @@ class SECOwnershipEvent:
             if self.transaction_date
             else None,
             "transaction_shares": _decimal_to_payload(self.transaction_shares),
-            "transaction_price_per_share": _decimal_to_payload(
-                self.transaction_price_per_share
-            ),
+            "transaction_price_per_share": _decimal_to_payload(self.transaction_price_per_share),
             "transaction_acquired_disposed_code": self.transaction_acquired_disposed_code,
             "shares_owned_following": _decimal_to_payload(self.shares_owned_following),
-            "derivative_underlying_shares": _decimal_to_payload(
-                self.derivative_underlying_shares
-            ),
+            "derivative_underlying_shares": _decimal_to_payload(self.derivative_underlying_shares),
             "ownership_percent": _decimal_to_payload(self.ownership_percent),
             "position_cusip": self.position_cusip,
             "position_shares": _decimal_to_payload(self.position_shares),

@@ -60,9 +60,7 @@ class TestAlertValidation:
             assert alert.trigger_type == tt
 
     def test_alert_trigger_constraint_migration_matches_runtime_schema(self):
-        migration_sql = Path(
-            "migrations/039_market_plumbing_alert_trigger_types.sql"
-        ).read_text()
+        migration_sql = Path("migrations/039_market_plumbing_alert_trigger_types.sql").read_text()
 
         for trigger_type in VALID_TRIGGER_TYPES:
             assert f"'{trigger_type}'" in migration_sql

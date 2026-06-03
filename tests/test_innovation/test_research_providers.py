@@ -119,16 +119,14 @@ async def test_openalex_provider_searches_all_text_criteria_to_avoid_broad_fetch
 
 def _arxiv_feed(*entries: str, total: int | None = 1) -> str:
     total_xml = (
-        f"<opensearch:totalResults>{total}</opensearch:totalResults>"
-        if total is not None
-        else ""
+        f"<opensearch:totalResults>{total}</opensearch:totalResults>" if total is not None else ""
     )
     return f"""<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom"
       xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/"
       xmlns:arxiv="http://arxiv.org/schemas/atom">
   {total_xml}
-  {''.join(entries)}
+  {"".join(entries)}
 </feed>"""
 
 
@@ -179,7 +177,7 @@ async def test_arxiv_provider_parses_atom_feed_and_respects_start_pagination() -
     assert client.calls[0]["params"]["start"] == "0"
     assert client.calls[1]["params"]["start"] == "1"
     assert client.calls[0]["params"]["max_results"] == "1"
-    assert "all:\"AI accelerators\"" in client.calls[0]["params"]["search_query"]
+    assert 'all:"AI accelerators"' in client.calls[0]["params"]["search_query"]
     assert "cat:cs.AR" in client.calls[0]["params"]["search_query"]
     assert client.calls[0]["params"]["sortBy"] == "submittedDate"
 

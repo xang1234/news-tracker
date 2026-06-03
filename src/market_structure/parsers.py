@@ -302,8 +302,7 @@ def _parse_pipe_rows(
         )
     if trailer_count is not None and trailer_count != len(rows):
         raise ValueError(
-            f"{source_name} trailer count {trailer_count} does not match "
-            f"{len(rows)} parsed rows"
+            f"{source_name} trailer count {trailer_count} does not match {len(rows)} parsed rows"
         )
     return rows
 

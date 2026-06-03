@@ -140,6 +140,4 @@ def _has_academic_collision(normalized_alias: str, alias_type: str) -> bool:
 def _review_note_for_risks(risks: list[str]) -> str:
     if not risks:
         return ""
-    return "Manual review required for innovation alias false-positive risks: " + ", ".join(
-        risks
-    )
+    return "Manual review required for innovation alias false-positive risks: " + ", ".join(risks)

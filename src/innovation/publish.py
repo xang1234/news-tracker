@@ -64,9 +64,7 @@ def group_innovation_evidence_by_concept(
     grouped: dict[str, list[InnovationEvidencePayload]] = {}
     for signal in signals:
         payload = build_innovation_evidence_payload(signal)
-        for concept_id in dict.fromkeys(
-            [signal.issuer_concept_id, signal.security_concept_id]
-        ):
+        for concept_id in dict.fromkeys([signal.issuer_concept_id, signal.security_concept_id]):
             grouped.setdefault(concept_id, []).append(dict(payload))
     return grouped
 
@@ -77,9 +75,7 @@ def group_innovation_evidence_by_theme(
     """Group innovation evidence by theme id for narrative rollups."""
     grouped: dict[str, list[InnovationEvidencePayload]] = {}
     for signal in signals:
-        grouped.setdefault(signal.theme_id, []).append(
-            build_innovation_evidence_payload(signal)
-        )
+        grouped.setdefault(signal.theme_id, []).append(build_innovation_evidence_payload(signal))
     return grouped
 
 

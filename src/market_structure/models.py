@@ -93,16 +93,9 @@ class MarketStructureEvent:
 
     def __post_init__(self) -> None:
         if self.event_type not in MARKET_STRUCTURE_EVENT_TYPES:
-            raise ValueError(
-                f"event_type must be one of {sorted(MARKET_STRUCTURE_EVENT_TYPES)}"
-            )
-        if (
-            self.signal_type is not None
-            and self.signal_type not in MARKET_STRUCTURE_SIGNAL_TYPES
-        ):
-            raise ValueError(
-                f"signal_type must be one of {sorted(MARKET_STRUCTURE_SIGNAL_TYPES)}"
-            )
+            raise ValueError(f"event_type must be one of {sorted(MARKET_STRUCTURE_EVENT_TYPES)}")
+        if self.signal_type is not None and self.signal_type not in MARKET_STRUCTURE_SIGNAL_TYPES:
+            raise ValueError(f"signal_type must be one of {sorted(MARKET_STRUCTURE_SIGNAL_TYPES)}")
         if self.anomaly_level not in MARKET_STRUCTURE_ANOMALY_LEVELS:
             raise ValueError(
                 f"anomaly_level must be one of {sorted(MARKET_STRUCTURE_ANOMALY_LEVELS)}"
@@ -122,9 +115,7 @@ class MarketStructureEvent:
             "source_url": self.source_url,
             "source_date": self.source_date.isoformat(),
             "trade_date": self.trade_date.isoformat() if self.trade_date else None,
-            "settlement_date": (
-                self.settlement_date.isoformat() if self.settlement_date else None
-            ),
+            "settlement_date": (self.settlement_date.isoformat() if self.settlement_date else None),
             "symbol": self.symbol,
             "security_ticker": self.security_ticker,
             "security_exchange": self.security_exchange,

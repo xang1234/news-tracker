@@ -102,9 +102,7 @@ def load_patentsview_bulk_snapshot(
     age_days = (fetched_at.date() - snapshot_date).days
     is_stale = age_days > max_age_days
     if is_stale and not allow_stale:
-        raise StalePatentSnapshotError(
-            f"PatentsView bulk snapshot is stale: {age_days} days old"
-        )
+        raise StalePatentSnapshotError(f"PatentsView bulk snapshot is stale: {age_days} days old")
 
     metadata = {
         "snapshot_date": snapshot_date.isoformat(),
