@@ -6,6 +6,8 @@ deduplication via claim_key.
 
 from __future__ import annotations
 
+import pytest
+
 from src.claims.narrative_extractor import (
     EVENT_TYPE_TO_PREDICATE,
     extract_claims_from_cooccurrence,
@@ -13,6 +15,77 @@ from src.claims.narrative_extractor import (
     extract_claims_from_events,
 )
 from src.contracts.intelligence.lanes import LANE_NARRATIVE
+
+
+class TestNumericFieldExtraction:
+    """Events carrying quantities populate typed numeric fields on claims."""
+
+    def test_guidance_quantity_populates_typed_fields(self) -> None:
+        events = [
+            {
+                "event_type": "guidance_change",
+                "actor": "TSMC",
+                "action": "raised guidance",
+                "object": "capex",
+                "confidence": 0.9,
+                "quantity": "$42 billion",
+                "time_ref": "Q3 2026",
+            }
+        ]
+        claim = extract_claims_from_events("doc_1", events)[0]
+        assert claim.metric == "guidance"
+        assert claim.numeric_value == pytest.approx(42e9)
+        assert claim.unit == "USD"
+        assert claim.period == "2026-Q3"
+        assert claim.modality == "guided"
+
+    def test_investment_quantity_is_capex(self) -> None:
+        events = [
+            {
+                "event_type": "capacity_expansion",
+                "actor": "Intel",
+                "action": "invests",
+                "object": "Arizona fab",
+                "quantity": "$20 billion",
+                "time_ref": "2026",
+            }
+        ]
+        claim = extract_claims_from_events("doc_2", events)[0]
+        assert claim.metric == "capex"
+        assert claim.numeric_value == pytest.approx(20e9)
+        assert claim.unit == "USD"
+        assert claim.period == "2026"
+
+    def test_non_numeric_event_has_no_value(self) -> None:
+        events = [
+            {
+                "event_type": "product_launch",
+                "actor": "NVIDIA",
+                "action": "launched",
+                "object": "H200",
+            }
+        ]
+        claim = extract_claims_from_events("doc_3", events)[0]
+        assert claim.numeric_value is None
+        assert claim.unit is None
+        # Metric label still derived from the event type.
+        assert claim.metric == "product_timing"
+
+    def test_backward_compatible_metadata_retained(self) -> None:
+        events = [
+            {
+                "event_type": "guidance_change",
+                "actor": "TSMC",
+                "action": "raised guidance",
+                "object": "capex",
+                "quantity": "$42 billion",
+                "time_ref": "Q3 2026",
+            }
+        ]
+        claim = extract_claims_from_events("doc_1", events)[0]
+        # The raw quantity stays in metadata for audit/back-compat.
+        assert claim.metadata["quantity"] == "$42 billion"
+
 
 # -- Event → Claim tests -----------------------------------------------------
 

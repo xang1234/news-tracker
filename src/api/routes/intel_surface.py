@@ -143,6 +143,11 @@ class ClaimResponse(BaseModel):
     object_concept_id: str | None = None
     confidence: float
     extraction_method: str
+    metric: str | None = None
+    numeric_value: float | None = None
+    unit: str | None = None
+    period: str | None = None
+    modality: str | None = None
     claim_valid_from: datetime | None = None
     claim_valid_to: datetime | None = None
     source_published_at: datetime | None = None
@@ -413,6 +418,15 @@ def _row_to_claim_response(row, payload: dict[str, Any]) -> ClaimResponse | None
         object_concept_id=payload.get("object_concept_id"),
         confidence=_as_float(payload.get("confidence"), default=0.0),
         extraction_method=_as_str(payload.get("extraction_method")),
+        metric=payload.get("metric"),
+        numeric_value=(
+            payload.get("numeric_value")
+            if isinstance(payload.get("numeric_value"), (int, float))
+            else None
+        ),
+        unit=payload.get("unit"),
+        period=payload.get("period"),
+        modality=payload.get("modality"),
         claim_valid_from=_parse_dt(
             payload.get("claim_valid_from"),
             fallback=_row_value(row, "valid_from"),

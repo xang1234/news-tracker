@@ -7,6 +7,7 @@ import pytest
 from src.claims.schemas import (
     VALID_CLAIM_STATUSES,
     VALID_EXTRACTION_METHODS,
+    VALID_MODALITIES,
     VALID_SOURCE_TYPES,
     EvidenceClaim,
     make_claim_id,
@@ -16,6 +17,79 @@ from src.claims.schemas import (
 MIGRATION_PATH = (
     pathlib.Path(__file__).resolve().parents[2] / "migrations" / "023_evidence_claims.sql"
 )
+NUMERIC_MIGRATION_PATH = (
+    pathlib.Path(__file__).resolve().parents[2] / "migrations" / "043_claim_numeric_facts.sql"
+)
+
+
+def _make_claim(**overrides) -> EvidenceClaim:
+    key = make_claim_key("narrative", "doc_1", "TSMC", "revises_guidance", "capex")
+    base = {
+        "claim_id": make_claim_id(key),
+        "claim_key": key,
+        "lane": "narrative",
+        "source_id": "doc_1",
+        "predicate": "revises_guidance",
+        "subject_text": "TSMC",
+        "contract_version": "v1",
+    }
+    base.update(overrides)
+    return EvidenceClaim(**base)
+
+
+class TestNumericFields:
+    """Typed numeric fact fields on EvidenceClaim."""
+
+    def test_numeric_fields_default_to_none(self) -> None:
+        claim = _make_claim()
+        assert claim.metric is None
+        assert claim.numeric_value is None
+        assert claim.unit is None
+        assert claim.period is None
+        assert claim.modality is None
+
+    def test_accepts_typed_numeric_fact(self) -> None:
+        claim = _make_claim(
+            metric="capex",
+            numeric_value=42_000_000_000.0,
+            unit="USD",
+            period="2026",
+            modality="guided",
+        )
+        assert claim.metric == "capex"
+        assert claim.numeric_value == 42_000_000_000.0
+        assert claim.unit == "USD"
+        assert claim.period == "2026"
+        assert claim.modality == "guided"
+
+    def test_invalid_modality_rejected(self) -> None:
+        with pytest.raises(ValueError, match="modality"):
+            _make_claim(modality="totally-made-up")
+
+    def test_all_valid_modalities_accepted(self) -> None:
+        for modality in VALID_MODALITIES:
+            assert _make_claim(modality=modality).modality == modality
+
+
+class TestMigrationNumericFacts:
+    """Migration 043 adds typed numeric columns to evidence_claims."""
+
+    @pytest.fixture()
+    def sql(self) -> str:
+        return NUMERIC_MIGRATION_PATH.read_text()
+
+    def test_file_exists(self) -> None:
+        assert NUMERIC_MIGRATION_PATH.exists()
+
+    def test_adds_typed_columns(self, sql: str) -> None:
+        for column in ("metric", "numeric_value", "unit", "period", "modality"):
+            assert column in sql
+
+    def test_modality_check_constraint(self, sql: str) -> None:
+        assert "'confirmed'" in sql
+        assert "'guided'" in sql
+        assert "'rumored'" in sql
+        assert "'estimate'" in sql
 
 
 class TestMakeClaimKey:

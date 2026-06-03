@@ -44,6 +44,11 @@ def _row_to_claim(row: Any) -> EvidenceClaim:
         object_concept_id=row["object_concept_id"],
         confidence=float(row["confidence"]),
         extraction_method=row["extraction_method"],
+        metric=row["metric"],
+        numeric_value=row["numeric_value"],
+        unit=row["unit"],
+        period=row["period"],
+        modality=row["modality"],
         claim_valid_from=row["claim_valid_from"],
         claim_valid_to=row["claim_valid_to"],
         source_published_at=row["source_published_at"],
@@ -78,11 +83,12 @@ class ClaimRepository:
                 predicate, object_text, object_concept_id,
                 confidence, extraction_method,
                 claim_valid_from, claim_valid_to, source_published_at,
-                contract_version, status, metadata
+                contract_version, status, metadata,
+                metric, numeric_value, unit, period, modality
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                 $11, $12, $13, $14, $15, $16, $17, $18, $19,
-                $20, $21, $22
+                $20, $21, $22, $23, $24, $25, $26, $27
             )
             ON CONFLICT (claim_key) DO UPDATE SET
                 run_id = COALESCE($4, news_intel.evidence_claims.run_id),
@@ -90,7 +96,12 @@ class ClaimRepository:
                 subject_concept_id = COALESCE($11, news_intel.evidence_claims.subject_concept_id),
                 object_concept_id = COALESCE($14, news_intel.evidence_claims.object_concept_id),
                 status = $21,
-                metadata = $22
+                metadata = $22,
+                metric = COALESCE($23, news_intel.evidence_claims.metric),
+                numeric_value = COALESCE($24, news_intel.evidence_claims.numeric_value),
+                unit = COALESCE($25, news_intel.evidence_claims.unit),
+                period = COALESCE($26, news_intel.evidence_claims.period),
+                modality = COALESCE($27, news_intel.evidence_claims.modality)
             RETURNING *
             """,
             claim.claim_id,
@@ -115,6 +126,11 @@ class ClaimRepository:
             claim.contract_version,
             claim.status,
             json.dumps(claim.metadata),
+            claim.metric,
+            claim.numeric_value,
+            claim.unit,
+            claim.period,
+            claim.modality,
         )
         return _row_to_claim(row)
 

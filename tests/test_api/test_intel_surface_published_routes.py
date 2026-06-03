@@ -646,3 +646,37 @@ def test_list_claims_empty_claim_id_falls_back_to_object_id() -> None:
     body = resp.json()
     assert body["total"] == 1
     assert body["claims"][0]["claim_id"] == "obj_claim_empty_id"
+
+
+def test_row_to_claim_response_maps_numeric_fields() -> None:
+    """Published claim payloads surface typed numeric facts on the API."""
+    from src.api.routes.intel_surface import _row_to_claim_response
+
+    row = {
+        "object_id": "claim_x",
+        "lane": "narrative",
+        "run_id": None,
+        "created_at": None,
+        "updated_at": None,
+        "valid_from": None,
+        "valid_to": None,
+        "contract_version": "1.0.0",
+    }
+    payload = {
+        "claim_id": "claim_x",
+        "subject_text": "TSMC",
+        "predicate": "revises_guidance",
+        "source_id": "doc_1",
+        "metric": "capex",
+        "numeric_value": 42_000_000_000.0,
+        "unit": "USD",
+        "period": "2026",
+        "modality": "guided",
+    }
+    resp = _row_to_claim_response(row, payload)
+    assert resp is not None
+    assert resp.metric == "capex"
+    assert resp.numeric_value == 42_000_000_000.0
+    assert resp.unit == "USD"
+    assert resp.period == "2026"
+    assert resp.modality == "guided"
