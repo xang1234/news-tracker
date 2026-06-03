@@ -13,6 +13,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Protocol, runtime_checkable
+
+# Default relative tolerance for treating two numeric facts as agreeing.
+# 5% absorbs rounding/reporting noise ("$42B" vs "$42.5B") while still
+# flagging genuine disagreements ("$42B" vs "$36B").
+DEFAULT_REL_TOLERANCE = 0.05
 
 # Duration units imply a lead-time metric rather than a capacity metric.
 _DURATION_UNITS = frozenset({"weeks", "months", "days"})
@@ -143,6 +150,77 @@ def infer_metric(
         if unit in _DURATION_UNITS:
             return "lead_time"
         return "capacity"
+    return None
+
+
+@runtime_checkable
+class NumericClaimLike(Protocol):
+    """Structural protocol for the numeric fields used in comparison.
+
+    ``EvidenceClaim`` satisfies this structurally — the comparison and
+    classification functions accept any object exposing these attributes,
+    keeping them decoupled from the full claim schema.
+    """
+
+    claim_id: str
+    metric: str | None
+    numeric_value: float | None
+    unit: str | None
+    period: str | None
+    confidence: float
+    source_published_at: datetime | None
+
+
+def compare_numeric_facts(
+    a: NumericClaimLike,
+    b: NumericClaimLike,
+    *,
+    rel_tolerance: float = DEFAULT_REL_TOLERANCE,
+) -> str:
+    """Compare two numeric facts.
+
+    Returns one of:
+        ``"agree"`` — same (metric, unit, period) and values within tolerance.
+        ``"contradict"`` — same (metric, unit, period) but values diverge.
+        ``"incomparable"`` — missing value, or differing metric/unit/period.
+
+    Facts are only comparable when they describe the same metric, in the
+    same unit, for the same period. ``period`` of ``None`` on both sides is
+    treated as the same (undated) period.
+    """
+    if a.numeric_value is None or b.numeric_value is None:
+        return "incomparable"
+    if a.metric != b.metric:
+        return "incomparable"
+    if a.unit != b.unit:
+        return "incomparable"
+    if a.period != b.period:
+        return "incomparable"
+
+    denom = max(abs(a.numeric_value), abs(b.numeric_value))
+    if denom == 0.0:
+        # Both zero (the only way denom is 0 given values are present).
+        return "agree"
+    relative_diff = abs(a.numeric_value - b.numeric_value) / denom
+    return "agree" if relative_diff <= rel_tolerance else "contradict"
+
+
+def numeric_link_type(
+    a: NumericClaimLike,
+    b: NumericClaimLike,
+    *,
+    rel_tolerance: float = DEFAULT_REL_TOLERANCE,
+) -> str | None:
+    """Map a pairwise comparison onto an assertion link type.
+
+    ``"agree"`` → ``"support"``, ``"contradict"`` → ``"contradiction"``,
+    ``"incomparable"`` → ``None`` (no link implied).
+    """
+    comparison = compare_numeric_facts(a, b, rel_tolerance=rel_tolerance)
+    if comparison == "agree":
+        return "support"
+    if comparison == "contradict":
+        return "contradiction"
     return None
 
 

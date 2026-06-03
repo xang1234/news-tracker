@@ -18,6 +18,14 @@ from src.assertions.edges import (
     compute_exposures,
     derive_edges,
 )
+from src.assertions.numeric_contradiction import (
+    classify_numeric_links,
+    numeric_link_types,
+)
+from src.assertions.numeric_reconciler import (
+    NumericReconciler,
+    resolve_numeric_subject,
+)
 from src.assertions.recompute import (
     AssertionDelta,
     RecomputeResult,
@@ -43,15 +51,19 @@ __all__ = [
     "ConceptExposure",
     "ConfidenceBreakdown",
     "DerivedEdge",
+    "NumericReconciler",
     "PathCacheEntry",
     "RecomputeResult",
     "ResolvedAssertion",
     "aggregate_assertion",
     "build_path_cache",
     "build_recompute_result",
+    "classify_numeric_links",
     "compute_exposures",
     "derive_edges",
     "find_affected_assertion_ids",
     "make_assertion_id",
+    "numeric_link_types",
     "recompute_assertion",
+    "resolve_numeric_subject",
 ]

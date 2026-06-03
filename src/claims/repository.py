@@ -191,6 +191,40 @@ class ClaimRepository:
         )
         return [_row_to_claim(row) for row in rows]
 
+    async def list_comparable_numeric_claims(
+        self,
+        *,
+        subject_concept_id: str,
+        metric: str,
+        period: str | None,
+    ) -> list[EvidenceClaim]:
+        """Find active, value-bearing numeric claims comparable to a fact.
+
+        Comparable = same subject concept, same metric, and same period
+        (NULL-safe: undated facts group with other undated facts). Only
+        ``active`` claims carrying a ``numeric_value`` are returned, since
+        non-numeric or retracted claims cannot participate in numeric
+        contradiction detection.
+
+        Backed by the partial index
+        ``idx_claims_numeric_subject_metric_period`` (migration 044).
+        """
+        rows = await self._db.fetch(
+            """
+            SELECT * FROM news_intel.evidence_claims
+            WHERE subject_concept_id = $1
+              AND metric = $2
+              AND period IS NOT DISTINCT FROM $3
+              AND numeric_value IS NOT NULL
+              AND status = 'active'
+            ORDER BY source_published_at DESC NULLS LAST, claim_id
+            """,
+            subject_concept_id,
+            metric,
+            period,
+        )
+        return [_row_to_claim(row) for row in rows]
+
     async def update_status(self, claim_id: str, new_status: str) -> EvidenceClaim | None:
         """Update a claim's status."""
         if new_status not in VALID_CLAIM_STATUSES:

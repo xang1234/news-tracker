@@ -92,6 +92,13 @@ class ProcessingService:
         self._claim_extraction_enabled = get_settings().narrative_claim_extraction_enabled
         self._claim_repo: Any = None  # Lazy-initialized ClaimRepository
 
+        # Numeric reconciliation (resolve subjects + detect contradictions)
+        self._numeric_reconciliation_enabled = (
+            get_settings().numeric_reconciliation_enabled and self._claim_extraction_enabled
+        )
+        self._entity_resolver: Any = None  # Lazy-initialized EntityResolver
+        self._numeric_reconciler: Any = None  # Lazy-initialized NumericReconciler
+
         logger.info(
             "Processing service initialized",
             batch_size=batch_size,
@@ -153,6 +160,42 @@ class ProcessingService:
             enable_events=enable_events,
         )
 
+    def _init_numeric_reconciliation(self, claim_repo: Any) -> None:
+        """Build the entity resolver + numeric reconciler bound to a claim repo.
+
+        Kept lazy (called from start()/run_once) so the dependency graph
+        (concept repository, assertion repository, resolver cascade) is only
+        constructed when numeric reconciliation is actually enabled.
+        """
+        from src.assertions.numeric_reconciler import NumericReconciler
+        from src.assertions.repository import AssertionRepository
+        from src.claims.resolver import EntityResolver
+        from src.security_master.concept_repository import ConceptRepository
+
+        self._entity_resolver = EntityResolver(ConceptRepository(self._database))
+        self._numeric_reconciler = NumericReconciler(
+            claim_repo, AssertionRepository(self._database)
+        )
+
+    async def _persist_claim(self, claim: Any, claim_repo: Any) -> None:
+        """Persist one extracted claim, with optional numeric reconciliation.
+
+        For numeric facts (when reconciliation is enabled): resolve the
+        subject to a concept ID *before* upsert so the concept is persisted,
+        then reconcile against comparable facts *after* upsert. Both steps
+        are no-ops for non-numeric/unresolved claims, so this is safe to call
+        for every claim.
+        """
+        if self._numeric_reconciliation_enabled and self._entity_resolver is not None:
+            from src.assertions.numeric_reconciler import resolve_numeric_subject
+
+            await resolve_numeric_subject(claim, self._entity_resolver)
+
+        await claim_repo.upsert_claim(claim)
+
+        if self._numeric_reconciliation_enabled and self._numeric_reconciler is not None:
+            await self._numeric_reconciler.reconcile_claim(claim)
+
     async def start(self) -> None:
         """
         Start the processing service.
@@ -188,6 +231,10 @@ class ProcessingService:
             from src.claims.repository import ClaimRepository
 
             self._claim_repo = ClaimRepository(self._database)
+
+        # Wire numeric reconciliation (resolver + reconciler) if enabled
+        if self._numeric_reconciliation_enabled and self._claim_repo is not None:
+            self._init_numeric_reconciliation(self._claim_repo)
 
         try:
             # Process messages from queue
@@ -369,7 +416,7 @@ class ProcessingService:
                         )
                         if claims and self._claim_repo is not None:
                             for claim in claims:
-                                await self._claim_repo.upsert_claim(claim)
+                                await self._persist_claim(claim, self._claim_repo)
                             logger.debug(
                                 "Extracted narrative claims",
                                 doc_id=doc.id,
@@ -454,6 +501,8 @@ class ProcessingService:
             from src.claims.repository import ClaimRepository
 
             claim_repo = ClaimRepository(self._database)
+            if self._numeric_reconciliation_enabled:
+                self._init_numeric_reconciliation(claim_repo)
 
         try:
             for doc in docs:
@@ -489,7 +538,7 @@ class ProcessingService:
                                 published_at=doc.timestamp,
                             )
                             for claim in claims:
-                                await claim_repo.upsert_claim(claim)
+                                await self._persist_claim(claim, claim_repo)
                         except Exception as e:
                             logger.warning(
                                 "Failed to extract narrative claims in run_once",
