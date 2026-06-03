@@ -97,7 +97,7 @@ class ProcessingService:
             get_settings().claim_reconciliation_enabled and self._claim_extraction_enabled
         )
         self._entity_resolver: Any = None  # Lazy-initialized EntityResolver
-        self._claim_reconcilers: list[Any] = []  # Lazy-initialized contradiction tiers
+        self._reconciliation_engine: Any = None  # Lazy-initialized ClaimReconciliationEngine
 
         logger.info(
             "Processing service initialized",
@@ -168,18 +168,22 @@ class ProcessingService:
         constructed when reconciliation is actually enabled. New tiers (e.g.
         semantic) join the list without touching the persist path.
         """
-        from src.assertions.numeric_reconciler import NumericReconciler
-        from src.assertions.predicate_reconciler import PredicateContradictionReconciler
+        from src.assertions.reconciliation_engine import (
+            ClaimReconciliationEngine,
+            CorroborationTier,
+            NumericTier,
+            PredicateContradictionTier,
+        )
         from src.assertions.repository import AssertionRepository
         from src.claims.resolver import EntityResolver
         from src.security_master.concept_repository import ConceptRepository
 
-        assertion_repo = AssertionRepository(self._database)
         self._entity_resolver = EntityResolver(ConceptRepository(self._database))
-        self._claim_reconcilers = [
-            NumericReconciler(claim_repo, assertion_repo),
-            PredicateContradictionReconciler(claim_repo, assertion_repo),
-        ]
+        self._reconciliation_engine = ClaimReconciliationEngine(
+            claim_repo,
+            AssertionRepository(self._database),
+            tiers=[NumericTier(), PredicateContradictionTier(), CorroborationTier()],
+        )
 
     async def _persist_claim(self, claim: Any, claim_repo: Any) -> None:
         """Persist one extracted claim, with optional reconciliation.
@@ -196,8 +200,8 @@ class ProcessingService:
 
         await claim_repo.upsert_claim(claim)
 
-        for reconciler in self._claim_reconcilers:
-            await reconciler.reconcile_claim(claim)
+        if self._reconciliation_engine is not None:
+            await self._reconciliation_engine.reconcile_claim(claim)
 
     async def _extract_and_persist_claims(self, doc: Any, claim_repo: Any) -> None:
         """Stage 6: extract narrative claims from a document and persist them.

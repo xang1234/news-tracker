@@ -15,10 +15,9 @@ from datetime import UTC, datetime
 from src.assertions.predicate_contradiction import (
     ANTONYM_PREDICATES,
     antonym_of,
-    classify_polarity_links,
+    polarity_link_types,
     validity_overlaps,
 )
-from src.assertions.schemas import AssertionClaimLink
 
 
 @dataclass
@@ -70,28 +69,24 @@ class TestValidityOverlaps:
         assert validity_overlaps(a, b) is True
 
 
-class TestClassifyPolarityLinks:
+class TestPolarityLinkTypes:
     def test_same_predicate_supports_antonym_contradicts(self):
         claims = [
             _Claim("c1", "expands_capacity"),
             _Claim("c2", "constrains_capacity"),
         ]
-        links = classify_polarity_links("asrt_x", "expands_capacity", claims)
-        by_id = {link.claim_id: link for link in links}
-        assert by_id["c1"].link_type == "support"
-        assert by_id["c2"].link_type == "contradiction"
-        assert all(isinstance(link, AssertionClaimLink) for link in links)
-        assert all(link.assertion_id == "asrt_x" for link in links)
+        opinions = polarity_link_types("expands_capacity", claims)
+        assert opinions == {"c1": "support", "c2": "contradiction"}
 
     def test_unrelated_predicate_is_not_linked(self):
         claims = [
             _Claim("c1", "expands_capacity"),
             _Claim("c2", "changes_pricing"),  # neither positive nor antonym
         ]
-        links = classify_polarity_links("asrt_x", "expands_capacity", claims)
-        assert {link.claim_id for link in links} == {"c1"}
+        opinions = polarity_link_types("expands_capacity", claims)
+        assert set(opinions) == {"c1"}
 
     def test_only_support_when_no_antonym_present(self):
         claims = [_Claim("c1", "expands_capacity"), _Claim("c2", "expands_capacity")]
-        links = classify_polarity_links("asrt_x", "expands_capacity", claims)
-        assert {link.link_type for link in links} == {"support"}
+        opinions = polarity_link_types("expands_capacity", claims)
+        assert set(opinions.values()) == {"support"}

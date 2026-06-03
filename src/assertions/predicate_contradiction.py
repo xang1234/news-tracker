@@ -15,8 +15,6 @@ Stateless pure functions — no I/O. The caller handles persistence.
 
 from __future__ import annotations
 
-from src.assertions.schemas import AssertionClaimLink
-
 # Antonym predicate pairs (symmetric). Predicates without a clear polarity
 # (changes_pricing, revises_guidance, relationship predicates) are absent and
 # therefore never trigger polarity contradiction.
@@ -47,33 +45,19 @@ def validity_overlaps(a, b) -> bool:
     return not (a_ends_before_b or b_ends_before_a)
 
 
-def classify_polarity_links(
-    assertion_id: str,
-    positive_predicate: str,
-    claims: list,
-) -> list[AssertionClaimLink]:
-    """Build links for an assertion keyed on ``positive_predicate``.
+def polarity_link_types(positive_predicate: str, claims: list) -> dict[str, str]:
+    """Classify claims as ``support``/``contradiction`` for ``positive_predicate``.
 
-    Same-predicate claims ``support`` the assertion; antonym-predicate claims
-    ``contradiction`` it. Claims with any other predicate are unrelated and
-    get no link. Validity-window filtering is the caller's responsibility.
+    Same-predicate claims ``support``; antonym-predicate claims
+    ``contradiction``. Claims with any other predicate are unrelated and get no
+    entry. Validity-window filtering is the caller's responsibility. Mirrors
+    ``numeric_link_types`` — a pure opinion map, no link objects.
     """
     antonym = antonym_of(positive_predicate)
-    links: list[AssertionClaimLink] = []
+    opinions: dict[str, str] = {}
     for claim in claims:
         if claim.predicate == positive_predicate:
-            link_type = "support"
+            opinions[claim.claim_id] = "support"
         elif antonym is not None and claim.predicate == antonym:
-            link_type = "contradiction"
-        else:
-            continue
-        links.append(
-            AssertionClaimLink(
-                assertion_id=assertion_id,
-                claim_id=claim.claim_id,
-                link_type=link_type,
-                contribution_weight=1.0,
-                metadata={"detector": "predicate_polarity"},
-            )
-        )
-    return links
+            opinions[claim.claim_id] = "contradiction"
+    return opinions

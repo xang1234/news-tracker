@@ -19,23 +19,26 @@ from src.assertions.edges import (
     compute_exposures,
     derive_edges,
 )
-from src.assertions.numeric_contradiction import (
-    classify_numeric_links,
-    numeric_link_types,
-)
-from src.assertions.numeric_reconciler import NumericReconciler
+from src.assertions.numeric_contradiction import numeric_link_types
 from src.assertions.predicate_contradiction import (
     antonym_of,
-    classify_polarity_links,
+    polarity_link_types,
     validity_overlaps,
 )
-from src.assertions.predicate_reconciler import PredicateContradictionReconciler
 from src.assertions.recompute import (
     AssertionDelta,
     RecomputeResult,
     build_recompute_result,
     find_affected_assertion_ids,
     recompute_assertion,
+)
+from src.assertions.reconciliation_engine import (
+    ClaimReconciliationEngine,
+    ContradictionTier,
+    CorroborationTier,
+    NumericTier,
+    PredicateContradictionTier,
+    merge_link_types,
 )
 from src.assertions.repository import AssertionRepository
 from src.assertions.schemas import (
@@ -52,25 +55,28 @@ __all__ = [
     "AssertionClaimLink",
     "AssertionDelta",
     "AssertionRepository",
+    "ClaimReconciliationEngine",
     "ConceptExposure",
     "ConfidenceBreakdown",
+    "ContradictionTier",
+    "CorroborationTier",
     "DerivedEdge",
-    "NumericReconciler",
+    "NumericTier",
     "PathCacheEntry",
-    "PredicateContradictionReconciler",
+    "PredicateContradictionTier",
     "RecomputeResult",
     "ResolvedAssertion",
     "aggregate_assertion",
     "antonym_of",
     "build_path_cache",
     "build_recompute_result",
-    "classify_numeric_links",
-    "classify_polarity_links",
     "compute_exposures",
     "derive_edges",
     "find_affected_assertion_ids",
     "make_assertion_id",
+    "merge_link_types",
     "numeric_link_types",
+    "polarity_link_types",
     "recompute_assertion",
     "resolve_claim_subject",
     "validity_overlaps",

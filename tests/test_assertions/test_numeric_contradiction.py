@@ -1,9 +1,9 @@
 """Tests for numeric contradiction classification.
 
-Turns a set of comparable numeric claims into per-claim link types
-(support/contradiction) and ``AssertionClaimLink`` records, by picking a
-per-group anchor and comparing every other fact against it. This is the
-primitive that lets ``aggregate_assertion`` flip an assertion to ``disputed``.
+Turns a set of comparable numeric claims into per-claim link-type *opinions*
+(support/contradiction) by picking a per-group anchor and comparing every other
+fact against it. The engine turns these opinions into the links that let
+``aggregate_assertion`` flip an assertion to ``disputed``.
 """
 
 from __future__ import annotations
@@ -11,11 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from src.assertions.numeric_contradiction import (
-    classify_numeric_links,
-    numeric_link_types,
-)
-from src.assertions.schemas import AssertionClaimLink
+from src.assertions.numeric_contradiction import numeric_link_types
 
 
 @dataclass
@@ -79,22 +75,3 @@ class TestNumericLinkTypes:
         ]
         result = numeric_link_types(claims)
         assert result == {"new": "support", "old": "contradiction"}
-
-
-class TestClassifyNumericLinks:
-    def test_produces_assertion_claim_links(self):
-        claims = [
-            _Fact("anchor", numeric_value=42e9, confidence=0.9),
-            _Fact("outlier", numeric_value=30e9, confidence=0.6),
-        ]
-        links = classify_numeric_links("asrt_x", claims)
-        assert all(isinstance(link, AssertionClaimLink) for link in links)
-        by_id = {link.claim_id: link for link in links}
-        assert by_id["anchor"].assertion_id == "asrt_x"
-        assert by_id["anchor"].link_type == "support"
-        assert by_id["outlier"].link_type == "contradiction"
-
-    def test_links_cover_every_claim(self):
-        claims = [_Fact("a"), _Fact("b"), _Fact("c")]
-        links = classify_numeric_links("asrt_y", claims)
-        assert {link.claim_id for link in links} == {"a", "b", "c"}
