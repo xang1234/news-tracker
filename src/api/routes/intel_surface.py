@@ -701,6 +701,64 @@ async def _list_assertions_impl(
     return AssertionListResponse(assertions=assertions, total=total)
 
 
+def _resolved_to_response(assertion: Any) -> AssertionResponse:
+    """Map a working-table ResolvedAssertion to the API response shape."""
+    return AssertionResponse(
+        assertion_id=assertion.assertion_id,
+        subject_concept_id=assertion.subject_concept_id,
+        predicate=assertion.predicate,
+        object_concept_id=assertion.object_concept_id,
+        confidence=assertion.confidence,
+        status=assertion.status,
+        valid_from=assertion.valid_from,
+        valid_to=assertion.valid_to,
+        support_count=assertion.support_count,
+        contradiction_count=assertion.contradiction_count,
+        first_seen_at=assertion.first_seen_at,
+        last_evidence_at=assertion.last_evidence_at,
+        source_diversity=assertion.source_diversity,
+        metadata=assertion.metadata,
+        created_at=assertion.created_at,
+        updated_at=assertion.updated_at,
+    )
+
+
+# NOTE: must be declared BEFORE /intel/assertions/{assertion_id} so "reconciled"
+# is not captured as a path param (FastAPI matches in declaration order).
+@router.get(
+    "/intel/assertions/reconciled",
+    response_model=AssertionListResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Invalid API key"},
+    },
+    summary="List freshly reconciled assertions (working table)",
+    description=(
+        "Reconciliation-engine output (disputed/corroborated status + support/"
+        "contradiction/source-diversity counts) read directly from the working "
+        "table, before the publish pipeline materializes it into the read model."
+    ),
+)
+async def list_reconciled_assertions(
+    assertion_status: str | None = Query(
+        default=None, alias="status", description="Filter by status (e.g. disputed)"
+    ),
+    limit: int = Query(default=50, ge=1, le=200, description="Max results"),
+    api_key: str = Depends(verify_api_key),  # noqa: B008
+    db: Database = Depends(get_database),  # noqa: B008
+) -> AssertionListResponse:
+    from src.assertions.repository import AssertionRepository
+
+    try:
+        assertions = await AssertionRepository(db).list_assertions(
+            status=assertion_status, limit=limit
+        )
+    except UndefinedTableError:
+        logger.warning("intel_schema_missing", endpoint="assertions_reconciled")
+        return AssertionListResponse(assertions=[], total=0)
+    items = [_resolved_to_response(a) for a in assertions]
+    return AssertionListResponse(assertions=items, total=len(items))
+
+
 @router.get(
     "/intel/assertions/{assertion_id}",
     response_model=AssertionDetailResponse,

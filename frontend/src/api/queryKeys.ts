@@ -61,6 +61,8 @@ export const queryKeys = {
   // Intelligence layer
   intelHealth: () => ['intel', 'health'] as const,
   assertions: (filters?: Record<string, unknown>) => ['intel', 'assertions', filters] as const,
+  reconciledAssertions: (filters?: Record<string, unknown>) =>
+    ['intel', 'assertions', 'reconciled', filters] as const,
   assertionDetail: (id: string) => ['intel', 'assertions', id] as const,
   claims: (filters?: Record<string, unknown>) => ['intel', 'claims', filters] as const,
   divergences: (filters?: Record<string, unknown>) => ['intel', 'divergence', filters] as const,

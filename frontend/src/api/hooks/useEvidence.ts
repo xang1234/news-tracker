@@ -118,6 +118,35 @@ export function useAssertions(filters?: AssertionFilters) {
   });
 }
 
+export interface ReconciledFilters {
+  status?: string;
+  limit?: number;
+}
+
+/**
+ * Reconciliation-engine output read straight from the working table
+ * (/intel/assertions/reconciled) — disputed/corroborated status + counts,
+ * before the publish pipeline materializes it into the read model.
+ */
+export function useReconciledAssertions(filters?: ReconciledFilters, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.reconciledAssertions(filters as Record<string, unknown>),
+    enabled,
+    queryFn: async (): Promise<AssertionListResponse> => {
+      const params: Record<string, unknown> = {};
+      if (filters?.status) params.status = filters.status;
+      if (filters?.limit != null) params.limit = filters.limit;
+      const { data } = await api.get<AssertionListResponse>(
+        '/intel/assertions/reconciled',
+        { params },
+      );
+      return data;
+    },
+    staleTime: 30_000,
+    retry: 1,
+  });
+}
+
 export function useAssertionDetail(id?: string) {
   return useQuery({
     queryKey: queryKeys.assertionDetail(id ?? ''),

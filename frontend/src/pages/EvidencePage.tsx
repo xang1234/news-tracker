@@ -3,10 +3,11 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, FileSearch, Scale } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { cn } from '@/lib/utils';
-import { timeAgo, pct, latency, formatDate } from '@/lib/formatters';
+import { timeAgo, pct, latency, formatDate, assertionVerdict } from '@/lib/formatters';
 import { ASSERTION_STATUS_COLORS } from '@/lib/constants';
 import {
   useAssertions,
+  useReconciledAssertions,
   useAssertionDetail,
   type AssertionFilters,
   type AssertionItem,
@@ -21,6 +22,7 @@ export default function EvidencePage() {
   const [status, setStatus] = useState('');
   const [minConfidence, setMinConfidence] = useState('');
   const [offset, setOffset] = useState(0);
+  const [liveReconciled, setLiveReconciled] = useState(false);
   const [selectedId, setSelectedId] = useState<string | undefined>(
     searchParams.get('assertion') ?? undefined,
   );
@@ -34,7 +36,14 @@ export default function EvidencePage() {
     offset,
   };
 
-  const { data, isLoading, isError, error } = useAssertions(filters);
+  // Published read-model (default) vs. live reconciliation-engine output. Only
+  // one query is enabled at a time.
+  const published = useAssertions(liveReconciled ? undefined : filters);
+  const reconciled = useReconciledAssertions(
+    { status: status || undefined, limit: PAGE_SIZE },
+    liveReconciled,
+  );
+  const { data, isLoading, isError, error } = liveReconciled ? reconciled : published;
   const detail = useAssertionDetail(selectedId);
 
   function handleFilterChange() {
@@ -113,6 +122,25 @@ export default function EvidencePage() {
               }}
               className="h-8 w-28 rounded border border-border bg-card px-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
             />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Source</label>
+            <button
+              type="button"
+              onClick={() => {
+                setLiveReconciled((v) => !v);
+                handleFilterChange();
+              }}
+              className={cn(
+                'flex h-8 items-center gap-1.5 rounded border px-2 text-sm transition-colors',
+                liveReconciled
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-card text-muted-foreground hover:border-primary/50',
+              )}
+              title="Show live reconciliation-engine output (working table) instead of the published read model"
+            >
+              {liveReconciled ? 'Live reconciled' : 'Published'}
+            </button>
           </div>
         </div>
 
@@ -252,6 +280,7 @@ function AssertionCard({
   onClick: () => void;
 }) {
   const statusClass = ASSERTION_STATUS_COLORS[assertion.status] ?? 'bg-slate-500/20 text-slate-400';
+  const verdict = assertionVerdict(assertion);
 
   return (
     <button
@@ -262,6 +291,13 @@ function AssertionCard({
         isSelected ? 'border-primary ring-1 ring-primary/30' : 'border-border',
       )}
     >
+      {/* Trust verdict */}
+      <span
+        className={cn('mb-2 inline-block rounded-full px-2 py-0.5 text-xs font-semibold', verdict.className)}
+      >
+        {verdict.label}
+      </span>
+
       {/* Triple */}
       <div className="font-mono text-sm text-foreground">
         <span className="text-primary">[{assertion.subject_concept_id}]</span>
