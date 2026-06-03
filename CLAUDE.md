@@ -178,6 +178,7 @@ class Config: ...  # ❌ Never use this
 - **Idempotent Upserts**: Edges, metrics, and seed data all use `ON CONFLICT DO UPDATE`
 - **Soft Delete Themes**: `deleted_at` column enables point-in-time queries; `AND deleted_at IS NULL` on all live queries
 - **Deterministic Model Versions**: `mv_{sha256(config_json)[:12]}` — idempotent, same config = same version ID
+- **Typed Numeric Facts**: `src/claims/numeric.py` parses event quantities (`$42 billion`→`numeric_value=4.2e10, unit=USD`) into first-class `metric/numeric_value/unit/period/modality` columns on `evidence_claims` (migration 043), populated at extraction time by `narrative_extractor` (the `processing_service` claim stage). Stateless pure functions: `parse_quantity`, `infer_metric`, `infer_modality`. Numeric *contradiction* detection over these facts is the pending follow-up (issue news-tracker-al3)
 - **Point-in-Time Queries**: Filter on `fetched_at` (ingestion time), not `timestamp` (publication time), to prevent look-ahead bias
 - **Circuit Breaker Decorator**: `CircuitBreaker` wraps any `NotificationChannel` transparently (CLOSED→OPEN→HALF_OPEN→CLOSED)
 - **Graceful Notification Degradation**: Dispatcher failures never block alert persistence; Redis fallback queue for retries

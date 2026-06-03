@@ -26,10 +26,15 @@ import logging
 import re
 from typing import Any
 
+from src.claims.numeric import infer_metric, infer_modality, parse_quantity
 from src.claims.schemas import EvidenceClaim, make_claim_id, make_claim_key
 from src.contracts.intelligence.lanes import LANE_NARRATIVE
+from src.event_extraction.normalizer import TimeNormalizer
 
 logger = logging.getLogger(__name__)
+
+# Stateless normalizer reused across extractions for period derivation.
+_TIME_NORMALIZER = TimeNormalizer()
 
 # -- Event type → predicate mapping ----------------------------------------
 
@@ -114,6 +119,17 @@ def extract_claims_from_events(
         span_start = event.get("span_start")
         span_end = event.get("span_end")
 
+        # Promote the captured quantity/time reference to typed numeric fields
+        # so the fact is stored as first-class, comparable data on the claim.
+        action = event.get("action")
+        parsed = parse_quantity(event.get("quantity"))
+        value = parsed.value if parsed else None
+        unit = parsed.unit if parsed else None
+        metric = infer_metric(event_type, action=action, unit=unit)
+        time_ref = event.get("time_ref")
+        period = _TIME_NORMALIZER.normalize(time_ref) if time_ref else None
+        modality = infer_modality(action, event_type=event_type)
+
         claim_key = make_claim_key(
             LANE_NARRATIVE,
             doc_id,
@@ -133,12 +149,17 @@ def extract_claims_from_events(
                 source_type="document",
                 source_span_start=span_start,
                 source_span_end=span_end,
-                source_text=event.get("action"),
+                source_text=action,
                 subject_text=actor,
                 predicate=predicate,
                 object_text=object_text,
                 confidence=confidence,
                 extraction_method="rule",
+                metric=metric,
+                numeric_value=value,
+                unit=unit,
+                period=period,
+                modality=modality,
                 source_published_at=published_at,
                 metadata={
                     "event_type": event_type,

@@ -22,6 +22,8 @@ VALID_SOURCE_TYPES = frozenset({"document", "filing_section", "graph_edge", "man
 
 VALID_EXTRACTION_METHODS = frozenset({"rule", "llm", "hybrid", "manual"})
 
+VALID_MODALITIES = frozenset({"confirmed", "guided", "rumored", "estimate"})
+
 
 def make_claim_key(
     lane: str,
@@ -78,6 +80,11 @@ class EvidenceClaim:
         object_concept_id: Resolved canonical concept ID for object.
         confidence: Extraction confidence (0-1).
         extraction_method: How the claim was extracted (rule, llm, etc.).
+        metric: Typed value-type the claim measures (e.g. "capex", "price").
+        numeric_value: Normalized magnitude in base units (None if not numeric).
+        unit: Canonical unit ("USD", "%", "nm", "count", "weeks", ...).
+        period: Normalized time period the value applies to (e.g. "2026-Q3").
+        modality: Epistemic status (confirmed, guided, rumored, estimate).
         claim_valid_from: When the claimed fact became true.
         claim_valid_to: When the claimed fact ceased to be true.
         source_published_at: When the source was published.
@@ -102,6 +109,11 @@ class EvidenceClaim:
     object_concept_id: str | None = None
     confidence: float = 0.5
     extraction_method: str = "rule"
+    metric: str | None = None
+    numeric_value: float | None = None
+    unit: str | None = None
+    period: str | None = None
+    modality: str | None = None
     claim_valid_from: datetime | None = None
     claim_valid_to: datetime | None = None
     source_published_at: datetime | None = None
@@ -128,4 +140,8 @@ class EvidenceClaim:
             raise ValueError(
                 f"Invalid claim status {self.status!r}. "
                 f"Must be one of {sorted(VALID_CLAIM_STATUSES)}"
+            )
+        if self.modality is not None and self.modality not in VALID_MODALITIES:
+            raise ValueError(
+                f"Invalid modality {self.modality!r}. Must be one of {sorted(VALID_MODALITIES)}"
             )
