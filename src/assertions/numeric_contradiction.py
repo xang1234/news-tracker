@@ -22,6 +22,7 @@ Stateless pure functions — no I/O. The caller persists the resulting links.
 
 from __future__ import annotations
 
+from src.assertions.schemas import AssertionClaimLink
 from src.claims.numeric import (
     DEFAULT_REL_TOLERANCE,
     NumericClaimLike,
@@ -86,16 +87,11 @@ def classify_numeric_links(
     claims: list[NumericClaimLike],
     *,
     rel_tolerance: float = DEFAULT_REL_TOLERANCE,
-):
+) -> list[AssertionClaimLink]:
     """Build ``AssertionClaimLink`` records from numeric classification.
 
     Each claim gets one link to ``assertion_id`` with its classified type.
-    Returns a list of ``AssertionClaimLink``.
     """
-    # Imported lazily to keep the numeric primitives free of schema imports
-    # at module load and avoid any import cycle through the assertions package.
-    from src.assertions.schemas import AssertionClaimLink
-
     link_types = numeric_link_types(claims, rel_tolerance=rel_tolerance)
     return [
         AssertionClaimLink(

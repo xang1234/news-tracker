@@ -196,6 +196,37 @@ class ProcessingService:
         if self._numeric_reconciliation_enabled and self._numeric_reconciler is not None:
             await self._numeric_reconciler.reconcile_claim(claim)
 
+    async def _extract_and_persist_claims(self, doc: Any, claim_repo: Any) -> None:
+        """Stage 6: extract narrative claims from a document and persist them.
+
+        Phase-resilient (own try/except) and shared by the queue loop and
+        run_once so the extraction flow lives in exactly one place.
+        """
+        try:
+            from src.claims.narrative_extractor import extract_claims_from_document
+
+            claims = extract_claims_from_document(
+                doc_id=doc.id,
+                events=doc.events_extracted,
+                entities=doc.entities_mentioned,
+                content=doc.content,
+                published_at=doc.timestamp,
+            )
+            for claim in claims:
+                await self._persist_claim(claim, claim_repo)
+            if claims:
+                logger.debug(
+                    "Extracted narrative claims",
+                    doc_id=doc.id,
+                    claim_count=len(claims),
+                )
+        except Exception as e:
+            logger.warning(
+                "Failed to extract narrative claims",
+                doc_id=doc.id,
+                error=str(e),
+            )
+
     async def start(self) -> None:
         """
         Start the processing service.
@@ -401,33 +432,8 @@ class ProcessingService:
                         )
 
                 # Stage 6: Extract narrative claims (events/entities → claims)
-                if self._claim_extraction_enabled:
-                    try:
-                        from src.claims.narrative_extractor import (
-                            extract_claims_from_document,
-                        )
-
-                        claims = extract_claims_from_document(
-                            doc_id=doc.id,
-                            events=doc.events_extracted,
-                            entities=doc.entities_mentioned,
-                            content=doc.content,
-                            published_at=doc.timestamp,
-                        )
-                        if claims and self._claim_repo is not None:
-                            for claim in claims:
-                                await self._persist_claim(claim, self._claim_repo)
-                            logger.debug(
-                                "Extracted narrative claims",
-                                doc_id=doc.id,
-                                claim_count=len(claims),
-                            )
-                    except Exception as e:
-                        logger.warning(
-                            "Failed to extract narrative claims",
-                            doc_id=doc.id,
-                            error=str(e),
-                        )
+                if self._claim_extraction_enabled and self._claim_repo is not None:
+                    await self._extract_and_persist_claims(doc, self._claim_repo)
 
                 processed += 1
                 self._metrics.documents_stored.labels(
@@ -525,26 +531,7 @@ class ProcessingService:
 
                     # Stage 6: Extract narrative claims
                     if self._claim_extraction_enabled and claim_repo is not None:
-                        try:
-                            from src.claims.narrative_extractor import (
-                                extract_claims_from_document,
-                            )
-
-                            claims = extract_claims_from_document(
-                                doc_id=doc.id,
-                                events=doc.events_extracted,
-                                entities=doc.entities_mentioned,
-                                content=doc.content,
-                                published_at=doc.timestamp,
-                            )
-                            for claim in claims:
-                                await self._persist_claim(claim, claim_repo)
-                        except Exception as e:
-                            logger.warning(
-                                "Failed to extract narrative claims in run_once",
-                                doc_id=doc.id,
-                                error=str(e),
-                            )
+                        await self._extract_and_persist_claims(doc, claim_repo)
 
                 except Exception as e:
                     stats["errors"] += 1
