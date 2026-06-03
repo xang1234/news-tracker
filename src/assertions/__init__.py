@@ -38,6 +38,7 @@ from src.assertions.reconciliation_engine import (
     CorroborationTier,
     NumericTier,
     PredicateContradictionTier,
+    SemanticTier,
     merge_link_types,
 )
 from src.assertions.repository import AssertionRepository
@@ -47,6 +48,10 @@ from src.assertions.schemas import (
     AssertionClaimLink,
     ResolvedAssertion,
     make_assertion_id,
+)
+from src.assertions.semantic_judge import (
+    ContradictionVerdict,
+    SemanticContradictionJudge,
 )
 
 __all__ = [
@@ -59,6 +64,7 @@ __all__ = [
     "ConceptExposure",
     "ConfidenceBreakdown",
     "ContradictionTier",
+    "ContradictionVerdict",
     "CorroborationTier",
     "DerivedEdge",
     "NumericTier",
@@ -66,6 +72,8 @@ __all__ = [
     "PredicateContradictionTier",
     "RecomputeResult",
     "ResolvedAssertion",
+    "SemanticContradictionJudge",
+    "SemanticTier",
     "aggregate_assertion",
     "antonym_of",
     "build_path_cache",

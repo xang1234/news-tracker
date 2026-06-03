@@ -337,6 +337,13 @@ class Settings(BaseSettings):
         description="Resolve claim subjects and reconcile them into assertions "
         "(numeric + predicate-polarity contradiction detection)",
     )
+    # LLM-judged semantic contradiction tier (residual non-numeric/no-antonym
+    # pairs). Off by default: it makes paid LLM calls. Reuses scoring config
+    # (API keys, model, budget) and requires claim_reconciliation_enabled.
+    semantic_contradiction_enabled: bool = Field(
+        default=False,
+        description="Enable the LLM-judged semantic contradiction tier (costs LLM calls)",
+    )
 
     # Sentiment Analysis
     sentiment_model_name: str = Field(

@@ -173,16 +173,23 @@ class ProcessingService:
             CorroborationTier,
             NumericTier,
             PredicateContradictionTier,
+            SemanticTier,
         )
         from src.assertions.repository import AssertionRepository
         from src.claims.resolver import EntityResolver
         from src.security_master.concept_repository import ConceptRepository
 
         self._entity_resolver = EntityResolver(ConceptRepository(self._database))
+        tiers: list[Any] = [NumericTier(), PredicateContradictionTier(), CorroborationTier()]
+        if get_settings().semantic_contradiction_enabled:
+            from src.assertions.semantic_judge import SemanticContradictionJudge
+            from src.scoring.config import ScoringConfig
+
+            tiers.append(SemanticTier(SemanticContradictionJudge(ScoringConfig())))
         self._reconciliation_engine = ClaimReconciliationEngine(
             claim_repo,
             AssertionRepository(self._database),
-            tiers=[NumericTier(), PredicateContradictionTier(), CorroborationTier()],
+            tiers=tiers,
         )
 
     async def _persist_claim(self, claim: Any, claim_repo: Any) -> None:

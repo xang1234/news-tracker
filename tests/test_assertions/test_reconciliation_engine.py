@@ -231,3 +231,29 @@ async def test_persists_exactly_one_assertion():
     await engine.reconcile_claim(c1)
 
     assert len(arepo.assertions) == 1
+
+
+@pytest.mark.asyncio
+async def test_semantic_tier_disputes_via_engine():
+    # Two non-numeric, no-antonym claims the deterministic tiers can't judge;
+    # the semantic tier (fake judge) flags them contradictory end-to-end.
+    from src.assertions.reconciliation_engine import SemanticTier
+    from src.assertions.semantic_judge import ContradictionVerdict
+
+    class _FakeJudge:
+        async def judge(self, a, b):
+            return ContradictionVerdict("contradicts", 0.9)
+
+    c1 = _claim("c1", "changes_pricing")
+    c2 = _claim("c2", "changes_pricing")
+    repo = FakeClaimRepo([c1, c2])
+    arepo = FakeAssertionRepo()
+    engine = ClaimReconciliationEngine(
+        repo, arepo, tiers=[CorroborationTier(), SemanticTier(_FakeJudge())]
+    )
+
+    result = await engine.reconcile_claim(c1)
+
+    assert result is not None
+    assert result.status == "disputed"
+    assert result.contradiction_count >= 1
