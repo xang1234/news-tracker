@@ -2,6 +2,7 @@
 
 import json
 import logging
+from typing import Any
 
 from src.sources.schemas import Source
 from src.storage.database import Database
@@ -173,7 +174,7 @@ class SourcesRepository:
     ) -> tuple[list[Source], int]:
         """Paginated list with filters. Returns (sources, total)."""
         conditions: list[str] = []
-        params: list = []
+        params: list[Any] = []
         idx = 1
 
         if active_only:
@@ -202,7 +203,7 @@ class SourcesRepository:
         params.extend([limit, offset])
         rows = await self._db.fetch(data_sql, *params)
 
-        return [_record_to_source(r) for r in rows], total or 0
+        return [_record_to_source(r) for r in rows], int(total or 0)
 
     async def get_active_by_platform(self, platform: str) -> list[Source]:
         """Fetch all active sources for a given platform."""
@@ -222,8 +223,24 @@ class SourcesRepository:
             platform,
             identifier,
         )
-        return result.endswith("1")
+        return str(result).endswith("1")
+
+    async def patch_metadata(
+        self, platform: str, identifier: str, metadata_patch: dict[str, object]
+    ) -> bool:
+        """Merge a top-level JSON metadata patch into a source row."""
+        result = await self._db.execute(
+            """
+            UPDATE sources
+            SET metadata = metadata || $3::jsonb, updated_at = NOW()
+            WHERE platform = $1 AND identifier = $2
+            """,
+            platform,
+            identifier,
+            json.dumps(metadata_patch),
+        )
+        return str(result).endswith("1")
 
     async def count(self) -> int:
         """Count total sources in the table."""
-        return await self._db.fetchval("SELECT COUNT(*) FROM sources")
+        return int(await self._db.fetchval("SELECT COUNT(*) FROM sources"))

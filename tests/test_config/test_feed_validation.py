@@ -1,0 +1,101 @@
+"""Tests for RSS/Atom feed URL validation helpers."""
+
+from __future__ import annotations
+
+import asyncio
+
+import httpx
+import pytest
+
+import src.config.feed_validation as feed_validation
+from src.config.feed_validation import validate_feed_url
+from src.config.feeds import Feed
+
+RSS_FEED = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Chip Wire</title>
+    <item>
+      <guid>chip-wire-nvda</guid>
+      <title>NVIDIA expands HBM supply</title>
+      <link>https://example.com/rss/nvda-hbm</link>
+      <pubDate>Fri, 31 May 2026 14:30:00 GMT</pubDate>
+      <description>NVIDIA says HBM demand is expanding.</description>
+    </item>
+  </channel>
+</rss>
+"""
+
+
+@pytest.mark.asyncio
+async def test_live_feed_validator_accepts_parseable_feed() -> None:
+    feed = Feed(
+        slug="chip-wire",
+        name="Chip Wire",
+        url="https://feeds.example.com/rss.xml",
+        category="trade_press",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, text=RSS_FEED))
+    ) as client:
+        result = await validate_feed_url(feed, client=client)
+
+    assert result.ok is True
+    assert result.status_code == 200
+    assert result.entry_count == 1
+    assert result.reason == "ok"
+
+
+@pytest.mark.asyncio
+async def test_live_feed_validator_catches_dead_feed_url() -> None:
+    feed = Feed(
+        slug="dead-feed",
+        name="Dead Feed",
+        url="https://feeds.example.com/dead.xml",
+        category="trade_press",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda _: httpx.Response(404, text="missing"))
+    ) as client:
+        result = await validate_feed_url(feed, client=client)
+
+    assert result.ok is False
+    assert result.status_code == 404
+    assert result.entry_count == 0
+    assert result.reason == "http_status"
+
+
+@pytest.mark.asyncio
+async def test_live_feed_validator_runs_checks_concurrently(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feeds = [
+        Feed(slug="feed-a", name="Feed A", url="https://feeds.example.com/a.xml", category="news"),
+        Feed(slug="feed-b", name="Feed B", url="https://feeds.example.com/b.xml", category="news"),
+    ]
+    started: list[str] = []
+    release = asyncio.Event()
+
+    async def fake_validate_feed_url(
+        feed: Feed,
+        *,
+        client: httpx.AsyncClient,
+    ) -> feed_validation.LiveFeedCheck:
+        started.append(feed.slug)
+        if len(started) == len(feeds):
+            release.set()
+        await asyncio.wait_for(release.wait(), timeout=0.2)
+        return feed_validation.LiveFeedCheck(
+            feed_slug=feed.slug,
+            url=feed.url,
+            ok=True,
+            reason="ok",
+        )
+
+    monkeypatch.setattr(feed_validation, "validate_feed_url", fake_validate_feed_url)
+
+    results = await feed_validation.validate_live_feed_urls(feeds=feeds, timeout=1.0)
+
+    assert [result.feed_slug for result in results] == ["feed-a", "feed-b"]

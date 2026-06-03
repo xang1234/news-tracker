@@ -3,11 +3,22 @@
 import json
 import logging
 import time
+from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from src.security_master.config import SecurityMasterConfig
+from src.security_master.nasdaq_trader import (
+    NASDAQ_TRADER_EXTERNAL_KEY,
+    SECURITY_MASTER_US_EXCHANGE,
+    NasdaqTraderReconciliationResult,
+    NasdaqTraderSymbolDirectory,
+    build_nasdaq_trader_reconciliation,
+    fetch_nasdaq_trader_symbol_directories,
+    parse_nasdaq_trader_symbol_directories,
+)
 from src.security_master.repository import SecurityMasterRepository
-from src.security_master.schemas import Security
+from src.security_master.schemas import Security, SecurityIdentifierLineage, normalize_sec_cik
 from src.storage.database import Database
 
 logger = logging.getLogger(__name__)
@@ -15,8 +26,29 @@ logger = logging.getLogger(__name__)
 _SEED_FILE = Path(__file__).parent / "data" / "seed_securities.json"
 
 
-def _parse_seed_entry(entry: dict) -> Security:
+def _parse_seed_entry(entry: dict[str, Any]) -> Security:
     """Convert a JSON seed entry to a Security dataclass."""
+    sec_cik = normalize_sec_cik(entry.get("sec_cik"))
+    external_identifiers = dict(entry.get("external_identifiers", {}))
+    identifier_lineage = []
+    for record in entry.get("identifier_lineage", []):
+        normalized_record = dict(record)
+        if (
+            normalized_record.get("identifier_type") == "sec_cik"
+            and normalized_record.get("value") is not None
+        ):
+            normalized_record["value"] = normalize_sec_cik(normalized_record["value"]) or ""
+        identifier_lineage.append(normalized_record)
+    if sec_cik:
+        external_identifiers.setdefault("sec_ticker", entry["ticker"])
+        if not any(record.get("identifier_type") == "sec_cik" for record in identifier_lineage):
+            identifier_lineage.append(
+                {
+                    "identifier_type": "sec_cik",
+                    "value": sec_cik,
+                    "source": "sec_company_tickers",
+                }
+            )
     return Security(
         ticker=entry["ticker"],
         exchange=entry.get("exchange", "US"),
@@ -26,6 +58,13 @@ def _parse_seed_entry(entry: dict) -> Security:
         country=entry.get("country", "US"),
         currency=entry.get("currency", "USD"),
         figi=entry.get("figi"),
+        sec_cik=sec_cik,
+        issuer_name=entry.get("issuer_name", ""),
+        former_names=entry.get("former_names", []),
+        external_identifiers=external_identifiers,
+        identifier_lineage=[
+            SecurityIdentifierLineage.from_raw(record) for record in identifier_lineage
+        ],
         is_active=entry.get("is_active", True),
     )
 
@@ -114,6 +153,58 @@ class SecurityMasterService:
         self.invalidate_cache()
         logger.info("Seeded %d securities from %s", count, seed_path)
         return count
+
+    async def ingest_nasdaq_trader_symbol_directory(
+        self,
+        nasdaq_listed_text: str,
+        other_listed_text: str,
+        *,
+        observed_at: datetime | None = None,
+    ) -> NasdaqTraderReconciliationResult:
+        """Parse and reconcile Nasdaq Trader symbol-directory files."""
+        directory = parse_nasdaq_trader_symbol_directories(
+            nasdaq_listed_text,
+            other_listed_text,
+        )
+        result = await self._reconcile_nasdaq_trader_directory(directory, observed_at=observed_at)
+        logger.info(
+            "Ingested Nasdaq Trader symbol directory",
+            extra={
+                "current_record_count": result.current_record_count,
+                "deactivated_missing_count": result.deactivated_missing_count,
+            },
+        )
+        return result
+
+    async def refresh_nasdaq_trader_symbol_directory(self) -> NasdaqTraderReconciliationResult:
+        """Fetch official Nasdaq Trader symbol files and reconcile them."""
+        directory = await fetch_nasdaq_trader_symbol_directories()
+        return await self._reconcile_nasdaq_trader_directory(directory)
+
+    async def _reconcile_nasdaq_trader_directory(
+        self,
+        directory: NasdaqTraderSymbolDirectory,
+        *,
+        observed_at: datetime | None = None,
+    ) -> NasdaqTraderReconciliationResult:
+        current_keys = {
+            (record.symbol, SECURITY_MASTER_US_EXCHANGE) for record in directory.records
+        }
+        existing_by_key = await self._repo.get_by_keys(current_keys)
+        previously_sourced = await self._repo.list_by_external_identifier(
+            NASDAQ_TRADER_EXTERNAL_KEY,
+        )
+        result = build_nasdaq_trader_reconciliation(
+            directory,
+            existing_by_key=existing_by_key,
+            previously_sourced_by_key={
+                (security.ticker, security.exchange): security for security in previously_sourced
+            },
+            observed_at=observed_at,
+        )
+        await self._repo.bulk_upsert(list(result.securities))
+        self.invalidate_cache()
+        return result
 
     async def ensure_seeded(self) -> None:
         """Seed from default JSON if the table is empty and seed_on_init is True."""

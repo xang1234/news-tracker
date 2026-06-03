@@ -23,6 +23,8 @@ from typing import Any
 
 from src.filing.adoption import FilingAdoptionScore
 from src.filing.divergence import DivergenceAlert
+from src.filing.sec_delta_models import SECFilingDeltaEvent
+from src.filing.sec_delta_publication import SECDeltaPublicationPayload, build_sec_delta_payload
 from src.publish.lane_health import LaneHealthStatus, PublishReadiness
 
 # -- Payload dataclasses (publishable, no internal state) --------------------
@@ -174,6 +176,7 @@ class FilingPublicationResult:
         lane_health: The health check result.
         adoption_payloads: Publishable adoption scores.
         divergence_payloads: Publishable divergence alerts.
+        sec_delta_payloads: Publishable official SEC fact deltas.
         issuer_summaries: Per-issuer divergence summaries.
         object_count: Total publishable objects produced.
         block_reason: Why publication was blocked (if applicable).
@@ -183,6 +186,7 @@ class FilingPublicationResult:
     lane_health: LaneHealthStatus
     adoption_payloads: list[AdoptionPayload] = field(default_factory=list)
     divergence_payloads: list[DivergencePayload] = field(default_factory=list)
+    sec_delta_payloads: list[SECDeltaPublicationPayload] = field(default_factory=list)
     issuer_summaries: list[IssuerDivergenceSummary] = field(default_factory=list)
     object_count: int = 0
     block_reason: str | None = None
@@ -299,6 +303,7 @@ def prepare_filing_publication(
     alerts: list[DivergenceAlert],
     lane_health: LaneHealthStatus,
     *,
+    sec_delta_events: list[SECFilingDeltaEvent] | None = None,
     now: datetime | None = None,
 ) -> FilingPublicationResult:
     """Prepare filing lane outputs for manifest publication.
@@ -314,6 +319,7 @@ def prepare_filing_publication(
         adoptions: Filing adoption scores for issuer-theme pairs.
         alerts: Divergence alerts from check_divergence().
         lane_health: Pre-computed lane health status.
+        sec_delta_events: Official SEC fact deltas available for publication.
         now: Current time (unused but kept for API symmetry).
 
     Returns:
@@ -328,15 +334,22 @@ def prepare_filing_publication(
 
     adoption_payloads = [build_adoption_payload(a) for a in adoptions]
     divergence_payloads = [build_divergence_payload(a) for a in alerts]
+    sec_delta_payloads = [build_sec_delta_payload(event) for event in sec_delta_events or []]
     issuer_summaries = build_issuer_summaries(adoptions, alerts)
 
-    object_count = len(adoption_payloads) + len(divergence_payloads) + len(issuer_summaries)
+    object_count = (
+        len(adoption_payloads)
+        + len(divergence_payloads)
+        + len(sec_delta_payloads)
+        + len(issuer_summaries)
+    )
 
     return FilingPublicationResult(
         published=True,
         lane_health=lane_health,
         adoption_payloads=adoption_payloads,
         divergence_payloads=divergence_payloads,
+        sec_delta_payloads=sec_delta_payloads,
         issuer_summaries=issuer_summaries,
         object_count=object_count,
     )

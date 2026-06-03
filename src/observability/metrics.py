@@ -124,6 +124,18 @@ class MetricsCollector:
             ["platform"],
         )
 
+        self.rss_feed_fetches = Counter(
+            "news_tracker_rss_feed_fetches_total",
+            "RSS/Atom feed fetch attempts by feed and status",
+            ["feed", "status"],
+        )
+
+        self.rss_feed_documents = Counter(
+            "news_tracker_rss_feed_documents_total",
+            "RSS/Atom documents yielded by feed",
+            ["feed"],
+        )
+
         # Deduplication metrics
         self.duplicates_detected = Counter(
             "news_tracker_duplicates_detected_total",
@@ -447,6 +459,14 @@ class MetricsCollector:
         """
         platform_str = platform.value if isinstance(platform, Platform) else platform
         self.adapter_health.labels(platform=platform_str).set(1 if healthy else 0)
+
+    def record_rss_feed_fetch(self, feed_slug: str, status: str) -> None:
+        """Record one RSS/Atom feed fetch result."""
+        self.rss_feed_fetches.labels(feed=feed_slug, status=status).inc()
+
+    def record_rss_feed_documents(self, feed_slug: str, count: int) -> None:
+        """Record documents yielded by one RSS/Atom feed fetch."""
+        self.rss_feed_documents.labels(feed=feed_slug).inc(count)
 
     def set_queue_depth(self, stream: str, depth: int) -> None:
         """

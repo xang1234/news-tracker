@@ -1,6 +1,14 @@
 import { Pencil, Trash2 } from 'lucide-react';
+import { humanize, timeAgo } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
 import { SOURCE_PLATFORMS } from '@/lib/constants';
+
+interface RssHealthRow {
+  status: string;
+  recent_document_count: number;
+  last_fetch_at: string | null;
+  last_error: string;
+}
 
 export interface SourceRow {
   platform: string;
@@ -10,6 +18,7 @@ export interface SourceRow {
   is_active: boolean;
   created_at: string | null;
   updated_at: string | null;
+  rssHealth?: RssHealthRow;
 }
 
 interface SourcesTableProps {
@@ -18,12 +27,24 @@ interface SourcesTableProps {
   onDeactivate: (platform: string, identifier: string) => void;
 }
 
-const COLUMNS = ['Platform', 'Identifier', 'Display Name', 'Active', 'Actions'] as const;
+const COLUMNS = ['Platform', 'Identifier', 'Display Name', 'Active', 'Health', 'Actions'] as const;
 
 function formatIdentifier(platform: string, identifier: string): string {
   if (platform === 'twitter') return `@${identifier}`;
   if (platform === 'reddit') return `r/${identifier}`;
   return identifier;
+}
+
+function rssHealthClass(status: string): string {
+  if (status === 'active') return 'bg-emerald-500/20 text-emerald-400';
+  if (status === 'stale') return 'bg-amber-500/20 text-amber-400';
+  if (status === 'failing') return 'bg-red-500/20 text-red-400';
+  if (status === 'inactive') return 'bg-slate-500/20 text-slate-400';
+  return 'bg-cyan-500/20 text-cyan-400';
+}
+
+function formatDocumentCount(count: number): string {
+  return `${count.toLocaleString()} doc${count === 1 ? '' : 's'}`;
 }
 
 export function SourcesTable({ sources, onEdit, onDeactivate }: SourcesTableProps) {
@@ -94,6 +115,38 @@ export function SourcesTable({ sources, onEdit, onDeactivate }: SourcesTableProp
                   </span>
                 </td>
                 <td className="px-4 py-3">
+                  {src.platform === 'rss' && src.rssHealth ? (
+                    <div className="min-w-40">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span
+                          className={cn(
+                            'inline-block rounded-full px-2 py-0.5 text-xs font-medium',
+                            rssHealthClass(src.rssHealth.status),
+                          )}
+                        >
+                          {humanize(src.rssHealth.status)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {formatDocumentCount(src.rssHealth.recent_document_count)}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {timeAgo(src.rssHealth.last_fetch_at)}
+                      </div>
+                      {src.rssHealth.last_error && (
+                        <div
+                          className="mt-1 max-w-52 truncate text-xs text-red-400"
+                          title={src.rssHealth.last_error}
+                        >
+                          {src.rssHealth.last_error}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">---</span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -156,6 +209,9 @@ export function SourcesTableSkeleton() {
               </td>
               <td className="px-4 py-3">
                 <div className="h-5 w-14 animate-pulse rounded-full bg-secondary" />
+              </td>
+              <td className="px-4 py-3">
+                <div className="h-5 w-24 animate-pulse rounded-full bg-secondary" />
               </td>
               <td className="px-4 py-3">
                 <div className="flex items-center gap-2">

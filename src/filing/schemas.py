@@ -21,9 +21,13 @@ VALID_FILING_TYPES = frozenset(
         "20-F",
         "6-K",
         "SC 13D",
+        "SC 13D/A",
         "SC 13G",
+        "SC 13G/A",
         "4",
+        "4/A",
         "13F-HR",
+        "13F-HR/A",
     }
 )
 

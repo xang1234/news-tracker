@@ -32,6 +32,9 @@ class SECPolicy(BaseSettings):
         request_timeout: HTTP request timeout in seconds.
         base_url: SEC EDGAR base URL.
         filing_base_url: SEC EDGAR full-text search/filing URL.
+        data_api_url: SEC JSON data API base URL.
+        companyfacts_bulk_url: Nightly Company Facts bulk archive URL.
+        submissions_bulk_url: Nightly Submissions bulk archive URL.
     """
 
     model_config = SettingsConfigDict(
@@ -60,6 +63,13 @@ class SECPolicy(BaseSettings):
     base_url: str = "https://efts.sec.gov/LATEST"
     filing_base_url: str = "https://www.sec.gov/cgi-bin/browse-edgar"
     archives_url: str = "https://www.sec.gov/Archives/edgar/data"
+    data_api_url: str = "https://data.sec.gov"
+    companyfacts_bulk_url: str = (
+        "https://www.sec.gov/Archives/edgar/daily-index/xbrl/companyfacts.zip"
+    )
+    submissions_bulk_url: str = (
+        "https://www.sec.gov/Archives/edgar/daily-index/bulkdata/submissions.zip"
+    )
 
     @property
     def headers(self) -> dict[str, str]:

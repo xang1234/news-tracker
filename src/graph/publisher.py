@@ -18,12 +18,19 @@ Publication flow:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from src.graph.baskets import ThematicBasket
+from src.graph.baskets import BasketMember, ThematicBasket
 from src.graph.path_scoring import ScoredPath
+from src.publish.evidence import (
+    EvidencePayload,
+    EvidencePayloadInput,
+    copy_evidence,
+    evidence_for_key,
+)
 from src.publish.lane_health import LaneHealthStatus, PublishReadiness
 
 # -- Path explanation payload --------------------------------------------------
@@ -50,6 +57,8 @@ class PathExplanation:
         corroboration_product: Product of corroboration factors.
         hop_decay: Decay factor for path length.
         assertion_ids: Lineage to supporting assertions.
+        sec_fact_evidence: SEC fact lineage for the target concept.
+        innovation_evidence: Patent/research lineage for the target concept.
     """
 
     source_concept_id: str
@@ -64,6 +73,8 @@ class PathExplanation:
     corroboration_product: float
     hop_decay: float
     assertion_ids: list[str]
+    sec_fact_evidence: list[EvidencePayload] = field(default_factory=list)
+    innovation_evidence: list[EvidencePayload] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -79,6 +90,8 @@ class PathExplanation:
             "corroboration_product": round(self.corroboration_product, 4),
             "hop_decay": round(self.hop_decay, 4),
             "assertion_ids": self.assertion_ids,
+            "sec_fact_evidence": copy_evidence(self.sec_fact_evidence),
+            "innovation_evidence": copy_evidence(self.innovation_evidence),
         }
 
 
@@ -151,7 +164,12 @@ class StructuralPublicationResult:
 DEFAULT_TOP_N = 10
 
 
-def build_path_explanation(path: ScoredPath) -> PathExplanation:
+def build_path_explanation(
+    path: ScoredPath,
+    *,
+    sec_fact_evidence: Sequence[EvidencePayloadInput] | None = None,
+    innovation_evidence: Sequence[EvidencePayloadInput] | None = None,
+) -> PathExplanation:
     """Convert a ScoredPath into a publishable PathExplanation.
 
     Extracts score ingredients and assertion IDs from the scored
@@ -170,6 +188,8 @@ def build_path_explanation(path: ScoredPath) -> PathExplanation:
         corroboration_product=path.breakdown.corroboration_product,
         hop_decay=path.breakdown.hop_decay,
         assertion_ids=[e.relation.assertion_id for e in path.edges],
+        sec_fact_evidence=copy_evidence(sec_fact_evidence),
+        innovation_evidence=copy_evidence(innovation_evidence),
     )
 
 
@@ -177,20 +197,36 @@ def build_basket_payload(
     basket: ThematicBasket,
     *,
     top_n: int = DEFAULT_TOP_N,
+    sec_fact_evidence_by_concept: dict[str, list[EvidencePayloadInput]] | None = None,
+    innovation_evidence_by_concept: dict[str, list[EvidencePayloadInput]] | None = None,
 ) -> BasketPayload:
     """Convert a ThematicBasket into a publishable BasketPayload.
 
     Serializes the top N beneficiaries and at-risk members for
     consumer UIs. Full path details live in PathExplanation objects.
     """
+
+    def _member_payload(member: BasketMember) -> dict[str, Any]:
+        payload = member.to_dict()
+        evidence = evidence_for_key(sec_fact_evidence_by_concept, member.concept_id)
+        if evidence:
+            payload["sec_fact_evidence"] = evidence
+        innovation_evidence = evidence_for_key(
+            innovation_evidence_by_concept,
+            member.concept_id,
+        )
+        if innovation_evidence:
+            payload["innovation_evidence"] = innovation_evidence
+        return payload
+
     return BasketPayload(
         source_concept_id=basket.source_concept_id,
         beneficiary_count=len(basket.beneficiaries),
         at_risk_count=len(basket.at_risk),
         first_order_count=basket.first_order_count,
         second_order_count=basket.second_order_count,
-        top_beneficiaries=[m.to_dict() for m in basket.beneficiaries[:top_n]],
-        top_at_risk=[m.to_dict() for m in basket.at_risk[:top_n]],
+        top_beneficiaries=[_member_payload(m) for m in basket.beneficiaries[:top_n]],
+        top_at_risk=[_member_payload(m) for m in basket.at_risk[:top_n]],
     )
 
 
@@ -203,6 +239,8 @@ def prepare_structural_publication(
     lane_health: LaneHealthStatus,
     *,
     top_n: int = DEFAULT_TOP_N,
+    sec_fact_evidence_by_concept: dict[str, list[EvidencePayloadInput]] | None = None,
+    innovation_evidence_by_concept: dict[str, list[EvidencePayloadInput]] | None = None,
     now: datetime | None = None,
 ) -> StructuralPublicationResult:
     """Prepare structural lane outputs for manifest publication.
@@ -219,6 +257,8 @@ def prepare_structural_publication(
         baskets: Thematic baskets to publish as summaries.
         lane_health: Pre-computed lane health status.
         top_n: How many top members to include per basket.
+        sec_fact_evidence_by_concept: SEC fact lineage keyed by concept id.
+        innovation_evidence_by_concept: Patent/research lineage keyed by concept id.
         now: Current time (unused, kept for API symmetry).
 
     Returns:
@@ -231,8 +271,26 @@ def prepare_structural_publication(
             block_reason=lane_health.format_block_reason(),
         )
 
-    path_explanations = [build_path_explanation(p) for p in paths]
-    basket_payloads = [build_basket_payload(b, top_n=top_n) for b in baskets]
+    path_explanations = [
+        build_path_explanation(
+            p,
+            sec_fact_evidence=evidence_for_key(sec_fact_evidence_by_concept, p.target_concept_id),
+            innovation_evidence=evidence_for_key(
+                innovation_evidence_by_concept,
+                p.target_concept_id,
+            ),
+        )
+        for p in paths
+    ]
+    basket_payloads = [
+        build_basket_payload(
+            b,
+            top_n=top_n,
+            sec_fact_evidence_by_concept=sec_fact_evidence_by_concept,
+            innovation_evidence_by_concept=innovation_evidence_by_concept,
+        )
+        for b in baskets
+    ]
 
     return StructuralPublicationResult(
         published=True,

@@ -3,11 +3,13 @@
 import pytest
 
 from src.security_master.concept_schemas import (
+    VALID_ALIAS_REVIEW_STATUSES,
     VALID_ALIAS_TYPES,
     VALID_CONCEPT_TYPES,
     VALID_ISSUER_SECURITY_RELATIONSHIPS,
     Concept,
     ConceptAlias,
+    ConceptAliasCandidate,
     IssuerSecurityLink,
     make_concept_id,
 )
@@ -84,15 +86,74 @@ class TestConceptAlias:
         a = ConceptAlias(alias="TSMC", concept_id="concept_issuer_abc")
         assert a.alias_type == "name"
         assert a.is_primary is False
+        assert a.confidence == 1.0
+        assert a.review_status == "accepted"
+        assert a.metadata == {}
 
     def test_all_alias_types_accepted(self) -> None:
         for at in VALID_ALIAS_TYPES:
             a = ConceptAlias(alias="test", concept_id="c1", alias_type=at)
             assert a.alias_type == at
 
+    def test_innovation_alias_types_are_supported(self) -> None:
+        for alias_type in {
+            "subsidiary",
+            "acquired_entity",
+            "lab",
+            "research_institution",
+        }:
+            alias = ConceptAlias(
+                alias="NVIDIA Research",
+                concept_id="concept_issuer_nvda",
+                alias_type=alias_type,
+                confidence=0.72,
+                review_status="needs_review",
+                source_attribution="curated_innovation_aliases",
+                metadata={"source_contexts": ["patents", "research"]},
+            )
+            assert alias.alias_type == alias_type
+            assert alias.confidence == 0.72
+            assert alias.review_status == "needs_review"
+            assert alias.metadata["source_contexts"] == ["patents", "research"]
+
+    def test_all_review_statuses_accepted(self) -> None:
+        for status in VALID_ALIAS_REVIEW_STATUSES:
+            alias = ConceptAlias(alias="test", concept_id="c1", review_status=status)
+            assert alias.review_status == status
+
     def test_invalid_type_rejected(self) -> None:
         with pytest.raises(ValueError, match="Invalid alias_type"):
             ConceptAlias(alias="test", concept_id="c1", alias_type="bad")
+
+    def test_invalid_confidence_rejected(self) -> None:
+        with pytest.raises(ValueError, match="confidence"):
+            ConceptAlias(alias="test", concept_id="c1", confidence=1.1)
+
+    def test_invalid_review_status_rejected(self) -> None:
+        with pytest.raises(ValueError, match="review_status"):
+            ConceptAlias(alias="test", concept_id="c1", review_status="maybe")
+
+
+class TestConceptAliasCandidate:
+    """Candidate resolution payload for ambiguous aliases."""
+
+    def test_requires_review_when_alias_needs_review(self) -> None:
+        candidate = ConceptAliasCandidate(
+            concept=Concept(
+                concept_id="concept_issuer_nvda",
+                concept_type="issuer",
+                canonical_name="NVIDIA Corporation",
+            ),
+            alias=ConceptAlias(
+                alias="NVIDIA Research",
+                concept_id="concept_issuer_nvda",
+                alias_type="lab",
+                confidence=0.62,
+                review_status="needs_review",
+            ),
+        )
+
+        assert candidate.requires_review is True
 
 
 class TestIssuerSecurityLink:
@@ -136,6 +197,8 @@ class TestMigrationConsistency:
     def test_alias_types_include_ticker(self) -> None:
         assert "ticker" in VALID_ALIAS_TYPES
         assert "name" in VALID_ALIAS_TYPES
+        assert "subsidiary" in VALID_ALIAS_TYPES
+        assert "lab" in VALID_ALIAS_TYPES
 
     def test_relationship_types_include_primary(self) -> None:
         assert "primary" in VALID_ISSUER_SECURITY_RELATIONSHIPS
