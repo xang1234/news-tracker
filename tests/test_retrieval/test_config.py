@@ -29,7 +29,9 @@ def test_config_validates_bounds() -> None:
 
 
 def test_feature_flag_defaults_off() -> None:
-    assert Settings().claim_retrieval_enabled is False
+    # _env_file=None isolates from a local .env (project convention for
+    # Settings tests — see test_settings.py / test_cors_settings.py).
+    assert Settings(_env_file=None).claim_retrieval_enabled is False
 
 
 def test_public_surface_is_importable() -> None:

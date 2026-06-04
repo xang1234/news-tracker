@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from src.claims.schemas import EvidenceClaim, make_claim_key
 from src.embedding.service import ModelType
 from src.retrieval.config import ClaimRetrievalConfig
@@ -185,3 +187,43 @@ class TestIndexClaim:
 
         assert await svc.index_claim("ghost") is False
         assert repo.stored == []
+
+
+class TestLimitValidation:
+    """limit=0/negative must be rejected, not silently swapped for the default."""
+
+    async def test_retrieve_rejects_zero_limit(self) -> None:
+        svc = _service(repo=_FakeRepo())
+        with pytest.raises(ValueError, match="limit must be >= 1"):
+            await svc.retrieve("q", limit=0)
+
+    async def test_retrieve_rejects_negative_limit(self) -> None:
+        svc = _service(repo=_FakeRepo())
+        with pytest.raises(ValueError, match="limit must be >= 1"):
+            await svc.retrieve("q", limit=-5)
+
+    async def test_index_pending_rejects_zero_limit(self) -> None:
+        svc = _service(repo=_FakeRepo())
+        with pytest.raises(ValueError, match="limit must be >= 1"):
+            await svc.index_pending(limit=0)
+
+    async def test_none_limit_uses_config_default(self) -> None:
+        repo = _FakeRepo()
+        svc = _service(repo=repo, config=ClaimRetrievalConfig(default_limit=7))
+        await svc.retrieve("q", limit=None)
+        assert repo.search_args["limit"] == 7
+
+
+class TestPartialStoreWarning:
+    async def test_warns_when_some_stores_fail(self, caplog) -> None:
+        # store_returns=False simulates a delete-race: claims fetched but the
+        # write finds nothing. index_pending must surface this, not stop silent.
+        repo = _FakeRepo(unembedded=[_claim("claim_a"), _claim("claim_b")])
+        repo.store_returns = False
+        svc = _service(repo=repo)
+
+        with caplog.at_level("WARNING"):
+            indexed = await svc.index_pending()
+
+        assert indexed == 0
+        assert any("store incomplete" in r.message for r in caplog.records)

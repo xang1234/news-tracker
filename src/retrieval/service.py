@@ -29,6 +29,20 @@ logger = logging.getLogger(__name__)
 RETRIEVAL_MODEL = ModelType.MINILM
 
 
+def _resolve_limit(limit: int | None, default: int) -> int:
+    """Resolve a caller-supplied limit, rejecting non-positive values.
+
+    ``None`` means "use the configured default"; ``0``/negative are invalid
+    (they'd reach SQL as a bad ``LIMIT``) and raise rather than silently
+    falling back.
+    """
+    if limit is None:
+        return default
+    if limit < 1:
+        raise ValueError(f"limit must be >= 1, got {limit}")
+    return limit
+
+
 class ClaimRetrievalService:
     """Semantic retrieval over verified structured claims."""
 
@@ -58,7 +72,7 @@ class ClaimRetrievalService:
         :class:`ClaimRetrievalFilter`); pass one to scope by lane, theme,
         subject, or confidence.
         """
-        limit = limit or self._config.default_limit
+        limit = _resolve_limit(limit, self._config.default_limit)
         if filters is None:
             filters = ClaimRetrievalFilter()
         query_embedding = await self._embedding.embed(query, RETRIEVAL_MODEL)
@@ -76,7 +90,7 @@ class ClaimRetrievalService:
         Returns the number of claims successfully indexed. Idempotent: a
         re-run only picks up claims whose embedding is still NULL.
         """
-        limit = limit or self._config.index_batch_size
+        limit = _resolve_limit(limit, self._config.index_batch_size)
         claims = await self._repo.list_unembedded(limit)
         if not claims:
             return 0
@@ -86,6 +100,13 @@ class ClaimRetrievalService:
         for claim, embedding in zip(claims, embeddings, strict=True):
             if await self._repo.store_embedding(claim.claim_id, embedding):
                 indexed += 1
+        if indexed < len(claims):
+            # Stores can fail only if a claim vanished between fetch and write
+            # (delete race). Log it so a `--all` backfill that stops on a
+            # zero-progress batch is diagnosable rather than silent.
+            logger.warning(
+                "claim embedding store incomplete: %d/%d persisted", indexed, len(claims)
+            )
         return indexed
 
     async def index_claim(self, claim_id: str) -> bool:
