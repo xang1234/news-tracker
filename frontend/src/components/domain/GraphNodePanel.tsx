@@ -1,5 +1,4 @@
 import { Network, Tag } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { NODE_TYPE_COLORS, RELATION_COLORS } from '@/lib/constants';
 import type { GraphNodeItem, GraphEdgeItem } from '@/api/hooks/useGraph';
 

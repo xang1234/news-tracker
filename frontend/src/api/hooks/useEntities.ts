@@ -63,7 +63,7 @@ export interface EntitySentimentResponse {
   pos_count: number;
   neg_count: number;
   neu_count: number;
-  trend: string;
+  trend: 'improving' | 'declining' | 'stable';
   latency_ms: number;
 }
 

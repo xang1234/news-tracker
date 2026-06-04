@@ -1,5 +1,5 @@
-import { useCallback, useRef, useMemo } from 'react';
-import ForceGraph2D from 'react-force-graph-2d';
+import { useCallback, useMemo } from 'react';
+import ForceGraph2D, { type NodeObject } from 'react-force-graph-2d';
 import { NODE_TYPE_COLORS, RELATION_COLORS } from '@/lib/constants';
 import type { GraphNodeItem, GraphEdgeItem } from '@/api/hooks/useGraph';
 
@@ -37,8 +37,6 @@ export function GraphCanvas({
   width,
   height = 500,
 }: GraphCanvasProps) {
-  const fgRef = useRef<{ centerAt: (x: number, y: number, ms: number) => void }>(null);
-
   const graphData = useMemo(() => {
     const graphNodes: GraphNode[] = nodes.map((n) => ({
       id: n.node_id,
@@ -92,7 +90,6 @@ export function GraphCanvas({
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-[#0f1117]">
       <ForceGraph2D
-        ref={fgRef}
         graphData={graphData}
         width={width}
         height={height}
@@ -109,14 +106,14 @@ export function GraphCanvas({
         cooldownTicks={100}
         backgroundColor="#0f1117"
         nodeCanvasObjectMode={() => 'after'}
-        nodeCanvasObject={(node: GraphNode & { x: number; y: number }, ctx: CanvasRenderingContext2D) => {
+        nodeCanvasObject={(node: NodeObject<GraphNode>, ctx: CanvasRenderingContext2D) => {
           const label = node.name;
           const fontSize = 10;
           ctx.font = `${fontSize}px sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'top';
           ctx.fillStyle = node.id === selectedNodeId ? '#fbbf24' : '#9ca3af';
-          ctx.fillText(label, node.x, node.y + 8);
+          ctx.fillText(label, node.x ?? 0, (node.y ?? 0) + 8);
         }}
       />
     </div>

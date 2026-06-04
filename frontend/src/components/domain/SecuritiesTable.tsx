@@ -1,21 +1,9 @@
 import { Pencil, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-export interface Security {
-  ticker: string;
-  exchange: string;
-  name: string;
-  aliases: string[];
-  sector: string;
-  country: string;
-  currency: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
+import type { SecurityItem } from '@/api/hooks/useSecurities';
 
 interface SecuritiesTableProps {
-  securities: Security[];
+  securities: SecurityItem[];
   onEdit: (ticker: string, exchange: string) => void;
   onDeactivate: (ticker: string, exchange: string) => void;
 }
