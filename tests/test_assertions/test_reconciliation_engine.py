@@ -31,6 +31,7 @@ def _claim(
     *,
     subject_concept_id: str | None = "concept_tsmc",
     object_concept_id: str | None = None,
+    object_text: str | None = None,
     metric: str | None = None,
     numeric_value: float | None = None,
     unit: str | None = None,
@@ -50,6 +51,7 @@ def _claim(
         predicate=predicate,
         subject_text="TSMC",
         subject_concept_id=subject_concept_id,
+        object_text=object_text,
         object_concept_id=object_concept_id,
         metric=metric,
         numeric_value=numeric_value,
@@ -257,3 +259,32 @@ async def test_semantic_tier_disputes_via_engine():
     assert result is not None
     assert result.status == "disputed"
     assert result.contradiction_count >= 1
+
+
+@pytest.mark.asyncio
+async def test_unresolved_object_relationship_claim_is_skipped():
+    # supplies_to with a named-but-unresolved object must NOT reconcile:
+    # otherwise two different objects both collapse onto (subject, predicate,
+    # None) and CorroborationTier falsely counts them as mutual support.
+    c1 = _claim("c1", "supplies_to", object_text="NVIDIA", object_concept_id=None)
+    c2 = _claim("c2", "supplies_to", object_text="Apple", object_concept_id=None)
+    engine, arepo = _engine([c1, c2])
+
+    result = await engine.reconcile_claim(c1)
+
+    assert result is None
+    assert arepo.assertions == {}
+
+
+@pytest.mark.asyncio
+async def test_unary_claim_with_no_object_still_reconciles():
+    # A unary claim (no object at all) must still reconcile — object_text None
+    # is legitimately objectless, not "unresolved".
+    c1 = _claim(
+        "c1", "expands_capacity", metric="capacity", numeric_value=30.0, unit="%", period="2026-Q3"
+    )
+    engine, arepo = _engine([c1])
+
+    result = await engine.reconcile_claim(c1)
+
+    assert result is not None

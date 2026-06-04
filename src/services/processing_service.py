@@ -231,19 +231,33 @@ class ProcessingService:
                 content=doc.content,
                 published_at=doc.timestamp,
             )
-            for claim in claims:
-                await self._persist_claim(claim, claim_repo)
-            if claims:
-                logger.debug(
-                    "Extracted narrative claims",
-                    doc_id=doc.id,
-                    claim_count=len(claims),
-                )
         except Exception as e:
             logger.warning(
                 "Failed to extract narrative claims",
                 doc_id=doc.id,
                 error=str(e),
+            )
+            return
+
+        # Persist each claim independently — one failing claim must not drop
+        # the rest of the document's claims.
+        persisted = 0
+        for claim in claims:
+            try:
+                await self._persist_claim(claim, claim_repo)
+                persisted += 1
+            except Exception as e:
+                logger.warning(
+                    "Failed to persist narrative claim",
+                    doc_id=doc.id,
+                    claim_id=getattr(claim, "claim_id", None),
+                    error=str(e),
+                )
+        if persisted:
+            logger.debug(
+                "Extracted narrative claims",
+                doc_id=doc.id,
+                claim_count=persisted,
             )
 
     async def start(self) -> None:

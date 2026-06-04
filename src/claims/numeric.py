@@ -190,10 +190,13 @@ def compare_numeric_facts(
     """
     if a.numeric_value is None or b.numeric_value is None:
         return "incomparable"
-    if a.metric != b.metric:
+    # A missing metric or unit means the fact isn't fully typed — treat as
+    # incomparable rather than letting None == None slip through as a match.
+    if a.metric is None or b.metric is None or a.metric != b.metric:
         return "incomparable"
-    if a.unit != b.unit:
+    if a.unit is None or b.unit is None or a.unit != b.unit:
         return "incomparable"
+    # period of None on both sides is a legitimately-comparable "undated" period.
     if a.period != b.period:
         return "incomparable"
 

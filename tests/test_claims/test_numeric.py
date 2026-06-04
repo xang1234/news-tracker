@@ -235,3 +235,23 @@ class TestInferModality:
 
     def test_none_text_is_confirmed(self):
         assert infer_modality(None) == "confirmed"
+
+
+class TestCompareNumericFactsMissingFields:
+    """Partially-populated facts (None metric/unit) must be incomparable,
+    not silently equal via None == None."""
+
+    def test_both_metric_none_is_incomparable(self):
+        a = _Fact(numeric_value=42e9, metric=None)
+        b = _Fact(numeric_value=43e9, metric=None)
+        assert compare_numeric_facts(a, b) == "incomparable"
+
+    def test_both_unit_none_is_incomparable(self):
+        a = _Fact(numeric_value=42e9, unit=None)
+        b = _Fact(numeric_value=43e9, unit=None)
+        assert compare_numeric_facts(a, b) == "incomparable"
+
+    def test_one_metric_none_is_incomparable(self):
+        a = _Fact(numeric_value=42e9, metric="capex")
+        b = _Fact(numeric_value=43e9, metric=None)
+        assert compare_numeric_facts(a, b) == "incomparable"

@@ -47,14 +47,22 @@ class _FakeDB:
         self.last_sql = ""
         self.last_params: tuple[Any, ...] = ()
 
-    async def fetch(self, sql: str, *params: Any) -> list[dict[str, Any]]:
-        self.last_sql = sql
-        self.last_params = params
-        # Emulate the status filter the repository applies.
+    def _filtered(self, params: tuple[Any, ...]) -> list[dict[str, Any]]:
         status = next((p for p in params if p in ("disputed", "active")), None)
         if status is None:
             return self._rows
         return [r for r in self._rows if r["status"] == status]
+
+    async def fetch(self, sql: str, *params: Any) -> list[dict[str, Any]]:
+        self.last_sql = sql
+        self.last_params = params
+        rows = self._filtered(params)
+        # Emulate LIMIT so total (count) can exceed the returned page.
+        return rows[:1]
+
+    async def fetchrow(self, sql: str, *params: Any) -> dict[str, Any]:
+        # COUNT(*) query — return the full filtered count, not the paged slice.
+        return {"cnt": len(self._filtered(params))}
 
 
 def _client(rows: list[dict[str, Any]]) -> TestClient:
@@ -104,3 +112,19 @@ def test_reconciled_route_not_shadowed_by_detail_route():
     body = resp.json()
     assert body["assertions"] == []
     assert body["total"] == 0
+
+
+def test_total_reflects_real_count_not_page_size():
+    # Two disputed rows but the fake serves a 1-row page; total must be the
+    # full filtered count (2), not the paged length (1).
+    rows = [
+        _row("asrt_1", "disputed", support=1, contradiction=1),
+        _row("asrt_2", "disputed", support=1, contradiction=2),
+    ]
+    client = _client(rows)
+
+    resp = client.get("/intel/assertions/reconciled?status=disputed")
+
+    body = resp.json()
+    assert len(body["assertions"]) == 1  # paged
+    assert body["total"] == 2  # real count

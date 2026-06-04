@@ -125,6 +125,12 @@ class SemanticContradictionJudge:
 
     async def judge(self, text_a: str, text_b: str) -> ContradictionVerdict | None:
         """Judge two claim texts; returns a verdict or None on failure/open circuit."""
+        # Fail fast on misconfiguration: with no API key, creating a client and
+        # calling out would just fail and needlessly trip the breaker on every
+        # call. Return None without touching the breaker so the tier no-ops cleanly.
+        if not self._config.openai_api_key:
+            logger.warning("Semantic judge has no OpenAI API key configured; skipping")
+            return None
         prompt = build_judge_prompt(text_a, text_b)
 
         async def _call() -> ContradictionVerdict | None:

@@ -44,7 +44,9 @@ export default function EvidencePage() {
     liveReconciled,
   );
   const { data, isLoading, isError, error } = liveReconciled ? reconciled : published;
-  const detail = useAssertionDetail(selectedId);
+  // Detail is only available from the published endpoint; in live mode a
+  // selected assertion may be live-only (404) or stale, so don't fetch it.
+  const detail = useAssertionDetail(liveReconciled ? undefined : selectedId);
 
   function handleFilterChange() {
     setOffset(0);
@@ -70,11 +72,12 @@ export default function EvidencePage() {
               type="text"
               placeholder="e.g. TSMC"
               value={conceptId}
+              disabled={liveReconciled}
               onChange={(e) => {
                 setConceptId(e.target.value);
                 handleFilterChange();
               }}
-              className="h-8 w-40 rounded border border-border bg-card px-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-8 w-40 rounded border border-border bg-card px-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
             />
           </div>
           <div className="space-y-1">
@@ -83,11 +86,12 @@ export default function EvidencePage() {
               type="text"
               placeholder="e.g. supplies_to"
               value={predicate}
+              disabled={liveReconciled}
               onChange={(e) => {
                 setPredicate(e.target.value);
                 handleFilterChange();
               }}
-              className="h-8 w-40 rounded border border-border bg-card px-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-8 w-40 rounded border border-border bg-card px-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
             />
           </div>
           <div className="space-y-1">
@@ -116,11 +120,12 @@ export default function EvidencePage() {
               max="1"
               step="0.1"
               value={minConfidence}
+              disabled={liveReconciled}
               onChange={(e) => {
                 setMinConfidence(e.target.value);
                 handleFilterChange();
               }}
-              className="h-8 w-28 rounded border border-border bg-card px-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              className="h-8 w-28 rounded border border-border bg-card px-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
             />
           </div>
           <div className="space-y-1">
@@ -201,8 +206,8 @@ export default function EvidencePage() {
               </div>
             )}
 
-            {/* Pagination */}
-            {data && total > 0 && (
+            {/* Pagination — hidden in live mode (reconciled endpoint is unpaged) */}
+            {!liveReconciled && data && total > 0 && (
               <div className="mt-6 flex items-center justify-between text-xs text-muted-foreground">
                 <span>
                   Showing {rangeStart}–{rangeEnd} of {total}
@@ -233,7 +238,15 @@ export default function EvidencePage() {
 
           {/* Right: Detail panel */}
           <div>
-            {!selectedId && (
+            {liveReconciled && (
+              <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card py-20 text-muted-foreground">
+                <FileSearch className="h-12 w-12" />
+                <p className="mt-3 text-sm">Live reconciled preview</p>
+                <p className="mt-1 text-xs">Assertion detail isn&apos;t available here. Switch to Published to inspect linked claims.</p>
+              </div>
+            )}
+
+            {!liveReconciled && !selectedId && (
               <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card py-20 text-muted-foreground">
                 <FileSearch className="h-12 w-12" />
                 <p className="mt-3 text-sm">Select an assertion</p>

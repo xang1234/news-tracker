@@ -8,6 +8,8 @@ the tier tests, never a live API.
 
 from __future__ import annotations
 
+import pytest
+
 from src.assertions.semantic_judge import (
     ContradictionVerdict,
     build_judge_prompt,
@@ -49,3 +51,24 @@ class TestParseVerdict:
 
     def test_none_payload_is_none(self):
         assert parse_verdict(None) is None
+
+
+class _NoKeyConfig:
+    openai_api_key = None
+    openai_model = "gpt-4o-mini"
+    llm_timeout = 30.0
+    circuit_failure_threshold = 5
+    circuit_recovery_timeout = 60.0
+
+
+@pytest.mark.asyncio
+async def test_judge_short_circuits_without_api_key():
+    # Misconfigured (enabled but no key): return None WITHOUT tripping the
+    # breaker or creating a client (which would silently no-op every call).
+    from src.assertions.semantic_judge import SemanticContradictionJudge
+
+    judge = SemanticContradictionJudge(_NoKeyConfig())
+    verdict = await judge.judge("a", "b")
+
+    assert verdict is None
+    assert judge._breaker.consecutive_failures == 0  # breaker untouched

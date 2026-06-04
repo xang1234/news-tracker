@@ -447,6 +447,17 @@ class Settings(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def validate_reconciliation_flags(self) -> "Settings":
+        """Reject reconciliation flag combinations that would silently no-op."""
+        if self.semantic_contradiction_enabled and not self.claim_reconciliation_enabled:
+            raise ValueError("semantic_contradiction_enabled requires claim_reconciliation_enabled")
+        if self.claim_reconciliation_enabled and not self.narrative_claim_extraction_enabled:
+            raise ValueError(
+                "claim_reconciliation_enabled requires narrative_claim_extraction_enabled"
+            )
+        return self
+
 
 @lru_cache
 def get_settings() -> Settings:

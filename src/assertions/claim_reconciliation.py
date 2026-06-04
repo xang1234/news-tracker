@@ -8,7 +8,11 @@ therefore tier-agnostic and lives here rather than inside any single tier.
 
 from __future__ import annotations
 
+import structlog
+
 from src.claims.schemas import EvidenceClaim
+
+logger = structlog.get_logger(__name__)
 
 
 async def resolve_claim_subject(claim: EvidenceClaim, resolver) -> EvidenceClaim:
@@ -23,7 +27,18 @@ async def resolve_claim_subject(claim: EvidenceClaim, resolver) -> EvidenceClaim
     """
     if claim.subject_concept_id is not None:
         return claim
-    result = await resolver.resolve(claim.subject_text, concept_type="issuer")
+    # Best-effort: a transient resolver failure must not drop the claim —
+    # leave the subject unresolved and let persistence continue.
+    try:
+        result = await resolver.resolve(claim.subject_text, concept_type="issuer")
+    except Exception as e:
+        logger.warning(
+            "Subject resolution failed; leaving claim unresolved",
+            claim_id=claim.claim_id,
+            subject_text=claim.subject_text,
+            error=str(e),
+        )
+        return claim
     if result.resolved:
         claim.subject_concept_id = result.concept_id
     return claim

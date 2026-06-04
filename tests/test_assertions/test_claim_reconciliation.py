@@ -78,3 +78,17 @@ async def test_resolves_non_numeric_claims_too():
     resolver = _FakeResolver("concept_tsmc")
     await resolve_claim_subject(claim, resolver)
     assert claim.subject_concept_id == "concept_tsmc"
+
+
+class _ThrowingResolver:
+    async def resolve(self, mention: str, **kwargs):
+        raise RuntimeError("resolver unavailable")
+
+
+@pytest.mark.asyncio
+async def test_resolver_failure_is_best_effort():
+    # A transient resolver error must NOT propagate (which would drop the
+    # claim before persistence); leave the subject unresolved and continue.
+    claim = _claim(None)
+    result = await resolve_claim_subject(claim, _ThrowingResolver())
+    assert result.subject_concept_id is None

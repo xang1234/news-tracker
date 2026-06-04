@@ -183,6 +183,20 @@ class AssertionRepository:
         )
         return [_row_to_assertion(row) for row in rows]
 
+    async def count_assertions(self, *, status: str | None = None) -> int:
+        """Count assertions matching an optional status filter (unpaged total)."""
+        conditions: list[str] = []
+        params: list[Any] = []
+        if status is not None:
+            params.append(status)
+            conditions.append(f"status = ${len(params)}")
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        row = await self._db.fetchrow(
+            f"SELECT COUNT(*) AS cnt FROM news_intel.resolved_assertions {where}",
+            *params,
+        )
+        return int(row["cnt"]) if row else 0
+
     async def list_for_concept(
         self, concept_id: str, *, limit: int = 50
     ) -> list[ResolvedAssertion]:

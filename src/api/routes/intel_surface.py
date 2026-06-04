@@ -751,15 +751,15 @@ async def list_reconciled_assertions(
 ) -> AssertionListResponse:
     from src.assertions.repository import AssertionRepository
 
+    repo = AssertionRepository(db)
     try:
-        assertions = await AssertionRepository(db).list_assertions(
-            status=assertion_status, limit=limit
-        )
+        assertions = await repo.list_assertions(status=assertion_status, limit=limit)
+        total = await repo.count_assertions(status=assertion_status)
     except UndefinedTableError:
         logger.warning("intel_schema_missing", endpoint="assertions_reconciled")
         return AssertionListResponse(assertions=[], total=0)
     items = [_resolved_to_response(a) for a in assertions]
-    return AssertionListResponse(assertions=items, total=len(items))
+    return AssertionListResponse(assertions=items, total=total)
 
 
 @router.get(

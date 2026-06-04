@@ -199,6 +199,12 @@ class ClaimReconciliationEngine:
         """Reconcile the incoming claim's assertion; returns it or None."""
         if claim.subject_concept_id is None:
             return None
+        # A named-but-unresolved object can't be reconciled: every such claim
+        # would collapse onto one (subject, predicate, None) assertion and
+        # CorroborationTier would count distinct objects as mutual support.
+        # (Genuinely unary claims have object_text=None and are fine.)
+        if claim.object_text is not None and claim.object_concept_id is None:
+            return None
 
         applicable = [t for t in self._tiers if t.applies_to(claim)]
         if not applicable:
