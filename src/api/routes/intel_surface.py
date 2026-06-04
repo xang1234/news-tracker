@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from asyncpg.exceptions import UndefinedTableError
@@ -28,6 +28,9 @@ from src.api.dependencies import (
 )
 from src.api.models import ErrorResponse
 from src.contracts.intelligence.lanes import ALL_LANES
+
+if TYPE_CHECKING:
+    from src.assertions.schemas import ResolvedAssertion
 from src.publish.lane_health import compute_lane_health
 from src.publish.service import PublishService
 from src.storage.database import Database
@@ -701,7 +704,7 @@ async def _list_assertions_impl(
     return AssertionListResponse(assertions=assertions, total=total)
 
 
-def _resolved_to_response(assertion: Any) -> AssertionResponse:
+def _resolved_to_response(assertion: ResolvedAssertion) -> AssertionResponse:
     """Map a working-table ResolvedAssertion to the API response shape."""
     return AssertionResponse(
         assertion_id=assertion.assertion_id,

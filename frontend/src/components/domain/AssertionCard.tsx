@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { pct, timeAgo } from '@/lib/formatters';
+import { pct, timeAgo, assertionVerdict } from '@/lib/formatters';
 import { ASSERTION_STATUS_COLORS } from '@/lib/constants';
 
 interface Assertion {
@@ -37,6 +37,7 @@ export function AssertionCard({ assertion, isSelected, onClick }: AssertionCardP
   const statusColor = ASSERTION_STATUS_COLORS[assertion.status] ?? 'bg-slate-500/20 text-slate-400';
   const predicateColor = PREDICATE_COLORS[assertion.predicate] ?? 'bg-secondary text-muted-foreground';
   const confidencePct = Math.round(assertion.confidence * 100);
+  const verdict = assertionVerdict(assertion);
 
   return (
     <div
@@ -50,6 +51,13 @@ export function AssertionCard({ assertion, isSelected, onClick }: AssertionCardP
         onClick && 'cursor-pointer hover:border-border/80',
       )}
     >
+      {/* Trust verdict */}
+      <span
+        className={cn('mb-2 inline-block rounded-full px-2 py-0.5 text-xs font-semibold', verdict.className)}
+      >
+        {verdict.label}
+      </span>
+
       {/* Triple: [subject] --predicate--> [object] */}
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className="rounded bg-secondary px-1.5 py-0.5 font-mono text-xs text-foreground">
