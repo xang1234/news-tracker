@@ -133,6 +133,11 @@ class TestListSecurities:
         assert item["exchange"] == "US"
         assert item["name"] == "NVIDIA Corporation"
         assert item["sector"] == "Semiconductors"
+        assert item["sec_cik"] is None
+        assert item["issuer_name"] == ""
+        assert item["former_names"] == []
+        assert item["external_identifiers"] == {}
+        assert item["identifier_lineage"] == []
         assert item["is_active"] is True
         assert "created_at" in item
 
@@ -208,9 +213,26 @@ class TestCreateSecurity:
                 "sector": "Tech",
                 "country": "US",
                 "currency": "USD",
+                "sec_cik": "CIK1045810",
+                "issuer_name": "NVIDIA Corporation",
+                "former_names": ["NVIDIA Corp"],
+                "external_identifiers": {"sec_ticker": "NVDA"},
+                "identifier_lineage": [
+                    {
+                        "identifier_type": "sec_cik",
+                        "value": "0001045810",
+                        "source": "sec_ticker_company",
+                    }
+                ],
             },
         )
         assert resp.status_code == 201
+        call_args = mock_security_repo.upsert.call_args[0][0]
+        assert call_args.sec_cik == "0001045810"
+        assert call_args.issuer_name == "NVIDIA Corporation"
+        assert call_args.former_names == ["NVIDIA Corp"]
+        assert call_args.external_identifiers == {"sec_ticker": "NVDA"}
+        assert call_args.identifier_lineage[0].source == "sec_ticker_company"
 
     @patch("src.api.routes.securities._get_settings")
     def test_create_missing_required_fields(self, mock_settings, client):
@@ -218,6 +240,54 @@ class TestCreateSecurity:
 
         resp = client.post("/securities", json={"ticker": "NVDA"})
         assert resp.status_code == 422
+
+    @patch("src.api.routes.securities._get_settings")
+    def test_create_rejects_invalid_sec_cik(self, mock_settings, client, mock_security_repo):
+        mock_settings.return_value = MagicMock(security_master_enabled=True)
+
+        resp = client.post(
+            "/securities",
+            json={
+                "ticker": "NVDA",
+                "exchange": "US",
+                "name": "NVIDIA",
+                "sec_cik": "not-a-cik",
+            },
+        )
+
+        assert resp.status_code == 422
+        mock_security_repo.upsert.assert_not_called()
+
+    @patch("src.api.routes.securities._get_settings")
+    def test_create_returns_422_for_domain_lineage_validation(
+        self, mock_settings, client, mock_security_repo, monkeypatch
+    ):
+        mock_settings.return_value = MagicMock(security_master_enabled=True)
+
+        def reject_lineage(_records):
+            raise ValueError("identifier_lineage source must be non-empty")
+
+        monkeypatch.setattr("src.api.routes.securities._lineage_request_records", reject_lineage)
+
+        resp = client.post(
+            "/securities",
+            json={
+                "ticker": "NVDA",
+                "exchange": "US",
+                "name": "NVIDIA",
+                "identifier_lineage": [
+                    {
+                        "identifier_type": "sec_cik",
+                        "value": "0001045810",
+                        "source": "sec_ticker_company",
+                    }
+                ],
+            },
+        )
+
+        assert resp.status_code == 422
+        assert "identifier_lineage" in resp.json()["detail"]
+        mock_security_repo.upsert.assert_not_called()
 
     @patch("src.api.routes.securities._get_settings")
     def test_create_refetch_fails(self, mock_settings, client, mock_security_repo):
@@ -282,6 +352,86 @@ class TestUpdateSecurity:
         call_args = mock_security_repo.upsert.call_args[0][0]
         assert call_args.sector == "Semiconductors"
         assert call_args.name == "NVIDIA Updated"
+
+    @patch("src.api.routes.securities._get_settings")
+    def test_update_sec_identifier_fields(self, mock_settings, client, mock_security_repo):
+        mock_settings.return_value = MagicMock(security_master_enabled=True)
+        existing = _make_security(sec_cik="0001045810", issuer_name="NVIDIA Corporation")
+        updated = _make_security(sec_cik="0001045810", issuer_name="NVIDIA Corp")
+        mock_security_repo.get_by_ticker.side_effect = [existing, updated]
+
+        resp = client.put(
+            "/securities/NVDA/US",
+            json={
+                "issuer_name": "NVIDIA Corp",
+                "former_names": ["NVIDIA Corporation"],
+                "external_identifiers": {"sec_ticker": "NVDA"},
+            },
+        )
+
+        assert resp.status_code == 200
+        call_args = mock_security_repo.upsert.call_args[0][0]
+        assert call_args.sec_cik == "0001045810"
+        assert call_args.issuer_name == "NVIDIA Corp"
+        assert call_args.former_names == ["NVIDIA Corporation"]
+        assert call_args.external_identifiers == {"sec_ticker": "NVDA"}
+
+    @patch("src.api.routes.securities._get_settings")
+    def test_update_can_clear_sec_cik(self, mock_settings, client, mock_security_repo):
+        mock_settings.return_value = MagicMock(security_master_enabled=True)
+        existing = _make_security(sec_cik="0001045810", issuer_name="NVIDIA Corporation")
+        updated = _make_security(sec_cik=None, issuer_name="NVIDIA Corporation")
+        mock_security_repo.get_by_ticker.side_effect = [existing, updated]
+
+        resp = client.put(
+            "/securities/NVDA/US",
+            json={"sec_cik": None},
+        )
+
+        assert resp.status_code == 200
+        call_args = mock_security_repo.upsert.call_args[0][0]
+        assert call_args.sec_cik is None
+
+    @patch("src.api.routes.securities._get_settings")
+    def test_update_rejects_invalid_sec_cik(self, mock_settings, client, mock_security_repo):
+        mock_settings.return_value = MagicMock(security_master_enabled=True)
+
+        resp = client.put(
+            "/securities/NVDA/US",
+            json={"sec_cik": "99999999999"},
+        )
+
+        assert resp.status_code == 422
+        mock_security_repo.upsert.assert_not_called()
+
+    @patch("src.api.routes.securities._get_settings")
+    def test_update_returns_422_for_domain_lineage_validation(
+        self, mock_settings, client, mock_security_repo, monkeypatch
+    ):
+        mock_settings.return_value = MagicMock(security_master_enabled=True)
+        mock_security_repo.get_by_ticker.return_value = _make_security()
+
+        def reject_lineage(_records):
+            raise ValueError("identifier_lineage source must be non-empty")
+
+        monkeypatch.setattr("src.api.routes.securities._lineage_request_records", reject_lineage)
+
+        resp = client.put(
+            "/securities/NVDA/US",
+            json={
+                "identifier_lineage": [
+                    {
+                        "identifier_type": "sec_cik",
+                        "value": "0001045810",
+                        "source": "sec_ticker_company",
+                    }
+                ]
+            },
+        )
+
+        assert resp.status_code == 422
+        assert "identifier_lineage" in resp.json()["detail"]
+        mock_security_repo.upsert.assert_not_called()
 
 
 # ── DELETE /securities/{ticker}/{exchange} ───────

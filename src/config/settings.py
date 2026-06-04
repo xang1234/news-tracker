@@ -117,6 +117,11 @@ class Settings(BaseSettings):
     reddit_rate_limit: int = 60
     news_rate_limit: int = 60
     substack_rate_limit: int = 10
+    rss_rate_limit: int = 20
+    rss_max_items_per_feed: int = Field(default=50, ge=1, le=500)
+    rss_recency_days: int = Field(default=7, ge=0, le=365)
+    rss_fetch_timeout: float = Field(default=15.0, ge=1.0, le=120.0)
+    rss_full_text_enabled: bool = True
 
     # Processing thresholds
     spam_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
@@ -271,6 +276,7 @@ class Settings(BaseSettings):
     sources_enabled: bool = Field(
         default=False, description="Enable database-backed source management"
     )
+    rss_enabled: bool = Field(default=False, description="Enable static RSS/Atom feed ingestion")
     sources_trigger_lock_ttl_seconds: int = Field(
         default=3600,
         ge=60,

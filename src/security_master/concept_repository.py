@@ -13,6 +13,7 @@ from typing import Any
 from src.security_master.concept_schemas import (
     Concept,
     ConceptAlias,
+    ConceptAliasCandidate,
     ConceptRelationship,
     ConceptThemeLink,
     IssuerSecurityLink,
@@ -29,10 +30,18 @@ def _parse_json(value: Any) -> dict[str, Any]:
     if value is None:
         return {}
     if isinstance(value, str):
-        return json.loads(value)
+        parsed = json.loads(value)
+        return parsed if isinstance(parsed, dict) else {}
     if isinstance(value, dict):
         return value
     return dict(value)
+
+
+def _record_value(record: Any, key: str, default: Any = None) -> Any:
+    try:
+        return record[key]
+    except (KeyError, IndexError):
+        return default
 
 
 def _row_to_concept(row: Any) -> Concept:
@@ -41,7 +50,9 @@ def _row_to_concept(row: Any) -> Concept:
         concept_type=row["concept_type"],
         canonical_name=row["canonical_name"],
         description=row["description"],
-        metadata=_parse_json(row["metadata"]),
+        metadata=_parse_json(
+            _record_value(row, "metadata", _record_value(row, "concept_metadata", {}))
+        ),
         is_active=row["is_active"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -54,8 +65,39 @@ def _row_to_alias(row: Any) -> ConceptAlias:
         concept_id=row["concept_id"],
         alias_type=row["alias_type"],
         is_primary=row["is_primary"],
+        confidence=float(_record_value(row, "confidence", 1.0)),
+        source_attribution=_record_value(row, "source_attribution"),
+        review_status=_record_value(row, "review_status", "accepted"),
+        review_note=_record_value(row, "review_note", ""),
+        metadata=_parse_json(_record_value(row, "metadata", {})),
         created_at=row["created_at"],
     )
+
+
+def _row_to_alias_candidate(row: Any) -> ConceptAliasCandidate:
+    concept = Concept(
+        concept_id=row["concept_id"],
+        concept_type=row["concept_type"],
+        canonical_name=row["canonical_name"],
+        description=row["description"],
+        metadata=_parse_json(_record_value(row, "concept_metadata", {})),
+        is_active=row["is_active"],
+        created_at=_record_value(row, "concept_created_at"),
+        updated_at=row["updated_at"],
+    )
+    alias = ConceptAlias(
+        alias=row["alias"],
+        concept_id=row["concept_id"],
+        alias_type=row["alias_type"],
+        is_primary=row["is_primary"],
+        confidence=float(row["confidence"]),
+        source_attribution=row["source_attribution"],
+        review_status=row["review_status"],
+        review_note=row["review_note"],
+        metadata=_parse_json(row["alias_metadata"]),
+        created_at=row["created_at"],
+    )
+    return ConceptAliasCandidate(concept=concept, alias=alias)
 
 
 def _row_to_link(row: Any) -> IssuerSecurityLink:
@@ -205,18 +247,66 @@ class ConceptRepository:
         row = await self._db.fetchrow(
             """
             INSERT INTO concept_aliases (
-                alias, concept_id, alias_type, is_primary
-            ) VALUES ($1, $2, $3, $4)
+                alias, concept_id, alias_type, is_primary,
+                confidence, source_attribution, review_status,
+                review_note, metadata
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ON CONFLICT (alias, concept_id) DO UPDATE
-            SET alias_type = $3, is_primary = $4
+            SET alias_type = $3,
+                is_primary = $4,
+                confidence = $5,
+                source_attribution = $6,
+                review_status = $7,
+                review_note = $8,
+                metadata = $9
             RETURNING *
             """,
             alias.alias,
             alias.concept_id,
             alias.alias_type,
             alias.is_primary,
+            alias.confidence,
+            alias.source_attribution,
+            alias.review_status,
+            alias.review_note,
+            json.dumps(alias.metadata),
         )
         return _row_to_alias(row)
+
+    async def resolve_alias_candidates(
+        self,
+        alias: str,
+        *,
+        limit: int = 10,
+        include_rejected: bool = False,
+    ) -> list[ConceptAliasCandidate]:
+        """Return all active concept candidates for a case-insensitive alias."""
+        review_filter = "" if include_rejected else "AND ca.review_status <> 'rejected'"
+        rows = await self._db.fetch(
+            f"""
+            SELECT
+                c.concept_id, c.concept_type, c.canonical_name, c.description,
+                c.metadata AS concept_metadata, c.is_active,
+                c.created_at AS concept_created_at, c.updated_at,
+                ca.alias, ca.alias_type, ca.is_primary, ca.confidence,
+                ca.source_attribution, ca.review_status, ca.review_note,
+                ca.metadata AS alias_metadata, ca.created_at
+            FROM concepts c
+            JOIN concept_aliases ca ON c.concept_id = ca.concept_id
+            WHERE lower(ca.alias) = lower($1)
+              AND c.is_active = TRUE
+              {review_filter}
+            ORDER BY ca.is_primary DESC,
+                     (ca.alias = $1)::int DESC,
+                     CASE ca.review_status WHEN 'accepted' THEN 0 ELSE 1 END,
+                     ca.confidence DESC,
+                     c.concept_id
+            LIMIT $2
+            """,
+            alias,
+            limit,
+        )
+        return [_row_to_alias_candidate(row) for row in rows]
 
     async def resolve_alias(self, alias: str) -> Concept | None:
         """Resolve an alias to its concept (case-insensitive).
@@ -225,20 +315,8 @@ class ConceptRepository:
         is deterministic: prefer primary aliases, then exact case match,
         then earliest concept_id alphabetically.
         """
-        row = await self._db.fetchrow(
-            """
-            SELECT c.* FROM concepts c
-            JOIN concept_aliases ca ON c.concept_id = ca.concept_id
-            WHERE lower(ca.alias) = lower($1)
-              AND c.is_active = TRUE
-            ORDER BY ca.is_primary DESC,
-                     (ca.alias = $1)::int DESC,
-                     c.concept_id
-            LIMIT 1
-            """,
-            alias,
-        )
-        return _row_to_concept(row) if row else None
+        candidates = await self.resolve_alias_candidates(alias, limit=1)
+        return candidates[0].concept if candidates else None
 
     async def get_aliases(self, concept_id: str) -> list[ConceptAlias]:
         """Get all aliases for a concept."""

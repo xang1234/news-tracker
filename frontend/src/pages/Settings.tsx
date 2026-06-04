@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Radio, Plus, Upload, ChevronLeft, ChevronRight, RefreshCw, Shield } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
@@ -24,6 +24,7 @@ import {
   useUpdateSource,
   useDeactivateSource,
   useTriggerIngestion,
+  useRssSourceHealth,
   type SourceFilters as ApiSourceFilters,
   type SourceItem,
 } from '@/api/hooks/useSources';
@@ -80,6 +81,7 @@ export default function Settings() {
   const updateMutation = useUpdateSource();
   const deactivateMutation = useDeactivateSource();
   const triggerMutation = useTriggerIngestion();
+  const rssHealth = useRssSourceHealth(activeTab === 'sources');
 
   useEffect(() => {
     if (triggerMutation.isSuccess || triggerMutation.isError) {
@@ -116,6 +118,19 @@ export default function Settings() {
   const twitterCount = sources.data?.sources.filter((s) => s.platform === 'twitter').length ?? 0;
   const redditCount = sources.data?.sources.filter((s) => s.platform === 'reddit').length ?? 0;
   const substackCount = sources.data?.sources.filter((s) => s.platform === 'substack').length ?? 0;
+  const rssCount = sources.data?.sources.filter((s) => s.platform === 'rss').length ?? 0;
+  const rssHealthBySlug = useMemo(
+    () => new Map((rssHealth.data?.feeds ?? []).map((feed) => [feed.slug, feed])),
+    [rssHealth.data?.feeds],
+  );
+  const sourceRows = useMemo(
+    () =>
+      (sources.data?.sources ?? []).map((source) => ({
+        ...source,
+        rssHealth: source.platform === 'rss' ? rssHealthBySlug.get(source.identifier) : undefined,
+      })),
+    [rssHealthBySlug, sources.data?.sources],
+  );
 
   const selectTab = (tab: SettingsTab) => {
     setSearchParams(tab === 'sources' ? {} : { tab }, { replace: true });
@@ -152,7 +167,7 @@ export default function Settings() {
         {activeTab === 'sources' && (
           <div className="mt-6">
             <p className="text-sm text-muted-foreground">
-              Manage ingestion sources for Twitter, Reddit, and Substack.
+              Manage ingestion sources for Twitter, Reddit, Substack, and RSS.
             </p>
 
             <div className="mt-4 flex items-center justify-end gap-2">
@@ -193,9 +208,10 @@ export default function Settings() {
               </div>
             )}
 
-            <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
               {sources.isLoading ? (
                 <>
+                  <MetricCardSkeleton />
                   <MetricCardSkeleton />
                   <MetricCardSkeleton />
                   <MetricCardSkeleton />
@@ -207,6 +223,7 @@ export default function Settings() {
                   <MetricCard label="Twitter" value={twitterCount} />
                   <MetricCard label="Reddit" value={redditCount} />
                   <MetricCard label="Substack" value={substackCount} />
+                  <MetricCard label="RSS" value={rssCount} />
                 </>
               )}
             </div>
@@ -243,7 +260,7 @@ export default function Settings() {
               )}
               {sources.data && sources.data.sources.length > 0 && (
                 <SourcesTable
-                  sources={sources.data.sources}
+                  sources={sourceRows}
                   onEdit={(p, i) => {
                     const item = sources.data?.sources.find((s) => s.platform === p && s.identifier === i);
                     if (item) setEditItem(item);

@@ -148,6 +148,26 @@ class TestSymbolRollups:
         assert d["symbol"] == "TSM"
         assert d["run_count"] == 2
 
+    def test_rollup_includes_innovation_evidence_separately(self) -> None:
+        run = _make_run(ticker_counts={"NVDA": 3})
+        sec_fact = {"event_id": "sec_delta:nvda", "evidence_role": "corroborating"}
+        innovation = {
+            "source_type": "patent",
+            "source_id": "US123",
+            "confidence_label": "medium",
+        }
+
+        rollups = build_symbol_rollups(
+            [run],
+            {},
+            sec_fact_evidence_by_symbol={"NVDA": [sec_fact]},
+            innovation_evidence_by_symbol={"NVDA": [innovation]},
+        )
+
+        assert rollups[0].sec_fact_evidence == [sec_fact]
+        assert rollups[0].innovation_evidence == [innovation]
+        assert rollups[0].to_dict()["innovation_evidence"] == [innovation]
+
     def test_empty_runs(self) -> None:
         rollups = build_symbol_rollups([], {})
         assert rollups == []
@@ -208,6 +228,37 @@ class TestThemeRollups:
         rollups = build_theme_rollups([run], {run.run_id: comp})
         assert rollups[0].top_symbols[0] == "TSM"  # highest count
 
+    def test_sec_fact_evidence_attached_once_per_symbol(self) -> None:
+        r1 = _make_run("nr_1", ticker_counts={"NVDA": 2})
+        r2 = _make_run("nr_2", ticker_counts={"NVDA": 4})
+        evidence = {"event_id": "sec_delta:nvda", "evidence_role": "corroborating"}
+
+        rollups = build_theme_rollups(
+            [r1, r2],
+            {},
+            sec_fact_evidence_by_symbol={"NVDA": [evidence]},
+        )
+
+        assert rollups[0].sec_fact_evidence == [evidence]
+
+    def test_theme_rollup_includes_theme_and_symbol_innovation_evidence(self) -> None:
+        run = _make_run(ticker_counts={"NVDA": 2}, theme_id="theme_hbm")
+        theme_evidence = {"source_type": "research", "source_id": "https://openalex.org/W1"}
+        symbol_evidence = {"source_type": "patent", "source_id": "US123"}
+
+        rollups = build_theme_rollups(
+            [run],
+            {},
+            innovation_evidence_by_theme={"theme_hbm": [theme_evidence]},
+            innovation_evidence_by_symbol={"NVDA": [symbol_evidence]},
+        )
+
+        assert rollups[0].innovation_evidence == [theme_evidence, symbol_evidence]
+        assert rollups[0].to_dict()["innovation_evidence"] == [
+            theme_evidence,
+            symbol_evidence,
+        ]
+
     def test_rollup_to_dict(self) -> None:
         rollup = ThemeRollup(
             theme_id="theme_hbm",
@@ -260,10 +311,60 @@ class TestPreparePublication:
         result = prepare_narrative_publication(runs, _healthy_status(), now=NOW)
         assert len(result.symbol_rollups) == 2
 
+    def test_symbol_rollups_include_sec_fact_evidence(self) -> None:
+        runs = [_make_run(ticker_counts={"NVDA": 3})]
+        evidence = {
+            "event_id": "sec_delta:nvda",
+            "reason_code": "sec_fact_revenue_growth",
+            "evidence_role": "corroborating",
+            "lineage": {"accession_number": "0001045810-26-000001"},
+        }
+
+        result = prepare_narrative_publication(
+            runs,
+            _healthy_status(),
+            now=NOW,
+            sec_fact_evidence_by_symbol={"NVDA": [evidence]},
+        )
+
+        rollup = result.symbol_rollups[0]
+        assert rollup.symbol == "NVDA"
+        assert rollup.sec_fact_evidence == [evidence]
+        assert rollup.to_dict()["sec_fact_evidence"][0]["lineage"]["accession_number"] == (
+            "0001045810-26-000001"
+        )
+
     def test_theme_rollups_included(self) -> None:
         runs = [_make_run(theme_id="theme_a"), _make_run("nr_2", theme_id="theme_b")]
         result = prepare_narrative_publication(runs, _healthy_status(), now=NOW)
         assert len(result.theme_rollups) == 2
+
+    def test_theme_rollups_aggregate_sec_fact_evidence_from_symbols(self) -> None:
+        runs = [_make_run(ticker_counts={"NVDA": 3, "AMD": 1})]
+        evidence = {"event_id": "sec_delta:nvda", "evidence_role": "corroborating"}
+
+        result = prepare_narrative_publication(
+            runs,
+            _healthy_status(),
+            now=NOW,
+            sec_fact_evidence_by_symbol={"NVDA": [evidence]},
+        )
+
+        assert result.theme_rollups[0].sec_fact_evidence == [evidence]
+
+    def test_prepare_publication_includes_innovation_evidence_separately(self) -> None:
+        runs = [_make_run(ticker_counts={"NVDA": 3}, theme_id="theme_hbm")]
+        innovation = {"source_type": "research", "source_id": "https://openalex.org/W1"}
+
+        result = prepare_narrative_publication(
+            runs,
+            _healthy_status(),
+            now=NOW,
+            innovation_evidence_by_theme={"theme_hbm": [innovation]},
+        )
+
+        assert result.theme_rollups[0].innovation_evidence == [innovation]
+        assert result.theme_rollups[0].to_dict()["innovation_evidence"] == [innovation]
 
     def test_empty_runs(self) -> None:
         result = prepare_narrative_publication([], _healthy_status(), now=NOW)

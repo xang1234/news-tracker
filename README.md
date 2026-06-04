@@ -170,6 +170,26 @@ Divergence payloads include reason code, severity, human-readable summary, and s
 4. Publish layer creates/updates manifests and object state.
 5. Consumers query published objects/read-model surfaces.
 
+## Datasource Coverage
+
+Current source families include:
+
+- Social/news ingestion: X/Twitter, Reddit, Substack, and news adapters.
+- RSS/Atom ingestion: a generic `FeedAdapter` ingests curated RSS 2.0 and Atom feeds as normal `NormalizedDocument` article records with source category, authority, full-text mode, feed health, conditional GET lineage, recency limits, per-feed caps, and per-run dedupe. The seeded catalog covers first-party company/IR and technical feeds from NVIDIA, AMD, Intel, Micron, KLA, and Samsung; semiconductor trade feeds from Semiconductor Engineering, EE Times, Semiconductor Digest, Semiconductor Today, and SemiWiki; and broad technology feeds from Tom's Hardware, The Verge, TechCrunch, and Ars Technica. Sources seeding converts the static catalog into `platform="rss"` rows with `metadata.url`, `metadata.category`, `metadata.authority`, and `metadata.full_text`, so operators can list, create, or deactivate RSS feeds through the existing Sources API without code changes. RSS health is exposed through `GET /sources/rss/health` and the Settings sources table, including active/stale/failing/inactive status, last fetch time, recent document count, and latest error. Run `uv run python scripts/validate_feeds.py` to catch malformed, duplicate, empty, or dead feed URLs before deploying catalog changes.
+- SEC filing lane: EDGAR filing search/fetch providers with centralized SEC fair-access policy.
+- Security master: ticker, exchange, alias, FIGI, and SEC issuer identifiers. Seeded semiconductor securities now carry SEC CIKs where available, SEC issuer names, former issuer-name slots, external identifier maps, and identifier-lineage records so Company Facts and submissions ingestion can audit how a ticker was mapped to an SEC issuer.
+- Nasdaq Trader symbol directories: the free Nasdaq Trader `nasdaqlisted.txt` and `otherlisted.txt` reference files can be ingested into the security master with `uv run news-tracker ingest-nasdaq-trader`. The parser preserves market category, listing-exchange code/name, financial status, round-lot size, ETF flags, test-issue flags, ACT/CQS/Nasdaq symbols, file-creation timestamps, and unexpected extra columns under `external_identifiers.nasdaq_trader`. Current non-test issues remain active, test issues are explicitly inactive, and previously Nasdaq-sourced symbols missing from the latest files are deactivated without deleting SEC CIKs or curated aliases.
+- SEC structured fundamentals: official `data.sec.gov` Submissions and XBRL Company Facts JSON for tracked issuer CIKs, cached by issuer, payload hash, source URL, and accession-number lineage. The provider uses declared SEC User-Agent headers, per-second fair-access rate limiting, retry handling for transient SEC failures, and exposes the SEC nightly bulk archive URLs for backfills.
+- SEC filing-delta events: point-in-time deltas derived from cached Company Facts for revenue, inventory, capex, R&D, gross-margin compression, and restatement/amended-filing changes. Events preserve accession, fact, unit, period, filed-date, fetched-at, source payload hash, and availability lineage for backtests and publication manifests.
+- SEC ownership events: Form 4, Schedule 13D/G, and 13F-HR filings can be parsed into structured `sec_ownership_events` rows instead of ambiguous news documents. Form 4 non-derivative and derivative transactions preserve transaction codes, acquired/disposed flags, prices, post-transaction holdings, and derivative underlying shares. Schedule 13D/G rows capture beneficial-ownership percentages and share counts, while 13F rows capture CUSIP-keyed quarterly positions, value, share counts, and point-in-time position deltas when a prior quarter is available. Events retain accession, filer, issuer mapping status, filing date, availability, source URL, amendment flags, and raw metadata for downstream guardrails.
+- Market-structure stress events: FINRA daily short-sale volume files and SEC fails-to-deliver files can be ingested with `uv run news-tracker ingest-market-structure` into structured `market_structure_events` rows. FINRA rows retain trade date, reporting facility, short-sale volume, short-exempt volume, total volume, ratio signals, and point-in-time availability based on FINRA's same-day post-close publication window. SEC fails-to-deliver rows retain settlement date, CUSIP, issuer description, fail quantity, prior close price, notional estimate, source file lineage, and fetch-time availability. Derived fields distinguish short-volume ratios, fails-to-deliver notional thresholds, and persistence streaks without treating either source as short-interest position data or evidence of abusive short selling.
+- Market-plumbing publication and replay: ownership and market-structure events can be converted into alert/read-model payloads with distinct labels for insider ownership, activist ownership, institutional holdings, short-volume anomalies, and fails-to-deliver anomalies. Short-volume and FTD payloads carry visible interpretation guardrails, while point-in-time replay delegates to repository `available_at` filters instead of event dates alone.
+- SEC delta publication and replay: filing manifests can publish SEC fact-delta payloads as `filing_fact` objects with stable reason codes, while narrative and structural payloads can attach SEC fact lineage as corroborating or contradictory evidence. Backtests can replay SEC delta availability through point-in-time `available_at` queries.
+- Innovation identity mapping: the concept registry supports patent/research alias resolution for issuer names, subsidiaries, acquired entities, labs, research institutions, and abbreviations before PatentsView, OpenAlex, or arXiv events are joined to securities. Alias rows retain confidence, source attribution, review status, review notes, and metadata so ambiguous assignee or affiliation matches remain auditable instead of being collapsed into a single company too early.
+- USPTO patent innovation signals: PatentsView-transition ingestion uses the free USPTO Open Data Portal patent/application search API when configured with an ODP API key, and can also normalize PatentsView/ODP bulk snapshot rows for offline backfills. Patent records preserve assignees, application/grant dates, CPC/IPC classifications, source lineage, fetched-at timestamps, snapshot staleness metadata, and family-level dedupe so duplicate applications and grants do not double-count the same invention. Linked signals require issuer-to-security mappings, retain ambiguous assignee candidates with confidence/review metadata, and attach configured CPC/IPC classes to innovation themes as slower-moving structural evidence.
+- Research innovation signals: OpenAlex Works metadata and arXiv Atom search feeds can be normalized into research/preprint records for curated semiconductor, AI infrastructure, materials, and EDA topics. Records retain titles, abstracts, authors, institutions, OpenAlex topics, arXiv categories, DOI/arXiv identifiers, publication dates, URLs, fetched-at timestamps, provider lineage, cursor/start pagination metadata, rate-limit hook usage, and duplicate DOI/arXiv suppression. Linked signals require institution-to-issuer and issuer-to-security mappings, skip weak issuer matches below the configured confidence floor, and map curated topics/categories to themes as slower-moving innovation evidence. Published structural and narrative outputs expose patents/research in separate `innovation_evidence` arrays with conservative low/medium confidence labels so users can inspect technology momentum without conflating it with news/social momentum or near-term catalysts.
+- Macro and supply-chain factors: FRED, BLS, BEA, Treasury Fiscal Data, Federal Reserve CSV, EIA, and Census sources for point-in-time ranking/backtest context.
+
 ## API Surfaces
 
 - Infrastructure/publish endpoints: `src/api/routes/intel.py`
@@ -229,6 +249,37 @@ NER_SPACY_MODEL=en_core_web_trf
 # Processing thresholds
 SPAM_THRESHOLD=0.7
 DUPLICATE_THRESHOLD=0.85
+
+# RSS/Atom ingestion (opt in)
+RSS_ENABLED=false
+RSS_RATE_LIMIT=20
+RSS_MAX_ITEMS_PER_FEED=50
+RSS_RECENCY_DAYS=7
+RSS_FULL_TEXT_ENABLED=true
+
+# Validate the curated RSS/Atom source catalog
+uv run python scripts/validate_feeds.py --skip-live
+uv run python scripts/validate_feeds.py
+
+# Example DB-backed RSS source row
+platform=rss
+identifier=semiconductor-engineering
+metadata.url=https://semiengineering.com/feed/
+metadata.category=trade_press
+metadata.authority=specialist
+metadata.full_text=true
+
+# Ingest free Nasdaq Trader listed-security reference files
+uv run news-tracker ingest-nasdaq-trader
+uv run news-tracker ingest-nasdaq-trader \
+  --nasdaq-listed-file /path/to/nasdaqlisted.txt \
+  --other-listed-file /path/to/otherlisted.txt
+
+# Ingest local FINRA daily short-volume and SEC fails-to-deliver files
+uv run news-tracker ingest-market-structure \
+  --finra-short-volume-file /path/to/CNMSshvolYYYYMMDD.txt \
+  --sec-fails-file /path/to/cnsfailsYYYYMMa.txt \
+  --fetched-at 2026-06-15T00:00:00Z
 ```
 
 The official X API is the primary Twitter/X ingestion path when `TWITTER_BEARER_TOKEN` is

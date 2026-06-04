@@ -2,13 +2,31 @@
 
 import json
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from src.security_master.config import SecurityMasterConfig
+from src.security_master.nasdaq_trader import NASDAQ_TRADER_EXTERNAL_KEY
 from src.security_master.service import SecurityMasterService
+
+NASDAQ_HEADER = (
+    "Symbol|Security Name|Market Category|Test Issue|Financial Status|Round Lot Size|ETF|NextShares"
+)
+OTHER_HEADER = (
+    "ACT Symbol|Security Name|Exchange|CQS Symbol|ETF|Round Lot Size|Test Issue|NASDAQ Symbol"
+)
+NASDAQ_LISTED_TEXT = f"""{NASDAQ_HEADER}
+NVDA|NVIDIA Corporation|Q|N|N|100|N|N
+File Creation Time: 0601202616:01|||||||
+"""
+
+OTHER_LISTED_TEXT = f"""{OTHER_HEADER}
+IBM|International Business Machines Corporation|N|IBM|N|100|N|IBM
+File Creation Time: 0601202616:02|||||||
+"""
 
 
 @pytest.fixture
@@ -119,7 +137,22 @@ class TestSeedFromJson:
     @pytest.mark.asyncio
     async def test_loads_and_upserts(self, service: SecurityMasterService, tmp_path: Path) -> None:
         seed_data = [
-            {"ticker": "TEST", "name": "Test Corp", "aliases": ["test"]},
+            {
+                "ticker": "TEST",
+                "name": "Test Corp",
+                "aliases": ["test"],
+                "sec_cik": "CIK1234567",
+                "issuer_name": "Test Corporation",
+                "former_names": ["Old Test Corp"],
+                "external_identifiers": {"sec_ticker": "TEST"},
+                "identifier_lineage": [
+                    {
+                        "identifier_type": "sec_cik",
+                        "value": "CIK1234567",
+                        "source": "sec_ticker_company",
+                    }
+                ],
+            },
         ]
         seed_file = tmp_path / "test_seed.json"
         seed_file.write_text(json.dumps(seed_data))
@@ -128,6 +161,11 @@ class TestSeedFromJson:
 
         assert result == 1  # bulk_upsert returns len(securities)
         service.repository._db.execute.assert_called_once()
+        args = service.repository._db.execute.call_args[0]
+        assert args[9] == ["0001234567"]
+        assert args[10] == ["Test Corporation"]
+        lineage = json.loads(args[13][0])
+        assert lineage[0]["value"] == "0001234567"
 
     @pytest.mark.asyncio
     async def test_invalidates_cache_after_seed(
@@ -142,6 +180,43 @@ class TestSeedFromJson:
 
         await service.seed_from_json(seed_file)
 
+        assert service._tickers_cache is None
+
+
+class TestNasdaqTraderIngestion:
+    """Tests for Nasdaq Trader symbol-directory ingestion."""
+
+    @pytest.mark.asyncio
+    async def test_reconciles_files_through_repository_and_invalidates_cache(
+        self,
+        service: SecurityMasterService,
+    ) -> None:
+        service.repository.get_by_keys = AsyncMock(return_value={})  # type: ignore[method-assign]
+        service.repository.list_by_external_identifier = AsyncMock(  # type: ignore[method-assign]
+            return_value=[],
+        )
+        service.repository.bulk_upsert = AsyncMock(return_value=2)  # type: ignore[method-assign]
+        service._tickers_cache = {"OLD"}
+        service._tickers_cached_at = time.monotonic()
+
+        result = await service.ingest_nasdaq_trader_symbol_directory(
+            NASDAQ_LISTED_TEXT,
+            OTHER_LISTED_TEXT,
+            observed_at=datetime(2026, 6, 1, 17, tzinfo=UTC),
+        )
+
+        service.repository.get_by_keys.assert_awaited_once()
+        service.repository.list_by_external_identifier.assert_awaited_once_with(
+            NASDAQ_TRADER_EXTERNAL_KEY,
+        )
+        service.repository.bulk_upsert.assert_awaited_once()
+        upserted = service.repository.bulk_upsert.call_args[0][0]
+        assert {security.ticker for security in upserted} == {"NVDA", "IBM"}
+        nvda = next(security for security in upserted if security.ticker == "NVDA")
+        assert nvda.external_identifiers[NASDAQ_TRADER_EXTERNAL_KEY]["last_seen_at"] == (
+            "2026-06-01T17:00:00+00:00"
+        )
+        assert result.current_record_count == 2
         assert service._tickers_cache is None
 
 

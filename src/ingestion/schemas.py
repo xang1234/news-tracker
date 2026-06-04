@@ -25,6 +25,7 @@ class Platform(str, Enum):
     REDDIT = "reddit"
     SUBSTACK = "substack"
     NEWS = "news"
+    RSS = "rss"
 
 
 class EngagementMetrics(BaseModel):
@@ -60,10 +61,10 @@ class EngagementMetrics(BaseModel):
 
         This is a simple heuristic that can be tuned based on backtesting.
         """
-        score = self.likes + (self.shares * 2) + self.comments
+        score = float(self.likes + (self.shares * 2) + self.comments)
         if self.upvote_ratio is not None:
             score *= self.upvote_ratio
-        return float(score)
+        return score
 
 
 class NormalizedDocument(BaseModel):

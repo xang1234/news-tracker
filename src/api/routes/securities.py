@@ -1,14 +1,17 @@
 """Securities Admin endpoints — CRUD for the security master table."""
 
 import time
+from typing import NoReturn
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import ValidationError
 from starlette.requests import Request
 
 from src.api.admin_models import (
     CreateSecurityRequest,
     SecuritiesListResponse,
+    SecurityIdentifierLineageItem,
     SecurityItem,
     UpdateSecurityRequest,
 )
@@ -18,7 +21,7 @@ from src.api.models import ErrorResponse
 from src.api.rate_limit import limiter
 from src.config.settings import get_settings as _get_settings
 from src.security_master.repository import SecurityMasterRepository
-from src.security_master.schemas import Security
+from src.security_master.schemas import Security, SecurityIdentifierLineage
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -42,10 +45,28 @@ def _security_to_item(s: Security) -> SecurityItem:
         sector=s.sector,
         country=s.country,
         currency=s.currency,
+        sec_cik=s.sec_cik,
+        issuer_name=s.issuer_name,
+        former_names=s.former_names,
+        external_identifiers=s.external_identifiers,
+        identifier_lineage=[
+            SecurityIdentifierLineageItem(**record.to_dict()) for record in s.identifier_lineage
+        ],
         is_active=s.is_active,
         created_at=s.created_at.isoformat() if s.created_at else None,
         updated_at=s.updated_at.isoformat() if s.updated_at else None,
     )
+
+
+def _lineage_request_records(
+    records: list[SecurityIdentifierLineageItem],
+) -> list[SecurityIdentifierLineage]:
+    return [SecurityIdentifierLineage.from_raw(record.model_dump()) for record in records]
+
+
+def _raise_security_input_validation_error(action: str, error: Exception) -> NoReturn:
+    logger.warning(f"{action}_security_validation_failed", error=str(error))
+    raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @router.get(
@@ -118,6 +139,11 @@ async def create_security(
             sector=body.sector,
             country=body.country,
             currency=body.currency,
+            sec_cik=body.sec_cik,
+            issuer_name=body.issuer_name,
+            former_names=body.former_names,
+            external_identifiers=body.external_identifiers,
+            identifier_lineage=_lineage_request_records(body.identifier_lineage),
         )
         await repo.upsert(security)
 
@@ -130,6 +156,8 @@ async def create_security(
         return _security_to_item(created)
     except HTTPException:
         raise
+    except (ValidationError, ValueError, TypeError) as e:
+        _raise_security_input_validation_error("create", e)
     except Exception as e:
         logger.error("create_security_failed", error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to create security")
@@ -173,6 +201,22 @@ async def update_security(
             sector=body.sector if body.sector is not None else existing.sector,
             country=body.country if body.country is not None else existing.country,
             currency=body.currency if body.currency is not None else existing.currency,
+            figi=existing.figi,
+            sec_cik=body.sec_cik if "sec_cik" in body.model_fields_set else existing.sec_cik,
+            issuer_name=body.issuer_name if body.issuer_name is not None else existing.issuer_name,
+            former_names=(
+                body.former_names if body.former_names is not None else existing.former_names
+            ),
+            external_identifiers=(
+                body.external_identifiers
+                if body.external_identifiers is not None
+                else existing.external_identifiers
+            ),
+            identifier_lineage=(
+                _lineage_request_records(body.identifier_lineage)
+                if body.identifier_lineage is not None
+                else existing.identifier_lineage
+            ),
             is_active=existing.is_active,
         )
         await repo.upsert(updated)
@@ -184,6 +228,8 @@ async def update_security(
         return _security_to_item(result)
     except HTTPException:
         raise
+    except (ValidationError, ValueError, TypeError) as e:
+        _raise_security_input_validation_error("update", e)
     except Exception as e:
         logger.error("update_security_failed", error=str(e), exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to update security")

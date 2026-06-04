@@ -166,6 +166,24 @@ class TestPathExplanation:
         assert expl.path_score == 0.5
         assert expl.path_sign == 1
 
+    def test_path_explanation_can_include_sec_fact_evidence(self) -> None:
+        evidence = {"event_id": "sec_delta:a", "evidence_role": "contradictory"}
+        expl = build_path_explanation(_path(target="A"), sec_fact_evidence=[evidence])
+
+        assert expl.sec_fact_evidence == [evidence]
+        assert expl.to_dict()["sec_fact_evidence"] == [evidence]
+
+    def test_path_explanation_can_include_innovation_evidence_separately(self) -> None:
+        evidence = {
+            "source_type": "patent",
+            "source_id": "US123",
+            "confidence_label": "medium",
+        }
+        expl = build_path_explanation(_path(target="A"), innovation_evidence=[evidence])
+
+        assert expl.innovation_evidence == [evidence]
+        assert expl.to_dict()["innovation_evidence"] == [evidence]
+
     def test_preserves_breakdown(self) -> None:
         p = _path()
         expl = build_path_explanation(p)
@@ -251,6 +269,30 @@ class TestBasketPayload:
         assert "concept_id" in payload.top_beneficiaries[0]
         assert "role" in payload.top_beneficiaries[0]
 
+    def test_top_members_include_sec_fact_evidence_by_concept(self) -> None:
+        evidence = {"event_id": "sec_delta:ben_0", "evidence_role": "corroborating"}
+        payload = build_basket_payload(
+            _basket(beneficiaries=2),
+            sec_fact_evidence_by_concept={"ben_0": [evidence]},
+        )
+
+        assert payload.top_beneficiaries[0]["sec_fact_evidence"] == [evidence]
+        assert "sec_fact_evidence" not in payload.top_beneficiaries[1]
+
+    def test_top_members_include_innovation_evidence_by_concept(self) -> None:
+        evidence = {
+            "source_type": "research",
+            "source_id": "https://openalex.org/W1",
+            "confidence_label": "low",
+        }
+        payload = build_basket_payload(
+            _basket(beneficiaries=2),
+            innovation_evidence_by_concept={"ben_0": [evidence]},
+        )
+
+        assert payload.top_beneficiaries[0]["innovation_evidence"] == [evidence]
+        assert "innovation_evidence" not in payload.top_beneficiaries[1]
+
     def test_to_dict(self) -> None:
         payload = build_basket_payload(_basket())
         d = payload.to_dict()
@@ -276,13 +318,18 @@ class TestPrepareStructuralPublication:
     def test_healthy_publication(self) -> None:
         paths = [_path(target="A"), _path(target="B")]
         baskets = [_basket()]
+        innovation_evidence = {"source_type": "patent", "source_id": "US123"}
         result = prepare_structural_publication(
             paths,
             baskets,
             _healthy_status(),
+            sec_fact_evidence_by_concept={"A": [{"event_id": "sec_delta:a"}]},
+            innovation_evidence_by_concept={"A": [innovation_evidence]},
         )
         assert result.published is True
         assert len(result.path_explanations) == 2
+        assert result.path_explanations[0].sec_fact_evidence == [{"event_id": "sec_delta:a"}]
+        assert result.path_explanations[0].innovation_evidence == [innovation_evidence]
         assert len(result.basket_payloads) == 1
         assert result.object_count == 3
         assert result.block_reason is None

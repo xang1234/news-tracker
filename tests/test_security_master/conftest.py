@@ -30,6 +30,18 @@ def sample_security() -> Security:
         sector="gpu_ai",
         country="US",
         currency="USD",
+        sec_cik="0001045810",
+        issuer_name="NVIDIA Corporation",
+        former_names=[],
+        external_identifiers={"sec_ticker": "NVDA"},
+        identifier_lineage=[
+            {
+                "identifier_type": "sec_cik",
+                "value": "0001045810",
+                "source": "sec_ticker_company",
+                "observed_at": "2026-05-31",
+            }
+        ],
     )
 
 
@@ -45,6 +57,18 @@ def sample_db_row() -> dict:
         "country": "US",
         "currency": "USD",
         "figi": None,
+        "sec_cik": "0001045810",
+        "issuer_name": "NVIDIA Corporation",
+        "former_names": [],
+        "external_identifiers": {"sec_ticker": "NVDA"},
+        "identifier_lineage": [
+            {
+                "identifier_type": "sec_cik",
+                "value": "0001045810",
+                "source": "sec_ticker_company",
+                "observed_at": "2026-05-31",
+            }
+        ],
         "is_active": True,
         "created_at": datetime(2025, 1, 1, tzinfo=UTC),
         "updated_at": datetime(2025, 1, 1, tzinfo=UTC),
@@ -63,6 +87,11 @@ def sample_korean_row() -> dict:
         "country": "KR",
         "currency": "KRW",
         "figi": "BBG000H7TBB4",
+        "sec_cik": None,
+        "issuer_name": "Samsung Electronics",
+        "former_names": ["Samsung Electronics Co., Ltd."],
+        "external_identifiers": {},
+        "identifier_lineage": [],
         "is_active": True,
         "created_at": datetime(2025, 1, 1, tzinfo=UTC),
         "updated_at": datetime(2025, 1, 1, tzinfo=UTC),

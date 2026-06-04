@@ -28,6 +28,11 @@ class TestSECPolicy:
         assert "User-Agent" in headers
         assert headers["User-Agent"] == policy.user_agent
 
+    def test_headers_do_not_force_json_accept_for_all_sec_endpoints(self) -> None:
+        policy = SECPolicy()
+
+        assert "Accept" not in policy.headers
+
     def test_archives_url(self) -> None:
         policy = SECPolicy()
         assert "Archives/edgar" in policy.archives_url

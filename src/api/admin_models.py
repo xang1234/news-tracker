@@ -1,10 +1,13 @@
 """Admin API models for sources and securities."""
 
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
-_ALLOWED_SOURCE_PLATFORMS = {"twitter", "reddit", "substack"}
+from src.security_master.schemas import normalize_sec_cik
+
+_ALLOWED_SOURCE_PLATFORMS = {"twitter", "reddit", "substack", "rss"}
+_RSS_REQUIRED_METADATA = ("url", "category")
 
 
 def _validate_source_platform(value: str) -> str:
@@ -13,6 +16,40 @@ def _validate_source_platform(value: str) -> str:
         allowed = ", ".join(sorted(_ALLOWED_SOURCE_PLATFORMS))
         raise ValueError(f"platform must be one of: {allowed}")
     return normalized
+
+
+def _validate_rss_source_metadata(metadata: dict[str, object]) -> None:
+    for key in _RSS_REQUIRED_METADATA:
+        value = metadata.get(key)
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"rss sources require metadata.{key}")
+
+    authority = metadata.get("authority")
+    if authority is not None and not isinstance(authority, str):
+        raise ValueError("rss metadata.authority must be a string when provided")
+
+    full_text = metadata.get("full_text")
+    if full_text is not None and not isinstance(full_text, bool):
+        raise ValueError("rss metadata.full_text must be a boolean when provided")
+
+
+def _normalize_optional_sec_cik(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return normalize_sec_cik(value)
+
+
+class SecurityIdentifierLineageItem(BaseModel):
+    """Auditable provenance for one security identifier."""
+
+    identifier_type: str = Field(..., min_length=1, description="Identifier kind")
+    value: str = Field(..., min_length=1, description="Identifier value")
+    source: str = Field(..., min_length=1, description="Source that supplied the identifier")
+    observed_at: str | None = Field(default=None, description="Observation date or timestamp")
+    valid_from: str | None = Field(default=None, description="Known validity start")
+    valid_to: str | None = Field(default=None, description="Known validity end")
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    metadata: dict[str, object] = Field(default_factory=dict)
 
 
 class SecurityItem(BaseModel):
@@ -25,6 +62,14 @@ class SecurityItem(BaseModel):
     sector: str = Field(default="", description="Sector classification")
     country: str = Field(default="US", description="Country code")
     currency: str = Field(default="USD", description="Trading currency")
+    sec_cik: str | None = Field(default=None, description="10-digit SEC CIK")
+    issuer_name: str = Field(default="", description="Issuer name reported to SEC")
+    former_names: list[str] = Field(default_factory=list, description="Former issuer names")
+    external_identifiers: dict[str, object] = Field(
+        default_factory=dict,
+        description="External identifiers such as SEC tickers, LEIs, and FIGI aliases",
+    )
+    identifier_lineage: list[SecurityIdentifierLineageItem] = Field(default_factory=list)
     is_active: bool = Field(default=True, description="Whether security is active")
     created_at: str | None = Field(default=None, description="Creation timestamp (ISO)")
     updated_at: str | None = Field(default=None, description="Last update timestamp (ISO)")
@@ -49,6 +94,16 @@ class CreateSecurityRequest(BaseModel):
     sector: str = Field(default="", description="Sector classification")
     country: str = Field(default="US", description="Country code")
     currency: str = Field(default="USD", description="Trading currency")
+    sec_cik: str | None = Field(default=None, description="10-digit SEC CIK")
+    issuer_name: str = Field(default="", description="Issuer name reported to SEC")
+    former_names: list[str] = Field(default_factory=list, description="Former issuer names")
+    external_identifiers: dict[str, object] = Field(default_factory=dict)
+    identifier_lineage: list[SecurityIdentifierLineageItem] = Field(default_factory=list)
+
+    @field_validator("sec_cik")
+    @classmethod
+    def validate_sec_cik(cls, value: str | None) -> str | None:
+        return _normalize_optional_sec_cik(value)
 
 
 class UpdateSecurityRequest(BaseModel):
@@ -59,13 +114,25 @@ class UpdateSecurityRequest(BaseModel):
     sector: str | None = Field(default=None, description="Sector classification")
     country: str | None = Field(default=None, description="Country code")
     currency: str | None = Field(default=None, description="Trading currency")
+    sec_cik: str | None = Field(default=None, description="10-digit SEC CIK")
+    issuer_name: str | None = Field(default=None, description="Issuer name reported to SEC")
+    former_names: list[str] | None = Field(default=None, description="Former issuer names")
+    external_identifiers: dict[str, object] | None = Field(default=None)
+    identifier_lineage: list[SecurityIdentifierLineageItem] | None = Field(default=None)
+
+    @field_validator("sec_cik")
+    @classmethod
+    def validate_sec_cik(cls, value: str | None) -> str | None:
+        return _normalize_optional_sec_cik(value)
 
 
 class SourceItem(BaseModel):
     """Single source record."""
 
-    platform: str = Field(..., description="Platform: twitter, reddit, substack")
-    identifier: str = Field(..., description="Handle, subreddit name, or publication slug")
+    platform: str = Field(..., description="Platform: twitter, reddit, substack, rss")
+    identifier: str = Field(
+        ..., description="Handle, subreddit name, publication slug, or feed slug"
+    )
     display_name: str = Field(default="", description="Human-readable display name")
     description: str = Field(default="", description="Short description")
     is_active: bool = Field(default=True, description="Whether source is active")
@@ -86,12 +153,41 @@ class SourcesListResponse(BaseModel):
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
 
 
+class RssSourceHealthItem(BaseModel):
+    """Operator-facing health for one RSS feed source."""
+
+    slug: str = Field(..., description="Stable RSS feed slug")
+    name: str = Field(..., description="Display name")
+    url: str = Field(..., description="Feed URL")
+    category: str = Field(..., description="RSS feed category")
+    is_active: bool = Field(..., description="Whether the source is enabled")
+    status: str = Field(
+        ...,
+        description="Operator status: active, stale, failing, inactive, or never_fetched",
+    )
+    is_producing: bool = Field(..., description="Whether the latest fetch yielded documents")
+    recent_document_count: int = Field(default=0, description="Documents yielded last fetch")
+    last_fetch_at: str | None = Field(default=None, description="Last feed fetch timestamp")
+    last_success_at: str | None = Field(default=None, description="Last successful fetch timestamp")
+    last_error_at: str | None = Field(default=None, description="Last failed fetch timestamp")
+    last_error: str = Field(default="", description="Most recent fetch or parse error")
+    health_status: str = Field(default="", description="Raw adapter health status")
+
+
+class RssSourceHealthResponse(BaseModel):
+    """RSS feed source health list."""
+
+    feeds: list[RssSourceHealthItem] = Field(..., description="RSS feed health entries")
+    total: int = Field(..., description="Number of RSS feeds returned")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
 class CreateSourceRequest(BaseModel):
     """Request to create a new source."""
 
-    platform: str = Field(..., description="Platform: twitter, reddit, substack")
+    platform: str = Field(..., description="Platform: twitter, reddit, substack, rss")
     identifier: str = Field(
-        ..., min_length=1, max_length=200, description="Handle, subreddit name, or slug"
+        ..., min_length=1, max_length=200, description="Handle, subreddit name, slug, or feed slug"
     )
     display_name: str = Field(default="", max_length=200, description="Human-readable name")
     description: str = Field(default="", max_length=500, description="Short description")
@@ -113,11 +209,22 @@ class CreateSourceRequest(BaseModel):
             raise ValueError("identifier must contain at least one non-empty character")
         return cleaned
 
+    @model_validator(mode="after")
+    def validate_rss_metadata(self) -> Self:
+        if self.platform == "rss":
+            _validate_rss_source_metadata(self.metadata)
+        return self
+
 
 class BulkCreateSourcesRequest(BaseModel):
     """Request to bulk-create sources for a single platform."""
 
-    platform: str = Field(..., description="Platform: twitter, reddit, substack")
+    platform: str = Field(
+        ...,
+        description=(
+            "Platform: twitter, reddit, substack. RSS requires metadata; use create source."
+        ),
+    )
     identifiers: list[str] = Field(
         ...,
         min_length=1,
@@ -128,7 +235,10 @@ class BulkCreateSourcesRequest(BaseModel):
     @field_validator("platform")
     @classmethod
     def validate_platform(cls, value: str) -> str:
-        return _validate_source_platform(value)
+        platform = _validate_source_platform(value)
+        if platform == "rss":
+            raise ValueError("RSS sources require metadata; use create source instead")
+        return platform
 
     @field_validator("identifiers")
     @classmethod
