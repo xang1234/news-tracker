@@ -92,6 +92,13 @@ class ProcessingService:
         self._claim_extraction_enabled = get_settings().narrative_claim_extraction_enabled
         self._claim_repo: Any = None  # Lazy-initialized ClaimRepository
 
+        # Claim reconciliation (resolve subjects + run contradiction tiers)
+        self._claim_reconciliation_enabled = (
+            get_settings().claim_reconciliation_enabled and self._claim_extraction_enabled
+        )
+        self._entity_resolver: Any = None  # Lazy-initialized EntityResolver
+        self._reconciliation_engine: Any = None  # Lazy-initialized ClaimReconciliationEngine
+
         logger.info(
             "Processing service initialized",
             batch_size=batch_size,
@@ -153,6 +160,106 @@ class ProcessingService:
             enable_events=enable_events,
         )
 
+    def _init_claim_reconciliation(self, claim_repo: Any) -> None:
+        """Build the entity resolver + contradiction tiers for a claim repo.
+
+        Kept lazy (called from start()/run_once) so the dependency graph
+        (concept repository, assertion repository, resolver cascade) is only
+        constructed when reconciliation is actually enabled. New tiers (e.g.
+        semantic) join the list without touching the persist path.
+        """
+        from src.assertions.reconciliation_engine import (
+            ClaimReconciliationEngine,
+            ContradictionTier,
+            CorroborationTier,
+            NumericTier,
+            PredicateContradictionTier,
+            SemanticTier,
+        )
+        from src.assertions.repository import AssertionRepository
+        from src.claims.resolver import EntityResolver
+        from src.security_master.concept_repository import ConceptRepository
+
+        self._entity_resolver = EntityResolver(ConceptRepository(self._database))
+        tiers: list[ContradictionTier] = [
+            NumericTier(),
+            PredicateContradictionTier(),
+            CorroborationTier(),
+        ]
+        if get_settings().semantic_contradiction_enabled:
+            from src.assertions.semantic_judge import SemanticContradictionJudge
+            from src.scoring.config import ScoringConfig
+
+            tiers.append(SemanticTier(SemanticContradictionJudge(ScoringConfig())))
+        self._reconciliation_engine = ClaimReconciliationEngine(
+            claim_repo,
+            AssertionRepository(self._database),
+            tiers=tiers,
+        )
+
+    async def _persist_claim(self, claim: Any, claim_repo: Any) -> None:
+        """Persist one extracted claim, with optional reconciliation.
+
+        When reconciliation is enabled: resolve the subject to a concept ID
+        *before* upsert (so the concept is persisted for future lookups), then
+        run each contradiction tier *after* upsert. Every tier is a no-op for
+        claims it doesn't apply to, so this is safe to call for every claim.
+        """
+        if self._claim_reconciliation_enabled and self._entity_resolver is not None:
+            from src.assertions.claim_reconciliation import resolve_claim_subject
+
+            await resolve_claim_subject(claim, self._entity_resolver)
+
+        await claim_repo.upsert_claim(claim)
+
+        if self._reconciliation_engine is not None:
+            await self._reconciliation_engine.reconcile_claim(claim)
+
+    async def _extract_and_persist_claims(self, doc: Any, claim_repo: Any) -> None:
+        """Stage 6: extract narrative claims from a document and persist them.
+
+        Phase-resilient (own try/except) and shared by the queue loop and
+        run_once so the extraction flow lives in exactly one place.
+        """
+        try:
+            from src.claims.narrative_extractor import extract_claims_from_document
+
+            claims = extract_claims_from_document(
+                doc_id=doc.id,
+                events=doc.events_extracted,
+                entities=doc.entities_mentioned,
+                content=doc.content,
+                published_at=doc.timestamp,
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to extract narrative claims",
+                doc_id=doc.id,
+                error=str(e),
+            )
+            return
+
+        # Persist each claim independently — one failing claim must not drop
+        # the rest of the document's claims.
+        persisted = 0
+        for claim in claims:
+            try:
+                await self._persist_claim(claim, claim_repo)
+                persisted += 1
+            except Exception as e:
+                logger.warning(
+                    "Failed to persist narrative claim",
+                    doc_id=doc.id,
+                    claim_id=getattr(claim, "claim_id", None),
+                    error=str(e),
+                )
+        if persisted:
+            logger.debug(
+                "Extracted narrative claims",
+                doc_id=doc.id,
+                claim_count=persisted,
+            )
+
     async def start(self) -> None:
         """
         Start the processing service.
@@ -188,6 +295,10 @@ class ProcessingService:
             from src.claims.repository import ClaimRepository
 
             self._claim_repo = ClaimRepository(self._database)
+
+        # Wire claim reconciliation (resolver + contradiction tiers) if enabled
+        if self._claim_reconciliation_enabled and self._claim_repo is not None:
+            self._init_claim_reconciliation(self._claim_repo)
 
         try:
             # Process messages from queue
@@ -354,33 +465,8 @@ class ProcessingService:
                         )
 
                 # Stage 6: Extract narrative claims (events/entities → claims)
-                if self._claim_extraction_enabled:
-                    try:
-                        from src.claims.narrative_extractor import (
-                            extract_claims_from_document,
-                        )
-
-                        claims = extract_claims_from_document(
-                            doc_id=doc.id,
-                            events=doc.events_extracted,
-                            entities=doc.entities_mentioned,
-                            content=doc.content,
-                            published_at=doc.timestamp,
-                        )
-                        if claims and self._claim_repo is not None:
-                            for claim in claims:
-                                await self._claim_repo.upsert_claim(claim)
-                            logger.debug(
-                                "Extracted narrative claims",
-                                doc_id=doc.id,
-                                claim_count=len(claims),
-                            )
-                    except Exception as e:
-                        logger.warning(
-                            "Failed to extract narrative claims",
-                            doc_id=doc.id,
-                            error=str(e),
-                        )
+                if self._claim_extraction_enabled and self._claim_repo is not None:
+                    await self._extract_and_persist_claims(doc, self._claim_repo)
 
                 processed += 1
                 self._metrics.documents_stored.labels(
@@ -454,6 +540,8 @@ class ProcessingService:
             from src.claims.repository import ClaimRepository
 
             claim_repo = ClaimRepository(self._database)
+            if self._claim_reconciliation_enabled:
+                self._init_claim_reconciliation(claim_repo)
 
         try:
             for doc in docs:
@@ -476,26 +564,7 @@ class ProcessingService:
 
                     # Stage 6: Extract narrative claims
                     if self._claim_extraction_enabled and claim_repo is not None:
-                        try:
-                            from src.claims.narrative_extractor import (
-                                extract_claims_from_document,
-                            )
-
-                            claims = extract_claims_from_document(
-                                doc_id=doc.id,
-                                events=doc.events_extracted,
-                                entities=doc.entities_mentioned,
-                                content=doc.content,
-                                published_at=doc.timestamp,
-                            )
-                            for claim in claims:
-                                await claim_repo.upsert_claim(claim)
-                        except Exception as e:
-                            logger.warning(
-                                "Failed to extract narrative claims in run_once",
-                                doc_id=doc.id,
-                                error=str(e),
-                            )
+                        await self._extract_and_persist_claims(doc, claim_repo)
 
                 except Exception as e:
                     stats["errors"] += 1

@@ -108,3 +108,86 @@ class TestUpsertNumericFields:
         passed = db.fetchrow.call_args.args
         assert "capex" in passed
         assert 42e9 in passed
+
+
+class TestListComparableNumericClaims:
+    """Cross-source comparable-fact lookup for numeric contradiction."""
+
+    async def test_maps_rows_to_claims(self) -> None:
+        db = AsyncMock()
+        db.fetch = AsyncMock(return_value=[_full_row(), _full_row(claim_id="claim_y")])
+        repo = ClaimRepository(db)
+
+        claims = await repo.list_comparable_numeric_claims(
+            subject_concept_id="concept_tsmc", metric="capex", period="2026"
+        )
+
+        assert [c.claim_id for c in claims] == ["claim_x", "claim_y"]
+
+    async def test_sql_filters_and_binds(self) -> None:
+        db = AsyncMock()
+        db.fetch = AsyncMock(return_value=[])
+        repo = ClaimRepository(db)
+
+        await repo.list_comparable_numeric_claims(
+            subject_concept_id="concept_tsmc", metric="capex", period="2026"
+        )
+
+        sql = db.fetch.call_args.args[0]
+        assert "subject_concept_id" in sql
+        assert "metric" in sql
+        # NULL-safe period match so undated facts group together.
+        assert "IS NOT DISTINCT FROM" in sql
+        # Only value-bearing, active facts are comparable.
+        assert "numeric_value IS NOT NULL" in sql
+        assert "status" in sql
+        passed = db.fetch.call_args.args
+        assert "concept_tsmc" in passed
+        assert "capex" in passed
+        assert "2026" in passed
+
+    async def test_handles_null_period(self) -> None:
+        db = AsyncMock()
+        db.fetch = AsyncMock(return_value=[])
+        repo = ClaimRepository(db)
+
+        await repo.list_comparable_numeric_claims(
+            subject_concept_id="concept_tsmc", metric="capex", period=None
+        )
+
+        passed = db.fetch.call_args.args
+        assert None in passed
+
+
+class TestListClaimsBySubjectPredicates:
+    """Lookup for predicate-polarity contradiction (antonym predicates)."""
+
+    async def test_maps_rows_to_claims(self) -> None:
+        db = AsyncMock()
+        db.fetch = AsyncMock(return_value=[_full_row(), _full_row(claim_id="claim_y")])
+        repo = ClaimRepository(db)
+
+        claims = await repo.list_claims_by_subject_predicates(
+            subject_concept_id="concept_tsmc",
+            predicates=["expands_capacity", "constrains_capacity"],
+        )
+
+        assert [c.claim_id for c in claims] == ["claim_x", "claim_y"]
+
+    async def test_sql_filters_and_binds(self) -> None:
+        db = AsyncMock()
+        db.fetch = AsyncMock(return_value=[])
+        repo = ClaimRepository(db)
+
+        predicates = ["expands_capacity", "constrains_capacity"]
+        await repo.list_claims_by_subject_predicates(
+            subject_concept_id="concept_tsmc", predicates=predicates
+        )
+
+        sql = db.fetch.call_args.args[0]
+        assert "subject_concept_id" in sql
+        assert "predicate = ANY" in sql
+        assert "status" in sql
+        passed = db.fetch.call_args.args
+        assert "concept_tsmc" in passed
+        assert predicates in passed

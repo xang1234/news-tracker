@@ -335,6 +335,22 @@ class Settings(BaseSettings):
         description="Enable evidence claim extraction from document events and entities",
     )
 
+    # Claim reconciliation: resolve claim subjects and run contradiction
+    # detection tiers (numeric + predicate-polarity) → flip assertions to
+    # 'disputed'. Requires narrative_claim_extraction_enabled (needs claims).
+    claim_reconciliation_enabled: bool = Field(
+        default=False,
+        description="Resolve claim subjects and reconcile them into assertions "
+        "(numeric + predicate-polarity contradiction detection)",
+    )
+    # LLM-judged semantic contradiction tier (residual non-numeric/no-antonym
+    # pairs). Off by default: it makes paid LLM calls. Reuses scoring config
+    # (API keys, model, budget) and requires claim_reconciliation_enabled.
+    semantic_contradiction_enabled: bool = Field(
+        default=False,
+        description="Enable the LLM-judged semantic contradiction tier (costs LLM calls)",
+    )
+
     # Sentiment Analysis
     sentiment_model_name: str = Field(
         default="ProsusAI/finbert", description="Model for sentiment analysis"
@@ -428,6 +444,17 @@ class Settings(BaseSettings):
         if self.cors_allow_credentials and "*" in self.cors_origin_list:
             raise ValueError(
                 "cors_allow_credentials=True is incompatible with wildcard CORS origins"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_reconciliation_flags(self) -> "Settings":
+        """Reject reconciliation flag combinations that would silently no-op."""
+        if self.semantic_contradiction_enabled and not self.claim_reconciliation_enabled:
+            raise ValueError("semantic_contradiction_enabled requires claim_reconciliation_enabled")
+        if self.claim_reconciliation_enabled and not self.narrative_claim_extraction_enabled:
+            raise ValueError(
+                "claim_reconciliation_enabled requires narrative_claim_extraction_enabled"
             )
         return self
 

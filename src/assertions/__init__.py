@@ -10,6 +10,7 @@ from src.assertions.aggregation import (
     ConfidenceBreakdown,
     aggregate_assertion,
 )
+from src.assertions.claim_reconciliation import resolve_claim_subject
 from src.assertions.edges import (
     ConceptExposure,
     DerivedEdge,
@@ -18,12 +19,27 @@ from src.assertions.edges import (
     compute_exposures,
     derive_edges,
 )
+from src.assertions.numeric_contradiction import numeric_link_types
+from src.assertions.predicate_contradiction import (
+    antonym_of,
+    polarity_link_types,
+    validity_overlaps,
+)
 from src.assertions.recompute import (
     AssertionDelta,
     RecomputeResult,
     build_recompute_result,
     find_affected_assertion_ids,
     recompute_assertion,
+)
+from src.assertions.reconciliation_engine import (
+    ClaimReconciliationEngine,
+    ContradictionTier,
+    CorroborationTier,
+    NumericTier,
+    PredicateContradictionTier,
+    SemanticTier,
+    merge_link_types,
 )
 from src.assertions.repository import AssertionRepository
 from src.assertions.schemas import (
@@ -33,6 +49,10 @@ from src.assertions.schemas import (
     ResolvedAssertion,
     make_assertion_id,
 )
+from src.assertions.semantic_judge import (
+    ContradictionVerdict,
+    SemanticContradictionJudge,
+)
 
 __all__ = [
     "VALID_ASSERTION_STATUSES",
@@ -40,18 +60,32 @@ __all__ = [
     "AssertionClaimLink",
     "AssertionDelta",
     "AssertionRepository",
+    "ClaimReconciliationEngine",
     "ConceptExposure",
     "ConfidenceBreakdown",
+    "ContradictionTier",
+    "ContradictionVerdict",
+    "CorroborationTier",
     "DerivedEdge",
+    "NumericTier",
     "PathCacheEntry",
+    "PredicateContradictionTier",
     "RecomputeResult",
     "ResolvedAssertion",
+    "SemanticContradictionJudge",
+    "SemanticTier",
     "aggregate_assertion",
+    "antonym_of",
     "build_path_cache",
     "build_recompute_result",
     "compute_exposures",
     "derive_edges",
     "find_affected_assertion_ids",
     "make_assertion_id",
+    "merge_link_types",
+    "numeric_link_types",
+    "polarity_link_types",
     "recompute_assertion",
+    "resolve_claim_subject",
+    "validity_overlaps",
 ]

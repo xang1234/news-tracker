@@ -46,3 +46,37 @@ export function humanize(snakeCase: string): string {
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
 }
+
+/**
+ * Derive a human-readable trust verdict + badge styling from an assertion's
+ * reconciliation state. Contradiction dominates; otherwise corroboration is
+ * graded by support count and source diversity.
+ */
+export interface AssertionVerdict {
+  label: string;
+  className: string;
+}
+
+export function assertionVerdict(a: {
+  status: string;
+  support_count: number;
+  contradiction_count: number;
+  source_diversity: number;
+}): AssertionVerdict {
+  if (a.status === 'disputed') {
+    return { label: 'Disputed', className: 'bg-red-500/20 text-red-400' };
+  }
+  if (a.contradiction_count > 0) {
+    return { label: 'Contested', className: 'bg-amber-500/20 text-amber-400' };
+  }
+  if (a.support_count >= 2 && a.source_diversity >= 2) {
+    return {
+      label: `Corroborated · ${a.source_diversity} sources`,
+      className: 'bg-emerald-500/20 text-emerald-400',
+    };
+  }
+  if (a.support_count >= 2) {
+    return { label: 'Supported', className: 'bg-emerald-500/20 text-emerald-300' };
+  }
+  return { label: 'Unverified', className: 'bg-slate-500/20 text-slate-400' };
+}

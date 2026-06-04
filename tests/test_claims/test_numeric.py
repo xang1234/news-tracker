@@ -7,14 +7,100 @@ normalized fields on a claim.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import datetime
+
 import pytest
 
 from src.claims.numeric import (
+    compare_numeric_facts,
     infer_metric,
     infer_modality,
+    numeric_link_type,
     parse_quantity,
 )
 from src.claims.schemas import VALID_MODALITIES
+
+
+@dataclass
+class _Fact:
+    """Minimal structural stand-in satisfying NumericClaimLike for tests."""
+
+    claim_id: str = "claim_x"
+    metric: str | None = "capex"
+    numeric_value: float | None = None
+    unit: str | None = "USD"
+    period: str | None = "2026-Q3"
+    confidence: float = 0.7
+    source_published_at: datetime | None = None
+
+
+class TestCompareNumericFacts:
+    """Pairwise comparison of two typed numeric facts."""
+
+    def test_same_metric_period_unit_within_tolerance_agrees(self):
+        a = _Fact(numeric_value=42e9)
+        b = _Fact(numeric_value=43e9)  # ~2.3% apart, under 5% default
+        assert compare_numeric_facts(a, b) == "agree"
+
+    def test_same_context_beyond_tolerance_contradicts(self):
+        a = _Fact(numeric_value=42e9)
+        b = _Fact(numeric_value=36e9)  # ~14% apart
+        assert compare_numeric_facts(a, b) == "contradict"
+
+    def test_different_unit_is_incomparable(self):
+        a = _Fact(numeric_value=42e9, unit="USD")
+        b = _Fact(numeric_value=42e9, unit="count")
+        assert compare_numeric_facts(a, b) == "incomparable"
+
+    def test_different_metric_is_incomparable(self):
+        a = _Fact(numeric_value=42e9, metric="capex")
+        b = _Fact(numeric_value=42e9, metric="capacity")
+        assert compare_numeric_facts(a, b) == "incomparable"
+
+    def test_different_period_is_incomparable(self):
+        a = _Fact(numeric_value=42e9, period="2026-Q3")
+        b = _Fact(numeric_value=42e9, period="2026-Q4")
+        assert compare_numeric_facts(a, b) == "incomparable"
+
+    def test_missing_value_is_incomparable(self):
+        a = _Fact(numeric_value=None)
+        b = _Fact(numeric_value=42e9)
+        assert compare_numeric_facts(a, b) == "incomparable"
+
+    def test_both_zero_agree(self):
+        a = _Fact(numeric_value=0.0)
+        b = _Fact(numeric_value=0.0)
+        assert compare_numeric_facts(a, b) == "agree"
+
+    def test_both_none_period_is_comparable(self):
+        a = _Fact(numeric_value=42e9, period=None)
+        b = _Fact(numeric_value=36e9, period=None)
+        assert compare_numeric_facts(a, b) == "contradict"
+
+    def test_custom_tolerance_widens_agreement(self):
+        a = _Fact(numeric_value=42e9)
+        b = _Fact(numeric_value=36e9)
+        assert compare_numeric_facts(a, b, rel_tolerance=0.20) == "agree"
+
+
+class TestNumericLinkType:
+    """Mapping pairwise comparison onto support/contradiction link types."""
+
+    def test_agree_maps_to_support(self):
+        a = _Fact(numeric_value=42e9)
+        b = _Fact(numeric_value=43e9)
+        assert numeric_link_type(a, b) == "support"
+
+    def test_contradict_maps_to_contradiction(self):
+        a = _Fact(numeric_value=42e9)
+        b = _Fact(numeric_value=36e9)
+        assert numeric_link_type(a, b) == "contradiction"
+
+    def test_incomparable_maps_to_none(self):
+        a = _Fact(numeric_value=42e9, unit="USD")
+        b = _Fact(numeric_value=42e9, unit="count")
+        assert numeric_link_type(a, b) is None
 
 
 class TestParseQuantity:
@@ -149,3 +235,23 @@ class TestInferModality:
 
     def test_none_text_is_confirmed(self):
         assert infer_modality(None) == "confirmed"
+
+
+class TestCompareNumericFactsMissingFields:
+    """Partially-populated facts (None metric/unit) must be incomparable,
+    not silently equal via None == None."""
+
+    def test_both_metric_none_is_incomparable(self):
+        a = _Fact(numeric_value=42e9, metric=None)
+        b = _Fact(numeric_value=43e9, metric=None)
+        assert compare_numeric_facts(a, b) == "incomparable"
+
+    def test_both_unit_none_is_incomparable(self):
+        a = _Fact(numeric_value=42e9, unit=None)
+        b = _Fact(numeric_value=43e9, unit=None)
+        assert compare_numeric_facts(a, b) == "incomparable"
+
+    def test_one_metric_none_is_incomparable(self):
+        a = _Fact(numeric_value=42e9, metric="capex")
+        b = _Fact(numeric_value=43e9, metric=None)
+        assert compare_numeric_facts(a, b) == "incomparable"
