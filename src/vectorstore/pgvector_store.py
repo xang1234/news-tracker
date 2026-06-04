@@ -11,6 +11,7 @@ from typing import Any
 import structlog
 
 from src.storage.database import Database
+from src.storage.pgvector import to_pgvector_literal
 from src.storage.repository import DocumentRepository
 from src.vectorstore.base import VectorSearchFilter, VectorSearchResult, VectorStore
 from src.vectorstore.config import VectorStoreConfig
@@ -105,7 +106,7 @@ class PgVectorStore(VectorStore):
             List of search results sorted by similarity (descending)
         """
         # Convert embedding to pgvector string format
-        embedding_str = f"[{','.join(str(x) for x in query_embedding)}]"
+        embedding_str = to_pgvector_literal(query_embedding)
 
         # Build dynamic query with filters
         conditions = ["embedding IS NOT NULL"]

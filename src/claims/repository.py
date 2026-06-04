@@ -26,7 +26,12 @@ def _parse_json(value: Any) -> dict[str, Any]:
     return dict(value)
 
 
-def _row_to_claim(row: Any) -> EvidenceClaim:
+def claim_from_row(row: Any) -> EvidenceClaim:
+    """Map a ``news_intel.evidence_claims`` row to an :class:`EvidenceClaim`.
+
+    Public so other repositories (e.g. retrieval) can hydrate claims from
+    their own queries without duplicating this 30-column mapping.
+    """
     return EvidenceClaim(
         claim_id=row["claim_id"],
         claim_key=row["claim_key"],
@@ -132,7 +137,7 @@ class ClaimRepository:
             claim.period,
             claim.modality,
         )
-        return _row_to_claim(row)
+        return claim_from_row(row)
 
     async def get_claim(self, claim_id: str) -> EvidenceClaim | None:
         """Fetch a claim by ID."""
@@ -140,7 +145,7 @@ class ClaimRepository:
             "SELECT * FROM news_intel.evidence_claims WHERE claim_id = $1",
             claim_id,
         )
-        return _row_to_claim(row) if row else None
+        return claim_from_row(row) if row else None
 
     async def get_by_key(self, claim_key: str) -> EvidenceClaim | None:
         """Fetch a claim by its deterministic key."""
@@ -148,7 +153,7 @@ class ClaimRepository:
             "SELECT * FROM news_intel.evidence_claims WHERE claim_key = $1",
             claim_key,
         )
-        return _row_to_claim(row) if row else None
+        return claim_from_row(row) if row else None
 
     async def list_claims(
         self,
@@ -189,7 +194,7 @@ class ClaimRepository:
             """,
             *params,
         )
-        return [_row_to_claim(row) for row in rows]
+        return [claim_from_row(row) for row in rows]
 
     async def list_comparable_numeric_claims(
         self,
@@ -223,7 +228,7 @@ class ClaimRepository:
             metric,
             period,
         )
-        return [_row_to_claim(row) for row in rows]
+        return [claim_from_row(row) for row in rows]
 
     async def list_claims_by_subject_predicates(
         self,
@@ -249,7 +254,7 @@ class ClaimRepository:
             subject_concept_id,
             predicates,
         )
-        return [_row_to_claim(row) for row in rows]
+        return [claim_from_row(row) for row in rows]
 
     async def update_status(self, claim_id: str, new_status: str) -> EvidenceClaim | None:
         """Update a claim's status."""
@@ -268,7 +273,7 @@ class ClaimRepository:
             claim_id,
             new_status,
         )
-        return _row_to_claim(row) if row else None
+        return claim_from_row(row) if row else None
 
     async def resolve_concepts(
         self,
@@ -290,4 +295,4 @@ class ClaimRepository:
             subject_concept_id,
             object_concept_id,
         )
-        return _row_to_claim(row) if row else None
+        return claim_from_row(row) if row else None

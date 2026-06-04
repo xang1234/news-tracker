@@ -25,6 +25,7 @@ from src.factors.cli import factors
 from src.market_structure.cli import ingest_market_structure
 from src.observability.logging import setup_logging
 from src.observability.metrics import get_metrics
+from src.retrieval.cli import claim_retrieval
 from src.security_master.cli import ingest_nasdaq_trader
 
 
@@ -80,6 +81,7 @@ def main(debug: bool) -> None:
 main.add_command(factors)
 main.add_command(ingest_nasdaq_trader)
 main.add_command(ingest_market_structure)
+main.add_command(claim_retrieval)
 
 
 @main.command()
