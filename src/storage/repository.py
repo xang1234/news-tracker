@@ -16,6 +16,7 @@ import asyncpg
 from src.ingestion.schemas import EngagementMetrics, NormalizedDocument, Platform
 from src.storage.database import Database
 from src.storage.migrations import apply_migrations
+from src.storage.pgvector import to_pgvector_literal
 
 logger = logging.getLogger(__name__)
 
@@ -631,7 +632,7 @@ class DocumentRepository:
             True if document was updated, False if not found
         """
         # Convert list to pgvector string format
-        embedding_str = f"[{','.join(str(x) for x in embedding)}]"
+        embedding_str = to_pgvector_literal(embedding)
         sql = """
             UPDATE documents
             SET embedding = $2, updated_at = NOW()
@@ -657,7 +658,7 @@ class DocumentRepository:
             True if document was updated, False if not found
         """
         # Convert list to pgvector string format
-        embedding_str = f"[{','.join(str(x) for x in embedding)}]"
+        embedding_str = to_pgvector_literal(embedding)
         sql = """
             UPDATE documents
             SET embedding_minilm = $2, updated_at = NOW()

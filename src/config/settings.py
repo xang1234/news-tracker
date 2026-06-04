@@ -351,6 +351,16 @@ class Settings(BaseSettings):
         description="Enable the LLM-judged semantic contradiction tier (costs LLM calls)",
     )
 
+    # Claim retrieval: semantic index over the structured claim layer so RAG
+    # briefings / Q&A retrieve verified claims, not raw documents. Read-mostly
+    # (search) plus a backfill that embeds claims; most useful with
+    # narrative_claim_extraction_enabled, but not a hard dependency (an empty
+    # index just returns no results).
+    claim_retrieval_enabled: bool = Field(
+        default=False,
+        description="Enable semantic retrieval over the structured evidence-claim layer",
+    )
+
     # Sentiment Analysis
     sentiment_model_name: str = Field(
         default="ProsusAI/finbert", description="Model for sentiment analysis"
