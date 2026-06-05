@@ -29,6 +29,7 @@ from src.api.routes import (
     intel_surface,
     keywords_route,
     ner,
+    qa,
     search,
     securities,
     sentiment,
@@ -252,6 +253,7 @@ Requires `X-API-KEY` header for all requests except `/health`.
     app.include_router(sources.router, tags=["sources"])
     app.include_router(intel.router, tags=["intel"])
     app.include_router(intel_surface.router, tags=["intel-surface"])
+    app.include_router(qa.router, tags=["qa"])
     app.include_router(ws_alerts.router, tags=["websocket"])
 
     # Root endpoint

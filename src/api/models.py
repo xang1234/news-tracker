@@ -390,6 +390,34 @@ class BriefingClauseModel(BaseModel):
     claim_ids: list[str] = Field(..., description="Evidence claim ids this clause cites")
 
 
+class QARequest(BaseModel):
+    """Request body for cited Q&A."""
+
+    question: str = Field(..., min_length=1, max_length=1000, description="Free-text question")
+
+
+class AnswerSegmentModel(BaseModel):
+    """One grounded sentence of a cited answer."""
+
+    text: str = Field(..., description="The segment text")
+    claim_ids: list[str] = Field(..., description="Evidence claim ids this segment cites")
+
+
+class CitedAnswerResponse(BaseModel):
+    """Response model for a cited answer with a grounding-sufficiency signal."""
+
+    question: str = Field(..., description="The question answered")
+    segments: list[AnswerSegmentModel] = Field(
+        ..., description="Answer segments, each citing >=1 evidence claim"
+    )
+    confidence: str = Field(..., description="'high' | 'low' | 'insufficient'")
+    claim_count: int = Field(..., description="Number of grounding claims retrieved")
+    generated_by: str = Field(..., description="'llm' or 'template'")
+    model: str | None = Field(default=None, description="LLM model, if LLM-generated")
+    generated_at: dt.datetime | None = Field(default=None, description="Generation timestamp")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
 class ThemeBriefingResponse(BaseModel):
     """Response model for a grounded, cited theme briefing."""
 

@@ -85,6 +85,7 @@ class AppServices:
         self.claim_repository: ClaimRepository | None = None
         self.claim_retrieval_service: Any = None
         self.briefing_service: Any = None
+        self.qa_service: Any = None
 
     async def get_database(self) -> Database:
         if self.database is None:
@@ -395,6 +396,20 @@ class AppServices:
                     )
         return self.briefing_service
 
+    async def get_qa_service(self) -> Any:
+        if self.qa_service is None:
+            from src.qa.service import CitedQAService
+            from src.scoring.config import ScoringConfig
+
+            retrieval_service = await self.get_claim_retrieval_service()
+            async with self._init_lock:
+                if self.qa_service is None:
+                    self.qa_service = CitedQAService(
+                        retrieval_service=retrieval_service,
+                        scoring_config=ScoringConfig(),
+                    )
+        return self.qa_service
+
     async def close(self) -> None:
         async def _close_async_resource(
             resource_name: str,
@@ -574,3 +589,7 @@ async def get_claim_retrieval_service(request: Request) -> Any:
 
 async def get_briefing_service(request: Request) -> Any:
     return await _get_services(request).get_briefing_service()
+
+
+async def get_qa_service(request: Request) -> Any:
+    return await _get_services(request).get_qa_service()
