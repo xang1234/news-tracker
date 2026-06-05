@@ -165,7 +165,7 @@ export default function EmbedPlayground() {
                 <SimilarityMatrix
                   labels={texts
                     .filter((t) => t.trim().length > 0)
-                    .map((t, i) => `Text ${i + 1}`)}
+                    .map((_, i) => `Text ${i + 1}`)}
                   matrix={matrix}
                 />
               </div>

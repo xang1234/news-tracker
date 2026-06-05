@@ -28,7 +28,7 @@ import {
 } from '@/api/hooks/useEntities';
 import { useAssertions } from '@/api/hooks/useEvidence';
 import { AssertionCard } from '@/components/domain/AssertionCard';
-import { timeAgo, latency } from '@/lib/formatters';
+import { timeAgo } from '@/lib/formatters';
 import { cn } from '@/lib/utils';
 
 const ENTITY_COLORS: Record<string, string> = {

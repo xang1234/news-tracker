@@ -4,7 +4,6 @@ import {
   Search,
   FileText,
   FlaskConical,
-  Tag,
   Layers,
   Bell,
   GitBranch,

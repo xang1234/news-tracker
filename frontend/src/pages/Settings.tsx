@@ -409,7 +409,7 @@ export default function Settings() {
                 initialValues={secEditItem}
                 isPending={secUpdateMutation.isPending}
                 onSubmit={(vals) => {
-                  secUpdateMutation.mutate({ ticker: secEditItem.ticker, exchange: secEditItem.exchange, ...vals }, { onSuccess: () => setSecEditItem(null) });
+                  secUpdateMutation.mutate(vals, { onSuccess: () => setSecEditItem(null) });
                 }}
               />
             )}

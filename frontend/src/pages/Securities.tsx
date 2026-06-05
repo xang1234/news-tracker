@@ -199,10 +199,7 @@ export default function Securities() {
             initialValues={editItem}
             isPending={updateMutation.isPending}
             onSubmit={(vals) => {
-              updateMutation.mutate(
-                { ticker: editItem.ticker, exchange: editItem.exchange, ...vals },
-                { onSuccess: () => setEditItem(null) },
-              );
+              updateMutation.mutate(vals, { onSuccess: () => setEditItem(null) });
             }}
           />
         )}
