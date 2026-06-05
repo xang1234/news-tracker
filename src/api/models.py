@@ -418,12 +418,29 @@ class CitedAnswerResponse(BaseModel):
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
 
 
+class ClaimCitationModel(BaseModel):
+    """Lineage for a cited claim, so the UI can link it to its evidence."""
+
+    claim_id: str = Field(..., description="Cited claim id")
+    subject_text: str = Field(..., description="Claim subject")
+    predicate: str = Field(..., description="Claim predicate")
+    object_text: str | None = Field(default=None, description="Claim object")
+    source_type: str = Field(..., description="document | filing_section | graph_edge | manual")
+    source_id: str = Field(..., description="Source id (e.g. document id) for the evidence link")
+    source_span_start: int | None = Field(default=None, description="Source span start offset")
+    source_span_end: int | None = Field(default=None, description="Source span end offset")
+    snippet: str | None = Field(default=None, description="Extracted source text span")
+
+
 class ThemeBriefingResponse(BaseModel):
     """Response model for a grounded, cited theme briefing."""
 
     theme_id: str = Field(..., description="Theme the briefing summarizes")
     clauses: list[BriefingClauseModel] = Field(
         ..., description="Briefing clauses, each citing >=1 evidence claim"
+    )
+    citations: list[ClaimCitationModel] = Field(
+        default_factory=list, description="Lineage for each cited claim, keyed by claim_id"
     )
     generated_by: str = Field(..., description="'llm' or 'template' (fallback)")
     claim_count: int = Field(..., description="Number of evidence claims considered")

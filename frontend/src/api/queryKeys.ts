@@ -14,6 +14,7 @@ export const queryKeys = {
   rankedThemes: (strategy?: string, maxTier?: number) =>
     ['themes', 'ranked', strategy, maxTier] as const,
   themeDetail: (id: string) => ['themes', id] as const,
+  themeBriefing: (id: string) => ['themes', id, 'briefing'] as const,
   themeMomentum: () => ['themes', 'momentum'] as const,
   themeCatalysts: (limit?: number, days?: number) =>
     ['themes', 'catalysts', limit, days] as const,
