@@ -460,6 +460,9 @@ class AppServices:
         self.publish_service = None
         self.assertion_repository = None
         self.claim_repository = None
+        self.claim_retrieval_service = None
+        self.briefing_service = None
+        self.qa_service = None
 
         redis_client = self.redis_client
         self.redis_client = None

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -16,6 +17,17 @@ from src.api.dependencies import get_qa_service
 from src.api.routes.qa import router
 from src.config.settings import get_settings
 from src.qa.schemas import CONFIDENCE_HIGH, CONFIDENCE_INSUFFICIENT, AnswerSegment, CitedAnswer
+
+
+@pytest.fixture(autouse=True)
+def _restore_cited_qa_enabled():
+    """Restore the global feature flag so these tests can't leak across order."""
+    settings = get_settings()
+    original = settings.cited_qa_enabled
+    try:
+        yield
+    finally:
+        settings.cited_qa_enabled = original
 
 
 class _FakeQAService:
