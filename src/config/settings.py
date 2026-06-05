@@ -367,6 +367,13 @@ class Settings(BaseSettings):
         default=False,
         description="Enable the grounded, cited theme briefing endpoint",
     )
+    # Cited Q&A: free-text question -> answer synthesized from retrieved claims,
+    # every sentence cited; refuses (insufficient) when grounding is thin.
+    # Consumes claim_retrieval + scoring config.
+    cited_qa_enabled: bool = Field(
+        default=False,
+        description="Enable the cited Q&A endpoint (ask-anything over the claim corpus)",
+    )
 
     # Sentiment Analysis
     sentiment_model_name: str = Field(
