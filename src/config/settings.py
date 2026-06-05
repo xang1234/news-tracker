@@ -360,6 +360,13 @@ class Settings(BaseSettings):
         default=False,
         description="Enable semantic retrieval over the structured evidence-claim layer",
     )
+    # Theme briefing: LLM-generated, claim-cited natural-language brief per theme,
+    # grounded by claim retrieval and degrading to a templated brief when the LLM
+    # breaker is open / unconfigured. Consumes claim_retrieval + scoring config.
+    theme_briefing_enabled: bool = Field(
+        default=False,
+        description="Enable the grounded, cited theme briefing endpoint",
+    )
 
     # Sentiment Analysis
     sentiment_model_name: str = Field(
