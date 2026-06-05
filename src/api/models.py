@@ -383,6 +383,27 @@ class ThemeDetailResponse(BaseModel):
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
 
 
+class BriefingClauseModel(BaseModel):
+    """One grounded clause of a theme briefing."""
+
+    text: str = Field(..., description="The clause text")
+    claim_ids: list[str] = Field(..., description="Evidence claim ids this clause cites")
+
+
+class ThemeBriefingResponse(BaseModel):
+    """Response model for a grounded, cited theme briefing."""
+
+    theme_id: str = Field(..., description="Theme the briefing summarizes")
+    clauses: list[BriefingClauseModel] = Field(
+        ..., description="Briefing clauses, each citing >=1 evidence claim"
+    )
+    generated_by: str = Field(..., description="'llm' or 'template' (fallback)")
+    claim_count: int = Field(..., description="Number of evidence claims considered")
+    model: str | None = Field(default=None, description="LLM model, if LLM-generated")
+    generated_at: dt.datetime | None = Field(default=None, description="Generation timestamp")
+    latency_ms: float = Field(..., description="Processing latency in milliseconds")
+
+
 class ThemeDocumentItem(BaseModel):
     """Document item within a theme's document list."""
 

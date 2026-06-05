@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 import redis.asyncio as redis
 from fastapi import FastAPI, Request
@@ -83,6 +83,8 @@ class AppServices:
         self.publish_service: PublishService | None = None
         self.assertion_repository: AssertionRepository | None = None
         self.claim_repository: ClaimRepository | None = None
+        self.claim_retrieval_service: Any = None
+        self.briefing_service: Any = None
 
     async def get_database(self) -> Database:
         if self.database is None:
@@ -363,6 +365,36 @@ class AppServices:
                     self.claim_repository = ClaimRepository(database)
         return self.claim_repository
 
+    async def get_claim_retrieval_service(self) -> Any:
+        if self.claim_retrieval_service is None:
+            from src.retrieval.service import ClaimRetrievalService
+
+            database = await self.get_database()
+            embedding_service = await self.get_embedding_service()
+            async with self._init_lock:
+                if self.claim_retrieval_service is None:
+                    self.claim_retrieval_service = ClaimRetrievalService(
+                        database=database, embedding_service=embedding_service
+                    )
+        return self.claim_retrieval_service
+
+    async def get_briefing_service(self) -> Any:
+        if self.briefing_service is None:
+            # Lazy: keep the scoring/LLM packages off the base API import path.
+            from src.briefing.generator import ThemeBriefingService
+            from src.scoring.config import ScoringConfig
+
+            theme_repository = await self.get_theme_repository()
+            retrieval_service = await self.get_claim_retrieval_service()
+            async with self._init_lock:
+                if self.briefing_service is None:
+                    self.briefing_service = ThemeBriefingService(
+                        theme_repository=theme_repository,
+                        retrieval_service=retrieval_service,
+                        scoring_config=ScoringConfig(),
+                    )
+        return self.briefing_service
+
     async def close(self) -> None:
         async def _close_async_resource(
             resource_name: str,
@@ -534,3 +566,11 @@ async def get_assertion_repository(request: Request) -> AssertionRepository:
 
 async def get_claim_repository(request: Request) -> ClaimRepository:
     return await _get_services(request).get_claim_repository()
+
+
+async def get_claim_retrieval_service(request: Request) -> Any:
+    return await _get_services(request).get_claim_retrieval_service()
+
+
+async def get_briefing_service(request: Request) -> Any:
+    return await _get_services(request).get_briefing_service()

@@ -14,6 +14,7 @@ from starlette.requests import Request
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import (
+    get_briefing_service,
     get_document_repository,
     get_factor_regime_service,
     get_graph_repository,
@@ -24,6 +25,7 @@ from src.api.dependencies import (
     get_theme_repository,
 )
 from src.api.models import (
+    BriefingClauseModel,
     ErrorResponse,
     MarketCatalystEvidenceItem,
     MarketCatalystItem,
@@ -40,6 +42,7 @@ from src.api.models import (
     NarrativeTickerCount,
     RankedThemeItem,
     RankedThemesResponse,
+    ThemeBriefingResponse,
     ThemeDetailResponse,
     ThemeDocumentItem,
     ThemeDocumentsResponse,
@@ -76,6 +79,20 @@ logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 CATALYST_BUILD_CONCURRENCY = 10
+
+
+def _require_theme_briefing_enabled() -> None:
+    """Gate the briefing feature flag.
+
+    Declared as a dependency *before* the briefing service so FastAPI's
+    in-order dependency resolution raises this 404 before constructing the
+    (heavy) service — a disabled endpoint never opens DB/embedding resources.
+    """
+    if not _get_settings().theme_briefing_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Theme briefing is not enabled",
+        )
 
 
 def _normal_exception_or_raise(result: BaseException) -> Exception:
@@ -718,6 +735,61 @@ async def get_theme(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get theme",
+        )
+
+
+@router.get(
+    "/themes/{theme_id}/briefing",
+    response_model=ThemeBriefingResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Invalid API key"},
+        404: {"model": ErrorResponse, "description": "Theme not found or feature disabled"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
+    summary="Get a grounded theme briefing",
+    description=(
+        "Generate a natural-language brief for a theme where every clause cites the "
+        "evidence claims it is grounded in. Degrades to a templated brief when the LLM "
+        "is unavailable."
+    ),
+)
+@limiter.limit(lambda: _get_settings().rate_limit_default)
+async def get_theme_briefing(
+    request: Request,
+    theme_id: str,
+    api_key: str = Depends(verify_api_key),
+    _gate: None = Depends(_require_theme_briefing_enabled),
+    briefing_service: Any = Depends(get_briefing_service),
+) -> ThemeBriefingResponse:
+    start_time = time.perf_counter()
+
+    try:
+        briefing = await briefing_service.generate(theme_id)
+        if briefing is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Theme {theme_id!r} not found",
+            )
+
+        latency_ms = (time.perf_counter() - start_time) * 1000
+        return ThemeBriefingResponse(
+            theme_id=briefing.theme_id,
+            clauses=[
+                BriefingClauseModel(text=c.text, claim_ids=c.claim_ids) for c in briefing.clauses
+            ],
+            generated_by=briefing.generated_by,
+            claim_count=briefing.claim_count,
+            model=briefing.model,
+            generated_at=briefing.generated_at,
+            latency_ms=round(latency_ms, 2),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("get_theme_briefing_failed", error=str(e), exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate briefing",
         )
 
 
