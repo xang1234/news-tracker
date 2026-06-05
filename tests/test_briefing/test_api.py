@@ -64,6 +64,24 @@ def test_404_when_feature_disabled() -> None:
     assert resp.status_code == 404
 
 
+def test_disabled_route_does_not_construct_service() -> None:
+    # The feature gate must short-circuit before the (heavy) briefing service
+    # dependency resolves, so a disabled route never opens DB/embedding stack.
+    settings = get_settings()
+    settings.theme_briefing_enabled = False
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[verify_api_key] = lambda: "test-key"
+
+    def _must_not_run():
+        raise AssertionError("briefing service constructed for a disabled route")
+
+    app.dependency_overrides[get_briefing_service] = _must_not_run
+
+    resp = TestClient(app).get("/themes/t1/briefing")
+    assert resp.status_code == 404
+
+
 def test_404_when_theme_missing() -> None:
     resp = _client(None).get("/themes/ghost/briefing")
     assert resp.status_code == 404

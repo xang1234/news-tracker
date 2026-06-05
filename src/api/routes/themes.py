@@ -81,6 +81,20 @@ router = APIRouter()
 CATALYST_BUILD_CONCURRENCY = 10
 
 
+def _require_theme_briefing_enabled() -> None:
+    """Gate the briefing feature flag.
+
+    Declared as a dependency *before* the briefing service so FastAPI's
+    in-order dependency resolution raises this 404 before constructing the
+    (heavy) service — a disabled endpoint never opens DB/embedding resources.
+    """
+    if not _get_settings().theme_briefing_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Theme briefing is not enabled",
+        )
+
+
 def _normal_exception_or_raise(result: BaseException) -> Exception:
     if not isinstance(result, Exception):
         raise result
@@ -744,13 +758,9 @@ async def get_theme_briefing(
     request: Request,
     theme_id: str,
     api_key: str = Depends(verify_api_key),
+    _gate: None = Depends(_require_theme_briefing_enabled),
     briefing_service: Any = Depends(get_briefing_service),
 ) -> ThemeBriefingResponse:
-    if not _get_settings().theme_briefing_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Theme briefing is not enabled",
-        )
     start_time = time.perf_counter()
 
     try:
