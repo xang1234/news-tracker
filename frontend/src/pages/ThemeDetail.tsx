@@ -5,6 +5,8 @@ import { Header } from '@/components/layout/Header';
 import { cn } from '@/lib/utils';
 import { LIFECYCLE_COLORS, SENTIMENT_COLORS } from '@/lib/constants';
 import { timeAgo, pct, truncate, latency as fmtLatency } from '@/lib/formatters';
+import { BriefingPanel } from '@/components/domain/BriefingPanel';
+import { useThemeBriefing } from '@/api/hooks/useThemeBriefing';
 import { ThemeMetricsChart } from '@/components/domain/ThemeMetricsChart';
 import { ThemeSentimentPanel } from '@/components/domain/ThemeSentimentPanel';
 import { BasketColumns } from '@/components/domain/BasketColumns';
@@ -21,7 +23,15 @@ import {
 import { useDivergences } from '@/api/hooks/useDivergence';
 import { useThemeBasket, useBasketPaths } from '@/api/hooks/useThemeIntelligence';
 
-type Tab = 'metrics' | 'sentiment' | 'documents' | 'events' | 'narratives' | 'filing' | 'structural';
+type Tab =
+  | 'briefing'
+  | 'metrics'
+  | 'sentiment'
+  | 'documents'
+  | 'events'
+  | 'narratives'
+  | 'filing'
+  | 'structural';
 
 export default function ThemeDetail() {
   const { themeId } = useParams();
@@ -34,6 +44,7 @@ export default function ThemeDetail() {
   const activeTab: Tab = searchParams.get('tab') === 'narratives' ? 'narratives' : manualTab;
 
   const { data: detail, isLoading, isError } = useThemeDetail(themeId);
+  const briefing = useThemeBriefing(activeTab === 'briefing' ? themeId : undefined);
   const metrics = useThemeMetrics(activeTab === 'metrics' ? themeId : undefined);
   const sentiment = useThemeSentiment(activeTab === 'sentiment' ? themeId : undefined);
   const documents = useThemeDocuments(
@@ -87,6 +98,7 @@ export default function ThemeDetail() {
   }
 
   const tabs: { key: Tab; label: string }[] = [
+    { key: 'briefing', label: 'Briefing' },
     { key: 'metrics', label: 'Metrics' },
     { key: 'sentiment', label: 'Sentiment' },
     { key: 'documents', label: 'Documents' },
@@ -219,6 +231,16 @@ export default function ThemeDetail() {
 
             {/* Tab content */}
             <div className="mt-6" role="tabpanel" id={`tabpanel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+              {/* Briefing tab */}
+              {activeTab === 'briefing' && (
+                <BriefingPanel
+                  data={briefing.data}
+                  isLoading={briefing.isLoading}
+                  isError={briefing.isError}
+                  error={briefing.error}
+                />
+              )}
+
               {/* Metrics tab */}
               {activeTab === 'metrics' && (
                 <>

@@ -9,13 +9,16 @@ is unavailable — so every clause is always grounded and cited.
 
 from __future__ import annotations
 
+from src.briefing.citations import citation_from_claim
 from src.briefing.config import BriefingConfig
 from src.briefing.generator import ThemeBriefingService
-from src.briefing.schemas import BriefingClause, ThemeBriefing
+from src.briefing.schemas import BriefingClause, ClaimCitation, ThemeBriefing
 
 __all__ = [
     "BriefingClause",
     "BriefingConfig",
+    "ClaimCitation",
     "ThemeBriefing",
     "ThemeBriefingService",
+    "citation_from_claim",
 ]

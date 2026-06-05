@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from src.briefing.citations import citation_from_claim
 from src.briefing.config import BriefingConfig
 from src.briefing.prompt import build_briefing_prompt, parse_briefing_response
 from src.briefing.schemas import ThemeBriefing
@@ -104,6 +105,7 @@ class ThemeBriefingService:
             clauses=clauses,
             generated_by=generated_by,
             claim_count=len(claims),
+            citations=[citation_from_claim(c) for c in claims],
             model=model,
             generated_at=datetime.now(UTC),
         )

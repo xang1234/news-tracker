@@ -26,6 +26,7 @@ from src.api.dependencies import (
 )
 from src.api.models import (
     BriefingClauseModel,
+    ClaimCitationModel,
     ErrorResponse,
     MarketCatalystEvidenceItem,
     MarketCatalystItem,
@@ -776,6 +777,20 @@ async def get_theme_briefing(
             theme_id=briefing.theme_id,
             clauses=[
                 BriefingClauseModel(text=c.text, claim_ids=c.claim_ids) for c in briefing.clauses
+            ],
+            citations=[
+                ClaimCitationModel(
+                    claim_id=cit.claim_id,
+                    subject_text=cit.subject_text,
+                    predicate=cit.predicate,
+                    object_text=cit.object_text,
+                    source_type=cit.source_type,
+                    source_id=cit.source_id,
+                    source_span_start=cit.source_span_start,
+                    source_span_end=cit.source_span_end,
+                    snippet=cit.snippet,
+                )
+                for cit in briefing.citations
             ],
             generated_by=briefing.generated_by,
             claim_count=briefing.claim_count,

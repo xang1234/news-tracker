@@ -21,6 +21,26 @@ class BriefingClause:
 
 
 @dataclass(frozen=True)
+class ClaimCitation:
+    """Lineage for a cited claim, so the UI can link it to its evidence.
+
+    Carries the resolved triple (for a readable label) plus the source
+    pointer (``source_type``/``source_id`` + character span) the frontend
+    uses to jump to the evidence document and span.
+    """
+
+    claim_id: str
+    subject_text: str
+    predicate: str
+    object_text: str | None
+    source_type: str
+    source_id: str
+    source_span_start: int | None
+    source_span_end: int | None
+    snippet: str | None
+
+
+@dataclass(frozen=True)
 class ThemeBriefing:
     """A grounded, cited natural-language brief for a theme.
 
@@ -33,6 +53,7 @@ class ThemeBriefing:
     clauses: list[BriefingClause]
     generated_by: str
     claim_count: int
+    citations: list[ClaimCitation] = field(default_factory=list)
     model: str | None = None
     generated_at: datetime | None = None
     metadata: dict = field(default_factory=dict)

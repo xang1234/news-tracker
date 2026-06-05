@@ -80,3 +80,10 @@ export function assertionVerdict(a: {
   }
   return { label: 'Unverified', className: 'bg-slate-500/20 text-slate-400' };
 }
+
+/** Badge for how a briefing/answer was produced: LLM-synthesized vs templated fallback. */
+export function generatedByBadge(method: 'llm' | 'template'): AssertionVerdict {
+  return method === 'llm'
+    ? { label: 'AI-generated', className: 'bg-violet-500/20 text-violet-300' }
+    : { label: 'Templated', className: 'bg-cyan-500/20 text-cyan-300' };
+}
