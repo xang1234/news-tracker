@@ -74,12 +74,11 @@ class ThemeBriefingService:
             prompt = build_briefing_prompt(
                 theme.name, [(c.claim_id, claim_embedding_text(c)) for c in claims]
             )
-            raw = await self._llm.complete_json(prompt)
-            if raw is not None:
-                parsed = parse_briefing_response(raw, valid_ids)
-                if parsed:
-                    clauses = parsed[: self._config.max_clauses]
-                    model = self._llm.model
+            # parse_briefing_response is None-safe, so the raw payload feeds it directly.
+            parsed = parse_briefing_response(await self._llm.complete_json(prompt), valid_ids)
+            if parsed:
+                clauses = parsed[: self._config.max_clauses]
+                model = self._llm.model
 
         if clauses is None:
             clauses = templated_clauses(claims, limit=self._config.max_clauses)

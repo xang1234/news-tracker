@@ -102,5 +102,5 @@ class SemanticContradictionJudge:
 
     async def judge(self, text_a: str, text_b: str) -> ContradictionVerdict | None:
         """Judge two claim texts; returns a verdict or None on failure/open circuit."""
-        raw = await self._llm.complete_json(build_judge_prompt(text_a, text_b))
-        return parse_verdict(raw) if raw is not None else None
+        # parse_verdict is None-safe (a None payload parses to None), so no guard.
+        return parse_verdict(await self._llm.complete_json(build_judge_prompt(text_a, text_b)))

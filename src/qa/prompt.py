@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.qa.schemas import AnswerSegment
-from src.retrieval.citation_gate import parse_cited_entries
+from src.retrieval.citation_gate import format_claims_block, parse_cited_entries
 
 _QA_PROMPT = """\
 You are answering an analyst's question using ONLY the evidence claims listed \
@@ -33,8 +33,7 @@ Evidence claims:
 
 def build_qa_prompt(question: str, claims: list[tuple[str, str]]) -> str:
     """Build the Q&A prompt from a question and ``(claim_id, text)`` pairs."""
-    claims_block = "\n".join(f"- [{claim_id}] {text}" for claim_id, text in claims)
-    return _QA_PROMPT.format(question=question, claims_block=claims_block)
+    return _QA_PROMPT.format(question=question, claims_block=format_claims_block(claims))
 
 
 def parse_qa_response(payload: Any, valid_claim_ids: set[str]) -> list[AnswerSegment]:
@@ -44,9 +43,4 @@ def parse_qa_response(payload: Any, valid_claim_ids: set[str]) -> list[AnswerSeg
     exists in ``valid_claim_ids``; invented ids are stripped and now-uncited
     segments dropped. Malformed input yields an empty list.
     """
-    return parse_cited_entries(
-        payload,
-        valid_claim_ids,
-        key="segments",
-        factory=lambda text, claim_ids: AnswerSegment(text=text, claim_ids=claim_ids),
-    )
+    return parse_cited_entries(payload, valid_claim_ids, key="segments", factory=AnswerSegment)

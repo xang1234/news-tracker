@@ -71,12 +71,11 @@ class CitedQAService:
             prompt = build_qa_prompt(
                 question, [(c.claim_id, claim_embedding_text(c)) for c in claims]
             )
-            raw = await self._llm.complete_json(prompt)
-            if raw is not None:
-                parsed = parse_qa_response(raw, valid_ids)
-                if parsed:
-                    segments = parsed[: self._config.max_segments]
-                    model = self._llm.model
+            # parse_qa_response is None-safe, so the raw payload feeds it directly.
+            parsed = parse_qa_response(await self._llm.complete_json(prompt), valid_ids)
+            if parsed:
+                segments = parsed[: self._config.max_segments]
+                model = self._llm.model
 
         if segments is None:
             # Grounding was sufficient, but the LLM was unavailable → templated
