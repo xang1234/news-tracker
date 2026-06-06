@@ -509,8 +509,12 @@ class DocumentContributionItem(BaseModel):
     document_id: str = Field(..., description="Contributing document ID")
     timestamp: str = Field(..., description="Document publication time (ISO format)")
     platform: str | None = Field(default=None, description="Source platform")
-    weight: float = Field(..., description="Composite aggregation weight (recency·authority·confidence)")
-    polarity: float = Field(..., description="Sentiment polarity: +1 positive / 0 neutral / −1 negative")
+    weight: float = Field(
+        ..., description="Composite aggregation weight (recency·authority·confidence)"
+    )
+    polarity: float = Field(
+        ..., description="Sentiment polarity: +1 positive / 0 neutral / −1 negative"
+    )
     sentiment_contribution: float = Field(
         ..., description="Signed share of net sentiment; sums to bullish_ratio − bearish_ratio"
     )
