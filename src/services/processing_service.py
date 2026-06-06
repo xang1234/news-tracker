@@ -241,6 +241,23 @@ class ProcessingService:
         self._llm_extractor = LLMClaimExtractor(scoring_config=ScoringConfig())
         self._review_repo = ReviewRepository(self._database)
 
+    def _setup_claim_pipeline(self) -> Any:
+        """Build the claim repo and wire its subsystems (reconciliation, LLM pass).
+
+        Shared by start() and run_once() so the enable→build→wire flow lives in
+        one place. Returns the claim repo, or None when claim extraction is off.
+        """
+        if not self._claim_extraction_enabled:
+            return None
+        from src.claims.repository import ClaimRepository
+
+        self._claim_repo = ClaimRepository(self._database)
+        if self._claim_reconciliation_enabled:
+            self._init_claim_reconciliation(self._claim_repo)
+        if self._llm_claim_extraction_enabled:
+            self._init_llm_claim_pipeline()
+        return self._claim_repo
+
     async def _hold_for_review(self, claim: Any) -> bool:
         """Hold a low-confidence LLM claim in the review queue.
 
@@ -360,19 +377,8 @@ class ProcessingService:
         self._repository = DocumentRepository(self._database)
         await self._deduplicator.connect()
 
-        # Create claim repository if extraction is enabled
-        if self._claim_extraction_enabled:
-            from src.claims.repository import ClaimRepository
-
-            self._claim_repo = ClaimRepository(self._database)
-
-        # Wire claim reconciliation (resolver + contradiction tiers) if enabled
-        if self._claim_reconciliation_enabled and self._claim_repo is not None:
-            self._init_claim_reconciliation(self._claim_repo)
-
-        # Wire the LLM second-pass extractor if enabled
-        if self._llm_claim_extraction_enabled:
-            self._init_llm_claim_pipeline()
+        # Build the claim repo + wire its subsystems (reconciliation, LLM pass)
+        self._setup_claim_pipeline()
 
         try:
             # Process messages from queue
@@ -608,16 +614,8 @@ class ProcessingService:
         }
         stored_doc_ids: list[str] = []
 
-        # Initialize claim repo for run_once if extraction is enabled
-        claim_repo = None
-        if self._claim_extraction_enabled:
-            from src.claims.repository import ClaimRepository
-
-            claim_repo = ClaimRepository(self._database)
-            if self._claim_reconciliation_enabled:
-                self._init_claim_reconciliation(claim_repo)
-            if self._llm_claim_extraction_enabled:
-                self._init_llm_claim_pipeline()
+        # Build the claim repo + wire its subsystems (reconciliation, LLM pass)
+        claim_repo = self._setup_claim_pipeline()
 
         try:
             for doc in docs:
