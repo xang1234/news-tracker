@@ -138,19 +138,16 @@ class SentimentPropagation:
         # Track computed impacts: node_id → PropagationImpact
         impacts: dict[str, PropagationImpact] = {}
 
-        # Source node has the original delta
-        source_impacts: dict[str, float] = {source_node: sentiment_delta}
-
         decay = self._config.propagation_default_decay
 
         for level in sorted(edges_by_depth.keys()):
             for source, target, relation, confidence in edges_by_depth[level]:
-                # Source impact comes from either the original delta or a previously
-                # computed propagation impact
-                if source in source_impacts:
-                    src_impact = source_impacts[source]
+                # The source's impact and causal chain come from either the origin
+                # (the original delta, empty path) or a previously-impacted node.
+                if source == source_node:
+                    src_impact, source_path = sentiment_delta, ()
                 elif source in impacts:
-                    src_impact = impacts[source].impact
+                    src_impact, source_path = impacts[source].impact, impacts[source].path
                 else:
                     continue
 
@@ -164,16 +161,12 @@ class SentimentPropagation:
                 if abs(target_impact) < threshold:
                     continue
 
-                # Extend the source's causal chain by this hop. The source is
-                # either the origin (empty path) or an already-impacted node.
-                source_path = impacts[source].path if source in impacts else ()
                 hop = PropagationHop(
                     from_node=source,
                     to_node=target,
                     relation=relation,
                     edge_confidence=confidence,
                 )
-
                 impacts[target] = PropagationImpact(
                     node_id=target,
                     impact=round(target_impact, 6),
