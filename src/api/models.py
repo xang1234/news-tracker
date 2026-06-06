@@ -503,6 +503,33 @@ class ThemeSentimentResponse(BaseModel):
     latency_ms: float = Field(..., description="Processing latency in milliseconds")
 
 
+class DocumentContributionItem(BaseModel):
+    """One document's share of a theme window's sentiment/volume movement."""
+
+    document_id: str = Field(..., description="Contributing document ID")
+    timestamp: str = Field(..., description="Document publication time (ISO format)")
+    platform: str | None = Field(default=None, description="Source platform")
+    weight: float = Field(..., description="Composite aggregation weight (recency·authority·confidence)")
+    polarity: float = Field(..., description="Sentiment polarity: +1 positive / 0 neutral / −1 negative")
+    sentiment_contribution: float = Field(
+        ..., description="Signed share of net sentiment; sums to bullish_ratio − bearish_ratio"
+    )
+    volume_contribution: float = Field(
+        ..., description="Share of weighted document volume (sums to 1.0)"
+    )
+
+
+class ThemeAttributionResponse(BaseModel):
+    """Response model for theme document→metric attribution."""
+
+    theme_id: str = Field(..., description="Theme identifier")
+    window_days: int = Field(..., description="Lookback window in days")
+    count: int = Field(..., description="Number of ranked contributions returned")
+    contributions: list[DocumentContributionItem] = Field(
+        ..., description="Documents ranked by how much they moved sentiment/volume"
+    )
+
+
 class ThemeMetricsItem(BaseModel):
     """Single day of theme metrics."""
 

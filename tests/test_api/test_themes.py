@@ -858,3 +858,54 @@ class TestRankedThemes:
         # and return 404. Instead it should return 200 from the ranked endpoint.
         resp = client.get("/themes/ranked")
         assert resp.status_code == 200
+
+
+class TestGetThemeAttribution:
+    """Tests for the document→metric attribution endpoint."""
+
+    def test_returns_ranked_contributions(self, client, mock_theme_repo):
+        from src.api.dependencies import get_attribution_service
+        from src.themes.attribution import DocumentContribution
+
+        mock_theme_repo.get_by_id.return_value = _make_theme()
+        contribs = [
+            DocumentContribution(
+                document_id="d1",
+                timestamp=datetime(2026, 6, 1, tzinfo=UTC),
+                platform="news",
+                weight=2.0,
+                polarity=1.0,
+                sentiment_contribution=0.6,
+                volume_contribution=0.5,
+            ),
+            DocumentContribution(
+                document_id="d2",
+                timestamp=datetime(2026, 6, 1, tzinfo=UTC),
+                platform="x",
+                weight=1.0,
+                polarity=-1.0,
+                sentiment_contribution=-0.3,
+                volume_contribution=0.25,
+            ),
+        ]
+
+        class _StubService:
+            async def attribute_theme(self, theme_id, **kwargs):
+                return contribs
+
+        client.app.dependency_overrides[get_attribution_service] = lambda: _StubService()
+
+        resp = client.get("/themes/theme_abc123/attribution?window_days=14&limit=5")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["theme_id"] == "theme_abc123"
+        assert data["window_days"] == 14
+        assert data["count"] == 2
+        assert data["contributions"][0]["document_id"] == "d1"
+        assert data["contributions"][0]["sentiment_contribution"] == 0.6
+
+    def test_not_found(self, client, mock_theme_repo):
+        mock_theme_repo.get_by_id.return_value = None
+        resp = client.get("/themes/nonexistent/attribution")
+        assert resp.status_code == 404
+        assert "not found" in resp.json()["detail"]

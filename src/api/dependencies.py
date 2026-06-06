@@ -8,7 +8,7 @@ import threading
 from typing import Any, Literal, cast
 
 import redis.asyncio as redis
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 
 from src.alerts.broadcaster import AlertBroadcaster
 from src.alerts.repository import AlertRepository
@@ -41,6 +41,7 @@ from src.sentiment.service import SentimentService
 from src.sources.repository import SourcesRepository
 from src.storage.database import Database
 from src.storage.repository import DocumentRepository
+from src.themes.attribution import AttributionService
 from src.themes.ranking import ThemeRankingService
 from src.themes.repository import ThemeRepository
 from src.vectorstore.config import VectorStoreConfig
@@ -536,6 +537,15 @@ async def get_feedback_repository(request: Request) -> FeedbackRepository:
 
 def get_sentiment_aggregator(request: Request) -> SentimentAggregator:
     return _get_services(request).get_sentiment_aggregator()
+
+
+async def get_attribution_service(
+    doc_repo: DocumentRepository = Depends(get_document_repository),  # noqa: B008
+    aggregator: SentimentAggregator = Depends(get_sentiment_aggregator),  # noqa: B008
+) -> AttributionService:
+    # Composed from its sub-dependencies (so test overrides apply) and trivial to
+    # build, so not cached on the app context.
+    return AttributionService(doc_repo, aggregator)
 
 
 async def get_graph_repository(request: Request) -> GraphRepository:

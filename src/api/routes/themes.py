@@ -14,6 +14,7 @@ from starlette.requests import Request
 
 from src.api.auth import verify_api_key
 from src.api.dependencies import (
+    get_attribution_service,
     get_briefing_service,
     get_document_repository,
     get_factor_regime_service,
@@ -27,6 +28,7 @@ from src.api.dependencies import (
 from src.api.models import (
     BriefingClauseModel,
     ClaimCitationModel,
+    DocumentContributionItem,
     ErrorResponse,
     MarketCatalystEvidenceItem,
     MarketCatalystItem,
@@ -43,6 +45,7 @@ from src.api.models import (
     NarrativeTickerCount,
     RankedThemeItem,
     RankedThemesResponse,
+    ThemeAttributionResponse,
     ThemeBriefingResponse,
     ThemeDetailResponse,
     ThemeDocumentItem,
@@ -62,8 +65,12 @@ from src.graph.propagation import SentimentPropagation
 from src.graph.storage import GraphRepository
 from src.narrative.repository import NarrativeRepository
 from src.narrative.schemas import NarrativeRun
-from src.sentiment.aggregation import DocumentSentiment, SentimentAggregator
+from src.sentiment.aggregation import (
+    SentimentAggregator,
+    document_sentiments_from_rows,
+)
 from src.storage.repository import DocumentRepository
+from src.themes.attribution import AttributionService
 from src.themes.catalysts import (
     compute_market_impact_score,
     dominant_event_types,
@@ -1088,28 +1095,7 @@ async def get_theme_sentiment(
         rows = await doc_repo.get_sentiments_for_theme(theme_id, since=since, until=now)
 
         # Convert to DocumentSentiment objects, skipping invalid rows
-        doc_sentiments: list[DocumentSentiment] = []
-        for row in rows:
-            sentiment = row.get("sentiment")
-            if not isinstance(sentiment, dict):
-                continue
-            label = sentiment.get("label")
-            if label not in ("positive", "negative", "neutral"):
-                continue
-            confidence = sentiment.get("confidence", 0.5)
-            scores = sentiment.get("scores", {})
-
-            doc_sentiments.append(
-                DocumentSentiment(
-                    document_id=row["document_id"],
-                    timestamp=row["timestamp"],
-                    label=label,
-                    confidence=confidence,
-                    scores=scores,
-                    authority_score=row.get("authority_score"),
-                    platform=row.get("platform"),
-                )
-            )
+        doc_sentiments = document_sentiments_from_rows(rows)
 
         # Aggregate (sync, CPU-only)
         result = aggregator.aggregate_theme_sentiment(
@@ -1153,6 +1139,62 @@ async def get_theme_sentiment(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to aggregate theme sentiment",
         )
+
+
+@router.get(
+    "/themes/{theme_id}/attribution",
+    response_model=ThemeAttributionResponse,
+    responses={
+        401: {"model": ErrorResponse, "description": "Invalid API key"},
+        404: {"model": ErrorResponse, "description": "Theme not found"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
+    summary="Get theme metric attribution",
+    description="""
+    Rank the documents that most moved a theme's sentiment/volume over a window.
+
+    Decomposes the *same* weighted aggregate shown by `/themes/{id}/sentiment`:
+    each document's `sentiment_contribution` sums to `bullish_ratio − bearish_ratio`
+    and its `volume_contribution` sums to 1.0. Answers "why did this spike?".
+    """,
+)
+@limiter.limit(lambda: _get_settings().rate_limit_sentiment)
+async def get_theme_attribution(
+    request: Request,
+    theme_id: str,
+    window_days: int = Query(default=7, ge=1, le=90, description="Lookback window in days"),
+    limit: int = Query(default=10, ge=1, le=100, description="Max ranked documents to return"),
+    api_key: str = Depends(verify_api_key),
+    theme_repo: ThemeRepository = Depends(get_theme_repository),
+    attribution: AttributionService = Depends(get_attribution_service),
+) -> ThemeAttributionResponse:
+    theme = await theme_repo.get_by_id(theme_id)
+    if theme is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Theme {theme_id!r} not found",
+        )
+
+    contributions = await attribution.attribute_theme(
+        theme_id, window_days=window_days, limit=limit
+    )
+    return ThemeAttributionResponse(
+        theme_id=theme_id,
+        window_days=window_days,
+        count=len(contributions),
+        contributions=[
+            DocumentContributionItem(
+                document_id=c.document_id,
+                timestamp=c.timestamp.isoformat(),
+                platform=c.platform,
+                weight=round(c.weight, 6),
+                polarity=c.polarity,
+                sentiment_contribution=round(c.sentiment_contribution, 6),
+                volume_contribution=round(c.volume_contribution, 6),
+            )
+            for c in contributions
+        ],
+    )
 
 
 @router.get(
