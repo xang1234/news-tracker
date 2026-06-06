@@ -39,11 +39,14 @@ def _task(task_type="claim_review", trigger_reason="low_confidence", claim_ids=(
 
 
 class _FakeReviewRepo:
-    """transition_task returns (prev_status, resolved task) and records the call."""
+    """get_task returns the pre-transition task; transition_task records the call."""
 
     def __init__(self, task: ReviewTask) -> None:
         self._task = task
         self.calls: list[tuple] = []
+
+    async def get_task(self, task_id):
+        return self._task
 
     async def transition_task(self, task_id, target_status, *, resolution=None, **kw):
         self.calls.append((task_id, target_status, resolution))
@@ -116,3 +119,29 @@ class TestResolve:
         svc, _repo, engine = _service(_task(claim_ids=("c1", "gone")), {"c1": _claim("c1")})
         await svc.resolve("review_x", "approved")
         assert engine.reconciled == ["c1"]  # 'gone' skipped, no crash
+
+    @pytest.mark.asyncio
+    async def test_reconcile_failure_leaves_task_untransitioned(self) -> None:
+        # Reconcile runs before the transition, so a failure must not leave the
+        # task marked approved with its claims still held.
+        class _FailingEngine:
+            async def reconcile_claim(self, claim):
+                raise RuntimeError("assertion store down")
+
+        repo = _FakeReviewRepo(_task())
+        svc = ReviewResolutionService(repo, _FakeClaimRepo({"c1": _claim("c1")}), _FailingEngine())
+        with pytest.raises(RuntimeError, match="assertion store down"):
+            await svc.resolve("review_x", "approved")
+        assert repo.calls == []  # transition never happened
+
+    @pytest.mark.asyncio
+    async def test_approving_missing_task_raises(self) -> None:
+        class _EmptyRepo(_FakeReviewRepo):
+            async def get_task(self, task_id):
+                return None
+
+        repo = _EmptyRepo(_task())
+        svc = ReviewResolutionService(repo, _FakeClaimRepo({}), _FakeEngine())
+        with pytest.raises(ValueError, match="not found"):
+            await svc.resolve("ghost", "approved")
+        assert repo.calls == []

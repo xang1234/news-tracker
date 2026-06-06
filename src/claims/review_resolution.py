@@ -59,7 +59,19 @@ class ReviewResolutionService:
 
         Approving a held (claim_review/low_confidence) task re-runs reconciliation
         for its claims — releasing them from the hold into the assertion layer.
+
+        Reconciliation runs *before* the task is transitioned, so a reconciliation
+        failure leaves the task in its pre-approval state rather than recording an
+        "approved" task whose claims never reached the assertion layer. (A revert
+        after transition isn't possible: ``resolved`` is a terminal state.)
         """
+        if resolution == RESOLUTION_APPROVED:
+            held = await self._review_repo.get_task(task_id)
+            if held is None:
+                raise ValueError(f"Review task not found: {task_id}")
+            if was_held_for_review(held):
+                await self._reconcile_claims(held)
+
         _previous, task = await self._review_repo.transition_task(
             task_id,
             "resolved",
@@ -67,8 +79,6 @@ class ReviewResolutionService:
             resolution_notes=resolution_notes,
             assigned_to=assigned_to,
         )
-        if resolution == RESOLUTION_APPROVED and was_held_for_review(task):
-            await self._reconcile_claims(task)
         return task
 
     async def _reconcile_claims(self, task: ReviewTask) -> None:
