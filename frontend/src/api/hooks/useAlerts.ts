@@ -16,6 +16,23 @@ export interface AlertFilters {
 
 // ── Alert item ──
 
+// One document that contributed to the metric that fired the alert (o59.2).
+export interface AlertEvidenceDocument {
+  document_id: string;
+  timestamp: string;
+  platform: string | null;
+  sentiment_contribution: number;
+  volume_contribution: number;
+}
+
+// The "receipt": docs that caused a theme-metric alert. Optional + loosely
+// shaped so the UI degrades gracefully when the field is absent or empty.
+export interface AlertSupportingEvidence {
+  source?: string;
+  window_days?: number;
+  documents?: AlertEvidenceDocument[];
+}
+
 export interface AlertItem {
   alert_id: string;
   theme_id: string;
@@ -27,6 +44,7 @@ export interface AlertItem {
   title: string;
   message: string;
   trigger_data: Record<string, unknown>;
+  supporting_evidence?: AlertSupportingEvidence;
   acknowledged: boolean;
   created_at: string;
 }

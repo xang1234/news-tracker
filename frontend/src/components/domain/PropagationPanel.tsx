@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { RELATION_COLORS } from '@/lib/constants';
 import { useGraphPropagate, type PropagationImpactItem } from '@/api/hooks/useGraph';
 import { latency } from '@/lib/formatters';
+import { EdgePath } from '@/components/domain/EdgePath';
 
 interface PropagationPanelProps {
   sourceNodeId?: string;
@@ -76,27 +77,35 @@ export function PropagationPanel({ sourceNodeId, sourceNodeName }: PropagationPa
             {data.impacts.map((impact: PropagationImpactItem) => (
               <div
                 key={impact.node_id}
-                className="flex items-center gap-2 rounded border border-border bg-background px-3 py-2 text-xs"
+                className="rounded border border-border bg-background px-3 py-2 text-xs"
               >
-                <span className="font-mono text-foreground">{impact.node_id}</span>
-                <span
-                  className="rounded px-1.5 py-0.5 text-[10px]"
-                  style={{
-                    backgroundColor: `${RELATION_COLORS[impact.relation] ?? '#6b7280'}20`,
-                    color: RELATION_COLORS[impact.relation] ?? '#6b7280',
-                  }}
-                >
-                  {impact.relation}
-                </span>
-                <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                  depth {impact.depth}
-                </span>
-                <span className={cn(
-                  'ml-auto font-medium',
-                  impact.impact > 0 ? 'text-emerald-400' : 'text-red-400',
-                )}>
-                  {impact.impact > 0 ? '+' : ''}{impact.impact.toFixed(4)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-foreground">{impact.node_id}</span>
+                  <span
+                    className="rounded px-1.5 py-0.5 text-[10px]"
+                    style={{
+                      backgroundColor: `${RELATION_COLORS[impact.relation] ?? '#6b7280'}20`,
+                      color: RELATION_COLORS[impact.relation] ?? '#6b7280',
+                    }}
+                  >
+                    {impact.relation}
+                  </span>
+                  <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    depth {impact.depth}
+                  </span>
+                  <span className={cn(
+                    'ml-auto font-medium',
+                    impact.impact > 0 ? 'text-emerald-400' : 'text-red-400',
+                  )}>
+                    {impact.impact > 0 ? '+' : ''}{impact.impact.toFixed(4)}
+                  </span>
+                </div>
+                {/* Causal chain that produced this impact (o59.3). */}
+                {impact.path && impact.path.length > 0 && (
+                  <div className="mt-2 border-t border-border pt-2">
+                    <EdgePath hops={impact.path} />
+                  </div>
+                )}
               </div>
             ))}
           </div>

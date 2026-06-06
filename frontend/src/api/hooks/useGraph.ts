@@ -38,12 +38,22 @@ export interface GraphNodeFilters {
 
 // ── Propagation types ──
 
+export interface PropagationHopItem {
+  from_node: string;
+  to_node: string;
+  relation: string;
+  edge_confidence: number;
+}
+
 export interface PropagationImpactItem {
   node_id: string;
   impact: number;
   depth: number;
   relation: string;
   edge_confidence: number;
+  // Ordered causal chain from the source to this node (o59.3). Optional so the
+  // UI degrades gracefully against an API that predates the field.
+  path?: PropagationHopItem[];
 }
 
 export interface PropagateRequest {
