@@ -1,0 +1,117 @@
+{
+  "_comment": "Hand-labelled golden set for the extraction eval (news-tracker-7th.1). Each document carries the extractor INPUTS (content + events_extracted/entities_mentioned shapes) and the LABELS a correct extractor should produce. Event-derived and co-occurrence claims are recoverable by the current regex extractor; implicit/multi-clause claims are deliberately included as labels the regex misses, to give the LLM pass (7th.2) measurable recall headroom without precision regression.",
+  "documents": [
+    {
+      "doc_id": "gold_001",
+      "content": "TSMC announced it will expand capacity at its Arizona fab by 30% in 2026 to meet surging demand from NVIDIA for advanced packaging of AI accelerators.",
+      "events": [
+        {
+          "actor": "TSMC",
+          "event_type": "capacity_expansion",
+          "object": "Arizona fab",
+          "action": "expand capacity",
+          "confidence": 0.9,
+          "quantity": "30%",
+          "time_ref": "2026",
+          "tickers": ["TSM"]
+        }
+      ],
+      "entities": [],
+      "expected_claims": [
+        { "subject": "TSMC", "predicate": "expands_capacity", "object": "Arizona fab" },
+        { "subject": "TSMC", "predicate": "supplies_to", "object": "NVIDIA" }
+      ]
+    },
+    {
+      "doc_id": "gold_002",
+      "content": "Intel delayed the ramp of its 18A node to Q3 2026 and cut its full-year revenue guidance, citing weaker foundry demand.",
+      "events": [
+        {
+          "actor": "Intel",
+          "event_type": "product_delay",
+          "object": "18A node",
+          "action": "delayed",
+          "confidence": 0.85,
+          "time_ref": "Q3 2026"
+        },
+        {
+          "actor": "Intel",
+          "event_type": "guidance_change",
+          "object": "full-year revenue",
+          "action": "cut",
+          "confidence": 0.8
+        }
+      ],
+      "entities": [],
+      "expected_claims": [
+        { "subject": "Intel", "predicate": "delays_product", "object": "18A node" },
+        { "subject": "Intel", "predicate": "revises_guidance", "object": "full-year revenue" }
+      ]
+    },
+    {
+      "doc_id": "gold_003",
+      "content": "Samsung raised DRAM contract prices by 20% this quarter amid a worsening HBM capacity crunch that is constraining supply.",
+      "events": [
+        {
+          "actor": "Samsung",
+          "event_type": "price_change",
+          "object": "DRAM",
+          "action": "raised",
+          "confidence": 0.88,
+          "quantity": "20%"
+        },
+        {
+          "actor": "Samsung",
+          "event_type": "capacity_constraint",
+          "object": "HBM",
+          "action": "crunch",
+          "confidence": 0.82
+        }
+      ],
+      "entities": [],
+      "expected_claims": [
+        { "subject": "Samsung", "predicate": "changes_pricing", "object": "DRAM" },
+        { "subject": "Samsung", "predicate": "constrains_capacity", "object": "HBM" }
+      ]
+    },
+    {
+      "doc_id": "gold_004",
+      "content": "AMD launched its MI400 accelerator at its datacenter event, intensifying competition with NVIDIA for AI training workloads.",
+      "events": [
+        {
+          "actor": "AMD",
+          "event_type": "product_launch",
+          "object": "MI400 accelerator",
+          "action": "launched",
+          "confidence": 0.9
+        }
+      ],
+      "entities": [],
+      "expected_claims": [
+        { "subject": "AMD", "predicate": "launches_product", "object": "MI400 accelerator" },
+        { "subject": "AMD", "predicate": "competes_with", "object": "NVIDIA" }
+      ]
+    },
+    {
+      "doc_id": "gold_005",
+      "content": "ASML supplies EUV lithography systems to TSMC for leading-edge production, making it a critical link in the advanced-node supply chain.",
+      "events": [],
+      "entities": [
+        { "text": "ASML", "type": "COMPANY", "start": 0 },
+        { "text": "TSMC", "type": "COMPANY", "start": 41 }
+      ],
+      "expected_claims": [
+        { "subject": "ASML", "predicate": "supplies_to", "object": "TSMC" }
+      ]
+    },
+    {
+      "doc_id": "gold_006",
+      "content": "Broadcom's custom ASIC business has grown increasingly dependent on TSMC's advanced nodes as hyperscalers shift orders toward bespoke silicon.",
+      "events": [],
+      "entities": [],
+      "expected_claims": [
+        { "subject": "Broadcom", "predicate": "depends_on", "object": "TSMC" }
+      ]
+    }
+  ]
+}

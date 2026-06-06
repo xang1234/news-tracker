@@ -21,6 +21,7 @@ from typing import Any
 import click
 
 from src.config.settings import get_settings
+from src.eval.cli import eval_group
 from src.factors.cli import factors
 from src.market_structure.cli import ingest_market_structure
 from src.observability.logging import setup_logging
@@ -82,6 +83,7 @@ main.add_command(factors)
 main.add_command(ingest_nasdaq_trader)
 main.add_command(ingest_market_structure)
 main.add_command(claim_retrieval)
+main.add_command(eval_group)
 
 
 @main.command()
