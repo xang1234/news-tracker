@@ -49,6 +49,39 @@ class DocumentSentiment:
             raise ValueError(f"Confidence must be 0-1, got {self.confidence}")
 
 
+def document_sentiments_from_rows(rows: list[dict]) -> list[DocumentSentiment]:
+    """Map ``get_sentiments_for_theme`` rows to ``DocumentSentiment``.
+
+    Skips rows whose sentiment payload is missing, carries an invalid label, or
+    has a malformed value that ``DocumentSentiment`` rejects (e.g. a
+    null/out-of-range confidence) — one bad row must not abort the whole batch.
+    Both the sentiment endpoint and attribution share this parsing contract.
+    """
+    docs: list[DocumentSentiment] = []
+    for row in rows:
+        sentiment = row.get("sentiment")
+        if not isinstance(sentiment, dict):
+            continue
+        label = sentiment.get("label")
+        if label not in ("positive", "negative", "neutral"):
+            continue
+        try:
+            docs.append(
+                DocumentSentiment(
+                    document_id=row["document_id"],
+                    timestamp=row["timestamp"],
+                    label=label,
+                    confidence=sentiment.get("confidence", 0.5),
+                    scores=sentiment.get("scores", {}),
+                    authority_score=row.get("authority_score"),
+                    platform=row.get("platform"),
+                )
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    return docs
+
+
 @dataclass
 class AggregatedSentiment:
     """
@@ -133,13 +166,17 @@ class SentimentAggregator:
             else self._config.aggregation_confidence_weight
         )
 
-    def _compute_weight(
+    def document_weight(
         self,
         doc: DocumentSentiment,
         reference_time: datetime,
     ) -> float:
         """
-        Compute weight for a single document.
+        Compute the composite aggregation weight for a single document.
+
+        Public so attribution (epic ``o59``) can decompose the aggregate using
+        the *same* weights it was built from, keeping per-document contributions
+        consistent with the displayed sentiment.
 
         Args:
             doc: Document sentiment to weight
@@ -220,7 +257,7 @@ class SentimentAggregator:
         authority_count = 0
 
         for doc in in_window:
-            weight = self._compute_weight(doc, ref_time)
+            weight = self.document_weight(doc, ref_time)
             total_weight += weight
 
             # Weight by label
