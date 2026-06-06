@@ -730,6 +730,10 @@ class AlertItem(BaseModel):
     title: str = Field(..., description="Short human-readable summary")
     message: str = Field(..., description="Detailed alert description")
     trigger_data: dict = Field(default_factory=dict, description="Trigger-specific context")
+    supporting_evidence: dict = Field(
+        default_factory=dict,
+        description="Docs/claims/events that caused the trigger (the 'receipt')",
+    )
     acknowledged: bool = Field(default=False, description="Whether the alert has been reviewed")
     created_at: str = Field(..., description="Alert creation timestamp (ISO format)")
 

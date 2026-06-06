@@ -90,3 +90,19 @@ class AlertConfig(BaseSettings):
         le=1.0,
         description="Minimum abs(impact) from sentiment propagation to generate alert",
     )
+
+    # Supporting-evidence enrichment (epic o59.2): attach top contributing
+    # documents to theme-metric alerts at trigger time, sourced from the
+    # doc→metric attribution service.
+    evidence_window_days: int = Field(
+        default=7,
+        ge=1,
+        le=90,
+        description="Lookback window for attributing an alert's contributing documents",
+    )
+    evidence_top_k: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        description="Max contributing documents to attach as supporting_evidence",
+    )
