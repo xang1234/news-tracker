@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from src.claims.llm_extractor import LLMClaimExtractor, LLMExtractionConfig
+from src.claims.llm_extractor import LLMClaimExtractor, LLMExtractionConfig, is_high_value
 
 
 class _FakeScoringConfig:
@@ -79,6 +79,33 @@ async def test_blank_content_returns_empty_without_calling() -> None:
 async def test_model_unavailable_degrades_to_empty() -> None:
     # complete_json returns None (open breaker / API error / bad JSON) → [].
     assert await _extractor(lambda _p: None).extract("d1", "content") == []
+
+
+class _Doc:
+    def __init__(self, authority=None, engagement_score=0.0) -> None:
+        self.authority_score = authority
+        self.engagement = type("E", (), {"engagement_score": engagement_score})()
+
+
+class TestHighValueGate:
+    def test_authority_above_threshold_qualifies(self) -> None:
+        assert is_high_value(_Doc(authority=0.8), LLMExtractionConfig(min_authority=0.5)) is True
+
+    def test_authority_below_threshold_rejected(self) -> None:
+        assert is_high_value(_Doc(authority=0.2), LLMExtractionConfig(min_authority=0.5)) is False
+
+    def test_missing_authority_treated_as_zero(self) -> None:
+        assert is_high_value(_Doc(authority=None), LLMExtractionConfig(min_authority=0.5)) is False
+
+    def test_engagement_lever_disabled_by_default(self) -> None:
+        # min_engagement default 0 → engagement never rescues a low-authority doc.
+        doc = _Doc(authority=0.1, engagement_score=10_000)
+        assert is_high_value(doc, LLMExtractionConfig(min_authority=0.5)) is False
+
+    def test_engagement_lever_rescues_when_enabled(self) -> None:
+        doc = _Doc(authority=0.1, engagement_score=500)
+        config = LLMExtractionConfig(min_authority=0.5, min_engagement=100)
+        assert is_high_value(doc, config) is True
 
 
 @pytest.mark.asyncio

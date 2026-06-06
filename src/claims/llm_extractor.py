@@ -8,14 +8,18 @@ parsing are the pure functions in ``llm_prompt``. Degrades to ``[]`` whenever
 the model is unavailable (no key / open breaker / unparseable), so a caller can
 always fall back to the rule pass.
 
-This bead (``7th.2``) is the pass itself; merging its output with the rule
-pass and gating it behind a feature flag in ``processing_service`` is ``7th.3``.
+``7th.2`` is the pass itself; ``7th.3`` adds the high-value ``is_high_value``
+gate (to bound cost), the ``claims.merge.merge_claims`` dedup-merge with the
+rule pass, and the ``llm_claim_extraction_enabled`` wiring in
+``processing_service``.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.claims.llm_prompt import build_extraction_prompt, parse_extraction_response
 from src.claims.schemas import EvidenceClaim
@@ -25,12 +29,46 @@ if TYPE_CHECKING:
     from src.scoring.json_llm import JsonLLMClient
 
 
-@dataclass(frozen=True)
-class LLMExtractionConfig:
-    """Tuning for the LLM extraction pass (injectable; no env surface yet)."""
+class LLMExtractionConfig(BaseSettings):
+    """Tuning for the LLM extraction pass (overridable via ``LLM_EXTRACTION_*``)."""
 
-    max_claims: int = 12
-    min_confidence: float = 0.5
+    model_config = SettingsConfigDict(
+        env_prefix="LLM_EXTRACTION_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    max_claims: int = Field(default=12, ge=1, description="Max claims requested per document")
+    min_confidence: float = Field(
+        default=0.5, ge=0.0, le=1.0, description="Drop LLM claims below this confidence"
+    )
+    # High-value gate — bounds cost by only running the paid pass on docs that
+    # clear an authority bar (primary) or an opt-in engagement bar (secondary).
+    min_authority: float = Field(
+        default=0.5, ge=0.0, le=1.0, description="Authority score required to run the LLM pass"
+    )
+    min_engagement: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Engagement score that also qualifies a doc (0 disables this lever)",
+    )
+
+
+def is_high_value(doc: Any, config: LLMExtractionConfig) -> bool:
+    """Whether a document clears the bar for the paid LLM extraction pass.
+
+    Authority (normalized 0-1) is the primary signal; engagement is an opt-in
+    secondary lever, active only when ``min_engagement > 0``.
+    """
+    authority = getattr(doc, "authority_score", None) or 0.0
+    if authority >= config.min_authority:
+        return True
+    if config.min_engagement > 0:
+        engagement = getattr(getattr(doc, "engagement", None), "engagement_score", 0.0)
+        return engagement >= config.min_engagement
+    return False
 
 
 class LLMClaimExtractor:
@@ -47,6 +85,11 @@ class LLMClaimExtractor:
 
         self._config = config or LLMExtractionConfig()
         self._llm = llm or JsonLLMClient(scoring_config, name="claim_extraction")
+
+    @property
+    def config(self) -> LLMExtractionConfig:
+        """The extraction tuning (read by the high-value gate before invoking)."""
+        return self._config
 
     async def extract(
         self,
