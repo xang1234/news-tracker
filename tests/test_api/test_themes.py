@@ -889,8 +889,12 @@ class TestGetThemeAttribution:
             ),
         ]
 
+        captured = {}
+
         class _StubService:
             async def attribute_theme(self, theme_id, **kwargs):
+                captured["theme_id"] = theme_id
+                captured.update(kwargs)
                 return contribs
 
         client.app.dependency_overrides[get_attribution_service] = lambda: _StubService()
@@ -903,6 +907,8 @@ class TestGetThemeAttribution:
         assert data["count"] == 2
         assert data["contributions"][0]["document_id"] == "d1"
         assert data["contributions"][0]["sentiment_contribution"] == 0.6
+        # Query params are forwarded to the service (regression guard).
+        assert captured == {"theme_id": "theme_abc123", "window_days": 14, "limit": 5}
 
     def test_not_found(self, client, mock_theme_repo):
         mock_theme_repo.get_by_id.return_value = None

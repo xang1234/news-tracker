@@ -137,6 +137,12 @@ class TestDocumentSentimentsFromRows:
             _row("ok", "positive"),
             {"document_id": "no_sent", "timestamp": REF, "sentiment": None},
             {"document_id": "bad_label", "timestamp": REF, "sentiment": {"label": "??"}},
+            # Malformed confidence must skip the row, not abort the whole batch.
+            {
+                "document_id": "bad_conf",
+                "timestamp": REF,
+                "sentiment": {"label": "positive", "confidence": 5.0},
+            },
         ]
         docs = document_sentiments_from_rows(rows)
         assert [d.document_id for d in docs] == ["ok"]

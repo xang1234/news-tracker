@@ -52,8 +52,10 @@ class DocumentSentiment:
 def document_sentiments_from_rows(rows: list[dict]) -> list[DocumentSentiment]:
     """Map ``get_sentiments_for_theme`` rows to ``DocumentSentiment``.
 
-    Skips rows whose sentiment payload is missing or carries an invalid label,
-    so both the sentiment endpoint and attribution share one parsing contract.
+    Skips rows whose sentiment payload is missing, carries an invalid label, or
+    has a malformed value that ``DocumentSentiment`` rejects (e.g. a
+    null/out-of-range confidence) — one bad row must not abort the whole batch.
+    Both the sentiment endpoint and attribution share this parsing contract.
     """
     docs: list[DocumentSentiment] = []
     for row in rows:
@@ -63,17 +65,20 @@ def document_sentiments_from_rows(rows: list[dict]) -> list[DocumentSentiment]:
         label = sentiment.get("label")
         if label not in ("positive", "negative", "neutral"):
             continue
-        docs.append(
-            DocumentSentiment(
-                document_id=row["document_id"],
-                timestamp=row["timestamp"],
-                label=label,
-                confidence=sentiment.get("confidence", 0.5),
-                scores=sentiment.get("scores", {}),
-                authority_score=row.get("authority_score"),
-                platform=row.get("platform"),
+        try:
+            docs.append(
+                DocumentSentiment(
+                    document_id=row["document_id"],
+                    timestamp=row["timestamp"],
+                    label=label,
+                    confidence=sentiment.get("confidence", 0.5),
+                    scores=sentiment.get("scores", {}),
+                    authority_score=row.get("authority_score"),
+                    platform=row.get("platform"),
+                )
             )
-        )
+        except (KeyError, TypeError, ValueError):
+            continue
     return docs
 
 

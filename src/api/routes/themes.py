@@ -1154,8 +1154,11 @@ async def get_theme_sentiment(
     Rank the documents that most moved a theme's sentiment/volume over a window.
 
     Decomposes the *same* weighted aggregate shown by `/themes/{id}/sentiment`:
-    each document's `sentiment_contribution` sums to `bullish_ratio − bearish_ratio`
-    and its `volume_contribution` sums to 1.0. Answers "why did this spike?".
+    across the **full** document set, each `sentiment_contribution` sums to
+    `bullish_ratio − bearish_ratio` and each `volume_contribution` sums to 1.0.
+    The response returns only the top `limit` movers (a subset), so the listed
+    rows are the largest contributors, not an exhaustive decomposition. Answers
+    "why did this spike?".
     """,
 )
 @limiter.limit(lambda: _get_settings().rate_limit_sentiment)
