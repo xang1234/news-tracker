@@ -15,6 +15,7 @@ Usage:
 from src.scoring.circuit_breaker import CircuitOpenError, GenericCircuitBreaker
 from src.scoring.compellingness import CompellingnessService
 from src.scoring.config import ScoringConfig
+from src.scoring.json_llm import JsonLLMClient
 from src.scoring.schemas import CompellingnessScore, DimensionScores, EvidenceQuote
 
 __all__ = [
@@ -24,5 +25,6 @@ __all__ = [
     "DimensionScores",
     "EvidenceQuote",
     "GenericCircuitBreaker",
+    "JsonLLMClient",
     "ScoringConfig",
 ]

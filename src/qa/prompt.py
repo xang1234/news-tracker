@@ -8,10 +8,10 @@ hallucinated-cited assertion.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from src.qa.schemas import AnswerSegment
+from src.retrieval.citation_gate import parse_cited_entries
 
 _QA_PROMPT = """\
 You are answering an analyst's question using ONLY the evidence claims listed \
@@ -37,13 +37,6 @@ def build_qa_prompt(question: str, claims: list[tuple[str, str]]) -> str:
     return _QA_PROMPT.format(question=question, claims_block=claims_block)
 
 
-def _dedupe(ids: list[str]) -> list[str]:
-    seen: dict[str, None] = {}
-    for i in ids:
-        seen.setdefault(i, None)
-    return list(seen)
-
-
 def parse_qa_response(payload: Any, valid_claim_ids: set[str]) -> list[AnswerSegment]:
     """Parse + ground an LLM answer response.
 
@@ -51,29 +44,9 @@ def parse_qa_response(payload: Any, valid_claim_ids: set[str]) -> list[AnswerSeg
     exists in ``valid_claim_ids``; invented ids are stripped and now-uncited
     segments dropped. Malformed input yields an empty list.
     """
-    if isinstance(payload, str):
-        try:
-            payload = json.loads(payload)
-        except (json.JSONDecodeError, ValueError):
-            return []
-    if not isinstance(payload, dict):
-        return []
-    raw_segments = payload.get("segments")
-    if not isinstance(raw_segments, list):
-        return []
-
-    segments: list[AnswerSegment] = []
-    for entry in raw_segments:
-        if not isinstance(entry, dict):
-            continue
-        text = entry.get("text")
-        ids = entry.get("claim_ids")
-        if not isinstance(text, str) or not text.strip():
-            continue
-        if not isinstance(ids, list):
-            continue
-        grounded = _dedupe([i for i in ids if isinstance(i, str) and i in valid_claim_ids])
-        if not grounded:
-            continue
-        segments.append(AnswerSegment(text=text.strip(), claim_ids=grounded))
-    return segments
+    return parse_cited_entries(
+        payload,
+        valid_claim_ids,
+        key="segments",
+        factory=lambda text, claim_ids: AnswerSegment(text=text, claim_ids=claim_ids),
+    )

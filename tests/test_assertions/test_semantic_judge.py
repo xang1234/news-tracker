@@ -71,4 +71,4 @@ async def test_judge_short_circuits_without_api_key():
     verdict = await judge.judge("a", "b")
 
     assert verdict is None
-    assert judge._breaker.consecutive_failures == 0  # breaker untouched
+    assert judge._llm._breaker.consecutive_failures == 0  # breaker untouched

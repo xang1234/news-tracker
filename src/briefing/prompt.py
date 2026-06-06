@@ -8,10 +8,10 @@ contain an uncited or hallucinated-cited assertion.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from src.briefing.schemas import BriefingClause
+from src.retrieval.citation_gate import parse_cited_entries
 
 _BRIEFING_PROMPT = """\
 You are writing a short factual brief about the theme "{theme_name}" for an \
@@ -34,13 +34,6 @@ def build_briefing_prompt(theme_name: str, claims: list[tuple[str, str]]) -> str
     return _BRIEFING_PROMPT.format(theme_name=theme_name, claims_block=claims_block)
 
 
-def _dedupe(ids: list[str]) -> list[str]:
-    seen: dict[str, None] = {}
-    for i in ids:
-        seen.setdefault(i, None)
-    return list(seen)
-
-
 def parse_briefing_response(payload: Any, valid_claim_ids: set[str]) -> list[BriefingClause]:
     """Parse + ground an LLM briefing response.
 
@@ -49,29 +42,9 @@ def parse_briefing_response(payload: Any, valid_claim_ids: set[str]) -> list[Bri
     clauses dropped. Any malformed input yields an empty list (caller falls
     back to the template).
     """
-    if isinstance(payload, str):
-        try:
-            payload = json.loads(payload)
-        except (json.JSONDecodeError, ValueError):
-            return []
-    if not isinstance(payload, dict):
-        return []
-    raw_clauses = payload.get("clauses")
-    if not isinstance(raw_clauses, list):
-        return []
-
-    clauses: list[BriefingClause] = []
-    for entry in raw_clauses:
-        if not isinstance(entry, dict):
-            continue
-        text = entry.get("text")
-        ids = entry.get("claim_ids")
-        if not isinstance(text, str) or not text.strip():
-            continue
-        if not isinstance(ids, list):
-            continue
-        grounded = _dedupe([i for i in ids if isinstance(i, str) and i in valid_claim_ids])
-        if not grounded:
-            continue
-        clauses.append(BriefingClause(text=text.strip(), claim_ids=grounded))
-    return clauses
+    return parse_cited_entries(
+        payload,
+        valid_claim_ids,
+        key="clauses",
+        factory=lambda text, claim_ids: BriefingClause(text=text, claim_ids=claim_ids),
+    )

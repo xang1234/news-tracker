@@ -16,15 +16,11 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-import structlog
-
 if TYPE_CHECKING:
     # Type-only: keeps the scoring service package off the `assertions` import
     # path (the judge only needs scoring when it is actually constructed).
-    from src.scoring.circuit_breaker import GenericCircuitBreaker
     from src.scoring.config import ScoringConfig
-
-logger = structlog.get_logger(__name__)
+    from src.scoring.json_llm import JsonLLMClient
 
 VALID_RELATIONS = frozenset({"contradicts", "agrees", "unrelated"})
 
@@ -89,61 +85,22 @@ def parse_verdict(payload: Any) -> ContradictionVerdict | None:
 
 
 class SemanticContradictionJudge:
-    """LLM-backed contradiction judge, gated by a circuit breaker.
+    """LLM-backed contradiction judge over the shared JSON-LLM client.
 
-    Reuses the generic circuit breaker from the scoring layer (the only
-    genuinely-shared piece); the prompt and parsing are contradiction-specific
-    and live here, decoupled from compellingness scoring. Currently OpenAI-only
-    (the scoring layer's Anthropic path is not wired here).
+    The contradiction prompt and verdict parsing are domain-specific and live
+    here; the breaker-guarded round-trip is delegated to the scoring layer's
+    ``JsonLLMClient``. A no-key client short-circuits to ``None`` without
+    tripping its breaker, so the tier no-ops cleanly when unconfigured.
     """
 
-    def __init__(
-        self, config: ScoringConfig, *, breaker: GenericCircuitBreaker | None = None
-    ) -> None:
+    def __init__(self, config: ScoringConfig, *, llm: JsonLLMClient | None = None) -> None:
         # Lazy import so importing `assertions` doesn't pull in the scoring
         # service package; the judge is only built when the tier is enabled.
-        from src.scoring.circuit_breaker import GenericCircuitBreaker
+        from src.scoring.json_llm import JsonLLMClient
 
-        self._config = config
-        self._client: Any = None
-        self._breaker = breaker or GenericCircuitBreaker(
-            failure_threshold=config.circuit_failure_threshold,
-            recovery_timeout=config.circuit_recovery_timeout,
-            name="semantic_judge",
-        )
-
-    def _get_client(self) -> Any:
-        if self._client is None:
-            import openai
-
-            api_key = self._config.openai_api_key
-            self._client = openai.AsyncOpenAI(
-                api_key=api_key.get_secret_value() if api_key else None,
-                timeout=self._config.llm_timeout,
-            )
-        return self._client
+        self._llm = llm or JsonLLMClient(config, name="semantic_judge")
 
     async def judge(self, text_a: str, text_b: str) -> ContradictionVerdict | None:
         """Judge two claim texts; returns a verdict or None on failure/open circuit."""
-        # Fail fast on misconfiguration: with no API key, creating a client and
-        # calling out would just fail and needlessly trip the breaker on every
-        # call. Return None without touching the breaker so the tier no-ops cleanly.
-        if not self._config.openai_api_key:
-            logger.warning("Semantic judge has no OpenAI API key configured; skipping")
-            return None
-        prompt = build_judge_prompt(text_a, text_b)
-
-        async def _call() -> ContradictionVerdict | None:
-            client = self._get_client()
-            response = await client.chat.completions.create(
-                model=self._config.openai_model,
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"},
-            )
-            return parse_verdict(response.choices[0].message.content)
-
-        try:
-            return await self._breaker.call(_call)
-        except Exception as e:  # breaker open, API error, etc. — degrade gracefully
-            logger.warning("Semantic judge call failed", error=str(e))
-            return None
+        raw = await self._llm.complete_json(build_judge_prompt(text_a, text_b))
+        return parse_verdict(raw) if raw is not None else None

@@ -55,20 +55,30 @@ class _FakeScoringConfig:
     circuit_recovery_timeout = 60.0
 
 
+class _FakeLLM:
+    """Stand-in for JsonLLMClient: a sync responder behind the async seam."""
+
+    def __init__(self, responder, *, api_key: bool, model: str = "gpt-4o-mini") -> None:
+        self._responder = responder
+        self._api_key = api_key
+        self.model = model
+
+    @property
+    def has_api_key(self) -> bool:
+        return self._api_key
+
+    async def complete_json(self, prompt: str) -> Any:
+        return self._responder(prompt)
+
+
 def _service(*, retrieval, config=None, llm=None, api_key="sk-test") -> CitedQAService:
-    svc = CitedQAService(
+    responder = llm if llm is not None else (lambda prompt: None)
+    return CitedQAService(
         retrieval_service=retrieval,
         scoring_config=_FakeScoringConfig(),
         config=config or QAConfig(),
+        llm=_FakeLLM(responder, api_key=api_key is not None),
     )
-    sync_llm = llm if llm is not None else (lambda prompt: None)
-
-    async def _async_llm(prompt: str, _fn=sync_llm) -> Any:
-        return _fn(prompt)
-
-    svc._call_llm = _async_llm  # type: ignore[assignment]
-    svc._has_api_key = lambda: api_key is not None  # type: ignore[assignment]
-    return svc
 
 
 class TestSufficiencyGate:
