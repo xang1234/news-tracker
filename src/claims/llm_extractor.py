@@ -60,14 +60,13 @@ def is_high_value(doc: Any, config: LLMExtractionConfig) -> bool:
     """Whether a document clears the bar for the paid LLM extraction pass.
 
     Authority (normalized 0-1) is the primary signal; engagement is an opt-in
-    secondary lever, active only when ``min_engagement > 0``.
+    secondary lever, active only when ``min_engagement > 0``. ``doc`` is a
+    ``NormalizedDocument`` (typed ``Any`` only to avoid an ingestion import).
     """
-    authority = getattr(doc, "authority_score", None) or 0.0
-    if authority >= config.min_authority:
+    if (doc.authority_score or 0.0) >= config.min_authority:
         return True
     if config.min_engagement > 0:
-        engagement = getattr(getattr(doc, "engagement", None), "engagement_score", 0.0)
-        return engagement >= config.min_engagement
+        return doc.engagement.engagement_score >= config.min_engagement
     return False
 
 

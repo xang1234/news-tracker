@@ -24,21 +24,19 @@ def merge_claims(
     matches a rule claim flips that claim to ``hybrid`` rather than adding a
     duplicate. Order is rule claims first, then LLM-only claims, in input order.
     """
+    # dict preserves insertion order, and replacing an existing key keeps its
+    # position — so rule-first-then-LLM-only order falls out for free.
     merged: dict[str, EvidenceClaim] = {}
-    order: list[str] = []
 
     for claim in rule_claims:
-        if claim.claim_key not in merged:
-            merged[claim.claim_key] = claim
-            order.append(claim.claim_key)
+        merged.setdefault(claim.claim_key, claim)  # first rule claim wins
 
     for claim in llm_claims:
         existing = merged.get(claim.claim_key)
         if existing is None:
             merged[claim.claim_key] = claim
-            order.append(claim.claim_key)
         elif existing.extraction_method == "rule":
             # Corroborated by both passes → keep the richer rule claim as hybrid.
             merged[claim.claim_key] = dataclasses.replace(existing, extraction_method="hybrid")
 
-    return [merged[key] for key in order]
+    return list(merged.values())
