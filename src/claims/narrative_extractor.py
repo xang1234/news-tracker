@@ -77,6 +77,14 @@ _VERB_TO_PREDICATE: list[tuple[re.Pattern[str], str]] = [
     (_PARTNER_VERBS, "depends_on"),
 ]
 
+# The narrative lane's predicate vocabulary — the union of event-derived and
+# co-occurrence predicates above. Exposed as the single source of truth so the
+# LLM extraction pass (7th.2) constrains itself to the same vocabulary the rule
+# extractor uses, keeping claim_keys (hence the ON CONFLICT dedup) comparable.
+NARRATIVE_PREDICATES: frozenset[str] = frozenset(EVENT_TYPE_TO_PREDICATE.values()) | {
+    predicate for _, predicate in _VERB_TO_PREDICATE
+}
+
 # Maximum character window for co-occurrence detection
 _COOCCURRENCE_WINDOW = 300
 

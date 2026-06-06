@@ -16,9 +16,13 @@ without a precision regression beyond the agreed bound.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from typing import TYPE_CHECKING
 
 from src.claims.schemas import EvidenceClaim
 from src.eval.schemas import DocEval, ExtractionEval, GoldenClaim, GoldenDocument
+
+if TYPE_CHECKING:
+    from src.scoring.config import ScoringConfig
 
 Extractor = Callable[[GoldenDocument], list[EvidenceClaim]]
 
@@ -82,3 +86,23 @@ def rule_extractor(doc: GoldenDocument) -> list[EvidenceClaim]:
     from src.claims.narrative_extractor import extract_claims_from_document
 
     return extract_claims_from_document(doc.doc_id, doc.events, doc.entities, doc.content)
+
+
+def make_llm_extractor(scoring_config: ScoringConfig | None = None) -> Extractor:
+    """Build a sync eval adapter around the async LLM extractor.
+
+    For offline measurement with a real API key (the LLM pass self-no-ops to an
+    empty result without one). Bridges the async ``extract`` to the harness's
+    sync ``Extractor`` per document — fine for the small golden set; not a hot path.
+    """
+    import asyncio
+
+    from src.claims.llm_extractor import LLMClaimExtractor
+    from src.scoring.config import ScoringConfig
+
+    extractor = LLMClaimExtractor(scoring_config=scoring_config or ScoringConfig())
+
+    def _extract(doc: GoldenDocument) -> list[EvidenceClaim]:
+        return asyncio.run(extractor.extract(doc.doc_id, doc.content))
+
+    return _extract
