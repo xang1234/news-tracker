@@ -34,6 +34,7 @@ from src.claims.review import (
     validate_review_transition,
 )
 from src.claims.review_repository import ReviewRepository
+from src.claims.review_resolution import ReviewResolutionService, was_held_for_review
 from src.claims.schemas import (
     VALID_CLAIM_STATUSES,
     VALID_EXTRACTION_METHODS,
@@ -67,8 +68,10 @@ __all__ = [
     "ResolverResult",
     "ResolverTier",
     "ReviewRepository",
+    "ReviewResolutionService",
     "ReviewTask",
     "capture_dead_letter",
+    "was_held_for_review",
     "make_claim_id",
     "make_claim_key",
     "run_quality_checks",
