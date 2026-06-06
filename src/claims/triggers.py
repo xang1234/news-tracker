@@ -16,6 +16,7 @@ Trigger inventory:
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from src.claims.resolver import ResolverResult, ResolverTier
 from src.claims.review import ReviewTask, make_review_task_id
@@ -37,6 +38,16 @@ HIGH_IMPACT_PREDICATES = frozenset(
 
 # Confidence below this threshold triggers review for fuzzy matches
 LOW_CONFIDENCE_THRESHOLD = 0.65
+
+
+def _claim_concept_ids(claim: EvidenceClaim) -> list[str]:
+    """Resolved subject + object concept IDs present on a claim, in order."""
+    return [cid for cid in (claim.subject_concept_id, claim.object_concept_id) if cid]
+
+
+def _claim_lineage(claim: EvidenceClaim) -> dict[str, Any]:
+    """Standard recompute lineage for a single-claim review task."""
+    return {"source_claim_id": claim.claim_id, "run_id": claim.run_id, "lane": claim.lane}
 
 
 def check_low_confidence(
@@ -79,11 +90,7 @@ def check_low_confidence(
                 {"concept_id": a.concept_id, "name": a.canonical_name} for a in result.alternatives
             ],
         },
-        lineage={
-            "source_claim_id": claim.claim_id,
-            "run_id": claim.run_id,
-            "lane": claim.lane,
-        },
+        lineage=_claim_lineage(claim),
     )
 
 
@@ -120,11 +127,7 @@ def check_llm_proposed(
             "mention": result.mention,
             "gate_metadata": result.metadata,
         },
-        lineage={
-            "source_claim_id": claim.claim_id,
-            "run_id": claim.run_id,
-            "lane": claim.lane,
-        },
+        lineage=_claim_lineage(claim),
     )
 
 
@@ -203,11 +206,7 @@ def check_high_impact_predicate(
     if claim.confidence >= confidence_threshold:
         return None
 
-    concept_ids = []
-    if claim.subject_concept_id:
-        concept_ids.append(claim.subject_concept_id)
-    if claim.object_concept_id:
-        concept_ids.append(claim.object_concept_id)
+    concept_ids = _claim_concept_ids(claim)
 
     task_id = make_review_task_id(
         "claim_review",
@@ -228,11 +227,7 @@ def check_high_impact_predicate(
             "subject": claim.subject_text,
             "object": claim.object_text,
         },
-        lineage={
-            "source_claim_id": claim.claim_id,
-            "run_id": claim.run_id,
-            "lane": claim.lane,
-        },
+        lineage=_claim_lineage(claim),
     )
 
 
@@ -253,11 +248,7 @@ def check_low_confidence_llm(
     if claim.confidence >= confidence_threshold:
         return None
 
-    concept_ids = []
-    if claim.subject_concept_id:
-        concept_ids.append(claim.subject_concept_id)
-    if claim.object_concept_id:
-        concept_ids.append(claim.object_concept_id)
+    concept_ids = _claim_concept_ids(claim)
 
     task_id = make_review_task_id(
         "claim_review",
@@ -279,11 +270,7 @@ def check_low_confidence_llm(
             "object": claim.object_text,
             "extraction_method": claim.extraction_method,
         },
-        lineage={
-            "source_claim_id": claim.claim_id,
-            "run_id": claim.run_id,
-            "lane": claim.lane,
-        },
+        lineage=_claim_lineage(claim),
     )
 
 
