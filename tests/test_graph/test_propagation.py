@@ -364,3 +364,74 @@ class TestEdgeWeightLookup:
         custom_config = GraphConfig(propagation_weight_depends_on=0.95)
         prop = SentimentPropagation(graph=graph, config=custom_config)
         assert prop._get_edge_weight("depends_on") == 0.95
+
+
+class TestPropagationPath:
+    """Causal path reconstruction (o59.3): ordered edges with per-hop detail."""
+
+    @pytest.mark.asyncio
+    async def test_linear_chain_records_ordered_path(self, propagation, mock_database):
+        # A --depends_on--> B --supplies_to--> C
+        mock_database.fetch.return_value = [
+            {"source": "A", "target": "B", "relation": "depends_on", "confidence": 1.0, "depth": 1},
+            {
+                "source": "B",
+                "target": "C",
+                "relation": "supplies_to",
+                "confidence": 0.9,
+                "depth": 2,
+            },
+        ]
+
+        impacts = await propagation.propagate("A", -0.5)
+
+        # B is one hop from the source.
+        b_path = impacts["B"].path
+        assert [(h.from_node, h.to_node, h.relation) for h in b_path] == [("A", "B", "depends_on")]
+        assert b_path[0].edge_confidence == 1.0
+
+        # C carries the full ordered chain A→B→C.
+        c_path = impacts["C"].path
+        assert [(h.from_node, h.to_node, h.relation) for h in c_path] == [
+            ("A", "B", "depends_on"),
+            ("B", "C", "supplies_to"),
+        ]
+        assert c_path[-1].edge_confidence == 0.9
+        # len(path) == depth, and the reaching edge is path[-1].
+        assert len(c_path) == impacts["C"].depth == 2
+        assert c_path[-1].relation == impacts["C"].path_relation
+
+    @pytest.mark.asyncio
+    async def test_depth_one_path_has_single_hop(self, propagation, mock_database):
+        mock_database.fetch.return_value = [
+            {
+                "source": "AMD",
+                "target": "NVDA",
+                "relation": "competes_with",
+                "confidence": 0.8,
+                "depth": 1,
+            },
+        ]
+
+        impacts = await propagation.propagate("AMD", -0.5)
+
+        path = impacts["NVDA"].path
+        assert len(path) == 1
+        assert path[0].from_node == "AMD"
+        assert path[0].to_node == "NVDA"
+        assert path[0].relation == "competes_with"
+        assert path[0].edge_confidence == 0.8
+
+    @pytest.mark.asyncio
+    async def test_branches_have_independent_paths(self, propagation, mock_database):
+        # A→B and A→C→D: D's path must not include B.
+        mock_database.fetch.return_value = [
+            {"source": "A", "target": "B", "relation": "depends_on", "confidence": 1.0, "depth": 1},
+            {"source": "A", "target": "C", "relation": "depends_on", "confidence": 1.0, "depth": 1},
+            {"source": "C", "target": "D", "relation": "depends_on", "confidence": 1.0, "depth": 2},
+        ]
+
+        impacts = await propagation.propagate("A", -0.5)
+
+        assert [h.to_node for h in impacts["D"].path] == ["C", "D"]
+        assert [h.to_node for h in impacts["B"].path] == ["B"]

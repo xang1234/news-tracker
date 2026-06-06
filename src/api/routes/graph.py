@@ -15,6 +15,7 @@ from src.api.models import (
     GraphNodesResponse,
     PropagateRequest,
     PropagateResponse,
+    PropagationHopItem,
     PropagationImpactItem,
     SubgraphResponse,
 )
@@ -171,6 +172,15 @@ async def propagate_sentiment(
                     depth=imp.depth,
                     relation=imp.path_relation,
                     edge_confidence=imp.edge_confidence,
+                    path=[
+                        PropagationHopItem(
+                            from_node=hop.from_node,
+                            to_node=hop.to_node,
+                            relation=hop.relation,
+                            edge_confidence=hop.edge_confidence,
+                        )
+                        for hop in imp.path
+                    ],
                 )
                 for imp in impacts.values()
             ],

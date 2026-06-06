@@ -200,6 +200,7 @@ class Config: ...  # ❌ Never use this
 - **Graceful Notification Degradation**: Dispatcher failures never block alert persistence; Redis fallback queue for retries
 - **Edge-Type-Aware BFS**: Sentiment propagation multiplies edge weights (with sign) per hop; `competes_with` (-0.3) flips impact direction
 - **First Arrival Wins**: Propagation uses shallowest path to determine impact — deeper paths to already-reached nodes are skipped
+- **Causal Path Reconstruction**: `SentimentPropagation` (epic `o59.3`) returns, per affected node, the ordered `path` of `PropagationHop`s (from_node/to_node/relation/edge_confidence) from the source — not just an impact scalar. Built incrementally during the level-by-level BFS (each target's `path = source.path + [reaching hop]`, exploiting first-arrival-wins), so `len(path) == depth` and `path[-1]` is the reaching edge. Surfaced in `POST /graph/propagate` (`PropagationImpactItem.path`); answers "*why* does NVDA move when HBM demand shifts" with the explicit chain.
 - **Transparent Cache Injection**: `init_security_master()` populates module-level caches in `tickers.py`; existing consumers use cached DB data with zero code changes
 - **Composite PK Securities**: `(ticker, exchange)` identifies securities across exchanges (e.g., Samsung on KRX vs US ADR)
 - **pg_trgm Fuzzy Search**: GIN trigram index on `securities.name` enables typo-tolerant company lookup via `similarity()`
@@ -298,7 +299,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 | PATCH | /alerts/{id}/acknowledge | Mark alert as acknowledged |
 | GET | /graph/nodes | List graph nodes (optional node_type filter) |
 | GET | /graph/nodes/{id}/subgraph | Subgraph around a node (depth param) |
-| POST | /graph/propagate | Sentiment propagation through causal graph |
+| POST | /graph/propagate | Sentiment propagation through causal graph (per-node causal edge path, epic `o59.3`) |
 | POST | /feedback | Submit quality rating for theme/alert/document |
 | GET | /feedback/stats | Aggregated feedback statistics by entity type |
 | WS | /ws/alerts | Real-time alert stream (severity, theme_id, api_key query params) |
