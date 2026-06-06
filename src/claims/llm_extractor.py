@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.claims.llm_prompt import build_extraction_prompt, parse_extraction_response
@@ -44,6 +44,15 @@ class LLMExtractionConfig(BaseSettings):
     min_confidence: float = Field(
         default=0.5, ge=0.0, le=1.0, description="Drop LLM claims below this confidence"
     )
+    # Review gate — pure-LLM claims with confidence in [min_confidence,
+    # review_confidence) are held in the review queue instead of feeding
+    # assertions (see triggers.check_low_confidence_llm).
+    review_confidence: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="LLM claims below this confidence are held for review",
+    )
     # High-value gate — bounds cost by only running the paid pass on docs that
     # clear an authority bar (primary) or an opt-in engagement bar (secondary).
     min_authority: float = Field(
@@ -54,6 +63,16 @@ class LLMExtractionConfig(BaseSettings):
         ge=0.0,
         description="Engagement score that also qualifies a doc (0 disables this lever)",
     )
+
+    @model_validator(mode="after")
+    def _check_review_above_floor(self) -> LLMExtractionConfig:
+        """A review gate at or below the extraction floor would never hold anything."""
+        if self.review_confidence <= self.min_confidence:
+            raise ValueError(
+                f"review_confidence ({self.review_confidence}) must exceed min_confidence "
+                f"({self.min_confidence}); otherwise no claim is ever held for review"
+            )
+        return self
 
 
 def is_high_value(doc: Any, config: LLMExtractionConfig) -> bool:

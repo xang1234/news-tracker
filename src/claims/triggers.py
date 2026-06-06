@@ -10,6 +10,7 @@ Trigger inventory:
     - check_llm_proposed: Any LLM-gated resolution
     - check_competing_predicates: Different predicates on same entities
     - check_high_impact_predicate: Risky predicates that need review
+    - check_low_confidence_llm: Speculative LLM-extracted claims
 """
 
 from __future__ import annotations
@@ -226,6 +227,57 @@ def check_high_impact_predicate(
             "threshold": confidence_threshold,
             "subject": claim.subject_text,
             "object": claim.object_text,
+        },
+        lineage={
+            "source_claim_id": claim.claim_id,
+            "run_id": claim.run_id,
+            "lane": claim.lane,
+        },
+    )
+
+
+def check_low_confidence_llm(
+    claim: EvidenceClaim,
+    *,
+    confidence_threshold: float,
+) -> ReviewTask | None:
+    """Trigger review for low-confidence LLM-extracted claims.
+
+    A pure ``llm`` claim below the threshold is speculative — it must not
+    silently feed assertions, so it is held in the review queue. ``hybrid``
+    claims (corroborated by the rule pass) and ``rule`` claims are trusted and
+    pass straight through.
+    """
+    if claim.extraction_method != "llm":
+        return None
+    if claim.confidence >= confidence_threshold:
+        return None
+
+    concept_ids = []
+    if claim.subject_concept_id:
+        concept_ids.append(claim.subject_concept_id)
+    if claim.object_concept_id:
+        concept_ids.append(claim.object_concept_id)
+
+    task_id = make_review_task_id(
+        "claim_review",
+        claim_ids=[claim.claim_id],
+        concept_ids=concept_ids,
+    )
+    return ReviewTask(
+        task_id=task_id,
+        task_type="claim_review",
+        trigger_reason="low_confidence",
+        claim_ids=[claim.claim_id],
+        concept_ids=concept_ids,
+        priority=1,
+        payload={
+            "predicate": claim.predicate,
+            "confidence": claim.confidence,
+            "threshold": confidence_threshold,
+            "subject": claim.subject_text,
+            "object": claim.object_text,
+            "extraction_method": claim.extraction_method,
         },
         lineage={
             "source_claim_id": claim.claim_id,
