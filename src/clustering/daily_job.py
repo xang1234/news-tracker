@@ -700,10 +700,19 @@ async def _generate_daily_alerts(
     except Exception as e:
         logger.warning("Redis unavailable for alert dedup: %s", e)
 
+    # Doc→metric attribution (epic o59.2): enrich theme-metric alerts with the
+    # contributing documents that caused them.
+    from src.sentiment.aggregation import SentimentAggregator
+    from src.storage.repository import DocumentRepository
+    from src.themes.attribution import AttributionService
+
+    attribution_service = AttributionService(DocumentRepository(database), SentimentAggregator())
+
     service = AlertService(
         config=alert_config,
         alert_repo=alert_repo,
         redis_client=redis_client,
+        attribution_service=attribution_service,
     )
 
     try:

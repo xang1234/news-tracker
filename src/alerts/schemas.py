@@ -54,6 +54,8 @@ class Alert:
         title: Short human-readable summary.
         message: Detailed description of the condition.
         trigger_data: JSONB payload with trigger-specific context.
+        supporting_evidence: JSONB payload of the docs/claims/events that caused
+            the trigger (the "receipt"); populated at trigger evaluation.
         acknowledged: Whether a user has reviewed the alert.
         created_at: When the alert was generated.
     """
@@ -68,6 +70,7 @@ class Alert:
     subject_id: str | None = None
     conviction_score: float | None = None
     trigger_data: dict[str, Any] = field(default_factory=dict)
+    supporting_evidence: dict[str, Any] = field(default_factory=dict)
     acknowledged: bool = False
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
@@ -95,6 +98,7 @@ class Alert:
             "title": self.title,
             "message": self.message,
             "trigger_data": self.trigger_data,
+            "supporting_evidence": self.supporting_evidence,
             "acknowledged": self.acknowledged,
             "created_at": self.created_at.isoformat(),
         }
@@ -119,6 +123,10 @@ class Alert:
         if isinstance(trigger_data, str):
             trigger_data = json.loads(trigger_data)
 
+        supporting_evidence = data.get("supporting_evidence") or {}
+        if isinstance(supporting_evidence, str):
+            supporting_evidence = json.loads(supporting_evidence)
+
         return cls(
             alert_id=data.get("alert_id", str(uuid.uuid4())),
             theme_id=data["theme_id"],
@@ -130,6 +138,7 @@ class Alert:
             title=data["title"],
             message=data["message"],
             trigger_data=trigger_data,
+            supporting_evidence=supporting_evidence,
             acknowledged=data.get("acknowledged", False),
             created_at=created_at,
         )
