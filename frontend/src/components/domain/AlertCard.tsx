@@ -73,6 +73,42 @@ export function AlertCard({ alert, onAcknowledge, isAcknowledging }: AlertCardPr
         </p>
       </div>
 
+      {/* Supporting evidence: the documents that moved the metric (o59.2) */}
+      {alert.supporting_evidence?.documents && alert.supporting_evidence.documents.length > 0 && (
+        <div className="mt-3 rounded border border-border bg-background/50 p-2">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Evidence · {alert.supporting_evidence.documents.length} document
+            {alert.supporting_evidence.documents.length !== 1 && 's'}
+          </div>
+          <div className="mt-1.5 space-y-1">
+            {alert.supporting_evidence.documents.map((doc) => (
+              <div key={doc.document_id} className="flex items-center gap-2 text-[11px]">
+                <Link
+                  to={`/documents/${doc.document_id}`}
+                  className="font-mono text-primary hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {truncate(doc.document_id, 18)}
+                </Link>
+                {doc.platform && (
+                  <span className="text-muted-foreground">{doc.platform}</span>
+                )}
+                <span
+                  className={cn(
+                    'ml-auto font-mono',
+                    doc.sentiment_contribution >= 0 ? 'text-emerald-400' : 'text-red-400',
+                  )}
+                  title="Sentiment contribution"
+                >
+                  {doc.sentiment_contribution >= 0 ? '+' : ''}
+                  {doc.sentiment_contribution.toFixed(3)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Bottom row: theme link + acknowledge button */}
       <div className="mt-3 flex items-center gap-2 text-xs">
         <Link

@@ -69,6 +69,7 @@ node_modules/.bin/vite build         # Production build
 - **Hooks pattern**: `src/api/hooks/use*.ts` — one hook per API endpoint, typed request/response interfaces co-located
 - **Shared utilities**: `src/lib/constants.ts` (PLATFORMS, colors), `src/lib/formatters.ts` (timeAgo, pct, truncate, latency), `src/lib/utils.ts` (cn for Tailwind merge)
 - **Domain components**: `src/components/domain/` — reusable cards/panels, always export a Skeleton variant for loading states
+- **Explainability receipts (epic `o59.4`)**: `AlertCard` renders an alert's `supporting_evidence.documents` (o59.2) — the contributing docs, deep-linked to `/documents/{id}`; `PropagationPanel` renders each impact's causal `path` (o59.3) via the `EdgePath` component (`src → relation(confidence) → target` chain; a focused renderer, distinct from `PathExplanation` which carries freshness/sign/score for structural scored paths). Both new fields are typed optional so the UI degrades gracefully against an API that predates them. `CatalystCard` already shows `catalyst.evidence`.
 - **Pages**: `src/pages/` — one default export per route, lazy-loaded in `App.tsx`
 - **Dark theme**: Always on (`<html class="dark">`), use `text-foreground`, `bg-card`, `border-border` etc.
 
