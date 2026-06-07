@@ -91,13 +91,16 @@ class TestGraphPropagateRoute:
     """Test POST /graph/propagate."""
 
     def test_propagate_happy_path(self, client, mock_propagation_service):
-        """POST /graph/propagate returns impact results."""
+        """POST /graph/propagate returns impact results with the causal path."""
+        from src.graph.propagation import PropagationHop
+
         mock_impact = MagicMock()
         mock_impact.node_id = "amd"
         mock_impact.impact = 0.35
         mock_impact.depth = 1
         mock_impact.path_relation = "competes_with"
         mock_impact.edge_confidence = 0.8
+        mock_impact.path = [PropagationHop("nvda", "amd", "competes_with", 0.8)]
         mock_propagation_service.propagate.return_value = {"amd": mock_impact}
 
         resp = client.post(
@@ -113,7 +116,17 @@ class TestGraphPropagateRoute:
         assert body["source_node"] == "nvda"
         assert body["sentiment_delta"] == 0.5
         assert body["total_affected"] == 1
-        assert body["impacts"][0]["node_id"] == "amd"
+        impact = body["impacts"][0]
+        assert impact["node_id"] == "amd"
+        # Causal path is exposed (o59.3): ordered hops with relation + confidence.
+        assert impact["path"] == [
+            {
+                "from_node": "nvda",
+                "to_node": "amd",
+                "relation": "competes_with",
+                "edge_confidence": 0.8,
+            }
+        ]
 
     def test_propagate_error_sanitized(self, client, mock_propagation_service):
         """Error response doesn't leak internal details."""

@@ -37,8 +37,9 @@ class AlertRepository:
         sql = """
             INSERT INTO alerts (
                 alert_id, theme_id, subject_type, subject_id, trigger_type, severity,
-                conviction_score, title, message, trigger_data, acknowledged, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                conviction_score, title, message, trigger_data, supporting_evidence,
+                acknowledged, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             RETURNING *
         """
         row = await self._db.fetchrow(
@@ -53,6 +54,7 @@ class AlertRepository:
             alert.title,
             alert.message,
             json.dumps(alert.trigger_data),
+            json.dumps(alert.supporting_evidence),
             alert.acknowledged,
             alert.created_at,
         )
@@ -214,6 +216,10 @@ def _row_to_alert(row: Any) -> Alert:
     if isinstance(trigger_data, str):
         trigger_data = json.loads(trigger_data)
 
+    supporting_evidence = row.get("supporting_evidence") or {}
+    if isinstance(supporting_evidence, str):
+        supporting_evidence = json.loads(supporting_evidence)
+
     return Alert(
         alert_id=row["alert_id"],
         theme_id=row["theme_id"],
@@ -225,6 +231,7 @@ def _row_to_alert(row: Any) -> Alert:
         title=row["title"],
         message=row["message"],
         trigger_data=trigger_data,
+        supporting_evidence=supporting_evidence,
         acknowledged=row.get("acknowledged", False),
         created_at=row["created_at"],
     )

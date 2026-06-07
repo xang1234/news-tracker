@@ -730,6 +730,10 @@ class AlertItem(BaseModel):
     title: str = Field(..., description="Short human-readable summary")
     message: str = Field(..., description="Detailed alert description")
     trigger_data: dict = Field(default_factory=dict, description="Trigger-specific context")
+    supporting_evidence: dict = Field(
+        default_factory=dict,
+        description="Docs/claims/events that caused the trigger (the 'receipt')",
+    )
     acknowledged: bool = Field(default=False, description="Whether the alert has been reviewed")
     created_at: str = Field(..., description="Alert creation timestamp (ISO format)")
 
@@ -878,14 +882,27 @@ class PropagateRequest(BaseModel):
     )
 
 
+class PropagationHopItem(BaseModel):
+    """One edge on the causal path from the source to an affected node."""
+
+    from_node: str = Field(..., description="Upstream node of this hop")
+    to_node: str = Field(..., description="Downstream node of this hop")
+    relation: str = Field(..., description="Edge type traversed")
+    edge_confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence of this edge")
+
+
 class PropagationImpactItem(BaseModel):
     """Single propagation impact result."""
 
     node_id: str = Field(..., description="Affected downstream node ID")
     impact: float = Field(..., description="Propagated sentiment impact (signed)")
     depth: int = Field(..., ge=1, description="Hops from source node")
-    relation: str = Field(..., description="Edge type of the first hop reaching this node")
+    relation: str = Field(..., description="Edge type of the hop reaching this node")
     edge_confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence of that edge")
+    path: list[PropagationHopItem] = Field(
+        default_factory=list,
+        description="Ordered edges from the source to this node (the causal chain)",
+    )
 
 
 class PropagateResponse(BaseModel):

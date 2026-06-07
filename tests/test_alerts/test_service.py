@@ -1,6 +1,6 @@
 """Tests for AlertService with mocked Redis and repository."""
 
-from datetime import date
+from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock
 
 import numpy as np
@@ -9,6 +9,7 @@ import pytest
 from src.alerts.config import AlertConfig
 from src.alerts.repository import AlertRepository
 from src.alerts.service import AlertService
+from src.themes.attribution import DocumentContribution
 from src.themes.schemas import Theme, ThemeMetrics
 from src.themes.transitions import LifecycleTransition
 
@@ -238,3 +239,107 @@ class TestGenerateAlerts:
         )
         assert len(result) == 3
         assert all(a.trigger_type == "volume_surge" for a in result)
+
+
+class _FakeAttribution:
+    """Stand-in AttributionService returning canned contributions (or raising)."""
+
+    def __init__(self, contributions=None, *, raises=False):
+        self._contributions = contributions or []
+        self._raises = raises
+        self.calls: list = []
+
+    async def attribute_theme(self, theme_id, *, window_days=7, limit=10, reference_time=None):
+        self.calls.append((theme_id, window_days, limit))
+        if self._raises:
+            raise RuntimeError("attribution down")
+        return self._contributions
+
+
+def _contrib(doc_id="d1", sent=0.5, vol=0.5):
+    return DocumentContribution(
+        document_id=doc_id,
+        timestamp=datetime(2026, 2, 7, tzinfo=UTC),
+        platform="news",
+        weight=1.0,
+        polarity=1.0,
+        sentiment_contribution=sent,
+        volume_contribution=vol,
+    )
+
+
+class TestEvidenceEnrichment:
+    @pytest.mark.asyncio
+    async def test_volume_surge_alert_enriched_with_documents(
+        self, config, mock_repo, mock_redis, theme
+    ):
+        attribution = _FakeAttribution([_contrib("d1"), _contrib("d2")])
+        svc = AlertService(
+            config=config,
+            alert_repo=mock_repo,
+            redis_client=mock_redis,
+            attribution_service=attribution,
+        )
+        mock_repo.create_batch.side_effect = lambda alerts: alerts
+        today = {theme.theme_id: _make_metrics(theme_id=theme.theme_id, volume_zscore=3.5)}
+
+        result = await svc.generate_alerts(
+            themes=[theme], today_metrics_map=today, yesterday_metrics_map={}
+        )
+
+        assert len(result) == 1
+        ev = result[0].supporting_evidence
+        assert ev["source"] == "doc_metric_attribution"
+        assert [d["document_id"] for d in ev["documents"]] == ["d1", "d2"]
+        assert attribution.calls[0][0] == theme.theme_id
+
+    @pytest.mark.asyncio
+    async def test_no_attribution_service_means_no_evidence(self, service, mock_repo, theme):
+        mock_repo.create_batch.side_effect = lambda alerts: alerts
+        today = {theme.theme_id: _make_metrics(theme_id=theme.theme_id, volume_zscore=3.5)}
+
+        result = await service.generate_alerts(
+            themes=[theme], today_metrics_map=today, yesterday_metrics_map={}
+        )
+        assert result[0].supporting_evidence == {}
+
+    @pytest.mark.asyncio
+    async def test_attribution_failure_is_graceful(self, config, mock_repo, mock_redis, theme):
+        attribution = _FakeAttribution(raises=True)
+        svc = AlertService(
+            config=config,
+            alert_repo=mock_repo,
+            redis_client=mock_redis,
+            attribution_service=attribution,
+        )
+        mock_repo.create_batch.side_effect = lambda alerts: alerts
+        today = {theme.theme_id: _make_metrics(theme_id=theme.theme_id, volume_zscore=3.5)}
+
+        result = await svc.generate_alerts(
+            themes=[theme], today_metrics_map=today, yesterday_metrics_map={}
+        )
+        # Alert still persisted; evidence simply absent.
+        assert len(result) == 1
+        assert result[0].supporting_evidence == {}
+
+    @pytest.mark.asyncio
+    async def test_new_theme_alert_not_enriched(self, config, mock_repo, mock_redis, theme):
+        attribution = _FakeAttribution([_contrib("d1")])
+        svc = AlertService(
+            config=config,
+            alert_repo=mock_repo,
+            redis_client=mock_redis,
+            attribution_service=attribution,
+        )
+        mock_repo.create_batch.side_effect = lambda alerts: alerts
+
+        result = await svc.generate_alerts(
+            themes=[theme],
+            today_metrics_map={},
+            yesterday_metrics_map={},
+            new_theme_ids=[theme.theme_id],
+        )
+        assert len(result) == 1
+        assert result[0].trigger_type == "new_theme"
+        assert result[0].supporting_evidence == {}  # not a metric decomposition
+        assert attribution.calls == []  # never queried
