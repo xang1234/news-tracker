@@ -25,7 +25,7 @@ from src.graph.path_scoring import (
     score_edge,
     score_paths_from,
 )
-from src.graph.propagation import PropagationImpact, SentimentPropagation
+from src.graph.propagation import PropagationHop, PropagationImpact, SentimentPropagation
 from src.graph.publisher import (
     BasketPayload,
     PathExplanation,
@@ -59,6 +59,7 @@ __all__ = [
     "GraphConfig",
     "GraphRepository",
     "PathExplanation",
+    "PropagationHop",
     "PropagationImpact",
     "SEED_VERSION",
     "ScoredEdge",

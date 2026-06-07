@@ -31,6 +31,23 @@ _WEIGHT_FIELD_MAP = {
 
 
 @dataclass(frozen=True)
+class PropagationHop:
+    """One edge traversed on the path from the source to an affected node.
+
+    Attributes:
+        from_node: Upstream node of this hop.
+        to_node: Downstream node of this hop.
+        relation: Edge type traversed (e.g. ``supplies_to``).
+        edge_confidence: Confidence of this edge.
+    """
+
+    from_node: str
+    to_node: str
+    relation: str
+    edge_confidence: float
+
+
+@dataclass(frozen=True)
 class PropagationImpact:
     """Impact of sentiment propagation on a single node.
 
@@ -38,8 +55,10 @@ class PropagationImpact:
         node_id: The affected node.
         impact: Propagated sentiment delta (sign preserved through edge weights).
         depth: Number of hops from the source node.
-        path_relation: Edge type of the first hop that reached this node.
-        edge_confidence: Confidence of that first-arriving edge.
+        path_relation: Edge type of the hop that reached this node.
+        edge_confidence: Confidence of that reaching edge.
+        path: Ordered edges from the source to this node (the causal chain);
+            ``path[-1]`` is the reaching hop, so ``len(path) == depth``.
     """
 
     node_id: str
@@ -47,6 +66,7 @@ class PropagationImpact:
     depth: int
     path_relation: str
     edge_confidence: float
+    path: tuple[PropagationHop, ...] = ()
 
 
 class SentimentPropagation:
@@ -118,19 +138,16 @@ class SentimentPropagation:
         # Track computed impacts: node_id → PropagationImpact
         impacts: dict[str, PropagationImpact] = {}
 
-        # Source node has the original delta
-        source_impacts: dict[str, float] = {source_node: sentiment_delta}
-
         decay = self._config.propagation_default_decay
 
         for level in sorted(edges_by_depth.keys()):
             for source, target, relation, confidence in edges_by_depth[level]:
-                # Source impact comes from either the original delta or a previously
-                # computed propagation impact
-                if source in source_impacts:
-                    src_impact = source_impacts[source]
+                # The source's impact and causal chain come from either the origin
+                # (the original delta, empty path) or a previously-impacted node.
+                if source == source_node:
+                    src_impact, source_path = sentiment_delta, ()
                 elif source in impacts:
-                    src_impact = impacts[source].impact
+                    src_impact, source_path = impacts[source].impact, impacts[source].path
                 else:
                     continue
 
@@ -144,12 +161,19 @@ class SentimentPropagation:
                 if abs(target_impact) < threshold:
                     continue
 
+                hop = PropagationHop(
+                    from_node=source,
+                    to_node=target,
+                    relation=relation,
+                    edge_confidence=confidence,
+                )
                 impacts[target] = PropagationImpact(
                     node_id=target,
                     impact=round(target_impact, 6),
                     depth=level,
                     path_relation=relation,
                     edge_confidence=confidence,
+                    path=(*source_path, hop),
                 )
 
         logger.info(
