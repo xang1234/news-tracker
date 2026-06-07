@@ -35,11 +35,15 @@ class AlertService:
         alert_repo: AlertRepository,
         redis_client: Any | None = None,
         dispatcher: Any | None = None,
+        attribution_service: Any | None = None,
     ) -> None:
         self._config = config
         self._alert_repo = alert_repo
         self._redis = redis_client
         self._dispatcher = dispatcher
+        # Optional doc→metric attribution (epic o59.1); when present, theme-metric
+        # alerts are enriched with the contributing documents that caused them.
+        self._attribution = attribution_service
 
     async def _is_duplicate(
         self,
@@ -135,6 +139,31 @@ class AlertService:
 
         return True
 
+    async def _enrich_evidence(self, alert: Alert) -> None:
+        """Attach contributing-document evidence to a theme-metric alert.
+
+        No-op unless an attribution service is wired and the trigger is one whose
+        cause decomposes into documents. Best-effort: any failure leaves the
+        alert un-enriched rather than blocking it.
+        """
+        if self._attribution is None:
+            return
+        from src.alerts.evidence import EVIDENCE_TRIGGER_TYPES, document_evidence_payload
+
+        if alert.trigger_type not in EVIDENCE_TRIGGER_TYPES:
+            return
+        try:
+            contributions = await self._attribution.attribute_theme(
+                alert.theme_id,
+                window_days=self._config.evidence_window_days,
+                limit=self._config.evidence_top_k,
+            )
+            alert.supporting_evidence = document_evidence_payload(
+                contributions, window_days=self._config.evidence_window_days
+            )
+        except Exception as e:
+            logger.warning("Evidence enrichment failed for alert %s: %s", alert.alert_id, e)
+
     async def generate_alerts(
         self,
         themes: list[Theme],
@@ -192,6 +221,10 @@ class AlertService:
         for alert in candidates:
             if await self._filter_alert(alert):
                 filtered.append(alert)
+
+        # Enrich survivors with supporting evidence (only ones we'll persist).
+        for alert in filtered:
+            await self._enrich_evidence(alert)
 
         # Persist
         if filtered:

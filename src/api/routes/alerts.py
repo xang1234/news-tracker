@@ -106,6 +106,7 @@ async def list_alerts(
                 title=a.title,
                 message=a.message,
                 trigger_data=a.trigger_data,
+                supporting_evidence=a.supporting_evidence,
                 acknowledged=a.acknowledged,
                 created_at=a.created_at.isoformat(),
             )
