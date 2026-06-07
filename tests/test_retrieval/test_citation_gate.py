@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.retrieval.citation_gate import parse_cited_entries
+from src.retrieval.citation_gate import format_claims_block, parse_cited_entries
 
 
 @dataclass(frozen=True)
@@ -56,6 +56,13 @@ def test_text_is_stripped() -> None:
 def test_accepts_json_string_payload() -> None:
     out = _parse('{"items": [{"text": "x", "claim_ids": ["a"]}]}', {"a"})
     assert out == [_Entry("x", ["a"])]
+
+
+def test_format_claims_block_renders_id_prefixed_lines() -> None:
+    assert format_claims_block([("a", "TSMC supplies NVIDIA"), ("b", "AMD launches MI400")]) == (
+        "- [a] TSMC supplies NVIDIA\n- [b] AMD launches MI400"
+    )
+    assert format_claims_block([]) == ""
 
 
 def test_malformed_inputs_yield_empty() -> None:

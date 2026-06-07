@@ -1,11 +1,12 @@
-"""Shared grounding gate for cited-LLM responses.
+"""Shared wire format for cited-LLM features (briefings, cited Q&A).
 
-Briefings and cited answers ask the LLM for the same JSON shape — a list of
-entries under some key, each ``{"text": ..., "claim_ids": [...]}`` — and ground
-them identically: keep only entries whose text is non-empty and that cite at
-least one *retrieved* claim, stripping invented ids and dropping now-uncited
-entries. This is that gate, parameterised by the JSON key and the value-object
-factory, so neither feature can emit an uncited or hallucinated-cited assertion.
+Both directions of the contract live here so the prompt and the parser can
+never drift: ``format_claims_block`` renders the ``[claim_id] text`` lines the
+prompt embeds, and ``parse_cited_entries`` grounds the response — keeping only
+entries with non-empty text that cite at least one *retrieved* claim, stripping
+invented ids and dropping now-uncited entries. The parser is parameterised by
+the JSON key and the value-object factory, so neither feature can emit an
+uncited or hallucinated-cited assertion.
 """
 
 from __future__ import annotations
@@ -15,6 +16,11 @@ from collections.abc import Callable
 from typing import Any, TypeVar
 
 T = TypeVar("T")
+
+
+def format_claims_block(claims: list[tuple[str, str]]) -> str:
+    """Render ``(claim_id, text)`` pairs as the ``- [id] text`` block prompts embed."""
+    return "\n".join(f"- [{claim_id}] {text}" for claim_id, text in claims)
 
 
 def parse_cited_entries(

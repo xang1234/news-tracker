@@ -30,6 +30,7 @@ from src.claims.triggers import (
     check_high_impact_predicate,
     check_llm_proposed,
     check_low_confidence,
+    check_low_confidence_llm,
 )
 from src.security_master.concept_schemas import Concept
 
@@ -399,6 +400,36 @@ class TestCheckHighImpactPredicate:
             claim = _make_claim(predicate=pred, confidence=0.3)
             task = check_high_impact_predicate(claim)
             assert task is not None, f"Expected trigger for {pred}"
+
+
+class TestCheckLowConfidenceLLM:
+    """Trigger holding speculative LLM claims for review."""
+
+    def _llm_claim(self, *, confidence: float, method: str = "llm") -> EvidenceClaim:
+        claim = _make_claim(confidence=confidence)
+        claim.extraction_method = method
+        return claim
+
+    def test_triggers_on_low_confidence_llm(self) -> None:
+        task = check_low_confidence_llm(self._llm_claim(confidence=0.5), confidence_threshold=0.7)
+        assert task is not None
+        assert task.task_type == "claim_review"
+        assert task.trigger_reason == "low_confidence"
+        assert task.payload["confidence"] == 0.5
+        assert task.concept_ids == ["concept_issuer_tsmc", "concept_issuer_nvda"]
+
+    def test_skips_high_confidence_llm(self) -> None:
+        claim = self._llm_claim(confidence=0.9)
+        assert check_low_confidence_llm(claim, confidence_threshold=0.7) is None
+
+    def test_skips_rule_claim(self) -> None:
+        rule = self._llm_claim(confidence=0.3, method="rule")
+        assert check_low_confidence_llm(rule, confidence_threshold=0.7) is None
+
+    def test_skips_hybrid_claim(self) -> None:
+        # Corroborated by the rule pass → trusted, never held.
+        hybrid = self._llm_claim(confidence=0.3, method="hybrid")
+        assert check_low_confidence_llm(hybrid, confidence_threshold=0.7) is None
 
 
 # -- Merge/split proposals -------------------------------------------------

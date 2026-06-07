@@ -92,6 +92,13 @@ class ProcessingService:
         self._claim_extraction_enabled = get_settings().narrative_claim_extraction_enabled
         self._claim_repo: Any = None  # Lazy-initialized ClaimRepository
 
+        # LLM second-pass extraction (high-value docs → claims merged by claim_key)
+        self._llm_claim_extraction_enabled = (
+            get_settings().llm_claim_extraction_enabled and self._claim_extraction_enabled
+        )
+        self._llm_extractor: Any = None  # Lazy-initialized LLMClaimExtractor
+        self._review_repo: Any = None  # Lazy-initialized ReviewRepository (LLM claim holds)
+
         # Claim reconciliation (resolve subjects + run contradiction tiers)
         self._claim_reconciliation_enabled = (
             get_settings().claim_reconciliation_enabled and self._claim_extraction_enabled
@@ -212,8 +219,80 @@ class ProcessingService:
 
         await claim_repo.upsert_claim(claim)
 
+        # Low-confidence LLM claims are held in the review queue and must not
+        # feed assertions until approved — so skip reconciliation for them.
+        if await self._hold_for_review(claim):
+            return
+
         if self._reconciliation_engine is not None:
             await self._reconciliation_engine.reconcile_claim(claim)
+
+    def _init_llm_claim_pipeline(self) -> None:
+        """Build the LLM claim subsystem: the second-pass extractor + review queue.
+
+        Lazy (called from start()/run_once) so the scoring/LLM stack is only
+        imported when the LLM pass is actually enabled. The review repo holds
+        low-confidence LLM claims out of reconciliation until approved.
+        """
+        from src.claims.llm_extractor import LLMClaimExtractor
+        from src.claims.review_repository import ReviewRepository
+        from src.scoring.config import ScoringConfig
+
+        self._llm_extractor = LLMClaimExtractor(scoring_config=ScoringConfig())
+        self._review_repo = ReviewRepository(self._database)
+
+    def _setup_claim_pipeline(self) -> Any:
+        """Build the claim repo and wire its subsystems (reconciliation, LLM pass).
+
+        Shared by start() and run_once() so the enable→build→wire flow lives in
+        one place. Returns the claim repo, or None when claim extraction is off.
+        """
+        if not self._claim_extraction_enabled:
+            return None
+        from src.claims.repository import ClaimRepository
+
+        self._claim_repo = ClaimRepository(self._database)
+        if self._claim_reconciliation_enabled:
+            self._init_claim_reconciliation(self._claim_repo)
+        if self._llm_claim_extraction_enabled:
+            self._init_llm_claim_pipeline()
+        return self._claim_repo
+
+    async def _hold_for_review(self, claim: Any) -> bool:
+        """Hold a low-confidence LLM claim in the review queue.
+
+        Returns True if the claim was held — the caller then skips reconciliation
+        so the speculative claim cannot feed assertions until a reviewer approves
+        it. Rule and (rule-corroborated) hybrid claims are never held.
+        """
+        if self._review_repo is None:
+            return False
+        from src.claims.triggers import check_low_confidence_llm
+
+        task = check_low_confidence_llm(
+            claim, confidence_threshold=self._llm_extractor.config.review_confidence
+        )
+        if task is None:
+            return False
+        await self._review_repo.upsert_task(task)
+        return True
+
+    async def _augment_with_llm_claims(self, doc: Any, rule_claims: list[Any]) -> list[Any]:
+        """Merge LLM claims into the rule claims for high-value docs.
+
+        Gated by the high-value document filter so the paid pass only runs on
+        documents worth the cost; the merge dedups by claim_key, so a triple
+        found by both passes is counted once (and marked hybrid).
+        """
+        from src.claims.llm_extractor import is_high_value
+        from src.claims.merge import merge_claims
+
+        if not is_high_value(doc, self._llm_extractor.config):
+            return rule_claims
+        llm_claims = await self._llm_extractor.extract(
+            doc.id, doc.content, published_at=doc.timestamp
+        )
+        return merge_claims(rule_claims, llm_claims)
 
     async def _extract_and_persist_claims(self, doc: Any, claim_repo: Any) -> None:
         """Stage 6: extract narrative claims from a document and persist them.
@@ -238,6 +317,14 @@ class ProcessingService:
                 error=str(e),
             )
             return
+
+        # Optional LLM second pass, merged by claim_key. Phase-resilient: an LLM
+        # failure must not drop the rule claims we already have.
+        if self._llm_extractor is not None:
+            try:
+                claims = await self._augment_with_llm_claims(doc, claims)
+            except Exception as e:
+                logger.warning("Failed LLM claim augmentation", doc_id=doc.id, error=str(e))
 
         # Persist each claim independently — one failing claim must not drop
         # the rest of the document's claims.
@@ -290,15 +377,8 @@ class ProcessingService:
         self._repository = DocumentRepository(self._database)
         await self._deduplicator.connect()
 
-        # Create claim repository if extraction is enabled
-        if self._claim_extraction_enabled:
-            from src.claims.repository import ClaimRepository
-
-            self._claim_repo = ClaimRepository(self._database)
-
-        # Wire claim reconciliation (resolver + contradiction tiers) if enabled
-        if self._claim_reconciliation_enabled and self._claim_repo is not None:
-            self._init_claim_reconciliation(self._claim_repo)
+        # Build the claim repo + wire its subsystems (reconciliation, LLM pass)
+        self._setup_claim_pipeline()
 
         try:
             # Process messages from queue
@@ -534,14 +614,8 @@ class ProcessingService:
         }
         stored_doc_ids: list[str] = []
 
-        # Initialize claim repo for run_once if extraction is enabled
-        claim_repo = None
-        if self._claim_extraction_enabled:
-            from src.claims.repository import ClaimRepository
-
-            claim_repo = ClaimRepository(self._database)
-            if self._claim_reconciliation_enabled:
-                self._init_claim_reconciliation(claim_repo)
+        # Build the claim repo + wire its subsystems (reconciliation, LLM pass)
+        claim_repo = self._setup_claim_pipeline()
 
         try:
             for doc in docs:

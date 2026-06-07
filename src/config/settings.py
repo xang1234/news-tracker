@@ -335,6 +335,15 @@ class Settings(BaseSettings):
         description="Enable evidence claim extraction from document events and entities",
     )
 
+    # LLM second-pass claim extraction: read raw document text with an LLM to
+    # capture implicit/multi-clause relationships the regex misses, merged with
+    # the rule pass by claim_key. Costs LLM calls (reuses SCORING_*); bounded by
+    # a high-value gate (LLM_EXTRACTION_*). Requires narrative_claim_extraction.
+    llm_claim_extraction_enabled: bool = Field(
+        default=False,
+        description="Enable the LLM second-pass claim extractor on high-value documents",
+    )
+
     # Claim reconciliation: resolve claim subjects and run contradiction
     # detection tiers (numeric + predicate-polarity) → flip assertions to
     # 'disputed'. Requires narrative_claim_extraction_enabled (needs claims).
@@ -479,6 +488,10 @@ class Settings(BaseSettings):
         if self.claim_reconciliation_enabled and not self.narrative_claim_extraction_enabled:
             raise ValueError(
                 "claim_reconciliation_enabled requires narrative_claim_extraction_enabled"
+            )
+        if self.llm_claim_extraction_enabled and not self.narrative_claim_extraction_enabled:
+            raise ValueError(
+                "llm_claim_extraction_enabled requires narrative_claim_extraction_enabled"
             )
         return self
 

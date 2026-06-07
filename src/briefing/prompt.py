@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.briefing.schemas import BriefingClause
-from src.retrieval.citation_gate import parse_cited_entries
+from src.retrieval.citation_gate import format_claims_block, parse_cited_entries
 
 _BRIEFING_PROMPT = """\
 You are writing a short factual brief about the theme "{theme_name}" for an \
@@ -30,8 +30,7 @@ Evidence claims:
 
 def build_briefing_prompt(theme_name: str, claims: list[tuple[str, str]]) -> str:
     """Build the briefing prompt from a theme name and ``(claim_id, text)`` pairs."""
-    claims_block = "\n".join(f"- [{claim_id}] {text}" for claim_id, text in claims)
-    return _BRIEFING_PROMPT.format(theme_name=theme_name, claims_block=claims_block)
+    return _BRIEFING_PROMPT.format(theme_name=theme_name, claims_block=format_claims_block(claims))
 
 
 def parse_briefing_response(payload: Any, valid_claim_ids: set[str]) -> list[BriefingClause]:
@@ -42,9 +41,4 @@ def parse_briefing_response(payload: Any, valid_claim_ids: set[str]) -> list[Bri
     clauses dropped. Any malformed input yields an empty list (caller falls
     back to the template).
     """
-    return parse_cited_entries(
-        payload,
-        valid_claim_ids,
-        key="clauses",
-        factory=lambda text, claim_ids: BriefingClause(text=text, claim_ids=claim_ids),
-    )
+    return parse_cited_entries(payload, valid_claim_ids, key="clauses", factory=BriefingClause)
