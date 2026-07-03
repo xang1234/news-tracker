@@ -86,7 +86,12 @@ class Settings(BaseSettings):
     )
     twitter_xui_usernames: str | None = Field(
         default=None,
-        description="Comma-separated X usernames to track with xui (overrides defaults)",
+        description=(
+            "Comma-separated X source specs for xui (overrides defaults). Bare "
+            "names are usernames; explicit kinds pass through: user:<handle>, "
+            "list:<id>, search:<query_or_url>, bookmarks. Note X blocks profile "
+            "reads for automated sessions; prefer search:/list:/bookmarks."
+        ),
     )
 
     # XUI polling + anti-automation cadence

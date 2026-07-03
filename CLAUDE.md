@@ -268,7 +268,7 @@ Settings in `src/config/settings.py` (Pydantic BaseSettings, env var overrides).
 ### Other Config
 - Tickers/companies: `src/config/tickers.py`
 - Twitter accounts: `src/config/twitter_accounts.py`
-- Sotwe: `SOTWE_ENABLED` (true), `SOTWE_USERNAMES`, `SOTWE_RATE_LIMIT` (10)
+- Twitter via xui: `TWITTER_XUI_ENABLED` (false), `TWITTER_XUI_COMMAND` (xui), `TWITTER_XUI_PROFILE` (default), `TWITTER_XUI_USERNAMES` (comma-separated source specs: bare names = `user:<handle>`; explicit `user:`/`list:<id>`/`search:<query_or_url>`/`bookmarks` pass through; defaults to `twitter_accounts.py`), `TWITTER_XUI_LIMIT_PER_SOURCE` (50) + guardrails (`TWITTER_XUI_*`: poll windows, scroll budgets, block backoff/circuit). Official API primary when `TWITTER_BEARER_TOKEN` set; xui-only otherwise. Requires authenticated xui session (`xui auth status --json`). ⚠️ X currently 403-blocks profile reads (`user:`) and returns empty for `from:` searches on automated sessions — use `search:`/`list:`/`bookmarks` sources (verified working 2026-07).
 - News API keys: `NEWSFILTER_API_KEYS`, `MARKETAUX_API_KEYS`, `FINLIGHT_API_KEYS` (comma-separated for rotation)
 - Processing: `spam_threshold` (0.7), `duplicate_threshold` (0.85)
 - Embedding: `embedding_model_name` (ProsusAI/finbert), `minilm_model_name` (all-MiniLM-L6-v2), cache TTL 168h

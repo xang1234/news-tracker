@@ -64,6 +64,23 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def _xui_source_spec(source: str) -> str:
+    """Map a configured source string to an explicit xui --sources spec.
+
+    Bare strings are treated as usernames (user:<handle>). Strings that already
+    carry an explicit kind — user:, list:, search:<query_or_url>, bookmarks —
+    pass through unchanged. X currently blocks profile reads for automated
+    sessions while cashtag/keyword searches, lists, and bookmarks still work,
+    so search:/list:/bookmarks specs are the reliable configuration.
+    """
+    if source.startswith(("user:", "list:", "search:")) or source in {
+        "bookmarks",
+        "bookmarks:self",
+    }:
+        return source
+    return f"user:{source}"
+
+
 @dataclass(frozen=True)
 class XuiGuardrailConfig:
     enabled: bool
@@ -314,6 +331,7 @@ class TwitterAdapter(BaseAdapter):
                     block_detected = True
                     break
 
+                spec = _xui_source_spec(source)
                 for item in result.items:
                     tweet_id = str(item.get("tweet_id", "")).strip()
                     if not tweet_id or tweet_id in self._seen_tweet_ids:
@@ -323,7 +341,11 @@ class TwitterAdapter(BaseAdapter):
                         {
                             "source": "xui",
                             "tweet": item,
-                            "username": source,
+                            # Author fallback only makes sense for user sources;
+                            # search/list/bookmarks specs are not handles.
+                            "username": (
+                                spec.split(":", 1)[1] if spec.startswith("user:") else None
+                            ),
                         }
                     )
 
@@ -496,7 +518,7 @@ class TwitterAdapter(BaseAdapter):
                 "--new",
                 "--json",
                 "--sources",
-                f"user:{source}",
+                _xui_source_spec(source),
             ]
         )
         if config_path is not None:
