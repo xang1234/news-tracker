@@ -29,15 +29,7 @@ logger = logging.getLogger(__name__)
 
 # Subreddits to monitor for financial content
 FINANCIAL_SUBREDDITS = [
-    "wallstreetbets",
-    "stocks",
-    "investing",
     "semiconductors",
-    "options",
-    "stockmarket",
-    "AMD_Stock",
-    "nvidia",
-    "intel",
 ]
 
 # Reddit API endpoints

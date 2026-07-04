@@ -5,13 +5,13 @@ from __future__ import annotations
 from src.config.feeds import FEED_CATEGORIES, FEEDS, Feed, validate_feed_catalog
 
 
-def test_curated_catalog_has_starter_stock_feed_coverage() -> None:
+def test_curated_catalog_has_focused_semiconductor_feed_coverage() -> None:
     enabled_feeds = [feed for feed in FEEDS if feed.enabled]
     slugs = {feed.slug for feed in enabled_feeds}
     categories = {feed.category for feed in enabled_feeds}
 
-    assert 15 <= len(enabled_feeds) <= 25
-    assert {"company_ir", "trade_press", "tech_press"}.issubset(categories)
+    assert 12 <= len(enabled_feeds) <= 20
+    assert {"company_ir", "company_tech", "trade_press"}.issubset(categories)
     assert {
         "nvidia-press-releases",
         "amd-press-releases",
