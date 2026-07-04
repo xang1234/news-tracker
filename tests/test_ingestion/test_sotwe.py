@@ -54,8 +54,12 @@ async def _collect_raw(adapter: TwitterAdapter) -> list[dict]:
 class TestTwitterAccounts:
     def test_default_usernames_not_empty(self):
         usernames = get_default_usernames()
-        assert len(usernames) > 0
-        assert "SemiAnalysis" in usernames
+        assert usernames == [
+            "SemiAnalysis",
+            "chinabeige",
+            "patrick_adventures",
+            "daniel_sumi",
+        ]
 
     def test_default_usernames_returns_copy(self):
         usernames1 = get_default_usernames()

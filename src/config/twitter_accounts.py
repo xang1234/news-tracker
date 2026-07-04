@@ -11,30 +11,10 @@ ANALYST_ACCOUNTS = [
     "chinabeige",  # Dylan Patel - semiconductor supply chain
     "patrick_adventures",  # Patrick Moorhead - tech analyst
     "daniel_sumi",  # Daniel Sumi - semiconductor industry
-    "TechAltar",  # TechAltar - chip industry analysis
-]
-
-# Major semiconductor company accounts
-COMPANY_ACCOUNTS = [
-    "nvidia",  # NVIDIA Corporation
-    "AMD",  # Advanced Micro Devices
-    "intel",  # Intel Corporation
-    "Qualcomm",  # Qualcomm
-    "Broadcom",  # Broadcom Inc
-    "MicronTech",  # Micron Technology
-    "Samsung_SD",  # Samsung Semiconductor
-    "SKhynix",  # SK Hynix
-]
-
-# Market and trading focused accounts
-MARKET_ACCOUNTS = [
-    "unusual_whales",  # Unusual options activity
-    "StockMKTNewz",  # Market news aggregator
-    "DeItaone",  # Breaking financial news
 ]
 
 # All default accounts combined
-DEFAULT_USERNAMES = ANALYST_ACCOUNTS + COMPANY_ACCOUNTS + MARKET_ACCOUNTS
+DEFAULT_USERNAMES = ANALYST_ACCOUNTS
 
 
 def get_default_usernames() -> list[str]:

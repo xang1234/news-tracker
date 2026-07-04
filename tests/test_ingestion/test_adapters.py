@@ -3,6 +3,7 @@
 import pytest
 
 from src.ingestion.mock_adapter import MockAdapter, create_mock_adapters
+from src.ingestion.reddit_adapter import FINANCIAL_SUBREDDITS
 from src.ingestion.schemas import NormalizedDocument, Platform
 
 
@@ -90,3 +91,10 @@ class TestCreateMockAdapters:
         # Substack gets half the documents
         assert adapters[Platform.TWITTER]._documents_per_fetch == 20
         assert adapters[Platform.SUBSTACK]._documents_per_fetch == 10
+
+
+class TestRedditDefaults:
+    """Tests for the default subreddit catalog."""
+
+    def test_default_subreddits_match_pruned_seed_catalog(self):
+        assert FINANCIAL_SUBREDDITS == ["semiconductors"]
