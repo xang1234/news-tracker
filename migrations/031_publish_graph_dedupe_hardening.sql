@@ -105,8 +105,18 @@ INSERT INTO intel_pub.read_model (
     updated_at
 )
 SELECT
+    -- Mirrors make_record_id(): sha256 over manifest_id + NUL + object_id.
+    -- NUL is illegal in text (chr(0) errors at plan time), so build the
+    -- key in bytea where it is allowed.
     'rm_' || substr(
-        encode(digest(po.manifest_id || chr(0) || po.object_id, 'sha256'), 'hex'),
+        encode(
+            digest(
+                convert_to(po.manifest_id, 'UTF8') || '\x00'::bytea
+                    || convert_to(po.object_id, 'UTF8'),
+                'sha256'
+            ),
+            'hex'
+        ),
         1,
         16
     ) AS record_id,
