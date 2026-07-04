@@ -13,7 +13,12 @@ import respx
 
 from src.config.twitter_accounts import DEFAULT_USERNAMES, get_default_usernames, parse_usernames
 from src.ingestion.schemas import Platform
-from src.ingestion.twitter_adapter import TWEETS_SEARCH_RECENT, TwitterAdapter, XuiInvocationResult
+from src.ingestion.twitter_adapter import (
+    TWEETS_SEARCH_RECENT,
+    TwitterAdapter,
+    XuiInvocationResult,
+    _xui_source_spec,
+)
 
 
 def _settings(**overrides):
@@ -49,6 +54,38 @@ def _settings(**overrides):
 
 async def _collect_raw(adapter: TwitterAdapter) -> list[dict]:
     return [item async for item in adapter._fetch_raw()]
+
+
+class TestXuiSourceSpec:
+    def test_bare_name_becomes_user_spec(self):
+        assert _xui_source_spec("nvidia") == "user:nvidia"
+
+    def test_explicit_kinds_pass_through(self):
+        for spec in (
+            "user:nvidia",
+            "list:84839422",
+            "search:$NVDA OR $AMD",
+            "search:https://x.com/search?q=%24NVDA&f=live",
+            "bookmarks",
+            "bookmarks:self",
+        ):
+            assert _xui_source_spec(spec) == spec
+
+    def test_search_spec_is_not_used_as_author_fallback(self):
+        settings = _settings(twitter_xui_enabled=True, twitter_xui_usernames="search:$NVDA")
+        with patch("src.ingestion.twitter_adapter.get_settings", return_value=settings):
+            adapter = TwitterAdapter()
+
+        doc = adapter._transform(
+            {
+                "source": "xui",
+                "tweet": {"tweet_id": "123", "text": "some $NVDA take"},
+                "username": None,
+            }
+        )
+        assert doc is not None
+        assert doc.author_id == "unknown"
+        assert doc.url == "https://twitter.com/i/status/123"
 
 
 class TestTwitterAccounts:
