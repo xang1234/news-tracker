@@ -75,19 +75,19 @@ class Feed:
     slug: str          # stable id  -> "eetimes"
     name: str          # display    -> "EE Times"
     url: str           # feed URL
-    category: str      # "trade_press" | "company_ir" | "tech_press"
+    category: str      # "trade_press" | "company_ir" | "company_tech" | "tech_press"
     full_text: bool = False   # True -> fetch + extract the article page
     enabled: bool = True
 ```
 
-Plus `FEEDS: list[Feed]` seeded with ~15–25 feeds. Proposed starter set
-(exact feed URLs to be verified during implementation):
+Plus `FEEDS: list[Feed]` seeded with a focused semiconductor catalog. Current
+starter set:
 
-- **trade_press:** EE Times, Semiconductor Engineering, DigiTimes, TrendForce,
-  Tom's Hardware
-- **company_ir:** NVIDIA, TSMC, Intel, AMD, ASML, Micron, Samsung Semiconductor
-  newsrooms
-- **tech_press:** The Verge, TechCrunch, Ars Technica, Reuters Technology
+- **trade_press:** Semiconductor Engineering, EE Times, Semiconductor Digest,
+  Semiconductor Today, SemiWiki
+- **company_ir:** NVIDIA, AMD, Intel, Micron, KLA, Samsung press/newsrooms
+- **company_tech:** NVIDIA Technical Blog and Samsung semiconductor/newsroom
+  feeds
 
 Per-feed `full_text` is set based on whether the feed ships full bodies; feeds
 that ship truncated `<description>` excerpts get `full_text=True`.
