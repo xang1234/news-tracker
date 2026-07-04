@@ -95,6 +95,7 @@ services:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: false
+      GF_PLUGINS_PREINSTALL_AUTO_UPDATE: false
     volumes:
       - grafana_data:/var/lib/grafana
       - ./deployments/grafana/provisioning:/etc/grafana/provisioning
